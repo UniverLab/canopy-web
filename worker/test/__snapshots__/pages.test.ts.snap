@@ -1,0 +1,1064 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`route snapshots > renders / with the official listing first 1`] = `
+"<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>graphs.univerlab.org · graphs.univerlab.org</title>
+<meta name="description" content="A catalogue of Canopy graphs and nodes.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=Old+Standard+TT:ital,wght@0,400;0,700;1,400&family=Sometype+Mono:ital,wght@0,400..700;1,400..700&display=swap">
+<style>
+:root {
+  --bg: #f4f0ea;
+  --ink: #1d1510;
+  --accent: #3fb8b0;
+  --display: "Old Standard TT", Georgia, serif;
+  --body: "EB Garamond", Georgia, serif;
+  --mono: "Sometype Mono", "Courier New", monospace;
+}
+html[data-theme="night"] {
+  --bg: #222928;
+  --ink: #ecebe4;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+  max-width: 46rem;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 1.0625rem;
+  line-height: 1.55;
+}
+a { color: var(--accent); }
+a:hover, a:focus-visible { text-decoration-thickness: 2px; }
+.site-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.brand {
+  font-family: var(--display);
+  font-size: 1.5rem;
+  color: var(--ink);
+  text-decoration: none;
+}
+.tagline { margin: 0.25rem 0 1.5rem; font-style: italic; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.2; }
+h1 { font-size: 2rem; margin: 0 0 0.25rem; }
+h2 { font-size: 1.35rem; margin: 2rem 0 0.5rem; }
+.description { margin: 0 0 1.25rem; font-size: 1.15rem; }
+.readme h1 { font-size: 1.6rem; }
+.readme h2 { font-size: 1.25rem; }
+.readme pre {
+  overflow-x: auto;
+  padding: 0.75rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+}
+.readme code { font-family: var(--mono); font-size: 0.9em; }
+.readme img { max-width: 100%; }
+.meta { font-family: var(--mono); font-size: 0.85rem; margin: 0.25rem 0 1rem; }
+.tabs { display: flex; gap: 1rem; margin: 1rem 0; font-family: var(--mono); }
+.tabs a[aria-current="page"] { color: var(--ink); text-decoration-thickness: 2px; }
+.search { display: flex; gap: 0.5rem; align-items: end; margin: 1rem 0 2rem; }
+.search label { display: block; font-family: var(--mono); font-size: 0.85rem; }
+.search input {
+  min-width: 14rem;
+  padding: 0.4rem 0.5rem;
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  font-family: var(--body);
+  font-size: 1rem;
+}
+.doc-list { list-style: none; padding: 0; margin: 0; }
+.doc-list li { margin: 0.75rem 0; }
+.doc-list .doc-name { font-family: var(--display); font-size: 1.15rem; }
+.doc-list .doc-description { display: block; }
+.button {
+  display: inline-block;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--bg);
+  background: var(--accent);
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+.install {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.5rem 0 1rem;
+}
+.install code {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  overflow-x: auto;
+}
+.copy {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.copy:hover, .copy:focus-visible { border-color: var(--accent); }
+.theme-toggle {
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.graph-svg { max-width: 100%; height: auto; margin: 1rem 0; color: var(--ink); }
+.graph-svg .node rect { fill: var(--bg); stroke: currentColor; stroke-width: 1.25; }
+.graph-svg .node text { font-family: var(--mono); font-size: 12px; fill: currentColor; }
+.graph-svg .edge { stroke: currentColor; stroke-width: 1.25; }
+.graph-svg .edge.fail { stroke-dasharray: 6 4; }
+.agent-nodes { font-family: var(--mono); font-size: 0.95rem; }
+.site-footer { margin-top: 3rem; font-family: var(--mono); font-size: 0.85rem; }
+.busy { border-left: 3px solid var(--accent); padding-left: 1rem; }
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+</style>
+<script>
+(function(){var stored=null;try{stored=localStorage.getItem("theme")}catch(e){}var hour=new Date().getHours();var theme=stored||(hour>=6&&hour<18?"day":"night");document.documentElement.dataset.theme=theme;document.addEventListener("DOMContentLoaded",function(){var button=document.getElementById("theme-toggle");if(!button){return}button.addEventListener("click",function(){var next=document.documentElement.dataset.theme==="day"?"night":"day";document.documentElement.dataset.theme=next;try{localStorage.setItem("theme",next)}catch(e){}});});})();
+</script>
+</head>
+<body>
+<header class="site-header">
+<a class="brand" href="/">graphs.univerlab.org</a>
+<button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch between day and night">Switch between day and night</button>
+</header>
+<p class="tagline">A catalogue of Canopy graphs and nodes.</p>
+<main>
+<form class="search" action="/search" method="get"><div><label for="q">Search graphs and nodes</label><input id="q" name="q" type="search" value="" placeholder="hello-graph"></div><button type="submit" class="button">Search</button></form>
+<nav class="tabs"><a href="/searchsort=top">Top</a><a href="/searchsort=new">New</a></nav>
+<h2>Official</h2>
+<h3>Graphs</h3>
+<ul class="doc-list"><li><a class="doc-name" href="/g/hello-graph">hello-graph</a> — 7 stars<span class="doc-description">Five nodes with one fail edge, for the drawing test.</span></li></ul>
+<h3>Nodes</h3>
+<ul class="doc-list"><li><a class="doc-name" href="/n/hello-node">hello-node</a> — 7 stars<span class="doc-description">Example catalogue node: drafts an implementation plan.</span></li></ul>
+</main>
+<footer class="site-footer"><a href="https://univerlab.org/canopy/">Canopy · UniverLab</a></footer>
+<script>
+(function(){document.addEventListener("click",function(event){var target=event.target;if(!target||!target.classList||!target.classList.contains("copy")){return}var command=target.getAttribute("data-copy")||"";if(navigator.clipboard){navigator.clipboard.writeText(command)}var original=target.textContent;target.textContent=command;window.setTimeout(function(){target.textContent=original},1500);});})();
+</script>
+</body>
+</html>
+"
+`;
+
+exports[`route snapshots > renders /g/<owner>/<repo>/<slug> with the community ref 1`] = `
+"<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hello-graph · graphs.univerlab.org</title>
+<meta name="description" content="Minimal example graph: implement, check, gate, and a router with two routes.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=Old+Standard+TT:ital,wght@0,400;0,700;1,400&family=Sometype+Mono:ital,wght@0,400..700;1,400..700&display=swap">
+<style>
+:root {
+  --bg: #f4f0ea;
+  --ink: #1d1510;
+  --accent: #3fb8b0;
+  --display: "Old Standard TT", Georgia, serif;
+  --body: "EB Garamond", Georgia, serif;
+  --mono: "Sometype Mono", "Courier New", monospace;
+}
+html[data-theme="night"] {
+  --bg: #222928;
+  --ink: #ecebe4;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+  max-width: 46rem;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 1.0625rem;
+  line-height: 1.55;
+}
+a { color: var(--accent); }
+a:hover, a:focus-visible { text-decoration-thickness: 2px; }
+.site-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.brand {
+  font-family: var(--display);
+  font-size: 1.5rem;
+  color: var(--ink);
+  text-decoration: none;
+}
+.tagline { margin: 0.25rem 0 1.5rem; font-style: italic; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.2; }
+h1 { font-size: 2rem; margin: 0 0 0.25rem; }
+h2 { font-size: 1.35rem; margin: 2rem 0 0.5rem; }
+.description { margin: 0 0 1.25rem; font-size: 1.15rem; }
+.readme h1 { font-size: 1.6rem; }
+.readme h2 { font-size: 1.25rem; }
+.readme pre {
+  overflow-x: auto;
+  padding: 0.75rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+}
+.readme code { font-family: var(--mono); font-size: 0.9em; }
+.readme img { max-width: 100%; }
+.meta { font-family: var(--mono); font-size: 0.85rem; margin: 0.25rem 0 1rem; }
+.tabs { display: flex; gap: 1rem; margin: 1rem 0; font-family: var(--mono); }
+.tabs a[aria-current="page"] { color: var(--ink); text-decoration-thickness: 2px; }
+.search { display: flex; gap: 0.5rem; align-items: end; margin: 1rem 0 2rem; }
+.search label { display: block; font-family: var(--mono); font-size: 0.85rem; }
+.search input {
+  min-width: 14rem;
+  padding: 0.4rem 0.5rem;
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  font-family: var(--body);
+  font-size: 1rem;
+}
+.doc-list { list-style: none; padding: 0; margin: 0; }
+.doc-list li { margin: 0.75rem 0; }
+.doc-list .doc-name { font-family: var(--display); font-size: 1.15rem; }
+.doc-list .doc-description { display: block; }
+.button {
+  display: inline-block;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--bg);
+  background: var(--accent);
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+.install {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.5rem 0 1rem;
+}
+.install code {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  overflow-x: auto;
+}
+.copy {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.copy:hover, .copy:focus-visible { border-color: var(--accent); }
+.theme-toggle {
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.graph-svg { max-width: 100%; height: auto; margin: 1rem 0; color: var(--ink); }
+.graph-svg .node rect { fill: var(--bg); stroke: currentColor; stroke-width: 1.25; }
+.graph-svg .node text { font-family: var(--mono); font-size: 12px; fill: currentColor; }
+.graph-svg .edge { stroke: currentColor; stroke-width: 1.25; }
+.graph-svg .edge.fail { stroke-dasharray: 6 4; }
+.agent-nodes { font-family: var(--mono); font-size: 0.95rem; }
+.site-footer { margin-top: 3rem; font-family: var(--mono); font-size: 0.85rem; }
+.busy { border-left: 3px solid var(--accent); padding-left: 1rem; }
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+</style>
+<script>
+(function(){var stored=null;try{stored=localStorage.getItem("theme")}catch(e){}var hour=new Date().getHours();var theme=stored||(hour>=6&&hour<18?"day":"night");document.documentElement.dataset.theme=theme;document.addEventListener("DOMContentLoaded",function(){var button=document.getElementById("theme-toggle");if(!button){return}button.addEventListener("click",function(){var next=document.documentElement.dataset.theme==="day"?"night":"day";document.documentElement.dataset.theme=next;try{localStorage.setItem("theme",next)}catch(e){}});});})();
+</script>
+</head>
+<body>
+<header class="site-header">
+<a class="brand" href="/">graphs.univerlab.org</a>
+<button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch between day and night">Switch between day and night</button>
+</header>
+<p class="tagline">A catalogue of Canopy graphs and nodes.</p>
+<main>
+<h1>hello-graph</h1>
+<p class="description">Minimal example graph: implement, check, gate, and a router with two routes.</p>
+<p class="meta"><a href="https://github.com/acme/things">acme/things</a></p>
+<p><a class="button" href="https://github.com/acme/things">Star on GitHub</a></p>
+<h2>Install</h2>
+<div class="install"><code>canopy graph install acme/things/flow</code><button type="button" class="copy" data-copy="canopy graph install acme/things/flow" aria-label="Copy the install command to the clipboard">Copy</button></div>
+<h2>Drawing</h2><svg class="graph-svg" viewBox="0 0 842 68" role="img" aria-label="acme/things/flow: A drawing of the graph: nodes left to right by layer." xmlns="http://www.w3.org/2000/svg"><line class="edge pass" x1="166" y1="34" x2="236" y2="34"></line><line class="edge other" x1="386" y1="34" x2="456" y2="34"></line><line class="edge other" x1="386" y1="34" x2="16" y2="34"></line><line class="edge other" x1="606" y1="34" x2="676" y2="34"></line><line class="edge fail" x1="606" y1="34" x2="16" y2="34"></line><line class="edge other" x1="166" y1="34" x2="456" y2="34"></line><g class="node kind-agent"><rect x="16" y="16" width="150" height="36" rx="4"></rect><text x="91" y="38" text-anchor="middle">implementer</text></g><g class="node kind-router"><rect x="236" y="16" width="150" height="36" rx="4"></rect><text x="311" y="38" text-anchor="middle">triage</text></g><g class="node kind-check"><rect x="456" y="16" width="150" height="36" rx="4"></rect><text x="531" y="38" text-anchor="middle">tests</text></g><g class="node kind-gate"><rect x="676" y="16" width="150" height="36" rx="4"></rect><text x="751" y="38" text-anchor="middle">gate</text></g></svg>
+<h2>Agent nodes</h2><p class="agent-nodes">implementer</p><p>These agent nodes need a harness to run.</p>
+<h2>README</h2>
+<div class="readme"></div>
+</main>
+<footer class="site-footer"><a href="https://univerlab.org/canopy/">Canopy · UniverLab</a></footer>
+<script>
+(function(){document.addEventListener("click",function(event){var target=event.target;if(!target||!target.classList||!target.classList.contains("copy")){return}var command=target.getAttribute("data-copy")||"";if(navigator.clipboard){navigator.clipboard.writeText(command)}var original=target.textContent;target.textContent=command;window.setTimeout(function(){target.textContent=original},1500);});})();
+</script>
+</body>
+</html>
+"
+`;
+
+exports[`route snapshots > renders /g/<slug> with the drawing and the install command 1`] = `
+"<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hello-graph · graphs.univerlab.org</title>
+<meta name="description" content="Five nodes with one fail edge, for the drawing test.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=Old+Standard+TT:ital,wght@0,400;0,700;1,400&family=Sometype+Mono:ital,wght@0,400..700;1,400..700&display=swap">
+<style>
+:root {
+  --bg: #f4f0ea;
+  --ink: #1d1510;
+  --accent: #3fb8b0;
+  --display: "Old Standard TT", Georgia, serif;
+  --body: "EB Garamond", Georgia, serif;
+  --mono: "Sometype Mono", "Courier New", monospace;
+}
+html[data-theme="night"] {
+  --bg: #222928;
+  --ink: #ecebe4;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+  max-width: 46rem;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 1.0625rem;
+  line-height: 1.55;
+}
+a { color: var(--accent); }
+a:hover, a:focus-visible { text-decoration-thickness: 2px; }
+.site-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.brand {
+  font-family: var(--display);
+  font-size: 1.5rem;
+  color: var(--ink);
+  text-decoration: none;
+}
+.tagline { margin: 0.25rem 0 1.5rem; font-style: italic; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.2; }
+h1 { font-size: 2rem; margin: 0 0 0.25rem; }
+h2 { font-size: 1.35rem; margin: 2rem 0 0.5rem; }
+.description { margin: 0 0 1.25rem; font-size: 1.15rem; }
+.readme h1 { font-size: 1.6rem; }
+.readme h2 { font-size: 1.25rem; }
+.readme pre {
+  overflow-x: auto;
+  padding: 0.75rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+}
+.readme code { font-family: var(--mono); font-size: 0.9em; }
+.readme img { max-width: 100%; }
+.meta { font-family: var(--mono); font-size: 0.85rem; margin: 0.25rem 0 1rem; }
+.tabs { display: flex; gap: 1rem; margin: 1rem 0; font-family: var(--mono); }
+.tabs a[aria-current="page"] { color: var(--ink); text-decoration-thickness: 2px; }
+.search { display: flex; gap: 0.5rem; align-items: end; margin: 1rem 0 2rem; }
+.search label { display: block; font-family: var(--mono); font-size: 0.85rem; }
+.search input {
+  min-width: 14rem;
+  padding: 0.4rem 0.5rem;
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  font-family: var(--body);
+  font-size: 1rem;
+}
+.doc-list { list-style: none; padding: 0; margin: 0; }
+.doc-list li { margin: 0.75rem 0; }
+.doc-list .doc-name { font-family: var(--display); font-size: 1.15rem; }
+.doc-list .doc-description { display: block; }
+.button {
+  display: inline-block;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--bg);
+  background: var(--accent);
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+.install {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.5rem 0 1rem;
+}
+.install code {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  overflow-x: auto;
+}
+.copy {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.copy:hover, .copy:focus-visible { border-color: var(--accent); }
+.theme-toggle {
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.graph-svg { max-width: 100%; height: auto; margin: 1rem 0; color: var(--ink); }
+.graph-svg .node rect { fill: var(--bg); stroke: currentColor; stroke-width: 1.25; }
+.graph-svg .node text { font-family: var(--mono); font-size: 12px; fill: currentColor; }
+.graph-svg .edge { stroke: currentColor; stroke-width: 1.25; }
+.graph-svg .edge.fail { stroke-dasharray: 6 4; }
+.agent-nodes { font-family: var(--mono); font-size: 0.95rem; }
+.site-footer { margin-top: 3rem; font-family: var(--mono); font-size: 0.85rem; }
+.busy { border-left: 3px solid var(--accent); padding-left: 1rem; }
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+</style>
+<script>
+(function(){var stored=null;try{stored=localStorage.getItem("theme")}catch(e){}var hour=new Date().getHours();var theme=stored||(hour>=6&&hour<18?"day":"night");document.documentElement.dataset.theme=theme;document.addEventListener("DOMContentLoaded",function(){var button=document.getElementById("theme-toggle");if(!button){return}button.addEventListener("click",function(){var next=document.documentElement.dataset.theme==="day"?"night":"day";document.documentElement.dataset.theme=next;try{localStorage.setItem("theme",next)}catch(e){}});});})();
+</script>
+</head>
+<body>
+<header class="site-header">
+<a class="brand" href="/">graphs.univerlab.org</a>
+<button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch between day and night">Switch between day and night</button>
+</header>
+<p class="tagline">A catalogue of Canopy graphs and nodes.</p>
+<main>
+<h1>hello-graph</h1>
+<p class="description">Five nodes with one fail edge, for the drawing test.</p>
+<p class="meta"><a href="https://github.com/UniverLab/graphs">UniverLab/graphs</a> — 7 stars</p>
+<p><a class="button" href="https://github.com/UniverLab/graphs">Star on GitHub</a></p>
+<h2>Install</h2>
+<div class="install"><code>canopy graph install hello-graph</code><button type="button" class="copy" data-copy="canopy graph install hello-graph" aria-label="Copy the install command to the clipboard">Copy</button></div>
+<h2>Drawing</h2><svg class="graph-svg" viewBox="0 0 1062 68" role="img" aria-label="hello-graph: A drawing of the graph: nodes left to right by layer." xmlns="http://www.w3.org/2000/svg"><line class="edge pass" x1="166" y1="34" x2="236" y2="34"></line><line class="edge other" x1="386" y1="34" x2="456" y2="34"></line><line class="edge fail" x1="386" y1="34" x2="16" y2="34"></line><line class="edge pass" x1="606" y1="34" x2="676" y2="34"></line><line class="edge other" x1="826" y1="34" x2="896" y2="34"></line><g class="node kind-agent"><rect x="16" y="16" width="150" height="36" rx="4"></rect><text x="91" y="38" text-anchor="middle">build</text></g><g class="node kind-check"><rect x="236" y="16" width="150" height="36" rx="4"></rect><text x="311" y="38" text-anchor="middle">test</text></g><g class="node kind-gate"><rect x="456" y="16" width="150" height="36" rx="4"></rect><text x="531" y="38" text-anchor="middle">gate</text></g><g class="node kind-router"><rect x="676" y="16" width="150" height="36" rx="4"></rect><text x="751" y="38" text-anchor="middle">triage</text></g><g class="node kind-agent"><rect x="896" y="16" width="150" height="36" rx="4"></rect><text x="971" y="38" text-anchor="middle">docs</text></g></svg>
+<h2>Agent nodes</h2><p class="agent-nodes">build, docs</p><p>These agent nodes need a harness to run.</p>
+<h2>README</h2>
+<div class="readme"><h1>hello-graph</h1>
+<p>A graph the page tests render, with **one fail edge**.</p>
+<h2>Install</h2>
+<pre><code>canopy graph install hello-graph</code></pre>
+<p>Read the <a href="https://univerlab.org/canopy/" rel="nofollow">docs</a> and run <code>npm test</code>.</p></div>
+</main>
+<footer class="site-footer"><a href="https://univerlab.org/canopy/">Canopy · UniverLab</a></footer>
+<script>
+(function(){document.addEventListener("click",function(event){var target=event.target;if(!target||!target.classList||!target.classList.contains("copy")){return}var command=target.getAttribute("data-copy")||"";if(navigator.clipboard){navigator.clipboard.writeText(command)}var original=target.textContent;target.textContent=command;window.setTimeout(function(){target.textContent=original},1500);});})();
+</script>
+</body>
+</html>
+"
+`;
+
+exports[`route snapshots > renders /llms.txt with one line per document 1`] = `
+"# graphs.univerlab.org — the Canopy graph and node catalogue.
+
+hello-graph	Five nodes with one fail edge, for the drawing test.	hello-graph
+hello-node	Example catalogue node: drafts an implementation plan.	hello-node
+"
+`;
+
+exports[`route snapshots > renders /n/<slug> without a drawing 1`] = `
+"<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hello-node · graphs.univerlab.org</title>
+<meta name="description" content="Example catalogue node: drafts an implementation plan.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=Old+Standard+TT:ital,wght@0,400;0,700;1,400&family=Sometype+Mono:ital,wght@0,400..700;1,400..700&display=swap">
+<style>
+:root {
+  --bg: #f4f0ea;
+  --ink: #1d1510;
+  --accent: #3fb8b0;
+  --display: "Old Standard TT", Georgia, serif;
+  --body: "EB Garamond", Georgia, serif;
+  --mono: "Sometype Mono", "Courier New", monospace;
+}
+html[data-theme="night"] {
+  --bg: #222928;
+  --ink: #ecebe4;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+  max-width: 46rem;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 1.0625rem;
+  line-height: 1.55;
+}
+a { color: var(--accent); }
+a:hover, a:focus-visible { text-decoration-thickness: 2px; }
+.site-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.brand {
+  font-family: var(--display);
+  font-size: 1.5rem;
+  color: var(--ink);
+  text-decoration: none;
+}
+.tagline { margin: 0.25rem 0 1.5rem; font-style: italic; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.2; }
+h1 { font-size: 2rem; margin: 0 0 0.25rem; }
+h2 { font-size: 1.35rem; margin: 2rem 0 0.5rem; }
+.description { margin: 0 0 1.25rem; font-size: 1.15rem; }
+.readme h1 { font-size: 1.6rem; }
+.readme h2 { font-size: 1.25rem; }
+.readme pre {
+  overflow-x: auto;
+  padding: 0.75rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+}
+.readme code { font-family: var(--mono); font-size: 0.9em; }
+.readme img { max-width: 100%; }
+.meta { font-family: var(--mono); font-size: 0.85rem; margin: 0.25rem 0 1rem; }
+.tabs { display: flex; gap: 1rem; margin: 1rem 0; font-family: var(--mono); }
+.tabs a[aria-current="page"] { color: var(--ink); text-decoration-thickness: 2px; }
+.search { display: flex; gap: 0.5rem; align-items: end; margin: 1rem 0 2rem; }
+.search label { display: block; font-family: var(--mono); font-size: 0.85rem; }
+.search input {
+  min-width: 14rem;
+  padding: 0.4rem 0.5rem;
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  font-family: var(--body);
+  font-size: 1rem;
+}
+.doc-list { list-style: none; padding: 0; margin: 0; }
+.doc-list li { margin: 0.75rem 0; }
+.doc-list .doc-name { font-family: var(--display); font-size: 1.15rem; }
+.doc-list .doc-description { display: block; }
+.button {
+  display: inline-block;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--bg);
+  background: var(--accent);
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+.install {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.5rem 0 1rem;
+}
+.install code {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  overflow-x: auto;
+}
+.copy {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.copy:hover, .copy:focus-visible { border-color: var(--accent); }
+.theme-toggle {
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.graph-svg { max-width: 100%; height: auto; margin: 1rem 0; color: var(--ink); }
+.graph-svg .node rect { fill: var(--bg); stroke: currentColor; stroke-width: 1.25; }
+.graph-svg .node text { font-family: var(--mono); font-size: 12px; fill: currentColor; }
+.graph-svg .edge { stroke: currentColor; stroke-width: 1.25; }
+.graph-svg .edge.fail { stroke-dasharray: 6 4; }
+.agent-nodes { font-family: var(--mono); font-size: 0.95rem; }
+.site-footer { margin-top: 3rem; font-family: var(--mono); font-size: 0.85rem; }
+.busy { border-left: 3px solid var(--accent); padding-left: 1rem; }
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+</style>
+<script>
+(function(){var stored=null;try{stored=localStorage.getItem("theme")}catch(e){}var hour=new Date().getHours();var theme=stored||(hour>=6&&hour<18?"day":"night");document.documentElement.dataset.theme=theme;document.addEventListener("DOMContentLoaded",function(){var button=document.getElementById("theme-toggle");if(!button){return}button.addEventListener("click",function(){var next=document.documentElement.dataset.theme==="day"?"night":"day";document.documentElement.dataset.theme=next;try{localStorage.setItem("theme",next)}catch(e){}});});})();
+</script>
+</head>
+<body>
+<header class="site-header">
+<a class="brand" href="/">graphs.univerlab.org</a>
+<button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch between day and night">Switch between day and night</button>
+</header>
+<p class="tagline">A catalogue of Canopy graphs and nodes.</p>
+<main>
+<h1>hello-node</h1>
+<p class="description">Example catalogue node: drafts an implementation plan.</p>
+<p class="meta"><a href="https://github.com/UniverLab/graphs">UniverLab/graphs</a> — 7 stars</p>
+<p><a class="button" href="https://github.com/UniverLab/graphs">Star on GitHub</a></p>
+<h2>Install</h2>
+<div class="install"><code>canopy node install hello-node</code><button type="button" class="copy" data-copy="canopy node install hello-node" aria-label="Copy the install command to the clipboard">Copy</button></div>
+
+
+<h2>README</h2>
+<div class="readme"></div>
+</main>
+<footer class="site-footer"><a href="https://univerlab.org/canopy/">Canopy · UniverLab</a></footer>
+<script>
+(function(){document.addEventListener("click",function(event){var target=event.target;if(!target||!target.classList||!target.classList.contains("copy")){return}var command=target.getAttribute("data-copy")||"";if(navigator.clipboard){navigator.clipboard.writeText(command)}var original=target.textContent;target.textContent=command;window.setTimeout(function(){target.textContent=original},1500);});})();
+</script>
+</body>
+</html>
+"
+`;
+
+exports[`route snapshots > renders /search with community results 1`] = `
+"<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Results for “flow” · graphs.univerlab.org</title>
+<meta name="description" content="A catalogue of Canopy graphs and nodes.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=Old+Standard+TT:ital,wght@0,400;0,700;1,400&family=Sometype+Mono:ital,wght@0,400..700;1,400..700&display=swap">
+<style>
+:root {
+  --bg: #f4f0ea;
+  --ink: #1d1510;
+  --accent: #3fb8b0;
+  --display: "Old Standard TT", Georgia, serif;
+  --body: "EB Garamond", Georgia, serif;
+  --mono: "Sometype Mono", "Courier New", monospace;
+}
+html[data-theme="night"] {
+  --bg: #222928;
+  --ink: #ecebe4;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+  max-width: 46rem;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 1.0625rem;
+  line-height: 1.55;
+}
+a { color: var(--accent); }
+a:hover, a:focus-visible { text-decoration-thickness: 2px; }
+.site-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.brand {
+  font-family: var(--display);
+  font-size: 1.5rem;
+  color: var(--ink);
+  text-decoration: none;
+}
+.tagline { margin: 0.25rem 0 1.5rem; font-style: italic; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.2; }
+h1 { font-size: 2rem; margin: 0 0 0.25rem; }
+h2 { font-size: 1.35rem; margin: 2rem 0 0.5rem; }
+.description { margin: 0 0 1.25rem; font-size: 1.15rem; }
+.readme h1 { font-size: 1.6rem; }
+.readme h2 { font-size: 1.25rem; }
+.readme pre {
+  overflow-x: auto;
+  padding: 0.75rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+}
+.readme code { font-family: var(--mono); font-size: 0.9em; }
+.readme img { max-width: 100%; }
+.meta { font-family: var(--mono); font-size: 0.85rem; margin: 0.25rem 0 1rem; }
+.tabs { display: flex; gap: 1rem; margin: 1rem 0; font-family: var(--mono); }
+.tabs a[aria-current="page"] { color: var(--ink); text-decoration-thickness: 2px; }
+.search { display: flex; gap: 0.5rem; align-items: end; margin: 1rem 0 2rem; }
+.search label { display: block; font-family: var(--mono); font-size: 0.85rem; }
+.search input {
+  min-width: 14rem;
+  padding: 0.4rem 0.5rem;
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  font-family: var(--body);
+  font-size: 1rem;
+}
+.doc-list { list-style: none; padding: 0; margin: 0; }
+.doc-list li { margin: 0.75rem 0; }
+.doc-list .doc-name { font-family: var(--display); font-size: 1.15rem; }
+.doc-list .doc-description { display: block; }
+.button {
+  display: inline-block;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--bg);
+  background: var(--accent);
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+.install {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.5rem 0 1rem;
+}
+.install code {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  overflow-x: auto;
+}
+.copy {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.copy:hover, .copy:focus-visible { border-color: var(--accent); }
+.theme-toggle {
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.graph-svg { max-width: 100%; height: auto; margin: 1rem 0; color: var(--ink); }
+.graph-svg .node rect { fill: var(--bg); stroke: currentColor; stroke-width: 1.25; }
+.graph-svg .node text { font-family: var(--mono); font-size: 12px; fill: currentColor; }
+.graph-svg .edge { stroke: currentColor; stroke-width: 1.25; }
+.graph-svg .edge.fail { stroke-dasharray: 6 4; }
+.agent-nodes { font-family: var(--mono); font-size: 0.95rem; }
+.site-footer { margin-top: 3rem; font-family: var(--mono); font-size: 0.85rem; }
+.busy { border-left: 3px solid var(--accent); padding-left: 1rem; }
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+</style>
+<script>
+(function(){var stored=null;try{stored=localStorage.getItem("theme")}catch(e){}var hour=new Date().getHours();var theme=stored||(hour>=6&&hour<18?"day":"night");document.documentElement.dataset.theme=theme;document.addEventListener("DOMContentLoaded",function(){var button=document.getElementById("theme-toggle");if(!button){return}button.addEventListener("click",function(){var next=document.documentElement.dataset.theme==="day"?"night":"day";document.documentElement.dataset.theme=next;try{localStorage.setItem("theme",next)}catch(e){}});});})();
+</script>
+</head>
+<body>
+<header class="site-header">
+<a class="brand" href="/">graphs.univerlab.org</a>
+<button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch between day and night">Switch between day and night</button>
+</header>
+<p class="tagline">A catalogue of Canopy graphs and nodes.</p>
+<main>
+<form class="search" action="/search" method="get"><div><label for="q">Search graphs and nodes</label><input id="q" name="q" type="search" value="flow" placeholder="hello-graph"></div><button type="submit" class="button">Search</button></form>
+<nav class="tabs"><a href="/search?q=flow&sort=top" aria-current="page">Top</a><a href="/search?q=flow&sort=new">New</a></nav>
+<h2>Results for “flow”</h2>
+<ul class="doc-list"><li><a class="doc-name" href="/g/acme/things/flow">hello-graph</a> — 2 stars<span class="doc-description">Minimal example graph: implement, check, gate, and a router with two routes.</span></li></ul>
+</main>
+<footer class="site-footer"><a href="https://univerlab.org/canopy/">Canopy · UniverLab</a></footer>
+<script>
+(function(){document.addEventListener("click",function(event){var target=event.target;if(!target||!target.classList||!target.classList.contains("copy")){return}var command=target.getAttribute("data-copy")||"";if(navigator.clipboard){navigator.clipboard.writeText(command)}var original=target.textContent;target.textContent=command;window.setTimeout(function(){target.textContent=original},1500);});})();
+</script>
+</body>
+</html>
+"
+`;
+
+exports[`the SVG drawing > draws five labelled boxes, one dashed fail edge, kinds as classes 1`] = `
+"<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hello-graph · graphs.univerlab.org</title>
+<meta name="description" content="Five nodes with one fail edge, for the drawing test.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=Old+Standard+TT:ital,wght@0,400;0,700;1,400&family=Sometype+Mono:ital,wght@0,400..700;1,400..700&display=swap">
+<style>
+:root {
+  --bg: #f4f0ea;
+  --ink: #1d1510;
+  --accent: #3fb8b0;
+  --display: "Old Standard TT", Georgia, serif;
+  --body: "EB Garamond", Georgia, serif;
+  --mono: "Sometype Mono", "Courier New", monospace;
+}
+html[data-theme="night"] {
+  --bg: #222928;
+  --ink: #ecebe4;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+  max-width: 46rem;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 1.0625rem;
+  line-height: 1.55;
+}
+a { color: var(--accent); }
+a:hover, a:focus-visible { text-decoration-thickness: 2px; }
+.site-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.brand {
+  font-family: var(--display);
+  font-size: 1.5rem;
+  color: var(--ink);
+  text-decoration: none;
+}
+.tagline { margin: 0.25rem 0 1.5rem; font-style: italic; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.2; }
+h1 { font-size: 2rem; margin: 0 0 0.25rem; }
+h2 { font-size: 1.35rem; margin: 2rem 0 0.5rem; }
+.description { margin: 0 0 1.25rem; font-size: 1.15rem; }
+.readme h1 { font-size: 1.6rem; }
+.readme h2 { font-size: 1.25rem; }
+.readme pre {
+  overflow-x: auto;
+  padding: 0.75rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+}
+.readme code { font-family: var(--mono); font-size: 0.9em; }
+.readme img { max-width: 100%; }
+.meta { font-family: var(--mono); font-size: 0.85rem; margin: 0.25rem 0 1rem; }
+.tabs { display: flex; gap: 1rem; margin: 1rem 0; font-family: var(--mono); }
+.tabs a[aria-current="page"] { color: var(--ink); text-decoration-thickness: 2px; }
+.search { display: flex; gap: 0.5rem; align-items: end; margin: 1rem 0 2rem; }
+.search label { display: block; font-family: var(--mono); font-size: 0.85rem; }
+.search input {
+  min-width: 14rem;
+  padding: 0.4rem 0.5rem;
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  font-family: var(--body);
+  font-size: 1rem;
+}
+.doc-list { list-style: none; padding: 0; margin: 0; }
+.doc-list li { margin: 0.75rem 0; }
+.doc-list .doc-name { font-family: var(--display); font-size: 1.15rem; }
+.doc-list .doc-description { display: block; }
+.button {
+  display: inline-block;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--bg);
+  background: var(--accent);
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+.install {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.5rem 0 1rem;
+}
+.install code {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  overflow-x: auto;
+}
+.copy {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.copy:hover, .copy:focus-visible { border-color: var(--accent); }
+.theme-toggle {
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.graph-svg { max-width: 100%; height: auto; margin: 1rem 0; color: var(--ink); }
+.graph-svg .node rect { fill: var(--bg); stroke: currentColor; stroke-width: 1.25; }
+.graph-svg .node text { font-family: var(--mono); font-size: 12px; fill: currentColor; }
+.graph-svg .edge { stroke: currentColor; stroke-width: 1.25; }
+.graph-svg .edge.fail { stroke-dasharray: 6 4; }
+.agent-nodes { font-family: var(--mono); font-size: 0.95rem; }
+.site-footer { margin-top: 3rem; font-family: var(--mono); font-size: 0.85rem; }
+.busy { border-left: 3px solid var(--accent); padding-left: 1rem; }
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+</style>
+<script>
+(function(){var stored=null;try{stored=localStorage.getItem("theme")}catch(e){}var hour=new Date().getHours();var theme=stored||(hour>=6&&hour<18?"day":"night");document.documentElement.dataset.theme=theme;document.addEventListener("DOMContentLoaded",function(){var button=document.getElementById("theme-toggle");if(!button){return}button.addEventListener("click",function(){var next=document.documentElement.dataset.theme==="day"?"night":"day";document.documentElement.dataset.theme=next;try{localStorage.setItem("theme",next)}catch(e){}});});})();
+</script>
+</head>
+<body>
+<header class="site-header">
+<a class="brand" href="/">graphs.univerlab.org</a>
+<button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch between day and night">Switch between day and night</button>
+</header>
+<p class="tagline">A catalogue of Canopy graphs and nodes.</p>
+<main>
+<h1>hello-graph</h1>
+<p class="description">Five nodes with one fail edge, for the drawing test.</p>
+<p class="meta"><a href="https://github.com/UniverLab/graphs">UniverLab/graphs</a> — 7 stars</p>
+<p><a class="button" href="https://github.com/UniverLab/graphs">Star on GitHub</a></p>
+<h2>Install</h2>
+<div class="install"><code>canopy graph install hello-graph</code><button type="button" class="copy" data-copy="canopy graph install hello-graph" aria-label="Copy the install command to the clipboard">Copy</button></div>
+<h2>Drawing</h2><svg class="graph-svg" viewBox="0 0 1062 68" role="img" aria-label="hello-graph: A drawing of the graph: nodes left to right by layer." xmlns="http://www.w3.org/2000/svg"><line class="edge pass" x1="166" y1="34" x2="236" y2="34"></line><line class="edge other" x1="386" y1="34" x2="456" y2="34"></line><line class="edge fail" x1="386" y1="34" x2="16" y2="34"></line><line class="edge pass" x1="606" y1="34" x2="676" y2="34"></line><line class="edge other" x1="826" y1="34" x2="896" y2="34"></line><g class="node kind-agent"><rect x="16" y="16" width="150" height="36" rx="4"></rect><text x="91" y="38" text-anchor="middle">build</text></g><g class="node kind-check"><rect x="236" y="16" width="150" height="36" rx="4"></rect><text x="311" y="38" text-anchor="middle">test</text></g><g class="node kind-gate"><rect x="456" y="16" width="150" height="36" rx="4"></rect><text x="531" y="38" text-anchor="middle">gate</text></g><g class="node kind-router"><rect x="676" y="16" width="150" height="36" rx="4"></rect><text x="751" y="38" text-anchor="middle">triage</text></g><g class="node kind-agent"><rect x="896" y="16" width="150" height="36" rx="4"></rect><text x="971" y="38" text-anchor="middle">docs</text></g></svg>
+<h2>Agent nodes</h2><p class="agent-nodes">build, docs</p><p>These agent nodes need a harness to run.</p>
+<h2>README</h2>
+<div class="readme"><h1>hello-graph</h1>
+<p>A graph the page tests render, with **one fail edge**.</p>
+<h2>Install</h2>
+<pre><code>canopy graph install hello-graph</code></pre>
+<p>Read the <a href="https://univerlab.org/canopy/" rel="nofollow">docs</a> and run <code>npm test</code>.</p></div>
+</main>
+<footer class="site-footer"><a href="https://univerlab.org/canopy/">Canopy · UniverLab</a></footer>
+<script>
+(function(){document.addEventListener("click",function(event){var target=event.target;if(!target||!target.classList||!target.classList.contains("copy")){return}var command=target.getAttribute("data-copy")||"";if(navigator.clipboard){navigator.clipboard.writeText(command)}var original=target.textContent;target.textContent=command;window.setTimeout(function(){target.textContent=original},1500);});})();
+</script>
+</body>
+</html>
+"
+`;
