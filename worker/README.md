@@ -62,6 +62,10 @@ database, the Cache API is still the only state:
 | `GET /api/g/<owner>/<repo>/<slug>` | one graph document, validated JSON attached |
 | `GET /api/n/<owner>/<repo>/<slug>` | one node document, validated JSON attached |
 
+The `g`/`n` in a single-document route is the kind asked for: a slug that only
+exists under the other kind is a typed `404`, never a document of the wrong
+kind.
+
 Every answer carries `access-control-allow-origin: *` (GET only, OPTIONS →
 204) and short cache-control (60 s for search, 300 s otherwise). Errors are
 typed JSON bodies — `{kind, message, status, retryAfter?}` with kinds

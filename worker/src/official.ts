@@ -15,6 +15,7 @@ import {
   isApiError,
 } from "./github.js";
 import { OFFICIAL_OWNER, OFFICIAL_REPOSITORY, OFFICIAL_REPO } from "./lib.js";
+import { readJson } from "./json.js";
 import {
   type CatalogEntry,
   type Doc,
@@ -61,7 +62,8 @@ async function officialStars(github: GitHub): Promise<number | null> {
   if (isApiError(response)) {
     return null;
   }
-  return starsFromRepository(await response.json() as unknown);
+  const body = await readJson(response);
+  return body.ok ? starsFromRepository(body.value) : null;
 }
 
 /**
@@ -85,7 +87,16 @@ export async function listOfficial(
     if (isApiError(listing)) {
       return listing;
     }
-    directories[kind] = listedDirectories(await listing.json() as unknown);
+    const body = await readJson(listing);
+    if (!body.ok) {
+      log(`official: registry/${kind}s listing did not parse as JSON`);
+      return {
+        kind: "upstream",
+        message: `GitHub contents for registry/${kind}s answered something other than JSON`,
+        status: 502,
+      };
+    }
+    directories[kind] = listedDirectories(body.value);
   }
   const stars = await officialStars(github);
   if (stars === null) {
@@ -119,12 +130,14 @@ export async function listOfficial(
 }
 
 /**
- * Load one official document by slug, trying graphs before nodes so an
- * endpoint that does not say the kind still answers. `document` is the
+ * Load one official document of an explicit kind. A slug that only exists
+ * under the other kind is simply absent: `GET /api/g` never answers with a
+ * node, and the miss costs one folder probe instead of two. `document` is the
  * validated JSON itself, for the pages' renderer.
  */
 export async function loadOfficialDocument(
   github: GitHub,
+  kind: DocumentKind,
   slug: string,
   log: Log,
 ): Promise<
@@ -132,26 +145,19 @@ export async function loadOfficialDocument(
   | { kind: "absent" }
   | ApiError
 > {
-  const owner = OFFICIAL_OWNER;
-  const repo = OFFICIAL_REPO;
-  for (const kind of ["graph", "node"] as const) {
-    const source = {
-      owner,
-      repo,
-      directory: documentDirectory(owner, repo, kind, slug),
-      kind,
-      slug,
-      stars: null,
-    };
-    const loaded = await loadDocument(github, source, log);
-    if (loaded.kind !== "absent") {
-      if (loaded.kind === "doc" && loaded.entry.doc.stars === null) {
-        loaded.entry.doc.stars = await officialStars(github);
-      }
-      return loaded;
-    }
+  const source = {
+    owner: OFFICIAL_OWNER,
+    repo: OFFICIAL_REPO,
+    directory: documentDirectory(OFFICIAL_OWNER, OFFICIAL_REPO, kind, slug),
+    kind,
+    slug,
+    stars: null,
+  };
+  const loaded = await loadDocument(github, source, log);
+  if (loaded.kind === "doc" && loaded.entry.doc.stars === null) {
+    loaded.entry.doc.stars = await officialStars(github);
   }
-  return { kind: "absent" };
+  return loaded;
 }
 
 /** JSON value re-export so callers do not reach past this module. */

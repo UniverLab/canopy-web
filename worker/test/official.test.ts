@@ -73,6 +73,32 @@ describe("the official listing", () => {
     expect(listing.graphs[0].readme).toBe("");
   });
 
+  it("falls back to the raw URL when the contents API sends no inline content", async () => {
+    const fake = fakeFetch([
+      STUBS(false)[0],
+      STUBS(false)[1],
+      {
+        url: `${REPO_DIR}/contents/registry/graphs/hello-graph/graph.json`,
+        status: 200,
+        // exactly what GitHub answers for a file over 1 MB
+        body: { name: "graph.json", path: "registry/graphs/hello-graph/graph.json", size: 2000000, content: "", encoding: "none" },
+      },
+      { url: `${REPO_DIR}/contents/registry/graphs/hello-graph/README.md`, status: 404, body: {} },
+      {
+        url: "raw.githubusercontent.com/UniverLab/graphs/HEAD/registry/graphs/hello-graph/graph.json",
+        status: 200,
+        text: VALID_GRAPH_TEXT,
+        headers: { "content-type": "text/plain" },
+      },
+      { url: "repos/UniverLab/graphs", status: 200, body: { stargazers_count: 7 } },
+    ]);
+    const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
+    const listing = (await listOfficial(github, () => undefined)) as OfficialListing;
+    expect(listing.graphs.length).toBe(1);
+    expect(listing.graphs[0].slug).toBe("hello-graph");
+    expect(listing.graphs[0].readme).toBe("");
+  });
+
   it("surfaces a rate limit from the directory listing as a typed error", async () => {
     const fake = fakeFetch([
       {

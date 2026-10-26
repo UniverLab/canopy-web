@@ -11,12 +11,11 @@
 import type { DocumentKind } from "../../src/schema.js";
 import type { ApiError, GitHub, Log } from "./github.js";
 import { isApiError } from "./github.js";
-import { isNumber, isRecord, isString, stringField } from "./json.js";
+import { isArray, isNumber, isRecord, isString, readJson, stringField } from "./json.js";
 import type { DocumentSource } from "./documents.js";
 import {
   type CatalogEntry,
   type Doc,
-  type TreeFile,
   documentDirectory,
   pathsFromTree,
   sourcesFromTree,
@@ -106,11 +105,11 @@ async function directoriesFallback(
       }
       continue;
     }
-    const body = await listing.json() as unknown;
-    if (!Array.isArray(body)) {
+    const body = await readJson(listing);
+    if (!body.ok || !Array.isArray(body.value)) {
       continue;
     }
-    for (const entry of body) {
+    for (const entry of body.value) {
       if (isRecord(entry) && entry["type"] === "dir" && isString(entry["name"])) {
         sources.push({
           owner,
@@ -140,19 +139,28 @@ export async function searchCommunity(
   if (isApiError(response)) {
     return response;
   }
-  const body = await response.json() as unknown;
-  if (!isRecord(body) || !Array.isArray(body["items"])) {
+  const body = await readJson(response);
+  if (!body.ok || !isRecord(body.value)) {
     return {
       kind: "upstream",
       message: "GitHub search answered an unexpected shape",
       status: 502,
     };
   }
-  const total = isNumber(body["total_count"]) ? body["total_count"] : 0;
+  const payload = body.value;
+  const items = payload["items"];
+  if (!isArray(items)) {
+    return {
+      kind: "upstream",
+      message: "GitHub search answered an unexpected shape",
+      status: 502,
+    };
+  }
+  const total = isNumber(payload["total_count"]) ? payload["total_count"] : 0;
 
   const entries: CatalogEntry[] = [];
   let truncated = false;
-  for (const item of body["items"].slice(0, SEARCH_PAGE_SIZE)) {
+  for (const item of items.slice(0, SEARCH_PAGE_SIZE)) {
     const hit = hitOf(item);
     if (hit === null) {
       continue;
@@ -168,10 +176,14 @@ export async function searchCommunity(
       log(`search: ${hit.owner}/${hit.repo} skipped: ${treeResponse.kind}`);
       continue;
     }
-    const treeBody = await treeResponse.json() as unknown;
-    let files: TreeFile[] = pathsFromTree(treeBody);
-    let sources = sourcesFromTree(hit.owner, hit.repo, files);
-    const truncatedTree = isRecord(treeBody) && treeBody["truncated"] === true;
+    const treeBody = await readJson(treeResponse);
+    if (!treeBody.ok) {
+      log(`search: ${hit.owner}/${hit.repo} tree did not parse as JSON, skipped`);
+      continue;
+    }
+    const tree = treeBody.value;
+    let sources = sourcesFromTree(hit.owner, hit.repo, pathsFromTree(tree));
+    const truncatedTree = isRecord(tree) && tree["truncated"] === true;
     if (truncatedTree && sources.length === 0) {
       sources = await directoriesFallback(github, hit.owner, hit.repo, hit.defaultBranch, log);
     }

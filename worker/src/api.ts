@@ -14,6 +14,7 @@
  */
 import { attachDownloads, createAnalytics } from "./analytics.js";
 import { createGitHub, isApiError, type ApiError, type CacheLike, type GitHub, type Log } from "./github.js";
+import type { DocumentKind } from "../../src/schema.js";
 import { SLUG_RE, OWNER_RE, REPO_RE, isOfficialRepo } from "./lib.js";
 import { documentDirectory, loadDocument } from "./documents.js";
 import { listOfficial, loadOfficialDocument } from "./official.js";
@@ -113,47 +114,42 @@ function partsInvalid(owner: string, repo: string, slug: string): string | null 
   return null;
 }
 
+/**
+ * One document, of the kind the route names: `GET /api/g` answers a graph or
+ * nothing, `GET /api/n` a node or nothing. `document` is the validated JSON
+ * itself, for the pages' renderer.
+ */
 async function singleDocument(
   github: GitHub,
+  kind: DocumentKind,
   owner: string,
   repo: string,
   slug: string,
   log: Log,
 ): Promise<Response> {
-  if (isOfficialRepo(owner, repo)) {
-    const loaded = await loadOfficialDocument(github, slug, log);
-    if (loaded.kind === "doc") {
-      return jsonResponse(loaded.entry, 200, 300);
-    }
-    if (loaded.kind === "absent") {
-      return errorResponse({
-        kind: "invalid-document",
-        message: `no official graph or node named ${slug}`,
-        status: 404,
-      });
-    }
-    return errorResponse(loaded);
+  const loaded = isOfficialRepo(owner, repo)
+    ? await loadOfficialDocument(github, kind, slug, log)
+    : await loadDocument(
+        github,
+        {
+          owner,
+          repo,
+          directory: documentDirectory(owner, repo, kind, slug),
+          kind,
+          slug,
+          stars: null,
+        },
+        log,
+      );
+  if (loaded.kind === "doc") {
+    return jsonResponse(loaded.entry, 200, 300);
   }
-  for (const kind of ["graph", "node"] as const) {
-    const source = {
-      owner,
-      repo,
-      directory: documentDirectory(owner, repo, kind, slug),
-      kind,
-      slug,
-      stars: null,
-    };
-    const loaded = await loadDocument(github, source, log);
-    if (loaded.kind === "doc") {
-      return jsonResponse(loaded.entry, 200, 300);
-    }
-    if (loaded.kind !== "absent") {
-      return errorResponse(loaded);
-    }
+  if (loaded.kind !== "absent") {
+    return errorResponse(loaded);
   }
   return errorResponse({
     kind: "invalid-document",
-    message: `no graph or node named ${slug} in ${owner}/${repo}`,
+    message: `no ${kind} named ${slug} in ${owner}/${repo}`,
     status: 404,
   });
 }
@@ -251,7 +247,8 @@ export async function handleApi(
       if (invalid !== null) {
         return errorResponse(invalidPath(invalid));
       }
-      return singleDocument(github, owner, repo, slug, log);
+      const kind: DocumentKind = route.verb === "g" ? "graph" : "node";
+      return singleDocument(github, kind, owner, repo, slug, log);
     }
     default:
       return errorResponse(invalidPath("unknown API route"));

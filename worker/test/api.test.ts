@@ -113,6 +113,50 @@ describe("the JSON API", () => {
     expect(body.doc.repo).toBe("acme/things");
   });
 
+  it("answers the kind the route names, never the other one", async () => {
+    const fake = fakeFetch([
+      {
+        url: `${REPO_DIR}/contents/registry/graphs/hello-graph/graph.json`,
+        status: 200,
+        body: fileBody("graphs/hello-graph/graph.json", VALID_GRAPH_TEXT),
+      },
+    ]);
+    const answer = await handleApi(
+      new Request("https://graphs.univerlab.org/api/n/UniverLab/graphs/hello-graph"),
+      {},
+      { fetchImpl: fake.fetchImpl, cache: new FakeCache() },
+    );
+    const response = answer as unknown as Response;
+    expect(response.status).toBe(404);
+    const body = (await response.json()) as { kind: string; message: string };
+    expect(body.kind).toBe("invalid-document");
+    expect(body.message).toContain("no node named");
+    // A node request never reads the graph folder, so a miss stays one probe.
+    expect(fake.calls.some((url) => url.includes("registry/graphs/hello-graph"))).toBe(false);
+  });
+
+  it("turns an unreadable upstream body into a typed error, never a throw", async () => {
+    const html = { "content-type": "text/html" };
+    const listing = await call("/api/official", {
+      stubs: [{ url: `${REPO_DIR}/contents/registry/graphs`, status: 200, text: "<html>portal</html>", headers: html }],
+    });
+    expect(listing.status).toBe(502);
+    expect(((await listing.json()) as { kind: string }).kind).toBe("upstream");
+
+    const document = await call("/api/g/UniverLab/graphs/hello-graph", {
+      stubs: [
+        {
+          url: `${REPO_DIR}/contents/registry/graphs/hello-graph/graph.json`,
+          status: 200,
+          text: "<html>portal</html>",
+          headers: html,
+        },
+      ],
+    });
+    expect(document.status).toBe(404);
+    expect(((await document.json()) as { kind: string }).kind).toBe("invalid-document");
+  });
+
   it("answers a missing document with a typed 404, never a 500", async () => {
     const fake = fakeFetch([
       { url: "repos/UniverLab/graphs/contents/registry/graphs/missing/graph.json", status: 404, body: {} },
@@ -174,6 +218,25 @@ describe("the JSON API", () => {
       { cache: new FakeCache(), fetchImpl: fakeFetch([]).fetchImpl },
     );
     expect(answer).toBe(true);
+  });
+
+  it("attaches install counts when analytics is configured and leaves them out otherwise", async () => {
+    const enriched = await call("/api/official", {
+      env: { CF_ACCOUNT_ID: "acct", CF_ANALYTICS_TOKEN: "tok" },
+      stubs: [
+        ...stubs(),
+        {
+          url: "analytics_engine/sql",
+          status: 200,
+          body: { data: [{ index: "UniverLab/graphs/graph/hello-graph", count: 5 }] },
+        },
+      ],
+    });
+    const withCounts = (await enriched.json()) as { graphs: Array<{ downloads?: number }> };
+    expect(withCounts.graphs[0].downloads).toBe(5);
+
+    const plain = (await (await call("/api/official")).json()) as { graphs: Array<{ downloads?: number }> };
+    expect(plain.graphs[0].downloads).toBeUndefined();
   });
 
   it("does not list official stars as zero when the repo call fails", async () => {

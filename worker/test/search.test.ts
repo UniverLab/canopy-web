@@ -173,6 +173,40 @@ describe("community search", () => {
     expect(outcome.items[0].readme).toBe("");
   });
 
+  it("skips a repository whose tree is unreadable and keeps the others", async () => {
+    const fake = fakeFetch([
+      {
+        url: SEARCH,
+        status: 200,
+        body: {
+          total_count: 2,
+          items: [
+            { name: "bad", owner: { login: "acme" }, default_branch: "main", stargazers_count: 1 },
+            { name: "good", owner: { login: "acme" }, default_branch: "main", stargazers_count: 1 },
+          ],
+        },
+      },
+      { url: "repos/acme/bad/git/trees/main", status: 200, text: "<html>portal</html>", headers: { "content-type": "text/html" } },
+      { url: "repos/acme/good/git/trees/main", status: 200, body: { tree: [{ path: "graphs/flow/graph.json", type: "blob" }] } },
+      { url: "repos/acme/good/contents/graphs/flow/graph.json", status: 200, body: fileBody("graphs/flow/graph.json", VALID_GRAPH_TEXT) },
+      { url: "repos/acme/good/contents/graphs/flow/README.md", status: 404, body: {} },
+    ]);
+    const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
+    const outcome = (await searchCommunity(github, { q: "", sort: "top", page: 1 }, () => undefined)) as SearchOutcome;
+    expect(outcome.items.length).toBe(1);
+    expect(outcome.items[0].repo).toBe("acme/good");
+  });
+
+  it("turns an unreadable search body into a typed upstream error, never a throw", async () => {
+    const fake = fakeFetch([
+      { url: SEARCH, status: 200, text: "<html>portal</html>", headers: { "content-type": "text/html" } },
+    ]);
+    const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
+    const outcome = await searchCommunity(github, { q: "", sort: "top", page: 1 }, () => undefined);
+    expect("kind" in outcome ? outcome.kind : "").toBe("upstream");
+    expect("kind" in outcome ? outcome.status : 0).toBe(502);
+  });
+
   it("surfaces a rate limit from the search call as a typed error", async () => {
     const fake = fakeFetch([
       { url: SEARCH, status: 429, headers: { "x-ratelimit-remaining": "0" } },

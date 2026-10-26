@@ -25,6 +25,25 @@ export function parseJson(text: string): ParsedJson {
   }
 }
 
+/** A response body that parsed as JSON; `ok: false` means it never will. */
+export type JsonRead = { ok: true; value: JsonValue } | { ok: false };
+
+/**
+ * Read a response body as JSON without ever throwing. GitHub answers JSON on
+ * every success, but a proxy or a captive portal can hand back HTML with a
+ * 200: that is an upstream problem the caller shapes into a typed error, not
+ * an exception that reaches the user as a 500.
+ */
+export async function readJson(response: Response): Promise<JsonRead> {
+  let text: string;
+  try {
+    text = await response.text();
+  } catch {
+    return { ok: false };
+  }
+  return parseJson(text);
+}
+
 /** True when the value is a JSON object (and not null, not an array). */
 export function isRecord(
   value: unknown,

@@ -12,7 +12,7 @@
 import type { DocumentKind, JsonValue } from "../../src/schema.js";
 import type { ApiError, GitHub } from "./github.js";
 import { isApiError } from "./github.js";
-import { decodeBase64, isArray, isNumber, isRecord, isString, parseJson, stringField } from "./json.js";
+import { decodeBase64, isArray, isNumber, isRecord, isString, parseJson, readJson, stringField } from "./json.js";
 import { isValidDocument } from "./validate.js";
 import { isOfficialRepo } from "./lib.js";
 
@@ -154,9 +154,17 @@ async function readText(
     log(`documents: ${path} absent at the contents API, trying raw`);
     return rawText(github, owner, repo, path, ref);
   }
-  const body = await file.json() as unknown;
-  if (isRecord(body) && body["content"] !== undefined && body["content"] !== null) {
-    const decoded = decodeBase64(body["content"]);
+  const body = await readJson(file);
+  if (!body.ok) {
+    log(`documents: ${path} answered something other than JSON, trying raw`);
+    return rawText(github, owner, repo, path, ref);
+  }
+  const content = isRecord(body.value) ? body.value["content"] : undefined;
+  const encoding = isRecord(body.value) ? stringField(body.value, "encoding") : "";
+  // Files over 1 MB arrive with `content: ""` and `encoding: "none"`; an empty
+  // inline body is never the file, so it goes to the raw URL as well.
+  if (isString(content) && content !== "" && encoding !== "none") {
+    const decoded = decodeBase64(content);
     if (decoded !== null) {
       return { kind: "text", text: decoded };
     }

@@ -85,8 +85,9 @@ export function fakeFetch(stubs: Stub[]): FakeFetch {
         continue;
       }
       const headers = new Headers({ "content-type": "application/json", ...stub.headers });
-      const text = stub.text ?? JSON.stringify(stub.body ?? {});
-      return new Response(stub.body === undefined ? '' : text, {
+      // `text` is a raw body (HTML, empty); `body` is JSON-encoded; absent both is "".
+      const payload = stub.text ?? (stub.body === undefined ? "" : JSON.stringify(stub.body));
+      return new Response(payload, {
         status: stub.status,
         headers,
       });
