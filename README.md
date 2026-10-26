@@ -32,8 +32,8 @@ must equal the document's slug-safe `name` (`^[a-z0-9-]{1,48}$`).
 
 ## How to publish
 
-1. Put the document at `graphs/<slug>/graph.json` (graphs) or
-   `nodes/<slug>/node.json` (nodes), where `<slug>` matches the
+1. Put the document at `registry/graphs/<slug>/graph.json` (graphs) or
+   `registry/nodes/<slug>/node.json` (nodes), where `<slug>` matches the
    document's `name`.
 2. Add a `README.md` beside it describing what the document does.
 3. Add the `canopy-graph` topic to the GitHub repository.

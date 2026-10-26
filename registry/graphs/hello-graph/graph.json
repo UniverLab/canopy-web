@@ -42,8 +42,8 @@
   ],
   "edges": [
     { "from_node": "implementer", "to_node": "triage", "condition": "pass" },
-    { "from_node": "triage", "to_node": "tests", "condition": { "condition": "route", "route": "proceed" } },
-    { "from_node": "triage", "to_node": "implementer", "condition": { "condition": "route", "route": "escalate" } },
+    { "from_node": "triage", "to_node": "tests", "condition": { "route": "proceed" } },
+    { "from_node": "triage", "to_node": "implementer", "condition": { "route": "escalate" } },
     { "from_node": "tests", "to_node": "gate", "condition": "always" },
     { "from_node": "tests", "to_node": "implementer", "condition": "fail" },
     { "from_node": "implementer", "to_node": "tests", "condition": "error" }

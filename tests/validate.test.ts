@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { validateDocumentFile, validateFolder } from "../src/validate.js";
+import { validateDocument, validateDocumentFile, validateFolder, validateTarget } from "../src/validate.js";
 
 const fixtures = path.resolve(import.meta.dirname, "fixtures");
 
@@ -56,5 +56,43 @@ describe("catalogue validator", () => {
         (failure) => failure.pointer === "#/name" && failure.message.includes("folder name"),
       ),
     ).toBe(true);
+  });
+
+  it("accepts a real Rust route condition {route}", () => {
+    const doc = {
+      format_version: 6,
+      name: "g",
+      nodes: [],
+      edges: [{ from_node: "a", to_node: "b", condition: { route: "proceed" } }],
+    };
+    expect(validateDocument("g/graph.json", "graph", doc)).toEqual([]);
+  });
+
+  it("rejects the {condition, route} shape Rust never wrote", () => {
+    const doc = {
+      format_version: 6,
+      name: "g",
+      nodes: [],
+      edges: [{ from_node: "a", to_node: "b", condition: { condition: "route", route: "proceed" } }],
+    };
+    expect(validateDocument("g/graph.json", "graph", doc).length).toBeGreaterThan(0);
+  });
+
+  it("accepts unknown hook fields, like Rust import does", () => {
+    const doc = {
+      format_version: 6,
+      name: "g",
+      nodes: [],
+      edges: [],
+      hooks: { on_completed: [{ command: "echo done", future_hook_field: 1 }] },
+    };
+    expect(validateDocument("g/graph.json", "graph", doc)).toEqual([]);
+  });
+
+  it("enforces folder rules when given a single file", () => {
+    const missing = validateTarget(path.join(folder("missing-readme-graph"), "graph.json"));
+    expect(missing.some((failure) => failure.message.includes("README"))).toBe(true);
+    const mismatch = validateTarget(path.join(folder("name-mismatch-node"), "node.json"));
+    expect(mismatch.some((failure) => failure.message.includes("folder name"))).toBe(true);
   });
 });

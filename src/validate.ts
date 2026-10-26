@@ -209,6 +209,11 @@ export function validateTarget(target: string): ValidationFailure[] {
     return [{ file: target, pointer: "#", message: "no such file or directory" }];
   }
   if (statSync(resolved).isFile()) {
+    // A document file is always validated as its folder: the publish layout
+    // requires the README.md and folder-name-equals-document-name rules too.
+    if (kindForFile(resolved) !== null) {
+      return validateFolder(path.dirname(resolved));
+    }
     return validateDocumentFile(resolved);
   }
   const entries = readdirSync(resolved);

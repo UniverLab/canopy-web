@@ -51,14 +51,13 @@
       "pattern": "^[a-z0-9-]{1,48}$"
     },
     "condition": {
-      "description": "Routing condition: pass, fail, always, error (break reads as error), or a router label {condition: route, route}.",
+      "description": "Routing condition: pass, fail, always, error (break reads as error), or a router label {route}. Matches serde's externally-tagged encoding of GraphEdgeCondition::Route.",
       "anyOf": [
         { "enum": ["pass", "fail", "always", "error", "break"] },
         {
           "type": "object",
-          "required": ["condition", "route"],
+          "required": ["route"],
           "properties": {
-            "condition": { "const": "route" },
             "route": { "type": "string", "minLength": 1 }
           },
           "additionalProperties": false
@@ -159,7 +158,7 @@
       "additionalProperties": false
     },
     "hook": {
-      "description": "One graph completion hook: agent (platform|crew + model), command, interactive (prompt + target session), or graph (target_graph_id).",
+      "description": "One graph completion hook: agent (platform|crew + model), command, interactive (prompt + target session), or graph (target_graph_id). Open to extra fields: GraphCompletionHook has no deny_unknown_fields.",
       "type": "object",
       "properties": {
         "platform": { "type": "string" },
@@ -175,8 +174,7 @@
         "queue_id": { "type": "string" },
         "workdir_override": { "type": "string" },
         "idea": { "type": "string" }
-      },
-      "additionalProperties": false
+      }
     },
     "hooks": {
       "description": "The graph's completion hooks, keyed by the four events they fire on.",
