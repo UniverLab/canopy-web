@@ -1,0 +1,16 @@
+{
+  "format_version": 1,
+  "name": "hello-node",
+  "kind": "agent",
+  "description": "Example catalogue node: drafts an implementation plan.",
+  "config": {
+    "prompt_template": "Draft a plan for {{spec_name}}.",
+    "timeout_minutes": 15
+  },
+  "preset": {
+    "name": "quick",
+    "content": {
+      "timeout_minutes": 5
+    }
+  }
+}

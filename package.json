@@ -1,0 +1,27 @@
+{
+  "name": "graphs-catalogue",
+  "version": "0.1.0",
+  "description": "UniverLab graphs catalogue: JSON Schemas and validator for shareable Canopy graph and node documents",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "validate": "tsx src/validate.ts"
+  },
+  "dependencies": {
+    "@cfworker/json-schema": "^4.1.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "@types/node": "^22.10.0",
+    "eslint": "^9.18.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}

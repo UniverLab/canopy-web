@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://graphs.univerlab.org/schema/graph.schema.json",
+  "title": "Canopy GraphExportDocument",
+  "description": "Portable design of one Canopy graph (format_version 6, with bundled presets). Derived field by field from harness-canopy src/domain/graph_transfer/mod.rs; every Rust type with deny_unknown_fields sets additionalProperties false here.",
+  "type": "object",
+  "required": ["format_version", "name", "nodes", "edges"],
+  "properties": {
+    "format_version": {
+      "description": "Accepted 1-6 on import; writers emit 6.",
+      "enum": [1, 2, 3, 4, 5, 6]
+    },
+    "name": { "$ref": "#/definitions/slug" },
+    "description": { "type": "string" },
+    "nodes": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/node" }
+    },
+    "edges": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/edge" }
+    },
+    "ensembles": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/ensemble" },
+      "default": []
+    },
+    "infra_node": {
+      "description": "Pre-wired target for infrastructure failures, by node name; null when the graph has no infra node.",
+      "anyOf": [{ "type": "string" }, { "type": "null" }]
+    },
+    "hooks": { "$ref": "#/definitions/hooks" },
+    "presets": {
+      "description": "Bundled presets shipped with the document (new in format version 6).",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["content"],
+        "properties": {
+          "name": { "type": "string" },
+          "content": true
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]{1,48}$"
+    },
+    "condition": {
+      "description": "Routing condition: pass, fail, always, error (break reads as error), or a router label {condition: route, route}.",
+      "anyOf": [
+        { "enum": ["pass", "fail", "always", "error", "break"] },
+        {
+          "type": "object",
+          "required": ["condition", "route"],
+          "properties": {
+            "condition": { "const": "route" },
+            "route": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "target": {
+      "description": "An ensemble wiring target: a plain node name, or {ensemble} for another ensemble's quorum.",
+      "anyOf": [
+        { "type": "string" },
+        {
+          "type": "object",
+          "required": ["ensemble"],
+          "properties": {
+            "ensemble": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "node": {
+      "type": "object",
+      "required": ["name", "kind", "position", "config"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["agent", "check", "gate", "router"] },
+        "position": { "type": "integer" },
+        "config": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "edge": {
+      "type": "object",
+      "required": ["from_node", "to_node", "condition"],
+      "properties": {
+        "from_node": { "type": "string", "minLength": 1 },
+        "to_node": { "type": "string", "minLength": 1 },
+        "condition": { "$ref": "#/definitions/condition" }
+      },
+      "additionalProperties": false
+    },
+    "ensembleMember": {
+      "type": "object",
+      "properties": {
+        "platform": { "type": "string" },
+        "model": { "type": "string" },
+        "prompt_override": { "type": "string" },
+        "timeout_minutes": { "type": "integer" }
+      },
+      "additionalProperties": false
+    },
+    "entrySource": {
+      "type": "object",
+      "required": ["from_node", "condition"],
+      "properties": {
+        "from_node": { "type": "string", "minLength": 1 },
+        "condition": { "$ref": "#/definitions/condition" }
+      },
+      "additionalProperties": false
+    },
+    "ensemble": {
+      "type": "object",
+      "required": [
+        "name",
+        "commit_rights",
+        "prompt_template",
+        "entry_from_node",
+        "entry_condition",
+        "on_pass_to",
+        "min_pass",
+        "timeout_minutes"
+      ],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["parallel", "cascade", "round_robin"] },
+        "commit_rights": { "type": "boolean" },
+        "prompt_template": { "type": "string" },
+        "entry_from_node": { "$ref": "#/definitions/target" },
+        "entry_condition": { "$ref": "#/definitions/condition" },
+        "extra_entry_sources": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/entrySource" },
+          "default": []
+        },
+        "on_pass_to": { "$ref": "#/definitions/target" },
+        "on_fail_to": { "$ref": "#/definitions/target" },
+        "min_pass": { "type": "integer" },
+        "timeout_minutes": { "type": "integer" },
+        "straggler_timeout_minutes": { "type": "integer" },
+        "quorum_grace_minutes": { "type": "integer" },
+        "crew": { "type": "string" },
+        "members": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/ensembleMember" },
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "hook": {
+      "description": "One graph completion hook: agent (platform|crew + model), command, interactive (prompt + target session), or graph (target_graph_id).",
+      "type": "object",
+      "properties": {
+        "platform": { "type": "string" },
+        "crew": { "type": "string" },
+        "model": { "type": "string" },
+        "effort": { "type": "string" },
+        "prompt": { "type": "string" },
+        "command": { "type": "string" },
+        "target_session_id": { "type": "string" },
+        "target_session_name": { "type": "string" },
+        "timeout_minutes": { "type": "integer", "minimum": 0 },
+        "target_graph_id": { "type": "string" },
+        "queue_id": { "type": "string" },
+        "workdir_override": { "type": "string" },
+        "idea": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "hooks": {
+      "description": "The graph's completion hooks, keyed by the four events they fire on.",
+      "type": "object",
+      "properties": {
+        "on_completed": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/hook" }
+        },
+        "on_failed": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/hook" }
+        },
+        "on_blocked": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/hook" }
+        },
+        "on_spec_completed": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/hook" }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

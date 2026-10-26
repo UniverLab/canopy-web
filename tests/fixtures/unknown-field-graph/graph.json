@@ -1,0 +1,129 @@
+{
+  "format_version": 6,
+  "name": "unknown-field-graph",
+  "description": "Minimal example graph: implement, check, gate, and a router with two routes.",
+  "nodes": [
+    {
+      "name": "implementer",
+      "kind": "agent",
+      "position": 1,
+      "config": {
+        "prompt_template": "Implement the spec."
+      }
+    },
+    {
+      "name": "triage",
+      "kind": "router",
+      "position": 2,
+      "config": {
+        "routes": [
+          {
+            "label": "escalate",
+            "description": "Needs a human."
+          },
+          {
+            "label": "proceed",
+            "description": "Safe to continue."
+          }
+        ],
+        "fallback": "escalate"
+      }
+    },
+    {
+      "name": "tests",
+      "kind": "check",
+      "position": 3,
+      "config": {
+        "command": "npm test"
+      }
+    },
+    {
+      "name": "gate",
+      "kind": "gate",
+      "position": 4,
+      "config": {
+        "output_contains": "passing"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from_node": "implementer",
+      "to_node": "triage",
+      "condition": "pass"
+    },
+    {
+      "from_node": "triage",
+      "to_node": "tests",
+      "condition": {
+        "condition": "route",
+        "route": "proceed"
+      }
+    },
+    {
+      "from_node": "triage",
+      "to_node": "implementer",
+      "condition": {
+        "condition": "route",
+        "route": "escalate"
+      }
+    },
+    {
+      "from_node": "tests",
+      "to_node": "gate",
+      "condition": "always"
+    },
+    {
+      "from_node": "tests",
+      "to_node": "implementer",
+      "condition": "fail"
+    },
+    {
+      "from_node": "implementer",
+      "to_node": "tests",
+      "condition": "error"
+    }
+  ],
+  "ensembles": [
+    {
+      "name": "reviewers",
+      "kind": "parallel",
+      "commit_rights": false,
+      "prompt_template": "Review the diff for defects.",
+      "entry_from_node": "gate",
+      "entry_condition": "pass",
+      "extra_entry_sources": [],
+      "on_pass_to": "tests",
+      "min_pass": 1,
+      "timeout_minutes": 30,
+      "members": [
+        {
+          "prompt_override": "Review for correctness."
+        },
+        {
+          "prompt_override": "Review for style.",
+          "timeout_minutes": 10
+        }
+      ]
+    }
+  ],
+  "infra_node": "tests",
+  "hooks": {
+    "on_completed": [
+      {
+        "command": "echo done"
+      }
+    ],
+    "on_failed": [],
+    "on_blocked": [],
+    "on_spec_completed": []
+  },
+  "presets": {
+    "quick": {
+      "content": {
+        "timeout_minutes": 10
+      }
+    }
+  },
+  "future_field": 1
+}
