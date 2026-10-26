@@ -51,3 +51,12 @@ must equal the document's slug-safe `name` (`^[a-z0-9-]{1,48}$`).
 
 The schemas in `schema/` are the single contract the worker and
 Canopy's `graph validate` agree on — import them, never copy them.
+
+## Worker deploy
+
+The install redirector lives in `worker/` (Cloudflare Worker
+`canopy-graphs`, behind `graphs.univerlab.org`). Deploys are manual only
+(`.github/workflows/deploy.yml`, `workflow_dispatch`). Before the first
+deploy, follow the one-time setup in [worker/README.md](worker/README.md):
+enable Analytics Engine on the account, bind the custom domain, and set
+`CLOUDFLARE_API_TOKEN`.
