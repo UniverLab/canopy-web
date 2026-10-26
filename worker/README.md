@@ -50,6 +50,27 @@ person. The client class is a coarse bucket, not the raw header.
 The write is fire-and-forget inside a `try/catch`: if the binding is missing
 (local dev) or Analytics Engine is down, the redirect still happens.
 
+## JSON API (the catalogue's read surface)
+
+Pages and agents read a JSON view of the catalogue; GitHub is still the
+database, the Cache API is still the only state:
+
+| Route | Answer |
+|---|---|
+| `GET /api/official` | `{graphs, nodes}` — the `registry/` listing |
+| `GET /api/search?q=&sort=top\|new&page=` | `{items, q, sort, page, total, truncated}` — `topic:canopy-graph` plus free text |
+| `GET /api/g/<owner>/<repo>/<slug>` | one graph document, validated JSON attached |
+| `GET /api/n/<owner>/<repo>/<slug>` | one node document, validated JSON attached |
+
+Every answer carries `access-control-allow-origin: *` (GET only, OPTIONS →
+204) and short cache-control (60 s for search, 300 s otherwise). Errors are
+typed JSON bodies — `{kind, message, status, retryAfter?}` with kinds
+`rate-limit` (429), `not-found`/`invalid-document` (404), `upstream` (502),
+`invalid-path`/`invalid-query` (400) — so nothing the Worker fails at can
+turn into a 500 for an agent to choke on. `downloads` (90-day install
+counts) is attached when `CF_ACCOUNT_ID` + `CF_ANALYTICS_TOKEN` are set, and
+absent when not: counts are never zero-filled.
+
 ## Tests
 
 ```sh
@@ -58,8 +79,12 @@ npm run test:worker     # worker/ suite, in the Workers runtime via Miniflare
 
 The suite covers both route shapes, `?ref=`, every 400 case, the `/i/` usage
 page, the data point written for each outcome, and that a throwing or missing
-binding still serves the redirect. `npm test` runs it together with the
-document validator suite.
+binding still serves the redirect, plus the API surface above: official
+listing, search with text and both orderings, invalid documents dropped, a
+cache hit on a second call, rate limits surfaced as typed errors, and counts
+present and absent. `npm test` runs it together with the document validator
+suite. The API tests use injected fakes (`worker/test/fakes.ts`),
+never stubbed globals.
 
 ## One-time setup (before the first deploy)
 

@@ -31,7 +31,7 @@ function request(path: string, options: Options = {}): Request {
 }
 
 function call(path: string, options: Options = {}): Response {
-  return worker.fetch(request(path, options), options.env ?? {});
+  return worker.fetch(request(path, options), options.env ?? {}) as Response;
 }
 
 /** An env whose Analytics Engine binding records what the Worker sends it. */

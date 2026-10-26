@@ -41,6 +41,25 @@ export const OFFICIAL_REPO = "graphs";
 /** Official documents live under the registry layout; community repos do not. */
 const OFFICIAL_PREFIX = "registry/";
 
+/**
+ * The directory prefix inside a repository that holds the official
+ * catalogue documents. Reused by buildUrl and by the catalogue API.
+ */
+export function documentPrefix(): string {
+  return OFFICIAL_PREFIX;
+}
+
+/** True when owner/repo names the official catalogue repository. */
+export function isOfficialRepo(owner: string, repo: string): boolean {
+  return (
+    owner.toLowerCase() === OFFICIAL_OWNER.toLowerCase() &&
+    repo.toLowerCase() === OFFICIAL_REPO.toLowerCase()
+  );
+}
+
+/** The official repository, plus the shared slug rule, for callers of buildUrl. */
+export const OFFICIAL_REPOSITORY = `${OFFICIAL_OWNER}/${OFFICIAL_REPO}`;
+
 /** The placeholder recorded for a part a bad request did not supply. */
 const UNKNOWN = "?";
 
@@ -207,7 +226,7 @@ export function parseTarget(pathname: string, ref: string | null): Parsed {
 
 /** Where the document really lives. This is the only URL the Worker hands out. */
 export function buildUrl(target: Target): string {
-  const prefix = target.official ? OFFICIAL_PREFIX : "";
+  const prefix = target.official ? documentPrefix() : "";
   return `https://raw.githubusercontent.com/${target.owner}/${target.repo}/${target.ref}/${prefix}${target.kind}s/${target.slug}/${target.kind}.json`;
 }
 

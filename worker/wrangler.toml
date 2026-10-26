@@ -8,6 +8,12 @@ name = "canopy-graphs"
 main = "src/index.ts"
 compatibility_date = "2026-10-26"
 
+[vars]
+# The Analytics Engine account the downloads API reads; the SQL API is the
+# only consumer. The token arrives as a secret (CF_ANALYTICS_TOKEN), the
+# token for GitHub arrives as GITHUB_TOKEN.
+CF_ACCOUNT_ID = "d7b81bdd721f503968523dd903d967be"
+
 # Inlined on purpose: the account has a single Worker account, and the deploy
 # workflow then needs exactly one secret (CLOUDFLARE_API_TOKEN).
 account_id = "d7b81bdd721f503968523dd903d967be"

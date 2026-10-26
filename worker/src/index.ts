@@ -27,6 +27,8 @@ import {
   indexKey,
   parseTarget,
 } from "./lib.js";
+import { handleApi, type ApiEnv } from "./api.js";
+import { type CacheLike } from "./github.js";
 
 /** The single Analytics Engine method this Worker uses. */
 export interface DataPoint {
@@ -39,9 +41,15 @@ export interface AnalyticsSink {
   writeDataPoint(point: DataPoint): void;
 }
 
-export interface Env {
+export interface Env extends ApiEnv {
   /** Optional: absent in local dev and in tests, and the Worker must still serve. */
   INSTALLS?: AnalyticsSink;
+}
+
+/** The Cache API when the runtime provides it, undefined otherwise. */
+function defaultCache(): CacheLike | undefined {
+  const runtime = globalThis as unknown as { caches?: { default?: CacheLike } };
+  return runtime.caches?.default;
 }
 
 function textResponse(body: string, status: number): Response {
@@ -82,9 +90,20 @@ function record(env: Env, req: Request, parts: Parts, outcome: Outcome): void {
 }
 
 export default {
-  fetch(req: Request, env: Env): Response {
+  fetch(req: Request, env: Env): Response | Promise<Response> {
     const url = new URL(req.url);
-    const parsed = parseTarget(url.pathname, url.searchParams.get("ref"));
+    if (url.pathname.startsWith("/api")) {
+      return handleApi(req, env, { cache: defaultCache() }).then(
+        (answer) => answer === true ? install(req, env, url) : answer,
+      );
+    }
+    return install(req, env, url);
+  },
+};
+
+/** The install redirector: 302 to GitHub, or a 400/404 explaining why not. */
+function install(req: Request, env: Env, url: URL): Response {
+  const parsed = parseTarget(url.pathname, url.searchParams.get("ref"));
 
     if (!parsed.ok) {
       record(env, req, parsed.rejection, "bad-request");
@@ -94,5 +113,4 @@ export default {
 
     record(env, req, parsed.target, "redirect");
     return Response.redirect(buildUrl(parsed.target), 302);
-  },
-};
+}
