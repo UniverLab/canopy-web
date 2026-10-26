@@ -1,0 +1,32 @@
+# graphs.univerlab.org — install redirector
+#
+# One Worker, one job: answer Canopy's install request with a 302 to the
+# document on GitHub, and count the request in aggregate. The Worker never
+# proxies the document, so GitHub stays the download origin and the trust
+# anchor (contract: Intelligence 778242cb).
+name = "canopy-graphs"
+main = "src/index.ts"
+compatibility_date = "2026-10-26"
+
+# Inlined on purpose: the account has a single Worker account, and the deploy
+# workflow then needs exactly one secret (CLOUDFLARE_API_TOKEN).
+account_id = "d7b81bdd721f503968523dd903d967be"
+
+# Aggregate counting. Analytics Engine is the right store: writes are
+# fire-and-forget (no latency added to the redirect), there is no database to
+# provision, and it is built for high-volume, low-value events. KV would need
+# read-modify-write and rate-limits at 1 write/sec/key; D1 would put a SQL
+# write in the hot path of every install.
+#
+# REQUIRED FIRST: Analytics Engine must be enabled once on the account, at
+# dash.cloudflare.com → Storage & databases → Analytics Engine (NOT under
+# Compute/Workers, despite what the error message links to). Until it is, a
+# deploy that declares this binding fails with `code: 10089`, whatever the
+# token's permissions. The dataset itself needs no provisioning — it is
+# created on the first write; the dashboard's "Create Dataset" button is not
+# needed.
+#
+# The binding is optional in code: `wrangler dev` without it still serves.
+[[analytics_engine_datasets]]
+binding = "INSTALLS"
+dataset = "canopy_graph_installs"

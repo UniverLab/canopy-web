@@ -45,7 +45,8 @@ must equal the document's slug-safe `name` (`^[a-z0-9-]{1,48}$`).
 | ----------------- | ----------------------------------------------- |
 | `npm run lint`    | eslint over the repo                            |
 | `npm run typecheck` | `tsc --noEmit` (strict)                       |
-| `npm test`        | vitest suite                                    |
+| `npm test`        | vitest suite (documents + worker)                |
+| `npm run test:worker` | worker suite only, in the Workers runtime    |
 | `npm run validate [paths...]` | validate registry documents (files or folders; no args = all of `registry/`) |
 
 The schemas in `schema/` are the single contract the worker and

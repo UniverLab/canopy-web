@@ -10,8 +10,15 @@
     "declaration": false,
     "sourceMap": false,
     "outDir": "dist",
-    "types": ["node"],
+    "types": ["node", "@cloudflare/vitest-pool-workers"],
     "lib": ["ES2022"]
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts", "vitest.config.ts"]
+  "include": [
+    "src/**/*.ts",
+    "tests/**/*.ts",
+    "vitest.config.ts",
+    "worker/src/**/*.ts",
+    "worker/test/**/*.ts",
+    "worker/vitest.config.ts"
+  ]
 }
