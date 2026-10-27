@@ -33,6 +33,9 @@ html[data-surface='tui'] {
   --canopy: #00a9a0;
   --teal: #3fb8b0;
 
+  /* The attention amber: "what this runs" chips and the community warning. */
+  --attention: #ffb454;
+
   /* The lab's three typefaces, self-hosted beside this file (see fonts/). */
   --font-display: 'Old Standard TT', Georgia, serif;
   --font-body: 'EB Garamond', Garamond, Georgia, serif;

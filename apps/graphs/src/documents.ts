@@ -27,6 +27,8 @@ export interface Doc {
   /** Graph: the number of nodes. Node: 1. */
   nodeCount: number;
   repo: string;
+  /** True when the document ships in this repo's registry. */
+  official: boolean;
   /** GitHub stars, or null when nobody told us. Never zero-filled. */
   stars: number | null;
   /** Last updated, `YYYY-MM-DD`, or null when nobody told us. */
@@ -278,6 +280,8 @@ export interface DocContext {
   stars: number | null;
   updated?: string | null;
   ref?: string;
+  /** The index's official flag; the repo address decides when absent. */
+  official?: boolean;
 }
 
 /**
@@ -299,6 +303,7 @@ export function docFromDocument(
     readme,
     nodeCount: nodeCountOf(context.kind, document),
     repo: `${context.owner}/${context.repo}`,
+    official: context.official ?? isOfficialRepo(context.owner, context.repo),
     stars: context.stars,
     updated: context.updated ?? null,
     harnesses: harnessesOf(context.kind, document),

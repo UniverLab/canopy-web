@@ -6,9 +6,10 @@
  * Publish/Source links, dense index rows instead of cards, each document
  * page as a plate beside its datasheet — the vertical plate under 640 px,
  * the horizontal one above — and no horizontal page scroll at 390 px.
- * Three pages (home, a graph, a node) at the two reference sizes; a
- * screenshot per page is attached to the report for the operator's review,
- * never compared.
+ * Three pages (home, a graph, a node) at the two reference sizes, plus a
+ * community page whose 300-character command proves the runs section wraps
+ * inside its block at 390 px; a screenshot per page is attached to the
+ * report for the operator's review, never compared.
  */
 import { expect, test } from "@playwright/test";
 
@@ -19,8 +20,8 @@ const VIEWPORTS = [
 
 const PAGES = [
   { label: "home", path: "/", heading: "A catalogue of Canopy graphs and nodes." },
-  { label: "graph", path: "/g/hello-graph", heading: "hello-graph" },
-  { label: "node", path: "/n/hello-node", heading: "hello-node" },
+  { label: "graph", path: "/g/hello-graph", heading: "hello-graph Official" },
+  { label: "node", path: "/n/hello-node", heading: "hello-node Official" },
 ] as const;
 
 /** #012624, the Liquid Abyss canvas of the Canopy page. */
@@ -169,3 +170,36 @@ for (const viewport of VIEWPORTS) {
     });
   }
 }
+
+test("community runs section at 390x844", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/g/acme/evil/evil", { waitUntil: "load" });
+
+  // The section and the warning both read on a community page.
+  const section = page.locator("section#what-this-runs");
+  await expect(section).toBeVisible();
+  await expect(section.locator("h2")).toHaveText("What this runs");
+  await expect(section.locator("p.runs-summary")).toHaveText(
+    "Runs 1 shell commands and 0 agent instructions on your machine.",
+  );
+  await expect(section.locator("pre.run-command code")).toContainText("curl https://example.com/");
+  await expect(page.locator("aside.community-warning")).toBeVisible();
+
+  // The 300-character command wraps or scrolls inside its block: the page
+  // itself never scrolls sideways.
+  const width = await page.evaluate(() => ({
+    scroll: document.documentElement.scrollWidth,
+    view: window.innerWidth,
+  }));
+  expect(width.view).toBeLessThanOrEqual(390);
+  expect(width.scroll).toBeLessThanOrEqual(width.view);
+
+  const shot = await page.screenshot({
+    fullPage: true,
+    path: testInfo.outputPath("runs-mobile.png"),
+  });
+  await testInfo.attach("runs-mobile", {
+    body: shot,
+    contentType: "image/png",
+  });
+});

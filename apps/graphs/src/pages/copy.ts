@@ -107,6 +107,55 @@ export const AGENT_NODES_NOTE = "These agent nodes need a harness to run.";
 /** The README section heading. */
 export const README_HEADING = "README";
 
+/** The transparency section: every command verbatim, every instruction readable. */
+export const RUNS_HEADING = "What this runs";
+
+/** The section's anchor: the community warning links to it. */
+export const RUNS_SECTION_ID = "what-this-runs";
+
+/** The badge on official documents, next to the name. */
+export const OFFICIAL_BADGE = "Official";
+
+/** The community warning: above the install box, and a twin blockquote. */
+export const COMMUNITY_WARNING =
+  "Community document. UniverLab does not review it. Installing it lets canopy run the " +
+  "commands and agent instructions listed below on your machine, with your permissions. " +
+  "Read them before you install.";
+
+/** The phrase inside the warning that links to the section. */
+export const COMMUNITY_WARNING_LINK = "the commands and agent instructions listed below";
+
+/** The line under a community install command. */
+export const RUNS_REVIEW_LINE = `Review "What this runs" first.`;
+
+/** How the section's summary line reads. */
+export function runsSummary(commands: number, prompts: number): string {
+  return `Runs ${commands} shell commands and ${prompts} agent instructions on your machine.`;
+}
+
+/** One attention chip: the word plus the pattern it names. */
+export function attentionChip(label: string): string {
+  return `attention: ${label}`;
+}
+
+/** A builtin preset's stand-in: its text lives in the harness, not the document. */
+export function builtinPresetLine(name: string): string {
+  return `canopy builtin preset "${name}"`;
+}
+
+/** The warning as HTML: the link phrase points at the section. */
+export function communityWarningHtml(href: string): string {
+  return COMMUNITY_WARNING.replace(
+    COMMUNITY_WARNING_LINK,
+    `<a href="${href}">${COMMUNITY_WARNING_LINK}</a>`,
+  );
+}
+
+/** The warning as a twin blockquote line, linking at the section the same way. */
+export function communityWarningMarkdown(href: string): string {
+  return `> ${COMMUNITY_WARNING.replace(COMMUNITY_WARNING_LINK, `[${COMMUNITY_WARNING_LINK}](${href})`)}`;
+}
+
 /** The UniverLab colophon: the product line, its experiment and its links. */
 export const COLOPHON_PRODUCT = "Canopy graphs";
 export const COLOPHON_EXP = "EXP-001";

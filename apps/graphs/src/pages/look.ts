@@ -337,6 +337,86 @@ figure.plate {
 .readme img { max-width: 100%; height: auto; }
 .busy { padding: 0.25rem 0 0.25rem 1rem; border-left: 3px solid var(--teal); }
 
+.badge-official {
+  display: inline-block;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--teal);
+  border-radius: var(--radius-ctl);
+  color: var(--teal);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.doc-title .badge-official { margin-left: 0.6rem; font-size: 0.8rem; vertical-align: middle; }
+.row-source { color: var(--surface-ink-dim); }
+
+.community-warning {
+  margin: 1rem 0 1.5rem;
+  padding: 0.9rem 1rem;
+  background: var(--bg-deep);
+  border: 1px solid var(--surface-line);
+  border-left: 3px solid var(--attention);
+  border-radius: var(--radius-ctl);
+  font-family: var(--font-body);
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+.community-warning p { margin: 0; }
+.install-review { margin: 0.4rem 0 0; font-family: var(--font-mono); font-size: 0.78rem; color: var(--surface-ink-dim); }
+
+.runs-summary { font-family: var(--font-mono); font-size: 0.85rem; }
+.run { margin: 0 0 1rem; }
+.run-where { font-family: var(--font-mono); font-size: 0.82rem; }
+p.run-where { margin: 0 0 0.35rem; }
+pre.run-command, pre.run-prompt-text {
+  margin: 0;
+  padding: 0.75rem;
+  max-width: 100%;
+  background: var(--bg-deep);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-x: auto;
+}
+pre.run-command code, pre.run-prompt-text code { font-family: inherit; overflow-wrap: anywhere; }
+.attention-chip {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--attention);
+  border-radius: var(--radius-ctl);
+  color: var(--attention);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+details.run-prompt {
+  margin: 0 0 0.75rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--bg-deep);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+}
+details.run-prompt summary { cursor: pointer; }
+details.run-prompt summary .run-where { color: var(--surface-ink); }
+.run-preview {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--surface-ink-dim);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.run-builtin { margin: 0.5rem 0 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--surface-ink-dim); }
+details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
+
 @media (max-width: 639px) {
   .plate .plate-h { display: none; }
   .plate .plate-v { display: block; }

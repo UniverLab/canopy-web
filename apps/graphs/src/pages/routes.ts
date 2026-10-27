@@ -45,11 +45,15 @@ import {
   NO_RESULTS,
   NOT_FOUND_BODY,
   NOT_FOUND_HEADING,
+  OFFICIAL_BADGE,
   OFFICIAL_HEADING,
   PUBLISH_HREF,
   PUBLISH_LABEL,
   PUBLISH_TITLE,
   README_HEADING,
+  RUNS_HEADING,
+  RUNS_REVIEW_LINE,
+  RUNS_SECTION_ID,
   SHEET_AGENTS,
   SHEET_EDGES,
   SHEET_ENSEMBLES,
@@ -64,6 +68,10 @@ import {
   STAR_BUTTON,
   TAGLINE,
   TOP_TAB,
+  attentionChip,
+  builtinPresetLine,
+  communityWarningHtml,
+  communityWarningMarkdown,
   countLine,
   edgesLine,
   ensembleLine,
@@ -72,12 +80,14 @@ import {
   llmsLine,
   nodesByKindLine,
   resultsFor,
+  runsSummary,
 } from "./copy.js";
 import { page, type Page } from "./layout.js";
 import { escapeHtml, renderMarkdown } from "./md.js";
 import { publishPage } from "./publish.js";
 import { docPath, docRef, pageRef, type PageRef } from "./ref.js";
 import { copyButton } from "./look.js";
+import { attentionFor, runsOf, type RunCommand, type RunPrompt } from "./runs.js";
 
 /** A non-page request: index.ts keeps routing it to the redirector. */
 export const NOT_PAGE = true as const;
@@ -187,10 +197,14 @@ function harnessDots(harnesses: string[]): string {
  * One index row: the name in the display face, the kind badge, the node
  * count for graphs, harness dots, stars, last updated and the install box.
  * One flex line on desktop, three stacked lines under 900 px; the
- * description rides along as the row's second block.
+ * description rides along as the row's second block. Official rows carry
+ * the badge next to the name; community rows show their source instead.
  */
 function docItem(doc: Doc): string {
   const install = installCommand(doc.kind, docRef(doc).ref);
+  const standing = doc.official
+    ? `<span class="badge-official">${OFFICIAL_BADGE}</span>`
+    : `<span class="row-source">${escapeHtml(doc.repo)}</span>`;
   const nodes = doc.kind === "graph" ? `<span class="row-meta">${countLine(NODES_LABEL, doc.nodeCount)}</span>` : "";
   const stars = doc.stars === null ? "" : `<span class="row-meta">${escapeHtml(countLine(STARS_LABEL, doc.stars))}</span>`;
   const updated = doc.updated === null
@@ -202,6 +216,7 @@ function docItem(doc: Doc): string {
   return (
     `<li class="row">` +
     `<a class="row-name" href="${docPath(doc)}">${escapeHtml(doc.name)}</a>` +
+    standing +
     `<span class="kind">${escapeHtml(doc.kind)}</span>` +
     nodes +
     harnessDots(doc.harnesses) +
@@ -273,6 +288,88 @@ function nodesByKind(document: JsonValue): Array<{ kind: string; count: number }
 }
 
 /**
+ * One command of the runs section: its node or hook title, the attention
+ * chips it earned, and its verbatim text in a mono block, always expanded.
+ */
+function commandBlock(command: RunCommand): string {
+  const chips = attentionFor(command.text)
+    .map((label) => `<span class="attention-chip">${escapeHtml(attentionChip(label))}</span>`)
+    .join(" ");
+  const marks = chips === "" ? "" : ` ${chips}`;
+  return (
+    `<div class="run">` +
+    `<p class="run-where">${escapeHtml(command.where)}${marks}</p>` +
+    `<pre class="run-command"><code>${escapeHtml(command.text)}</code></pre>` +
+    `</div>`
+  );
+}
+
+/**
+ * One agent instruction of the runs section: a disclosure titled by node,
+ * its first three lines as the summary, the full text inside. A builtin
+ * preset has no text in the document, so it names itself instead.
+ */
+function promptBlock(prompt: RunPrompt): string {
+  const preview = prompt.source === "builtin"
+    ? builtinPresetLine(prompt.text)
+    : prompt.text.split("\n").slice(0, 3).join("\n");
+  const body = prompt.source === "builtin"
+    ? `<p class="run-builtin">${escapeHtml(builtinPresetLine(prompt.text))}</p>`
+    : `<pre class="run-prompt-text"><code>${escapeHtml(prompt.text)}</code></pre>`;
+  return (
+    `<details class="run-prompt">` +
+    `<summary><span class="run-where">${escapeHtml(prompt.where)}</span>` +
+    `<span class="run-preview">${escapeHtml(preview)}</span></summary>` +
+    body +
+    `</details>`
+  );
+}
+
+/**
+ * The transparency section, before the README: the summary line, every
+ * command verbatim, every agent instruction readable. Even an empty
+ * document states its counts, so the absence of runs is visible too.
+ */
+function runsSectionHtml(kind: DocumentKind, document: JsonValue): string {
+  const runs = runsOf(kind, document);
+  return [
+    `<section class="runs" id="${RUNS_SECTION_ID}">`,
+    `<h2 class="kicker">${RUNS_HEADING}</h2>`,
+    `<p class="runs-summary">${escapeHtml(runsSummary(runs.commands.length, runs.prompts.length))}</p>`,
+    ...runs.commands.map(commandBlock),
+    ...runs.prompts.map(promptBlock),
+    `</section>`,
+  ].join("\n");
+}
+
+/**
+ * The same section for the markdown twin: commands and prompts in fenced
+ * blocks under their titles, attention marks as plain lines, so an agent
+ * reading the twin sees what the page shows.
+ */
+function runsSectionMarkdown(kind: DocumentKind, document: JsonValue): string {
+  const runs = runsOf(kind, document);
+  const lines = [
+    `## ${RUNS_HEADING}`,
+    ``,
+    runsSummary(runs.commands.length, runs.prompts.length),
+    ``,
+  ];
+  for (const command of runs.commands) {
+    lines.push(`### ${mdText(command.where)}`, ``, "```sh", command.text, "```", ``);
+    const marks = attentionFor(command.text);
+    if (marks.length > 0) {
+      lines.push(`Attention: ${marks.join(", ")}.`, ``);
+    }
+  }
+  for (const prompt of runs.prompts) {
+    const text = prompt.source === "builtin" ? builtinPresetLine(prompt.text) : prompt.text;
+    lines.push(`### ${mdText(prompt.where)}`, ``, "```text", text, "```", ``);
+  }
+  return lines.join("\n").trimEnd();
+}
+
+/**
  * The datasheet beside the plate: kind, name, source, ref and stars, then —
  * for graphs — nodes by kind, edges with the fail count, ensembles and the
  * agent nodes a harness must run, then install. A field with no data is
@@ -324,44 +421,57 @@ function datasheet(doc: Doc, document: JsonValue, ref: PageRef): { html: string;
       lines.push(`- ${SHEET_AGENTS}: ${agents.join(", ")}`);
     }
   }
-  fields.push(
-    sheetField(
-      INSTALL_HEADING,
-      `<span class="row-install"><code>${escapeHtml(install)}</code>${copyButton(install)}</span>`,
-    ),
-  );
+  const installBox =
+    `<span class="row-install"><code>${escapeHtml(install)}</code>${copyButton(install)}</span>` +
+    (doc.official ? "" : `<p class="install-review">${escapeHtml(RUNS_REVIEW_LINE)}</p>`);
+  fields.push(sheetField(INSTALL_HEADING, installBox));
   return { html: `<dl class="sheet">${fields.join("")}</dl>`, lines };
 }
 
-/** One document page: title, star button, plate beside its datasheet, README. */
+/**
+ * One document page: title, star button, the community warning above the
+ * install box, the plate beside its datasheet, what the document runs,
+ * then the README. Official pages carry the badge and no warning.
+ */
 function documentPage(doc: Doc, document: JsonValue, ref: PageRef): Page {
   const install = installCommand(ref.kind, ref.ref);
   const sheet = datasheet(doc, document, ref);
+  const badge = doc.official ? ` <span class="badge-official">${OFFICIAL_BADGE}</span>` : "";
+  const warning = doc.official
+    ? ""
+    : `<aside class="community-warning" role="note"><p>${communityWarningHtml(`#${RUNS_SECTION_ID}`)}</p></aside>`;
+  const runs = runsSectionHtml(ref.kind, document);
   const readme = doc.readme.trim() === ""
     ? ""
     : `<h2 class="kicker">${README_HEADING}</h2>\n<div class="readme">${renderMarkdown(doc.readme)}</div>`;
 
   const html = [
-    `<h1 class="doc-title">${escapeHtml(doc.name)}</h1>`,
+    `<h1 class="doc-title">${escapeHtml(doc.name)}${badge}</h1>`,
     `<p class="description">${escapeHtml(doc.description)}</p>`,
     `<p><a class="button" href="${ref.repoUrl}">${STAR_BUTTON}</a></p>`,
+    warning,
     `<div class="doc-cols">`,
     plateFigure(document, ref.kind),
     sheet.html,
     `</div>`,
+    runs,
     readme,
-  ].join("\n");
+  ].filter((block) => block !== "").join("\n");
 
   const markdown = [
     `# ${doc.name}`,
     ``,
     doc.description,
     ``,
+    ...(doc.official ? [] : [communityWarningMarkdown(`#${RUNS_SECTION_ID}`), ``]),
     ...sheet.lines,
     ``,
     `## ${INSTALL_HEADING}`,
     ``,
     `    ${install}`,
+    ...(doc.official ? [] : [RUNS_REVIEW_LINE]),
+    ``,
+    runsSectionMarkdown(ref.kind, document),
     ``,
     readme === ""
       ? ""

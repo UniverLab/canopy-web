@@ -8,11 +8,13 @@ import {
   type Downloads,
 } from "../src/analytics.js";
 import type { Doc } from "../src/documents.js";
+import { isOfficialRepo } from "../src/lib.js";
 import { FakeCache, fakeFetch } from "./fakes.js";
 
 const SQL_URL = "analytics_engine/sql";
 
 function sampleDoc(slug: string, kind: "graph" | "node", repo: string): Doc {
+  const [owner = "", name = ""] = repo.split("/");
   return {
     kind,
     slug,
@@ -21,6 +23,7 @@ function sampleDoc(slug: string, kind: "graph" | "node", repo: string): Doc {
     readme: "",
     nodeCount: kind === "node" ? 1 : 3,
     repo,
+    official: isOfficialRepo(owner, name),
     stars: null,
     updated: null,
     harnesses: [],
