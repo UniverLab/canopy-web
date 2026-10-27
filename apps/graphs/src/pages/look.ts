@@ -297,8 +297,8 @@ dl.sheet { margin: 0; font-family: var(--font-mono); font-size: 0.85rem; }
   color: var(--surface-ink-dim);
 }
 .sheet dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
-.sheet .row-install { margin-left: 0; width: 100%; }
-.sheet .row-install code { flex: 1; min-width: 0; }
+.sheet .row-install { margin-left: 0; width: 100%; flex-wrap: wrap; }
+.sheet .row-install code { flex: 1 1 12rem; min-width: 0; white-space: normal; overflow-wrap: anywhere; overflow-x: visible; }
 
 figure.plate {
   margin: 0 0 1.5rem;

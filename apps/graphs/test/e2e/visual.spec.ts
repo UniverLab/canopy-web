@@ -6,6 +6,8 @@
  * Publish/Source links, dense index rows instead of cards, each document
  * page as a plate beside its datasheet — the vertical plate under 640 px,
  * the horizontal one above — and no horizontal page scroll at 390 px.
+ * The datasheet INSTALL row shows its whole command wrapped in its box
+ * while the home index rows keep their one-line command.
  * Three pages (home, a graph, a node) at the two reference sizes, plus a
  * community page whose 300-character command proves the runs section wraps
  * inside its block at 390 px; a screenshot per page is attached to the
@@ -20,8 +22,18 @@ const VIEWPORTS = [
 
 const PAGES = [
   { label: "home", path: "/", heading: "A catalogue of Canopy graphs and nodes." },
-  { label: "graph", path: "/g/hello-graph", heading: "hello-graph Official" },
-  { label: "node", path: "/n/hello-node", heading: "hello-node Official" },
+  {
+    label: "graph",
+    path: "/g/hello-graph",
+    heading: "hello-graph Official",
+    install: "canopy graph install hello-graph",
+  },
+  {
+    label: "node",
+    path: "/n/hello-node",
+    heading: "hello-node Official",
+    install: "canopy node install hello-node",
+  },
 ] as const;
 
 /** #012624, the Liquid Abyss canvas of the Canopy page. */
@@ -122,6 +134,11 @@ for (const viewport of VIEWPORTS) {
       // Listing pages render dense rows; document pages a plate beside a sheet.
       if (target.label === "home") {
         await expect(page.locator("ol.index > li.row")).toHaveCount(2);
+        // The index rows keep their one-line command beside the Copy button.
+        const indexCode = page.locator("ol.index > li.row .row-install code").first();
+        await expect(indexCode).toBeVisible();
+        const whiteSpace = await indexCode.evaluate((el) => getComputedStyle(el).whiteSpace);
+        expect(whiteSpace).toBe("nowrap");
       } else {
         const plate = page.locator("figure.plate");
         await expect(plate).toHaveCount(1);
@@ -137,6 +154,15 @@ for (const viewport of VIEWPORTS) {
           await expect(horizontal).toBeVisible();
           await expect(vertical).toBeHidden();
         }
+        // The datasheet INSTALL row shows the whole command: it wraps
+        // instead of clipping, so nothing hides inside a scroll box.
+        const installCode = page.locator("dl.sheet .row-install code");
+        await expect(installCode).toHaveText(target.install);
+        const installBox = await installCode.evaluate((el) => ({
+          scroll: el.scrollWidth,
+          client: el.clientWidth,
+        }));
+        expect(installBox.scroll).toBeLessThanOrEqual(installBox.client);
       }
 
       // The page never scrolls sideways, at either reference size.
