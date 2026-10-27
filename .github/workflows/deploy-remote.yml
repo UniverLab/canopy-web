@@ -1,0 +1,31 @@
+name: deploy-remote
+
+# Manual only: nothing deploys on merge. Publishes apps/remote/worker/ to
+# Cloudflare as the `canopy-remote` Worker behind remote.univerlab.org. The
+# account id is inlined in apps/remote/worker/wrangler.toml, so the only
+# secret is the API token.
+on:
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-remote-worker
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy worker
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Deploy with Wrangler
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: apps/remote/worker
+          command: deploy

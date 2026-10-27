@@ -1,0 +1,25 @@
+# remote.univerlab.org — blind signaling relay
+#
+# One Worker, one job: prove both ends belong to the same GitHub account
+# and forward opaque signaling messages between them, storing nothing.
+# The Worker never parses signaling bodies beyond `t` for the rate limit
+# (contract: Intelligence d4eb8558).
+name = "canopy-remote"
+main = "src/index.ts"
+compatibility_date = "2026-10-26"
+
+# Inlined on purpose: the account has a single Worker account, and the deploy
+# workflow then needs exactly one secret (CLOUDFLARE_API_TOKEN).
+account_id = "d7b81bdd721f503968523dd903d967be"
+
+routes = [{ pattern = "remote.univerlab.org/*", zone_name = "univerlab.org" }]
+
+# One room per GitHub user id. The room uses the WebSocket hibernation API
+# with per-socket attachments only — it never touches the storage API.
+[[durable_objects.bindings]]
+name = "USER_ROOM"
+class_name = "UserRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["UserRoom"]
