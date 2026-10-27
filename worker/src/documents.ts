@@ -116,7 +116,6 @@ export function sourcesFromTree(
   files: TreeFile[],
 ): DocumentSource[] {
   const documentRe = /^(graphs|nodes)\/([a-z0-9-]{1,48})\/(?:graph|node)\.json$/;
-  const readmeRe = /^(?:graphs|nodes)\/([a-z0-9-]{1,48})\/readme\.md$/i;
   return files.flatMap((file) => {
     const match = documentRe.exec(file.path);
     if (match === null) {

@@ -102,6 +102,8 @@ dist
 *.htm
 *.html
 *.js
+# The ESLint flat config is source, not a build output.
+!eslint.config.js
 *.jsp
 *.php
 *.rss

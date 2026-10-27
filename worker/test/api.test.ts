@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, expect, it } from "vitest";
 import { handleApi } from "../src/api.js";
-import { NOT_API } from "../src/api.js";
 import { FakeCache, dirBody, fakeFetch, fileBody, type Stub } from "./fakes.js";
-import { INVALID_GRAPH_TEXT, VALID_GRAPH_TEXT, VALID_NODE_TEXT } from "./documents-fixture.js";
+import { VALID_GRAPH_TEXT, VALID_NODE_TEXT } from "./documents-fixture.js";
 
 const SEARCH = "search/repositories";
 const REPO_DIR = "repos/UniverLab/graphs";
