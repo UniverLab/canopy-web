@@ -11,7 +11,7 @@
     "sourceMap": false,
     "outDir": "dist",
     "types": ["node", "@cloudflare/vitest-pool-workers"],
-    "lib": ["ES2022"]
+    "lib": ["ES2022", "DOM"]
   },
   "include": [
     "src/**/*.ts",
@@ -22,6 +22,7 @@
     "apps/*/vitest.config.ts",
     "apps/*/worker/src/**/*.ts",
     "apps/*/worker/test/**/*.ts",
-    "apps/*/worker/vitest.config.ts"
+    "apps/*/worker/vitest.config.ts",
+    "apps/*/vite.config.ts"
   ]
 }
