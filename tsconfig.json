@@ -17,8 +17,8 @@
     "src/**/*.ts",
     "tests/**/*.ts",
     "vitest.config.ts",
-    "worker/src/**/*.ts",
-    "worker/test/**/*.ts",
-    "worker/vitest.config.ts"
+    "apps/*/src/**/*.ts",
+    "apps/*/test/**/*.ts",
+    "apps/*/vitest.config.ts"
   ]
 }

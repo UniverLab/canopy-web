@@ -1,6 +1,17 @@
-# graphs.univerlab.org catalogue
+# canopy-web
 
-Shareable Canopy documents live here. Two kinds:
+The web side of Canopy, one repository with one app per subdomain:
+
+- `apps/graphs/` — the graphs catalogue at graphs.univerlab.org: browse,
+  share and install graph and node designs.
+- `apps/remote/` — Canopy remote control at remote.univerlab.org: reach your
+  canopy sessions from a browser, peer to peer.
+
+Each app is its own Cloudflare Worker with its own secrets and origin.
+
+## Graphs catalogue
+
+Shareable Canopy documents live in `registry/`. Two kinds:
 
 - **Graphs** — a graph's portable design (`GraphExportDocument`,
   format version 6): name, nodes, edges, ensembles, hooks, infra node,
@@ -12,7 +23,7 @@ Shareable Canopy documents live here. Two kinds:
 ## Document layout
 
 ```text
-graphs/
+canopy-web/
   schema/
     graph.schema.json   # the graph contract (v6, bundled presets)
     node.schema.json     # the node contract (v1)
@@ -23,7 +34,7 @@ graphs/
   registry/
     graphs/<slug>/graph.json + README.md
     nodes/<slug>/node.json + README.md
-  worker/               # Cloudflare Worker serving the catalogue
+  apps/graphs/          # Cloudflare Worker serving the catalogue
   tests/                # vitest suite + fixtures
 ```
 
@@ -54,9 +65,9 @@ Canopy's `graph validate` agree on — import them, never copy them.
 
 ## Worker deploy
 
-The install redirector lives in `worker/` (Cloudflare Worker
+The install redirector lives in `apps/graphs/` (Cloudflare Worker
 `canopy-graphs`, behind `graphs.univerlab.org`). Deploys are manual only
 (`.github/workflows/deploy.yml`, `workflow_dispatch`). Before the first
-deploy, follow the one-time setup in [worker/README.md](worker/README.md):
+deploy, follow the one-time setup in [apps/graphs/README.md](apps/graphs/README.md):
 enable Analytics Engine on the account, bind the custom domain, and set
 `CLOUDFLARE_API_TOKEN`.

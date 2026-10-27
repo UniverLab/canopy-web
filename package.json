@@ -11,7 +11,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run && npm run test:worker",
-    "test:worker": "vitest run --config worker/vitest.config.ts",
+    "test:worker": "vitest run --config apps/graphs/vitest.config.ts",
     "validate": "tsx src/validate.ts"
   },
   "dependencies": {

@@ -8,7 +8,7 @@
  * catalogue never re-sorts. The document cap keeps a request bounded, and a
  * bounded-away page is reported with `truncated: true`.
  */
-import type { DocumentKind } from "../../src/schema.js";
+import type { DocumentKind } from "../../../src/schema.js";
 import type { ApiError, GitHub, Log } from "./github.js";
 import { isApiError } from "./github.js";
 import { isArray, isNumber, isRecord, isString, readJson, stringField } from "./json.js";

@@ -5,7 +5,7 @@ import { FakeCache, dirBody, fakeFetch, fileBody, type Stub } from "./fakes.js";
 import { VALID_GRAPH_TEXT, VALID_NODE_TEXT } from "./documents-fixture.js";
 
 const SEARCH = "search/repositories";
-const REPO_DIR = "repos/UniverLab/graphs";
+const REPO_DIR = "repos/UniverLab/canopy-web";
 
 /** Everything one official graph plus one node need to answer an API call. */
 function stubs(): Stub[] {
@@ -16,7 +16,7 @@ function stubs(): Stub[] {
     { url: `${REPO_DIR}/contents/registry/graphs/hello-graph/README.md`, status: 200, body: fileBody("graphs/hello-graph/README.md", "# hello-graph\n") },
     { url: `${REPO_DIR}/contents/registry/nodes/hello-node/node.json`, status: 200, body: fileBody("nodes/hello-node/node.json", VALID_NODE_TEXT) },
     { url: `${REPO_DIR}/contents/registry/nodes/hello-node/README.md`, status: 404, body: {} },
-    { url: "repos/UniverLab/graphs", status: 200, body: { stargazers_count: 7 } },
+    { url: "repos/UniverLab/canopy-web", status: 200, body: { stargazers_count: 7 } },
   ];
 }
 
@@ -86,7 +86,7 @@ describe("the JSON API", () => {
   });
 
   it("answers /api/g/<official> with the validated document attached", async () => {
-    const response = await call("/api/g/UniverLab/graphs/hello-graph");
+    const response = await call("/api/g/UniverLab/canopy-web/hello-graph");
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
       doc: { kind: string; slug: string; repo: string };
@@ -121,7 +121,7 @@ describe("the JSON API", () => {
       },
     ]);
     const answer = await handleApi(
-      new Request("https://graphs.univerlab.org/api/n/UniverLab/graphs/hello-graph"),
+      new Request("https://graphs.univerlab.org/api/n/UniverLab/canopy-web/hello-graph"),
       {},
       { fetchImpl: fake.fetchImpl, cache: new FakeCache() },
     );
@@ -142,7 +142,7 @@ describe("the JSON API", () => {
     expect(listing.status).toBe(502);
     expect(((await listing.json()) as { kind: string }).kind).toBe("upstream");
 
-    const document = await call("/api/g/UniverLab/graphs/hello-graph", {
+    const document = await call("/api/g/UniverLab/canopy-web/hello-graph", {
       stubs: [
         {
           url: `${REPO_DIR}/contents/registry/graphs/hello-graph/graph.json`,
@@ -158,12 +158,12 @@ describe("the JSON API", () => {
 
   it("answers a missing document with a typed 404, never a 500", async () => {
     const fake = fakeFetch([
-      { url: "repos/UniverLab/graphs/contents/registry/graphs/missing/graph.json", status: 404, body: {} },
-      { url: "repos/UniverLab/graphs/contents/registry/nodes/missing/node.json", status: 404, body: {} },
+      { url: "repos/UniverLab/canopy-web/contents/registry/graphs/missing/graph.json", status: 404, body: {} },
+      { url: "repos/UniverLab/canopy-web/contents/registry/nodes/missing/node.json", status: 404, body: {} },
     ]);
     const cache = new FakeCache();
     const answer = await handleApi(
-      new Request("https://graphs.univerlab.org/api/g/UniverLab/graphs/missing"),
+      new Request("https://graphs.univerlab.org/api/g/UniverLab/canopy-web/missing"),
       {},
       { fetchImpl: fake.fetchImpl, cache },
     );
@@ -227,7 +227,7 @@ describe("the JSON API", () => {
         {
           url: "analytics_engine/sql",
           status: 200,
-          body: { data: [{ index: "UniverLab/graphs/graph/hello-graph", count: 5 }] },
+          body: { data: [{ index: "UniverLab/canopy-web/graph/hello-graph", count: 5 }] },
         },
       ],
     });
@@ -239,8 +239,8 @@ describe("the JSON API", () => {
   });
 
   it("does not list official stars as zero when the repo call fails", async () => {
-    const withoutStars = stubs().filter((stub) => stub.url !== "repos/UniverLab/graphs");
-    withoutStars.push({ url: "repos/UniverLab/graphs", status: 404, body: {}, });
+    const withoutStars = stubs().filter((stub) => stub.url !== "repos/UniverLab/canopy-web");
+    withoutStars.push({ url: "repos/UniverLab/canopy-web", status: 404, body: {}, });
     const response = await call("/api/official", { stubs: withoutStars });
     const body = (await response.json()) as { graphs: Array<{ stars: unknown }> };
     expect(response.status).toBe(200);

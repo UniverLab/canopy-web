@@ -507,8 +507,8 @@ h2 { font-size: 1.35rem; margin: 2rem 0 0.5rem; }
 <main>
 <h1>hello-graph</h1>
 <p class="description">Five nodes with one fail edge, for the drawing test.</p>
-<p class="meta"><a href="https://github.com/UniverLab/graphs">UniverLab/graphs</a> — 7 stars</p>
-<p><a class="button" href="https://github.com/UniverLab/graphs">Star on GitHub</a></p>
+<p class="meta"><a href="https://github.com/UniverLab/canopy-web">UniverLab/canopy-web</a> — 7 stars</p>
+<p><a class="button" href="https://github.com/UniverLab/canopy-web">Star on GitHub</a></p>
 <h2>Install</h2>
 <div class="install"><code>canopy graph install hello-graph</code><button type="button" class="copy" data-copy="canopy graph install hello-graph" aria-label="Copy the install command to the clipboard">Copy</button></div>
 <h2>Drawing</h2><svg class="graph-svg" viewBox="0 0 1062 68" role="img" aria-label="hello-graph: A drawing of the graph: nodes left to right by layer." xmlns="http://www.w3.org/2000/svg"><line class="edge pass" x1="166" y1="34" x2="236" y2="34"></line><line class="edge other" x1="386" y1="34" x2="456" y2="34"></line><line class="edge fail" x1="386" y1="34" x2="16" y2="34"></line><line class="edge pass" x1="606" y1="34" x2="676" y2="34"></line><line class="edge other" x1="826" y1="34" x2="896" y2="34"></line><g class="node kind-agent"><rect x="16" y="16" width="150" height="36" rx="4"></rect><text x="91" y="38" text-anchor="middle">build</text></g><g class="node kind-check"><rect x="236" y="16" width="150" height="36" rx="4"></rect><text x="311" y="38" text-anchor="middle">test</text></g><g class="node kind-gate"><rect x="456" y="16" width="150" height="36" rx="4"></rect><text x="531" y="38" text-anchor="middle">gate</text></g><g class="node kind-router"><rect x="676" y="16" width="150" height="36" rx="4"></rect><text x="751" y="38" text-anchor="middle">triage</text></g><g class="node kind-agent"><rect x="896" y="16" width="150" height="36" rx="4"></rect><text x="971" y="38" text-anchor="middle">docs</text></g></svg>
@@ -695,8 +695,8 @@ h2 { font-size: 1.35rem; margin: 2rem 0 0.5rem; }
 <main>
 <h1>hello-node</h1>
 <p class="description">Example catalogue node: drafts an implementation plan.</p>
-<p class="meta"><a href="https://github.com/UniverLab/graphs">UniverLab/graphs</a> — 7 stars</p>
-<p><a class="button" href="https://github.com/UniverLab/graphs">Star on GitHub</a></p>
+<p class="meta"><a href="https://github.com/UniverLab/canopy-web">UniverLab/canopy-web</a> — 7 stars</p>
+<p><a class="button" href="https://github.com/UniverLab/canopy-web">Star on GitHub</a></p>
 <h2>Install</h2>
 <div class="install"><code>canopy node install hello-node</code><button type="button" class="copy" data-copy="canopy node install hello-node" aria-label="Copy the install command to the clipboard">Copy</button></div>
 
@@ -1041,8 +1041,8 @@ h2 { font-size: 1.35rem; margin: 2rem 0 0.5rem; }
 <main>
 <h1>hello-graph</h1>
 <p class="description">Five nodes with one fail edge, for the drawing test.</p>
-<p class="meta"><a href="https://github.com/UniverLab/graphs">UniverLab/graphs</a> — 7 stars</p>
-<p><a class="button" href="https://github.com/UniverLab/graphs">Star on GitHub</a></p>
+<p class="meta"><a href="https://github.com/UniverLab/canopy-web">UniverLab/canopy-web</a> — 7 stars</p>
+<p><a class="button" href="https://github.com/UniverLab/canopy-web">Star on GitHub</a></p>
 <h2>Install</h2>
 <div class="install"><code>canopy graph install hello-graph</code><button type="button" class="copy" data-copy="canopy graph install hello-graph" aria-label="Copy the install command to the clipboard">Copy</button></div>
 <h2>Drawing</h2><svg class="graph-svg" viewBox="0 0 1062 68" role="img" aria-label="hello-graph: A drawing of the graph: nodes left to right by layer." xmlns="http://www.w3.org/2000/svg"><line class="edge pass" x1="166" y1="34" x2="236" y2="34"></line><line class="edge other" x1="386" y1="34" x2="456" y2="34"></line><line class="edge fail" x1="386" y1="34" x2="16" y2="34"></line><line class="edge pass" x1="606" y1="34" x2="676" y2="34"></line><line class="edge other" x1="826" y1="34" x2="896" y2="34"></line><g class="node kind-agent"><rect x="16" y="16" width="150" height="36" rx="4"></rect><text x="91" y="38" text-anchor="middle">build</text></g><g class="node kind-check"><rect x="236" y="16" width="150" height="36" rx="4"></rect><text x="311" y="38" text-anchor="middle">test</text></g><g class="node kind-gate"><rect x="456" y="16" width="150" height="36" rx="4"></rect><text x="531" y="38" text-anchor="middle">gate</text></g><g class="node kind-router"><rect x="676" y="16" width="150" height="36" rx="4"></rect><text x="751" y="38" text-anchor="middle">triage</text></g><g class="node kind-agent"><rect x="896" y="16" width="150" height="36" rx="4"></rect><text x="971" y="38" text-anchor="middle">docs</text></g></svg>

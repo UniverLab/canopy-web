@@ -15,7 +15,7 @@ anchor — this Worker is just a prettier doorway.
 
 | Route | Where it points |
 |---|---|
-| `GET /i/<kind>/<slug>` | official: `https://raw.githubusercontent.com/UniverLab/graphs/<ref>/registry/<kind>s/<slug>/<kind>.json` |
+| `GET /i/<kind>/<slug>` | official: `https://raw.githubusercontent.com/UniverLab/canopy-web/<ref>/registry/<kind>s/<slug>/<kind>.json` |
 | `GET /i/<owner>/<repo>/<kind>/<slug>` | community: `https://raw.githubusercontent.com/<owner>/<repo>/<ref>/<kind>s/<slug>/<kind>.json` |
 
 - `<kind>` is `graph` or `node`.
@@ -27,7 +27,7 @@ anchor — this Worker is just a prettier doorway.
 
 Official documents are the ones in this repo's `registry/` — the `registry/`
 prefix is implicit in the short route, so `/i/graph/hello-graph` and the
-community form `/i/UniverLab/graphs/graph/hello-graph` point at the same file.
+community form `/i/UniverLab/canopy-web/graph/hello-graph` point at the same file.
 
 ## What it counts
 
@@ -36,9 +36,9 @@ One aggregate data point per request, via
 
 | Field | Example | Why |
 |---|---|---|
-| index | `UniverLab/graphs/graph/hello-graph` | which document is installed |
+| index | `UniverLab/canopy-web/graph/hello-graph` | which document is installed |
 | kind | `graph` / `node` | graphs vs nodes |
-| document | `UniverLab/graphs/hello-graph` | document, without repeating the kind |
+| document | `UniverLab/canopy-web/hello-graph` | document, without repeating the kind |
 | client | `canopy`, `curl`, `browser`, `other` | a real install, a script, or someone looking |
 | canopy version | `1.7.2` | which Canopy release installs what |
 | country | `CO` | rough geography |
@@ -78,7 +78,7 @@ absent when not: counts are never zero-filled.
 ## Tests
 
 ```sh
-npm run test:worker     # worker/ suite, in the Workers runtime via Miniflare
+npm run test:worker     # apps/graphs suite, in the Workers runtime via Miniflare
 ```
 
 The suite covers both route shapes, `?ref=`, every 400 case, the `/i/` usage
@@ -87,7 +87,7 @@ binding still serves the redirect, plus the API surface above: official
 listing, search with text and both orderings, invalid documents dropped, a
 cache hit on a second call, rate limits surfaced as typed errors, and counts
 present and absent. `npm test` runs it together with the document validator
-suite. The API tests use injected fakes (`worker/test/fakes.ts`),
+suite. The API tests use injected fakes (`apps/graphs/test/fakes.ts`),
 never stubbed globals.
 
 ## One-time setup (before the first deploy)

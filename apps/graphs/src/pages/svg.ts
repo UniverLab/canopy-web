@@ -9,7 +9,7 @@
  * left-to-right columns, and within a column each node takes the next row.
  * The whole drawing is static SVG: no script, no external anything.
  */
-import type { JsonValue } from "../../../src/schema.js";
+import type { JsonValue } from "../../../../src/schema.js";
 import { isArray, isRecord, isString, stringField } from "../json.js";
 import { DRAWING_ALT } from "./copy.js";
 import { escapeHtml } from "./md.js";

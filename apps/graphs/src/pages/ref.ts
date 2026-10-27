@@ -8,7 +8,7 @@
  * notion of "official" (`isOfficialRepo`) so a page and an install command
  * can never disagree.
  */
-import type { DocumentKind } from "../../../src/schema.js";
+import type { DocumentKind } from "../../../../src/schema.js";
 import type { Doc } from "../documents.js";
 import { isOfficialRepo } from "../lib.js";
 

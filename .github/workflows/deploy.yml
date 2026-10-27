@@ -1,8 +1,8 @@
 name: deploy
 
-# Manual only: nothing deploys on merge. Publishes worker/ to Cloudflare as
+# Manual only: nothing deploys on merge. Publishes apps/graphs/ to Cloudflare as
 # the `canopy-graphs` Worker behind graphs.univerlab.org. The account id is
-# inlined in worker/wrangler.toml, so the only secret is the API token.
+# inlined in apps/graphs/wrangler.toml, so the only secret is the API token.
 on:
   workflow_dispatch: {}
 
@@ -26,5 +26,5 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          workingDirectory: worker
+          workingDirectory: apps/graphs
           command: deploy

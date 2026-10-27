@@ -9,7 +9,7 @@
  * fetched once the document validated) and dropping anything invalid with a
  * note in the log instead of an error.
  */
-import type { DocumentKind, JsonValue } from "../../src/schema.js";
+import type { DocumentKind, JsonValue } from "../../../src/schema.js";
 import type { ApiError, GitHub } from "./github.js";
 import { isApiError } from "./github.js";
 import { decodeBase64, isArray, isNumber, isRecord, isString, parseJson, readJson, stringField } from "./json.js";

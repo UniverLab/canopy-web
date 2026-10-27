@@ -7,7 +7,7 @@
  * one file. The few string *shapes* (an install command, an llms.txt line)
  * live here too, next to the words they are made of.
  */
-import type { DocumentKind } from "../../../src/schema.js";
+import type { DocumentKind } from "../../../../src/schema.js";
 import type { Doc } from "../documents.js";
 
 /** The site's name, in the header and the page titles. */

@@ -3,7 +3,7 @@ import { defineWorkersConfig } from "@cloudflare/vitest-pool-workers/config";
 
 export default defineWorkersConfig({
   test: {
-    include: ["worker/test/**/*.test.ts"],
+    include: ["apps/graphs/test/**/*.test.ts"],
     poolOptions: {
       workers: {
         // Single-file Worker: the pool loads this config, so tests speak to

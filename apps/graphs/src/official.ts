@@ -2,12 +2,12 @@
 /**
  * The official listing for graphs.univerlab.org.
  *
- * UniverLab/graphs is the database: `registry/graphs/` and `registry/nodes/`
+ * UniverLab/canopy-web is the database: `registry/graphs/` and `registry/nodes/`
  * hold one folder per document. This module lists the two directories, then
  * loads each folder through the same validate-and-render path as everything
  * else. Nothing is persisted beyond the Cache API.
  */
-import type { DocumentKind, JsonValue } from "../../src/schema.js";
+import type { DocumentKind, JsonValue } from "../../../src/schema.js";
 import {
   type ApiError,
   type GitHub,

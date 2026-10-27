@@ -6,7 +6,7 @@ import { createGitHub } from "../src/github.js";
 import { FakeCache, dirBody, fakeFetch, fileBody } from "./fakes.js";
 import { INVALID_GRAPH_TEXT, VALID_GRAPH_TEXT } from "./documents-fixture.js";
 
-const REPO_DIR = "repos/UniverLab/graphs";
+const REPO_DIR = "repos/UniverLab/canopy-web";
 
 /** The GitHub-shaped stubs behind one and two official documents. */
 const STUBS = (brokenToo: boolean) => [
@@ -24,7 +24,7 @@ const STUBS = (brokenToo: boolean) => [
   { url: `${REPO_DIR}/contents/registry/graphs/broken-graph/graph.json`, status: 200, body: fileBody("graphs/broken-graph/graph.json", INVALID_GRAPH_TEXT) },
   { url: `${REPO_DIR}/contents/registry/graphs/hello-graph/README.md`, status: 200, body: fileBody("graphs/hello-graph/README.md", "# hello-graph\n\nA tiny graph.\n") },
   { url: `${REPO_DIR}/contents/registry/graphs/broken-graph/README.md`, status: 404, body: {} },
-  { url: "repos/UniverLab/graphs", status: 200, body: { stargazers_count: 7 } },
+  { url: "repos/UniverLab/canopy-web", status: 200, body: { stargazers_count: 7 } },
 ];
 
 describe("the official listing", () => {
@@ -42,7 +42,7 @@ describe("the official listing", () => {
     expect(doc.name).toBe("hello-graph");
     expect(doc.readme).toContain("A tiny graph");
     expect(doc.nodeCount).toBe(4);
-    expect(doc.repo).toBe("UniverLab/graphs");
+    expect(doc.repo).toBe("UniverLab/canopy-web");
     expect(doc.stars).toBe(7);
     expect("downloads" in doc).toBe(false);
   });
@@ -85,12 +85,12 @@ describe("the official listing", () => {
       },
       { url: `${REPO_DIR}/contents/registry/graphs/hello-graph/README.md`, status: 404, body: {} },
       {
-        url: "raw.githubusercontent.com/UniverLab/graphs/HEAD/registry/graphs/hello-graph/graph.json",
+        url: "raw.githubusercontent.com/UniverLab/canopy-web/HEAD/registry/graphs/hello-graph/graph.json",
         status: 200,
         text: VALID_GRAPH_TEXT,
         headers: { "content-type": "text/plain" },
       },
-      { url: "repos/UniverLab/graphs", status: 200, body: { stargazers_count: 7 } },
+      { url: "repos/UniverLab/canopy-web", status: 200, body: { stargazers_count: 7 } },
     ]);
     const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
     const listing = (await listOfficial(github, () => undefined)) as OfficialListing;

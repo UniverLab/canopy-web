@@ -8,7 +8,7 @@
  * never a copied version of the rules.
  */
 import { type Schema, Validator } from "@cfworker/json-schema";
-import { graphSchema, nodeSchema, type DocumentKind } from "../../src/schema.js";
+import { graphSchema, nodeSchema, type DocumentKind } from "../../../src/schema.js";
 import { isRecord, type ParsedJson, parseJson } from "./json.js";
 
 interface SchemaResult {

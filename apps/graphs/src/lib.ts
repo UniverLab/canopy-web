@@ -36,7 +36,7 @@ export const DEFAULT_REF = "HEAD";
 
 export const OFFICIAL_OWNER = "UniverLab";
 
-export const OFFICIAL_REPO = "graphs";
+export const OFFICIAL_REPO = "canopy-web";
 
 /** Official documents live under the registry layout; community repos do not. */
 const OFFICIAL_PREFIX = "registry/";
@@ -66,7 +66,7 @@ const UNKNOWN = "?";
 export const USAGE = [
   "graphs.univerlab.org redirects to the document on GitHub.",
   "",
-  "  GET /i/<kind>/<slug>                  official: UniverLab/graphs",
+  "  GET /i/<kind>/<slug>                  official: UniverLab/canopy-web",
   "  GET /i/<owner>/<repo>/<kind>/<slug>   community repository",
   "",
   "<kind> is graph or node; ?ref=<branch|tag|commit> defaults to HEAD.",

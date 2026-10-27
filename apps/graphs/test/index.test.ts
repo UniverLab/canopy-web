@@ -7,7 +7,7 @@ import { SLUG_PATTERN, SLUG_RE } from "../src/lib.js";
 const ORIGIN = "https://graphs.univerlab.org";
 
 const official = (kind: string, slug: string, ref = "HEAD"): string =>
-  `https://raw.githubusercontent.com/UniverLab/graphs/${ref}/registry/${kind}s/${slug}/${kind}.json`;
+  `https://raw.githubusercontent.com/UniverLab/canopy-web/${ref}/registry/${kind}s/${slug}/${kind}.json`;
 
 const community = (owner: string, repo: string, kind: string, slug: string, ref = "HEAD"): string =>
   `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${kind}s/${slug}/${kind}.json`;
@@ -159,8 +159,8 @@ describe("counting", () => {
     expect(response.status).toBe(302);
     expect(points).toHaveLength(1);
     expect(points[0]).toEqual({
-      indexes: ["UniverLab/graphs/graph/hello-graph"],
-      blobs: ["graph", "UniverLab/graphs/hello-graph", "curl", "", "", "redirect"],
+      indexes: ["UniverLab/canopy-web/graph/hello-graph"],
+      blobs: ["graph", "UniverLab/canopy-web/hello-graph", "curl", "", "", "redirect"],
       doubles: [1],
     });
   });
@@ -200,8 +200,8 @@ describe("counting", () => {
     expect(response.status).toBe(400);
     expect(points).toEqual([
       {
-        indexes: ["UniverLab/graphs/graph/?"],
-        blobs: ["graph", "UniverLab/graphs/?", "curl", "", "", "bad-request"],
+        indexes: ["UniverLab/canopy-web/graph/?"],
+        blobs: ["graph", "UniverLab/canopy-web/?", "curl", "", "", "bad-request"],
         doubles: [1],
       },
     ]);

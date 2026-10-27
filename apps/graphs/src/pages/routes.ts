@@ -20,7 +20,7 @@ import { type ApiDeps, type ApiEnv } from "../api.js";
 import { attachDownloads, createAnalytics, type Downloads } from "../analytics.js";
 import { type Log, createGitHub, isApiError } from "../github.js";
 import { OFFICIAL_OWNER, OFFICIAL_REPO, OWNER_RE, REPO_RE, SLUG_RE } from "../lib.js";
-import type { DocumentKind, JsonValue } from "../../../src/schema.js";
+import type { DocumentKind, JsonValue } from "../../../../src/schema.js";
 import type { Doc } from "../documents.js";
 import { documentDirectory, loadDocument } from "../documents.js";
 import { listOfficial, loadOfficialDocument } from "../official.js";

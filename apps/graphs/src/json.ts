@@ -7,7 +7,7 @@
  * values the callers can branch on, so a malformed GitHub response degrades
  * into a typed error or a dropped document instead of an exception.
  */
-import type { JsonValue } from "../../src/schema.js";
+import type { JsonValue } from "../../../src/schema.js";
 
 export type { JsonValue };
 

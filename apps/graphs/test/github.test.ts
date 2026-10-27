@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createGitHub, TTL, USER_AGENT, type ApiError } from "../src/github.js";
 import { FakeCache, fakeFetch, type Stub } from "./fakes.js";
 
-const url = "https://api.github.com/repos/UniverLab/graphs";
+const url = "https://api.github.com/repos/UniverLab/canopy-web";
 
 function run(stubs: Stub[], options: { token?: string } = {}): {
   calls: string[];

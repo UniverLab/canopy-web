@@ -14,7 +14,7 @@
  */
 import { attachDownloads, createAnalytics } from "./analytics.js";
 import { createGitHub, isApiError, type ApiError, type CacheLike, type GitHub, type Log } from "./github.js";
-import type { DocumentKind } from "../../src/schema.js";
+import type { DocumentKind } from "../../../src/schema.js";
 import { SLUG_RE, OWNER_RE, REPO_RE, isOfficialRepo } from "./lib.js";
 import { documentDirectory, loadDocument } from "./documents.js";
 import { listOfficial, loadOfficialDocument } from "./official.js";

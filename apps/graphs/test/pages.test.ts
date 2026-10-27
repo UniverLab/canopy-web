@@ -16,7 +16,7 @@ import {
 import { VALID_GRAPH_TEXT, VALID_NODE_TEXT } from "./documents-fixture.js";
 
 const ORIGIN = "https://graphs.univerlab.org";
-const REPO_DIR = "repos/UniverLab/graphs";
+const REPO_DIR = "repos/UniverLab/canopy-web";
 const SEARCH = "search/repositories";
 const HTML = { "content-type": "text/html" };
 
@@ -234,12 +234,12 @@ describe("the page shell", () => {
       env: { CF_ACCOUNT_ID: "acct", CF_ANALYTICS_TOKEN: "tok" },
       stubs: [
         ...officialStubs(),
-        { url: "analytics_engine/sql", status: 200, body: { data: [{ index: "UniverLab/graphs/graph/hello-graph", count: 12 }] } },
+        { url: "analytics_engine/sql", status: 200, body: { data: [{ index: "UniverLab/canopy-web/graph/hello-graph", count: 12 }] } },
       ],
     })).text();
     expect(html).toContain("7 stars");
     expect(html).toContain("12 downloads");
-    expect(html).toContain(`<a class="button" href="https://github.com/UniverLab/graphs">Star on GitHub</a>`);
+    expect(html).toContain(`<a class="button" href="https://github.com/UniverLab/canopy-web">Star on GitHub</a>`);
     expect(html).toContain("build, docs");
     expect(html).toContain("need a harness");
   });
@@ -257,7 +257,7 @@ describe("the page shell", () => {
   });
 
   it("serves the short official form and the long one identically", async () => {
-    const long = await call("/g/UniverLab/graphs/hello-graph");
+    const long = await call("/g/UniverLab/canopy-web/hello-graph");
     const html = await long.text();
     expect(html).toContain("canopy graph install hello-graph");
   });

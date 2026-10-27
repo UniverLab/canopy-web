@@ -41,7 +41,7 @@ describe("the analytics collector", () => {
         status: 200,
         body: {
           data: [
-            { index: "UniverLab/graphs/graph/hello-graph", count: 12 },
+            { index: "UniverLab/canopy-web/graph/hello-graph", count: 12 },
             { index: "acme/things/node/cool-node", count: 4 },
           ],
         },
@@ -54,7 +54,7 @@ describe("the analytics collector", () => {
       token: "tok",
     });
     const volumes = (await analytics.volume()) as Downloads;
-    expect(volumes.get("UniverLab/graphs/graph/hello-graph")).toBe(12);
+    expect(volumes.get("UniverLab/canopy-web/graph/hello-graph")).toBe(12);
     expect(volumes.get("acme/things/node/cool-node")).toBe(4);
     expect(fake.calls.length).toBe(1);
     expect(fake.calls[0]).toContain("accounts/acct/analytics_engine/sql");
@@ -68,7 +68,7 @@ describe("the analytics collector", () => {
 
   it("serves the second call from the cache without a second SQL call", async () => {
     const fake = fakeFetch([
-      { url: SQL_URL, status: 200, body: { data: [{ index: "UniverLab/graphs/graph/hello-graph", count: 12 }] } },
+      { url: SQL_URL, status: 200, body: { data: [{ index: "UniverLab/canopy-web/graph/hello-graph", count: 12 }] } },
     ]);
     const cache = new FakeCache();
     const analytics = createAnalytics({
@@ -81,7 +81,7 @@ describe("the analytics collector", () => {
     const again = await analytics.volume();
     expect(fake.calls.length).toBe(1);
     expect(cache.has(ANALYTICS_CACHE_URL)).toBe(true);
-    expect((again as Downloads).get("UniverLab/graphs/graph/hello-graph")).toBe(12);
+    expect((again as Downloads).get("UniverLab/canopy-web/graph/hello-graph")).toBe(12);
   });
 
   it("returns null when the SQL call fails, never a throw", async () => {
@@ -98,8 +98,8 @@ describe("the analytics collector", () => {
 
   it("attaches 90-day counts where they match and nothing where they do not", () => {
     const docs = [
-      sampleDoc("hello-graph", "graph", "UniverLab/graphs"),
-      sampleDoc("quiet-graph", "graph", "UniverLab/graphs"),
+      sampleDoc("hello-graph", "graph", "UniverLab/canopy-web"),
+      sampleDoc("quiet-graph", "graph", "UniverLab/canopy-web"),
     ];
     const volumes = new Map<string, number>([[downloadKey(docs[0]), 12]]);
     const attached = attachDownloads(docs, volumes);
@@ -109,7 +109,7 @@ describe("the analytics collector", () => {
   });
 
   it("leaves downloads absent altogether when analytics is unconfigured", () => {
-    const attached = attachDownloads([sampleDoc("hello-graph", "graph", "UniverLab/graphs")], null);
+    const attached = attachDownloads([sampleDoc("hello-graph", "graph", "UniverLab/canopy-web")], null);
     expect(attached[0].downloads).toBeUndefined();
   });
 });
