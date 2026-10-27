@@ -73,9 +73,15 @@ export const COPY_BUTTON = "Copy";
 /** The copy button's accessible label. */
 export const COPY_ARIA = "Copy the install command to the clipboard";
 
-/** The drawing's heading and its accessible description. */
+/** The drawing's heading: the plate figure below it. */
 export const DRAWING_HEADING = "Drawing";
-export const DRAWING_ALT = "A drawing of the graph: nodes left to right by layer.";
+
+/** The structure section of a graph's markdown twin: nodes and routes as text. */
+export const STRUCTURE_HEADING = "Structure";
+export const STRUCTURE_NODES_LABEL = "Nodes";
+export const STRUCTURE_ENSEMBLES_LABEL = "Ensembles";
+export const STRUCTURE_ROUTES_LABEL = "Routes";
+export const STRUCTURE_NONE = "none";
 
 /** The agent-nodes section: these are the nodes a harness must run. */
 export const AGENT_NODES_HEADING = "Agent nodes";

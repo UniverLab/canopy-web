@@ -103,7 +103,7 @@ describe("route snapshots", () => {
     expect(await response.text()).toMatchSnapshot();
   });
 
-  it("renders /n/<slug> without a drawing", async () => {
+  it("renders /n/<slug> with the one node", async () => {
     expect(await (await call("/n/hello-node")).text()).toMatchSnapshot();
   });
 
@@ -129,6 +129,28 @@ describe("the markdown twin", () => {
       expect(await response.text(), path).not.toContain("<");
     }
   });
+
+  it("lists the graph's nodes and routes as text, the same structure as the plate", async () => {
+    const twin = await (await call("/g/hello-graph", { accept: "text/markdown" })).text();
+    expect(twin).toContain("## Structure");
+    expect(twin).toContain("Nodes: build (agent), test (check), gate (gate), triage (router), docs (agent).");
+    expect(twin).toContain("Routes:");
+    for (const route of [
+      "- build --pass--> test",
+      "- test --always--> gate",
+      "- test --fail--> build",
+      "- gate --pass--> triage",
+      "- triage --route:ship--> docs",
+    ]) {
+      expect(twin).toContain(route);
+    }
+    expect(twin).not.toContain("<");
+  });
+
+  it("gives the node twin no structure section", async () => {
+    const twin = await (await call("/n/hello-node", { accept: "text/markdown" })).text();
+    expect(twin).not.toContain("## Structure");
+  });
 });
 
 describe("the sanitizer", () => {
@@ -148,20 +170,39 @@ describe("the sanitizer", () => {
   });
 });
 
-describe("the SVG drawing", () => {
-  it("draws five labelled boxes, one dashed fail edge, kinds as classes", async () => {
+describe("the plate drawing", () => {
+  it("draws the five nodes as Canopy shapes in a scrolling figure", async () => {
     const html = await (await call("/g/hello-graph")).text();
     expect(html).toMatchSnapshot();
+    // The figure scrolls horizontally on narrow screens; the page never overflows.
+    expect(html).toContain(`<figure class="plate">`);
+    expect(html).toContain(`.plate { margin: 1rem 0; overflow-x: auto; max-width: 100%; }`);
+    // One labelled shape per node: agents are circles, checks rounded
+    // squares, gates and routers diamonds — the router reads as a gate.
     for (const label of ["build", "test", "gate", "triage", "docs"]) {
       expect(html).toContain(`>${label}</text>`);
     }
-    expect((html.match(/class="edge fail"/g) ?? [])).toHaveLength(1);
-    expect((html.match(/class="edge pass"/g) ?? [])).toHaveLength(2);
-    expect((html.match(/class="edge other"/g) ?? [])).toHaveLength(2);
-    for (const kind of ["kind-agent", "kind-check", "kind-gate", "kind-router"]) {
-      expect(html).toContain(`class="node ${kind}"`);
+    for (const shape of [
+      `class="node shape-agent" data-name="build"`,
+      `class="node shape-check" data-name="test"`,
+      `class="node shape-gate" data-name="gate"`,
+      `class="node shape-gate" data-name="triage"`,
+      `class="node shape-agent" data-name="docs"`,
+    ]) {
+      expect(html).toContain(shape);
     }
-    expect(html).toContain(`stroke-dasharray`);
+    // Edges follow the conditions: one red fail arc back, four teal passes
+    // (the always and the route read as pass), no error, a labelled svg.
+    expect((html.match(/class="edge fail"/g) ?? [])).toHaveLength(1);
+    expect((html.match(/class="edge pass"/g) ?? [])).toHaveLength(4);
+    expect(html).not.toContain(`class="edge error"`);
+    expect(html).toContain(`<svg class="plate-svg"`);
+    expect(html).toContain(`role="img"`);
+    expect(html).toContain(`<title>hello-graph</title>`);
+    expect(html).toContain(`<desc>Nodes in order: build, test, gate, triage, docs.</desc>`);
+    // The walking token rides the main pass chain and rests without motion.
+    expect(html).toContain(`<circle class="token"`);
+    expect(html).toContain(`prefers-reduced-motion`);
   });
 });
 
@@ -266,10 +307,12 @@ describe("the page shell", () => {
     expect(html).toContain("need a harness");
   });
 
-  it("installs the node page by its node ref and draws nothing", async () => {
+  it("installs the node page by its node ref and draws the one node", async () => {
     const html = await (await call("/n/hello-node")).text();
     expect(html).toContain("canopy node install hello-node");
-    expect(html).not.toContain("<svg");
+    expect(html).toContain(`<figure class="plate">`);
+    expect(html).toContain(`<g class="node shape-agent" data-name="hello-node"`);
+    expect(html).toContain(`<title>hello-node</title>`);
   });
 
   it("gives the community graph the owner/repo/slug ref", async () => {

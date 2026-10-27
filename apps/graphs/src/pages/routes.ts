@@ -20,6 +20,8 @@ import { type ApiDeps, type ApiEnv } from "../api.js";
 import { attachDownloads, createAnalytics, type Downloads } from "../analytics.js";
 import { type Log, createGitHub, isApiError } from "../github.js";
 import { OFFICIAL_OWNER, OFFICIAL_REPO, OWNER_RE, REPO_RE, SLUG_RE } from "../lib.js";
+import { structureOf, type GraphDocument, type NodeDocument } from "../plate/document.js";
+import { renderNodePlate, renderPlate } from "../plate/render.js";
 import type { DocumentKind, JsonValue } from "../../../../src/schema.js";
 import type { Doc } from "../documents.js";
 import { documentDirectory, loadDocument } from "../documents.js";
@@ -53,6 +55,11 @@ import {
   SITE_NAME,
   STARS_LABEL,
   STAR_BUTTON,
+  STRUCTURE_ENSEMBLES_LABEL,
+  STRUCTURE_HEADING,
+  STRUCTURE_NODES_LABEL,
+  STRUCTURE_NONE,
+  STRUCTURE_ROUTES_LABEL,
   TAGLINE,
   TOP_TAB,
   countLine,
@@ -63,7 +70,6 @@ import {
 import { page, type Page } from "./layout.js";
 import { escapeHtml, renderMarkdown } from "./md.js";
 import { docPath, docRef, pageRef, type PageRef } from "./ref.js";
-import { renderGraph } from "./svg.js";
 import { copyButton } from "./theme.js";
 
 /** A non-page request: index.ts keeps routing it to the redirector. */
@@ -208,6 +214,43 @@ function docListMarkdown(docs: Doc[], emptyLine: string): string {
   return `${lines.join("\n")}\n`;
 }
 
+/** The plate figure for a document page: the graph plate, or the one node. */
+function plateFigure(document: JsonValue, kind: PageRef["kind"]): string {
+  // The data layer only serves validated documents, so the cast is honest;
+  // the renderers stay total and draw nothing when it is not.
+  const plate = kind === "graph"
+    ? renderPlate(document as unknown as GraphDocument)
+    : renderNodePlate(document as unknown as NodeDocument);
+  return plate === "" ? "" : `<h2>${DRAWING_HEADING}</h2><figure class="plate">${plate}</figure>`;
+}
+
+/** The structure section of a graph's markdown twin: nodes and routes as text. */
+function structureSection(document: JsonValue): string {
+  const structure = structureOf(document);
+  if (structure === null) {
+    return "";
+  }
+  const nodes = structure.nodes.length === 0
+    ? STRUCTURE_NONE
+    : structure.nodes.map((node) => `${node.name} (${node.kind})`).join(", ");
+  const lines = [`## ${STRUCTURE_HEADING}`, ``, `${STRUCTURE_NODES_LABEL}: ${nodes}.`, ``];
+  if (structure.ensembles.length > 0) {
+    const ensembles = structure.ensembles
+      .map((ensemble) => `${ensemble.name} (${ensemble.strategy}, ${ensemble.members} members)`)
+      .join(", ");
+    lines.push(`${STRUCTURE_ENSEMBLES_LABEL}: ${ensembles}.`, ``);
+  }
+  if (structure.routes.length > 0) {
+    lines.push(
+      `${STRUCTURE_ROUTES_LABEL}:`,
+      ``,
+      ...structure.routes.map((route) => `- ${route.from} --${route.via}--> ${route.to}`),
+      ``,
+    );
+  }
+  return `${lines.join("\n")}\n`;
+}
+
 /** One document page: name, meta, star button, install, drawing, README. */
 function documentPage(doc: Doc, document: JsonValue, ref: PageRef): Page {
   const install = installCommand(ref.kind, ref.ref);
@@ -228,7 +271,7 @@ function documentPage(doc: Doc, document: JsonValue, ref: PageRef): Page {
     `<p><a class="button" href="${ref.repoUrl}">${STAR_BUTTON}</a></p>`,
     `<h2>${INSTALL_HEADING}</h2>`,
     `<div class="install"><code>${escapeHtml(install)}</code>${copyButton(install)}</div>`,
-    ref.kind === "graph" ? `<h2>${DRAWING_HEADING}</h2>${renderGraph(document, ref.ref)}` : "",
+    plateFigure(document, ref.kind),
     agents.length === 0
       ? ""
       : `<h2>${AGENT_NODES_HEADING}</h2><p class="agent-nodes">${escapeHtml(agents.join(", "))}</p>` +
@@ -250,6 +293,7 @@ function documentPage(doc: Doc, document: JsonValue, ref: PageRef): Page {
     ``,
     `    ${install}`,
     ``,
+    ref.kind === "graph" ? structureSection(document) : "",
     agents.length === 0
       ? ""
       : `## ${AGENT_NODES_HEADING}\n\n${agents.join(", ")}\n\n${AGENT_NODES_NOTE}\n`,

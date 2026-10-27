@@ -163,11 +163,8 @@ h2 { font-size: 1.35rem; margin: 2rem 0 0.5rem; }
   font-size: 0.85rem;
   cursor: pointer;
 }
-.graph-svg { max-width: 100%; height: auto; margin: 1rem 0; color: var(--ink); }
-.graph-svg .node rect { fill: var(--bg); stroke: currentColor; stroke-width: 1.25; }
-.graph-svg .node text { font-family: var(--mono); font-size: 12px; fill: currentColor; }
-.graph-svg .edge { stroke: currentColor; stroke-width: 1.25; }
-.graph-svg .edge.fail { stroke-dasharray: 6 4; }
+.plate { margin: 1rem 0; overflow-x: auto; max-width: 100%; }
+.plate svg { display: block; height: auto; max-width: none; }
 .agent-nodes { font-family: var(--mono); font-size: 0.95rem; }
 .site-footer { margin-top: 3rem; font-family: var(--mono); font-size: 0.85rem; }
 .busy { border-left: 3px solid var(--accent); padding-left: 1rem; }
