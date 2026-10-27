@@ -40,7 +40,7 @@ export class NewDialog {
   constructor(catalog: CatalogStore, callbacks: NewDialogCallbacks) {
     this.catalog = catalog;
     this.callbacks = callbacks;
-    this.sheet = new Sheet({ kind: "new", title: "New session" }, () => this.close());
+    this.sheet = new Sheet({ kind: "new", title: "Start an agent on this host" }, () => this.close());
   }
 
   get isOpen(): boolean {

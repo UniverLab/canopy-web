@@ -101,7 +101,7 @@ export function renderSessions(
     .join("");
   root.innerHTML =
     `<div class="sessions-head"><h2>Sessions</h2>` +
-    `<button type="button" id="session-new">New</button></div>` +
+    `<button type="button" id="session-new">New agent</button></div>` +
     (items.length === 0
       ? `<p class="empty">No sessions on this host.</p>`
       : `<ul class="session-list">${rows}</ul>`);
