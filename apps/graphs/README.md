@@ -91,7 +91,7 @@ discovery dialect as univerlab.org (same robots wording, same `Link` shape):
 | `GET /.well-known/api-catalog` | RFC 9727 linkset: the OpenAPI description, the Publish docs, the index status |
 
 Every HTML page carries
-`Link: </llms.txt>; rel="describedby", </.well-known/api-catalog>; rel="api-catalog"`,
+`Link: </llms.txt>; rel="describedby"; type="text/plain", </.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json"`,
 and every other `/.well-known/*` path answers `404`. The four files live in
 `src/agent-files.ts`, checked before the API router.
 

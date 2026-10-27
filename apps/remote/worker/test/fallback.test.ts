@@ -42,7 +42,7 @@ function request(path: string, method = "GET"): Request {
 }
 
 describe("the SPA fallback", () => {
-  it.each(["/", "/pair", "/deep/link"])("serves index.html for extensionless %s", async (path) => {
+  it.each(["/", "/pair", "/pair/", "/deep/link"])("serves index.html for extensionless %s", async (path) => {
     const response = await worker.fetch(request(path), testEnv());
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("text/html; charset=utf-8");
@@ -75,7 +75,15 @@ describe("the SPA fallback", () => {
 });
 
 describe("honest 404s", () => {
-  it.each(["/.well-known/api-catalog", "/.well-known/other", "/llms.txt", "/sitemap.xml"])(
+  it.each([
+    "/.well-known",
+    "/.well-known/api-catalog",
+    "/.well-known/other",
+    "/llms.txt",
+    "/llms.txt/",
+    "/sitemap.xml",
+    "/sitemap.xml/",
+  ])(
     "answers %s with a 404, never the SPA",
     async (path) => {
       const response = await worker.fetch(request(path), testEnv());
@@ -85,7 +93,7 @@ describe("honest 404s", () => {
     },
   );
 
-  it.each(["/app.css", "/look/tokens.css", "/favicon.ico"])(
+  it.each(["/app.css", "/app.css/", "/look/tokens.css", "/favicon.ico"])(
     "answers %s with a 404 when no built asset holds it",
     async (path) => {
       const response = await worker.fetch(request(path), testEnv());

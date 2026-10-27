@@ -56,7 +56,7 @@ test("serves robots.txt as static text that keeps crawlers out", async ({
 test("answers agent probes with 404 JSON, never the SPA", async ({
   request,
 }) => {
-  for (const path of ["/llms.txt", "/sitemap.xml", "/.well-known/api-catalog"]) {
+  for (const path of ["/llms.txt", "/llms.txt/", "/sitemap.xml", "/sitemap.xml/", "/.well-known/api-catalog"]) {
     const response = await request.get(path);
     expect(response.status(), path).toBe(404);
     expect(response.headers()["content-type"], path).toContain("application/json");
@@ -66,6 +66,8 @@ test("answers agent probes with 404 JSON, never the SPA", async ({
 test("answers a missing built asset with 404, not index.html", async ({
   request,
 }) => {
-  const response = await request.get("/app.css");
-  expect(response.status()).toBe(404);
+  for (const path of ["/app.css", "/app.css/"]) {
+    const response = await request.get(path);
+    expect(response.status(), path).toBe(404);
+  }
 });

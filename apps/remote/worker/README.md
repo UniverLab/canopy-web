@@ -16,7 +16,9 @@ same GitHub account, and forward opaque signaling messages between them.
 | `GET /ws/host` | upgrades a host socket into the user's room (GitHub token + id + label) |
 | `GET /turn` | `{iceServers}`: Cloudflare TURN credentials plus STUN |
 
-Anything else answers `404` for now; a defined path with the wrong method
+Anything else is the SPA fallback: extensionless paths serve the app's
+`index.html`, while agent probes and file paths no built asset holds answer
+`404` (see Static assets below); a defined path with the wrong method
 answers `405`. Every response carries the relay's security headers
 (CSP, `Referrer-Policy: no-referrer`, `X-Content-Type-Options: nosniff`).
 

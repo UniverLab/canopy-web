@@ -87,7 +87,11 @@ async function fallback(pathname: string, req: Request, env: Env): Promise<Respo
   if (req.method !== "GET" && req.method !== "HEAD") {
     return json({ error: "not_found" }, 404);
   }
-  if (isAgentPath(pathname) || hasExtension(pathname)) {
+  // A trailing slash does not turn a probe into a route: /llms.txt/ is
+  // still /llms.txt, and /app.css/ still names a file. Only the bare /
+  // keeps its slash.
+  const clean = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
+  if (isAgentPath(clean) || hasExtension(clean)) {
     return json({ error: "not_found" }, 404);
   }
   try {
