@@ -38,7 +38,7 @@ export async function directoriesFallback(
   repo: string,
   branch: string,
   log: Log,
-): Promise<DocumentSource[]> {
+): Promise<DocumentSource[] | ApiError> {
   const sources: DocumentSource[] = [];
   const prefix = branch === "" ? "" : `?ref=${encodeURIComponent(branch)}`;
   for (const kind of ["graph", "node"] as const) {
@@ -47,6 +47,9 @@ export async function directoriesFallback(
       "contents",
     );
     if (isApiError(listing)) {
+      if (listing.kind === "rate-limit") {
+        return listing;
+      }
       if (listing.kind !== "not-found") {
         log(`discovery: ${owner}/${repo} listing ${kind}s failed: ${listing.kind}`);
       }

@@ -269,6 +269,60 @@ describe("the scheduled indexer", () => {
     expect(oneDoc.document.name).toBe("hello-graph");
   });
 
+  it("carries over repositories beyond GitHub's 1,000-result cap", async () => {
+    const kv = new FakeKV();
+    const previous = (repo: string, slug: string): Record<string, unknown> => ({
+      kind: "graph",
+      owner: "acme",
+      repo,
+      slug,
+      name: slug,
+      description: "",
+      official: false,
+      stars: null,
+      updated: null,
+      ref: "main",
+    });
+    await kv.put("index:v1", JSON.stringify({
+      built_at: "2026-10-26T00:00:00.000Z",
+      entries: [previous("r-001", "flow"), previous("beyond", "x")],
+    }));
+    for (const [repo, slug] of [["r-001", "flow"], ["beyond", "x"]] as const) {
+      await kv.put(docKey("graph", "acme", repo, slug), JSON.stringify({ document: { name: slug }, readme: "" }));
+    }
+
+    // Ten full pages: GitHub's cap, every repository with an empty tree
+    // (one call each, no documents). Official (3) + discovery (10) +
+    // trees (1,000) stays under the 1,200 budget.
+    const stubs: Stub[] = [...emptyOfficialStubs()];
+    for (let page = 1; page <= 10; page += 1) {
+      const names = Array.from({ length: 100 }, (_, i) => `r-${String((page - 1) * 100 + i + 1).padStart(3, "0")}`);
+      stubs.push({
+        url: discoveryUrl(page),
+        status: 200,
+        body: { total_count: 1001, items: names.map((name, i) => searchHit(name, i + 1)) },
+      });
+      for (const name of names) {
+        stubs.push({
+          url: `repos/acme/${name}/git/trees/main`,
+          status: 200,
+          body: { tree: [] },
+        });
+      }
+    }
+    const { meta } = await run(stubs, { kv });
+
+    expect(meta.truncated).toBe(true);
+    expect(meta.calls).toBe(3 + 10 + 1000);
+    const index = await storedIndex(kv);
+    // The visited repository had no documents, so its previous entry is
+    // gone; the repository beyond the cap was never proven gone, so its
+    // previous entry — and its document key — carry over.
+    expect(index.entries.map((e) => `${e["repo"]}/${e["slug"]}`)).toEqual(["beyond/x"]);
+    expect(await kv.get(docKey("graph", "acme", "r-001", "flow"))).toBeNull();
+    expect(await kv.get(docKey("graph", "acme", "beyond", "x"))).not.toBeNull();
+  });
+
   it("deletes the keys of documents that disappeared", async () => {
     const kv = new FakeKV();
     const entry = (repo: string, slug: string): Record<string, unknown> => ({

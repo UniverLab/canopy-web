@@ -61,8 +61,10 @@ export const INDEX_CRON_MINUTES = 15;
 export const DISCOVERY_PAGE_SIZE = 100;
 
 /**
- * GitHub caps search at 1,000 results: 10 pages of 100, then discovery
- * is complete by definition, with `truncated` set in the meta.
+ * GitHub caps search at 1,000 results: 10 pages of 100, then the run stops
+ * paging with `truncated` set. Discovery stays incomplete — repositories
+ * beyond the cap were not proven gone, so their previous entries carry
+ * over instead of being deleted.
  */
 export const DISCOVERY_MAX_PAGES = 10;
 
@@ -472,7 +474,6 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
         discoveryComplete = true;
         paging = false;
       } else if (page >= DISCOVERY_MAX_PAGES) {
-        discoveryComplete = true;
         state.truncated = true;
         paging = false;
       } else {

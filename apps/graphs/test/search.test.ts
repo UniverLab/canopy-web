@@ -173,6 +173,28 @@ describe("community search", () => {
     expect(outcome.items[0].readme).toBe("");
   });
 
+  it("surfaces a rate limit from the fallback listings as a typed error", async () => {
+    const fake = fakeFetch([
+      {
+        url: SEARCH,
+        status: 200,
+        body: {
+          total_count: 1,
+          items: [{ name: "things", owner: { login: "acme" }, default_branch: "main", stargazers_count: 3 }],
+        },
+      },
+      {
+        url: "repos/acme/things/git/trees/main",
+        status: 200,
+        body: { truncated: true, tree: [{ path: ".github/workflows/ci.yml", type: "blob" }] },
+      },
+      { url: "repos/acme/things/contents/graphs", status: 429, headers: { "x-ratelimit-remaining": "0" } },
+    ]);
+    const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
+    const outcome = await searchCommunity(github, { q: "", sort: "top", page: 1 }, () => undefined);
+    expect("kind" in outcome ? outcome.kind : "").toBe("rate-limit");
+  });
+
   it("skips a repository whose tree is unreadable and keeps the others", async () => {
     const fake = fakeFetch([
       {
