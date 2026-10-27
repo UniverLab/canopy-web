@@ -12,6 +12,16 @@ import type { DocumentKind } from "../../../src/schema.js";
 import type { Doc } from "../documents.js";
 import { isOfficialRepo } from "../lib.js";
 
+/**
+ * Encode one path segment for a URL. The route regexes (`SLUG_RE` et al.)
+ * keep every *page* address safe, but a directory name is whatever the
+ * repository chose — the listing paths render it into an href and a
+ * markdown link, so it is encoded here, once, where every path starts.
+ */
+function segment(part: string): string {
+  return encodeURIComponent(part);
+}
+
 export interface PageRef {
   kind: DocumentKind;
   official: boolean;
@@ -34,17 +44,21 @@ export function pageRef(kind: DocumentKind, owner: string, repo: string, slug: s
     repo,
     slug,
     ref: official ? slug : `${owner}/${repo}/${slug}`,
-    repoUrl: `https://github.com/${owner}/${repo}`,
+    repoUrl: `https://github.com/${segment(owner)}/${segment(repo)}`,
   };
 }
 
 /**
  * The catalogue path for a document. Official documents use the short
- * form; community documents carry the repository.
+ * form; community documents carry the repository. Every segment is
+ * percent-encoded, so the path is safe both in an HTML attribute and
+ * inside a markdown link.
  */
 export function pagePath(ref: PageRef): string {
   const verb = ref.kind === "graph" ? "g" : "n";
-  return ref.official ? `/${verb}/${ref.slug}` : `/${verb}/${ref.owner}/${ref.repo}/${ref.slug}`;
+  return ref.official
+    ? `/${verb}/${segment(ref.slug)}`
+    : `/${verb}/${segment(ref.owner)}/${segment(ref.repo)}/${segment(ref.slug)}`;
 }
 
 /** The reference of a listed document, whose repo is the `owner/repo` pair. */

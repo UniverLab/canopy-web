@@ -86,6 +86,8 @@ describe("route snapshots", () => {
     expect(html).toMatchSnapshot();
     expect(html).toContain(`<label for="q">${SEARCH_LABEL}</label>`);
     expect(html).toContain(`<button type="submit" class="button">${SEARCH_BUTTON}</button>`);
+    expect(html).toContain(`<a href="/search?sort=top">`);
+    expect(html).toContain(`<a href="/search?sort=new">`);
   });
 
   it("renders /search with community results", async () => {
@@ -287,5 +289,23 @@ describe("routing", () => {
     const response = await call("/g/Not_A_Slug");
     expect(response.status).toBe(404);
     expect(await response.text()).toContain("Not found");
+  });
+
+  it("keeps a raw directory-name slug inert in listing links", async () => {
+    const slug = 'evil" onmouseover="alert(1)';
+    const encoded = "evil%22%20onmouseover%3D%22alert(1)";
+    const stubs = [
+      { url: `${REPO_DIR}/contents/registry/graphs`, status: 200, body: dirBody([{ name: slug, type: "dir" }]) },
+      { url: `${REPO_DIR}/contents/registry/graphs/evil%22%20onmouseover=%22alert(1)/graph.json`, status: 200, body: fileBody("graphs/x/graph.json", VALID_GRAPH_TEXT) },
+      { url: `${REPO_DIR}/contents/registry/graphs/${encoded}/README.md`, status: 404, body: {} },
+      { url: REPO_DIR, status: 200, body: { stargazers_count: 1 } },
+    ];
+    const html = await (await call("/", { stubs })).text();
+    expect(html).toContain(`href="/g/${encoded}"`);
+    expect(html).not.toContain(`onmouseover="alert(1)"`);
+    const twin = await (await call("/", { stubs, accept: "text/markdown" })).text();
+    expect(twin).toContain(`](/g/${encoded})`);
+    // No link target in the twin may carry a raw quote.
+    expect(twin).not.toMatch(/\]\(\/g\/[^)\n]*"/i);
   });
 });

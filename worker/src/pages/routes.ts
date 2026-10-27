@@ -160,7 +160,7 @@ function searchForm(q: string): string {
 }
 
 function searchHref(q: string, sort: SearchSort): string {
-  const base = q === "" ? "" : `?q=${encodeURIComponent(q)}&`;
+  const base = q === "" ? "?" : `?q=${encodeURIComponent(q)}&`;
   return `/search${base}sort=${sort}`;
 }
 

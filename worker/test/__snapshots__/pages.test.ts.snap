@@ -157,7 +157,7 @@ h2 { font-size: 1.35rem; margin: 2rem 0 0.5rem; }
 <p class="tagline">A catalogue of Canopy graphs and nodes.</p>
 <main>
 <form class="search" action="/search" method="get"><div><label for="q">Search graphs and nodes</label><input id="q" name="q" type="search" value="" placeholder="hello-graph"></div><button type="submit" class="button">Search</button></form>
-<nav class="tabs"><a href="/searchsort=top">Top</a><a href="/searchsort=new">New</a></nav>
+<nav class="tabs"><a href="/search?sort=top">Top</a><a href="/search?sort=new">New</a></nav>
 <h2>Official</h2>
 <h3>Graphs</h3>
 <ul class="doc-list"><li><a class="doc-name" href="/g/hello-graph">hello-graph</a> — 7 stars<span class="doc-description">Five nodes with one fail edge, for the drawing test.</span></li></ul>
