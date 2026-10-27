@@ -20,8 +20,11 @@ export default defineConfig({
   webServer: {
     // SESSION_SECRET is a Worker secret in prod; locally --var provides the
     // minimum env /auth/me needs, so it answers its real 401 (no cookie).
+    // build:look first: the app links /look/tokens.css and the generated
+    // public/look is gitignored, so without it the serve run would test a
+    // bare unstyled build (and still pass).
     command:
-      "npm run build:remote-web && npx wrangler dev --config ../worker/wrangler.toml --port 8787 --var SESSION_SECRET:dev-serve-secret",
+      "npm run build:look && npm run build:remote-web && npx wrangler dev --config ../worker/wrangler.toml --port 8787 --var SESSION_SECRET:dev-serve-secret",
     url: "http://127.0.0.1:8787/",
     // Own server only: see apps/graphs/playwright.config.ts — a reused server
     // can be wedged (the health check never answers) or out of date.

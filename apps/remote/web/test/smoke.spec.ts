@@ -27,25 +27,58 @@ test("renders the terminal and the key bar at 360x640", async ({ page }) => {
 
 test("fits the whole terminal to the pane at 390x844", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  // The pane re-fits on resize: scale = pane width / terminal width.
+  // The pane re-fits on resize: scale = pane width / terminal width. Wait
+  // for that re-fit to settle — the fit left over from the 360 px start
+  // also reports a scale > 0.5, so measuring straight away would race the
+  // ResizeObserver (the visual box was still the old 326 px wide).
   await expect
-    .poll(async () => Number(await page.locator(".term-fit").getAttribute("data-scale")))
-    .toBeGreaterThan(0.5);
+    .poll(async () =>
+      page.evaluate(() => {
+        const fit = document.querySelector(".term-fit") as HTMLElement;
+        const scaler = document.querySelector(".term-scale") as HTMLElement;
+        const rows = document.querySelector(".xterm-rows") as HTMLElement;
+        if (innerWidth !== 390) {
+          return Number.MAX_SAFE_INTEGER;
+        }
+        return Math.max(
+          Math.abs(scaler.getBoundingClientRect().width - fit.clientWidth),
+          Math.abs(rows.getBoundingClientRect().width - fit.clientWidth),
+        );
+      }),
+    )
+    .toBeLessThanOrEqual(2);
   const measured = await page.evaluate(() => {
     const pane = document.querySelector(".term-pane") as HTMLElement;
-    const term = document.querySelector(".xterm") as HTMLElement;
+    const scaler = document.querySelector(".term-scale") as HTMLElement;
+    const rows = document.querySelector(".xterm-rows") as HTMLElement;
     const fit = document.querySelector(".term-fit") as HTMLElement;
     return {
       pane: pane.getBoundingClientRect(),
-      term: term.getBoundingClientRect(),
+      // The terminal's visual box: natural size × the fitted scale.
+      visual: scaler.getBoundingClientRect(),
+      // The text itself carries xterm's own font size (the .xterm box
+      // inherits the page's), so this is the size the reader sees.
+      text: rows.getBoundingClientRect(),
+      fontPx: parseFloat(getComputedStyle(rows).fontSize),
       scale: Number(fit.dataset.scale),
-      fontPx: parseFloat(getComputedStyle(term).fontSize),
+      fitScroll: fit.scrollWidth,
+      fitClient: fit.clientWidth,
     };
   });
-  // The full 80-column terminal sits inside the pane, scaled exactly once.
-  expect(measured.term.width).toBeLessThanOrEqual(measured.pane.width + 1);
-  expect(measured.term.right).toBeLessThanOrEqual(measured.pane.right + 1);
+  // The full 80-column terminal sits inside the pane and fills it,
+  // scaled exactly once (no phantom horizontal scroll at the fit).
+  expect(measured.visual.width).toBeLessThanOrEqual(measured.pane.width + 1);
+  expect(measured.visual.right).toBeLessThanOrEqual(measured.pane.right + 1);
+  expect(Math.abs(measured.visual.width - measured.fitClient)).toBeLessThanOrEqual(1);
+  expect(measured.fitScroll - measured.fitClient).toBeLessThanOrEqual(1);
+  // The text runs to the pane edge and no further: 80 columns inside 390 px.
+  // Filling the pane (not merely sitting inside it) is what fails when the
+  // terminal scales twice or not at all.
+  expect(Math.abs(measured.text.width - measured.fitClient)).toBeLessThanOrEqual(2);
+  expect(measured.text.width).toBeLessThanOrEqual(measured.pane.width + 1);
+  expect(measured.text.right).toBeLessThanOrEqual(measured.pane.right + 1);
   // And the glyphs stay readable: at least 7 CSS px on a 390 px screen.
+  expect(measured.fontPx).toBeGreaterThanOrEqual(10);
   expect(measured.fontPx * measured.scale).toBeGreaterThanOrEqual(7);
   const shot = await page.screenshot({ path: testInfo.outputPath("session-390x844.png") });
   await testInfo.attach("session-390x844", { body: shot, contentType: "image/png" });
