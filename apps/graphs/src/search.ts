@@ -16,6 +16,7 @@ import type { DocumentSource } from "./documents.js";
 import {
   type CatalogEntry,
   type Doc,
+  communityDir,
   documentDirectory,
   pathsFromTree,
   sourcesFromTree,
@@ -74,9 +75,15 @@ function hitOf(value: unknown): RepoHit | null {
   };
 }
 
+/**
+ * The GitHub topic that lists a repository in the catalogue. The Publish
+ * page names it, so it lives here, next to the query that reads it.
+ */
+export const CATALOGUE_TOPIC = "canopy-graph";
+
 export function searchUrl(options: SearchInput): string {
   const text = options.q.trim();
-  const q = `topic:canopy-graph${text === "" ? "" : ` ${text}`}`;
+  const q = `topic:${CATALOGUE_TOPIC}${text === "" ? "" : ` ${text}`}`;
   const params = new URLSearchParams({
     q,
     sort: options.sort === "new" ? "updated" : "stars",
@@ -99,7 +106,7 @@ async function directoriesFallback(
   const prefix = branch === "" ? "" : `?ref=${encodeURIComponent(branch)}`;
   for (const kind of ["graph", "node"] as const) {
     const listing = await github.get(
-      `https://api.github.com/repos/${owner}/${repo}/contents/${kind}s${prefix}`,
+      `https://api.github.com/repos/${owner}/${repo}/contents/${communityDir(kind)}${prefix}`,
       "contents",
     );
     if (isApiError(listing)) {

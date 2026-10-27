@@ -43,6 +43,12 @@ must equal the document's slug-safe `name` (`^[a-z0-9-]{1,48}$`).
 
 ## How to publish
 
+To list a graph or node from your own repo, follow the Publish page:
+https://graphs.univerlab.org/publish — any public repo with the
+`canopy-graph` topic is listed.
+
+Official documents live in this repo's `registry/`:
+
 1. Put the document at `registry/graphs/<slug>/graph.json` (graphs) or
    `registry/nodes/<slug>/node.json` (nodes), where `<slug>` matches the
    document's `name`.

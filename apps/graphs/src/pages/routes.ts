@@ -8,6 +8,7 @@
  *   GET /g/<owner>/<repo>/<slug>              community graph page
  *   GET /n/<slug>, /n/<owner>/<repo>/<slug>   node pages likewise
  *   GET /llms.txt                             one line per document: name, description, ref
+ *   GET /publish, /publish.md                 how to list a graph or node (page, markdown twin)
  *
  * Every route reads the catalogue through the data layer (official.ts,
  * documents.ts, search.ts) and only renders what comes back. A typed
@@ -44,6 +45,9 @@ import {
   NOT_FOUND_BODY,
   NOT_FOUND_HEADING,
   OFFICIAL_HEADING,
+  PUBLISH_HREF,
+  PUBLISH_LABEL,
+  PUBLISH_TITLE,
   README_HEADING,
   SHEET_AGENTS,
   SHEET_EDGES,
@@ -62,6 +66,7 @@ import {
   countLine,
   edgesLine,
   ensembleLine,
+  homePublishLine,
   installCommand,
   llmsLine,
   nodesByKindLine,
@@ -69,6 +74,7 @@ import {
 } from "./copy.js";
 import { page, type Page } from "./layout.js";
 import { escapeHtml, renderMarkdown } from "./md.js";
+import { publishPage } from "./publish.js";
 import { docPath, docRef, pageRef, type PageRef } from "./ref.js";
 import { copyButton } from "./look.js";
 
@@ -389,6 +395,9 @@ function homePage(graphs: Doc[], nodes: Doc[]): Page {
     `### ${NODES_HEADING}`,
     ``,
     docListMarkdown(nodes, EMPTY_OFFICIAL_NODES),
+    `## ${PUBLISH_TITLE}`,
+    ``,
+    `${homePublishLine(PUBLISH_LABEL, PUBLISH_HREF)}\n`,
   ].join("\n");
   return { title: SITE_NAME, description: TAGLINE, html, markdown };
 }
@@ -501,6 +510,18 @@ export async function handlePage(
   }
   if (segments.length === 1 && segments[0] === "llms.txt") {
     return llmsResponse(env, deps);
+  }
+  if (segments.length === 1 && segments[0] === "publish") {
+    return page(req, publishPage());
+  }
+  if (segments.length === 1 && segments[0] === "publish.md") {
+    return new Response(publishPage().markdown, {
+      status: 200,
+      headers: {
+        "content-type": "text/markdown; charset=utf-8",
+        "cache-control": "public, max-age=300",
+      },
+    });
   }
   const verb = segments[0];
   if ((verb === "g" || verb === "n") && (segments.length === 2 || segments.length === 4)) {

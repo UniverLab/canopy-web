@@ -6,9 +6,10 @@
  *   canopy graph install hello-graph
  *
  * Three surfaces, one Worker: `/api/*` is the JSON API (api.ts), the
- * catalogue pages (/, /search, /g, /n, /llms.txt) are the HTML/markdown
- * renderer (pages/routes.ts), and everything else that is not an install
- * URL falls through to the redirector below, which answers with either a
+ * catalogue pages (/, /search, /g, /n, /llms.txt, /publish) are the
+ * HTML/markdown renderer (pages/routes.ts), and everything else that
+ * is not an install URL falls through to the redirector below, which
+ * answers with either a
  * 302 to the document on GitHub or a 400/404 explaining why not. The
  * Worker never fetches or proxies the document: GitHub stays the download
  * origin and the trust anchor, so this adds no supply-chain surface beyond
@@ -102,7 +103,8 @@ function firstSegment(pathname: string): string {
 /** The page routes: everything else stays the synchronous redirector. */
 function isPagePath(pathname: string): boolean {
   const first = firstSegment(pathname);
-  return first === "" || first === "search" || first === "llms.txt" || first === "g" || first === "n";
+  return first === "" || first === "search" || first === "llms.txt" || first === "g" || first === "n" ||
+    first === "publish" || first === "publish.md";
 }
 
 /** The injected transport and cache: production defaults, test overrides. */
@@ -122,8 +124,8 @@ function answer(req: Request, env: Env, deps: WorkerDeps): Response | Promise<Re
       (result) => result === true ? install(req, env, url) : result,
     );
   }
-  // The catalogue pages claim /, /search, /g, /n and /llms.txt; every
-  // other path (the /i install routes above all) stays a redirect.
+  // The catalogue pages claim /, /search, /g, /n, /llms.txt and /publish;
+  // every other path (the /i install routes above all) stays a redirect.
   if (isPagePath(url.pathname)) {
     return handlePage(req, env, apiDeps).then(
       (result) => result === NOT_PAGE ? install(req, env, url) : result,

@@ -66,6 +66,20 @@ export function documentFile(kind: DocumentKind): string {
   return kind === "graph" ? "graph.json" : "node.json";
 }
 
+/**
+ * The folders the search reads documents from, at the repository root:
+ * `graphs/<slug>/graph.json` and `nodes/<slug>/node.json`. The Publish
+ * page states these paths, so they live here, not in prose.
+ */
+export const GRAPH_DIR = "graphs";
+
+export const NODE_DIR = "nodes";
+
+/** The community folder holding documents of `kind`. */
+export function communityDir(kind: DocumentKind): string {
+  return kind === "graph" ? GRAPH_DIR : NODE_DIR;
+}
+
 /** `registry/graphs` when the repository is the official one, else ``. */
 export function prefixFor(owner: string, repo: string): string {
   return isOfficialRepo(owner, repo) ? "registry/" : "";
@@ -79,7 +93,7 @@ export function documentDirectory(
   slug: string,
 ): string {
   const prefix = prefixFor(owner, repo);
-  return `${prefix}${kind}s/${slug}`;
+  return `${prefix}${communityDir(kind)}/${slug}`;
 }
 
 function contentsUrl(owner: string, repo: string, path: string, ref: string): string {
@@ -126,13 +140,13 @@ export function sourcesFromTree(
   repo: string,
   files: TreeFile[],
 ): DocumentSource[] {
-  const documentRe = /^(graphs|nodes)\/([a-z0-9-]{1,48})\/(?:graph|node)\.json$/;
+  const documentRe = new RegExp(`^(${GRAPH_DIR}|${NODE_DIR})/([a-z0-9-]{1,48})/(?:graph|node)\\.json$`);
   return files.flatMap((file) => {
     const match = documentRe.exec(file.path);
     if (match === null) {
       return [];
     }
-    const kind: DocumentKind = match[1] === "graphs" ? "graph" : "node";
+    const kind: DocumentKind = match[1] === GRAPH_DIR ? "graph" : "node";
     return [{ owner, repo, directory: `${match[1]}/${match[2]}`, kind, slug: match[2], stars: null }];
   });
 }

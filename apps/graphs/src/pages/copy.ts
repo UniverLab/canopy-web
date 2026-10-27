@@ -9,6 +9,7 @@
  */
 import type { DocumentKind } from "../../../../src/schema.js";
 import type { Doc } from "../documents.js";
+import { OFFICIAL_OWNER, OFFICIAL_REPO } from "../lib.js";
 
 /** The site's name, in the page titles. */
 export const SITE_NAME = "graphs.univerlab.org";
@@ -170,4 +171,123 @@ export function edgesLine(total: number, fail: number): string {
 /** How one ensemble reads: "reviewers (parallel, 2 members)". */
 export function ensembleLine(name: string, strategy: string, members: number): string {
   return `${name} (${strategy}, ${members} members)`;
+}
+
+/** The Publish page: how to list a graph or node in the catalogue. */
+export const PUBLISH_TITLE = "Publish";
+export const PUBLISH_DESCRIPTION = "How to list your graph or node in the catalogue.";
+export const PUBLISH_LEDE = "Any public repo can list its graphs and nodes here.";
+
+/** The Publish page's seven sections, in page order. */
+export const PUBLISH_SHARE_HEADING = "What you can share";
+export const PUBLISH_PLACE_HEADING = "Where it goes in your repo";
+export const PUBLISH_TOPIC_HEADING = "Mark the repo";
+export const PUBLISH_CHECK_HEADING = "Check it before sharing";
+export const PUBLISH_WHEN_HEADING = "When it shows up";
+export const PUBLISH_INSTALL_HEADING = "How people install it";
+export const PUBLISH_OFFICIAL_HEADING = "Official documents";
+
+/** The Canopy commands the Publish page shows, beside the install prefixes above. */
+export const EXPORT_GRAPH_COMMAND = "canopy graph export";
+export const VALIDATE_GRAPH_PREFIX = "canopy graph validate";
+
+/** The example repository and slugs the Publish page installs from. */
+export const PUBLISH_EXAMPLE_OWNER = "acme";
+export const PUBLISH_EXAMPLE_REPO = "things";
+export const PUBLISH_EXAMPLE_GRAPH = "flow";
+export const PUBLISH_EXAMPLE_NODE = "cool-node";
+
+/** The fields of a node document, as the share section lists them. */
+export const PUBLISH_NODE_FIELDS = ["format_version", "name", "kind", "config", "description", "preset"];
+
+/** The harness keys a shared document never carries. */
+export const PUBLISH_BARE_KEYS = ["platform", "model", "cli"];
+
+/** The JSON Schemas, at `main` in this repo, as raw file URLs. */
+export const SCHEMA_GRAPH_URL =
+  `https://raw.githubusercontent.com/${OFFICIAL_OWNER}/${OFFICIAL_REPO}/main/schema/graph.schema.json`;
+export const SCHEMA_NODE_URL =
+  `https://raw.githubusercontent.com/${OFFICIAL_OWNER}/${OFFICIAL_REPO}/main/schema/node.schema.json`;
+
+/** The schema link labels. */
+export const SCHEMA_GRAPH_LABEL = "graph.schema.json";
+export const SCHEMA_NODE_LABEL = "node.schema.json";
+
+/** What you can share: a graph is the export of the export command. */
+export function publishShareGraph(file: string): string {
+  return `A graph is a ${file} file. It is the export of:`;
+}
+
+/** What you can share: a node carries its fields and nothing else. */
+export function publishShareNode(file: string): string {
+  return (
+    `A node is a ${file} file. It carries format_version, name, kind and config, ` +
+    `with an optional description and preset.`
+  );
+}
+
+/** What you can share: shared documents stay harness-free. */
+export const PUBLISH_SHARE_BARE =
+  "Shared documents never carry platform, model or cli. The person who installs chooses the harnesses.";
+
+/** Where it goes: the graph path, over the path the search reads. */
+export function publishPlaceGraph(path: string): string {
+  return `Put the graph at ${path}.`;
+}
+
+/** Where it goes: the node path, over the path the search reads. */
+export function publishPlaceNode(path: string): string {
+  return `Put the node at ${path}.`;
+}
+
+/** Where it goes: every document folder carries its README. */
+export const PUBLISH_PLACE_README = "Add a README.md in the same folder. It says what the document does.";
+
+/** Where it goes: the slug equals the name and matches the slug rule. */
+export function publishPlaceSlug(pattern: string): string {
+  return `The <slug> in the path equals the document's name. It matches ${pattern}.`;
+}
+
+/** Mark the repo: listing needs a public repository. */
+export const PUBLISH_TOPIC_PUBLIC = "The repo must be public.";
+
+/** Mark the repo: the topic that lists it, over the search's own topic. */
+export function publishTopicStep(topic: string): string {
+  return `Add the ${topic} topic on GitHub. Find it under Settings → About → Topics.`;
+}
+
+/** Check it before sharing: the validator reports every problem with its path. */
+export const PUBLISH_CHECK_VALIDATE =
+  "Check the file with canopy 3.2 or later. It reports every problem with its path:";
+
+/** Check it before sharing: or read the file against the JSON Schemas. */
+export function publishCheckSchemas(graphLabel: string, nodeLabel: string): string {
+  return `Or check the file against the JSON Schemas: ${graphLabel} and ${nodeLabel}.`;
+}
+
+/** When it shows up: GitHub indexes a new topic within minutes. */
+export const PUBLISH_WHEN_INDEX = "GitHub indexes a new topic within minutes.";
+
+/** When it shows up: over the minutes the worker caches search results. */
+export function publishWhenCache(minutes: number): string {
+  return `The catalogue caches search results for ${minutes} minutes.`;
+}
+
+/** How people install it: the graph installs by owner, repo and slug. */
+export const PUBLISH_INSTALL_GRAPH = "People install the graph with:";
+
+/** How people install it: the node installs the same way. */
+export const PUBLISH_INSTALL_NODE = "People install the node with:";
+
+/** How people install it: the same commands the document pages print. */
+export const PUBLISH_INSTALL_SAME = "The commands are the same ones each document page prints.";
+
+/** Official documents live in this repo's registry and arrive by pull request. */
+export function publishOfficial(repo: string, prefix: string): string {
+  return `Official documents live in ${repo} under ${prefix}. They are proposed by pull request.`;
+}
+
+/** The home twin's pointer to the Publish page, over its label and href. */
+export function homePublishLine(label: string, href: string): string {
+  return `Share your own: [${label}](${href})`;
 }
