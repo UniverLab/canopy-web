@@ -16,15 +16,18 @@
     "test:remote-web": "vitest run --config apps/remote/web/vitest.config.ts",
     "test:worker": "vitest run --config apps/graphs/vitest.config.ts",
     "test:remote-worker": "vitest run --config apps/remote/worker/vitest.config.ts",
-    "validate": "tsx src/validate.ts"
+    "validate": "tsx src/validate.ts",
+    "test:remote-smoke": "playwright test --config apps/remote/web/playwright.config.ts"
   },
   "dependencies": {
-    "@cfworker/json-schema": "^4.1.1"
+    "@cfworker/json-schema": "^4.1.1",
+    "@xterm/xterm": "5.5.0"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.12.21",
     "@cloudflare/workers-types": "^5.20261026.1",
     "@eslint/js": "^9.18.0",
+    "@playwright/test": "1.64.0",
     "@types/node": "^22.10.0",
     "eslint": "^9.18.0",
     "fake-indexeddb": "6.2.5",

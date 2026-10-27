@@ -96,6 +96,18 @@ export class ConnectionManager {
     void this.attempt();
   }
 
+  get connected(): boolean {
+    return this.phase === "open";
+  }
+
+  // Session-layer frames to the host. False while reconnecting or failed.
+  send(data: string): boolean {
+    if (this.phase !== "open" || !this.peer) {
+      return false;
+    }
+    return this.peer.send(data);
+  }
+
   stop(): void {
     this.clearTimers();
     this.unsubscribePeer?.();

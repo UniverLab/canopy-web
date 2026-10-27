@@ -223,6 +223,20 @@ export class HostPeer {
     }
   }
 
+  // Session-layer frames to the host. False when there is no open data
+  // channel; the caller decides whether to retry or drop.
+  send(data: string): boolean {
+    if (this.state !== "open" || !this.channel || this.channel.readyState !== "open") {
+      return false;
+    }
+    try {
+      this.channel.send(data);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   close(): void {
     if (this.state === "starting") {
       this.settleOpen?.reject(new Error("Connection closed"));

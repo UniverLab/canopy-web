@@ -99,9 +99,13 @@ dist
 *.cer
 *.csr
 *.css
+!apps/remote/web/src/styles.css
 *.htm
 *.html
 !apps/remote/web/index.html
+!apps/remote/web/fake.html
+test-results/
+playwright-report/
 *.js
 # The ESLint flat config is source, not a build output.
 !eslint.config.js

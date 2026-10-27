@@ -1,0 +1,406 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Canopy remote: every color, font and spacing decision lives in these
+ * custom properties so the visual identity review can retheme without
+ * touching the components. Light and dark follow the OS setting. */
+
+:root {
+  --bg: #ffffff;
+  --ink: #1d1510;
+  --muted: #6b6259;
+  --line: #e3ddd4;
+  --accent: #0e7c76;
+  --accent-ink: #ffffff;
+  --danger: #a4262c;
+  --dot-run: #1e9e50;
+  --dot-idle: #c77700;
+  --dot-dead: #8a8378;
+  --dot-unknown: #b3aa9d;
+  --term-bg: #101210;
+  --key-bg: #f1ede6;
+  --key-ink: #1d1510;
+  --radius: 8px;
+  --gap: 0.5rem;
+  --font-body: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Sometype Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #222928;
+    --ink: #ecebe4;
+    --muted: #a8a49a;
+    --line: #3a423f;
+    --accent: #3fb8b0;
+    --accent-ink: #10201e;
+    --danger: #e08086;
+    --dot-run: #3fd07a;
+    --dot-idle: #e09a2b;
+    --dot-dead: #6f6a60;
+    --dot-unknown: #57534b;
+    --term-bg: #0c0c0c;
+    --key-bg: #323937;
+    --key-ink: #ecebe4;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  line-height: 1.5;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+#app {
+  margin: 0 auto;
+  max-width: 48rem;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+main {
+  padding: 0 1rem 1rem;
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+
+button {
+  font: inherit;
+  color: var(--ink);
+  background: var(--key-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.9rem;
+  min-height: 2.75rem;
+}
+
+button:active {
+  filter: brightness(0.94);
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+input,
+select {
+  display: block;
+  width: 100%;
+  margin-top: 0.25rem;
+  padding: 0.5rem 0.6rem;
+  min-height: 2.75rem;
+}
+
+label {
+  display: block;
+  margin: 0.75rem 0;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  padding-top: max(0.6rem, env(safe-area-inset-top));
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.topbar .brand {
+  font-weight: 700;
+}
+
+.topbar .login,
+.topbar .host {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topbar .login {
+  color: var(--muted);
+}
+
+.topbar .conn {
+  margin-left: auto;
+  font-size: 0.85rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.conn-banner {
+  background: var(--key-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.conn-banner button {
+  min-height: 2.25rem;
+  padding: 0.25rem 0.75rem;
+}
+
+.signin {
+  margin: auto;
+  text-align: center;
+  max-width: 24rem;
+}
+
+#pair-error:empty {
+  display: none;
+}
+
+#pair-error {
+  color: var(--danger);
+}
+
+.sessions-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.sessions-head h2 {
+  margin: 0.75rem 0;
+}
+
+.session-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.session-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  text-align: left;
+  background: var(--bg);
+  min-height: 3.5rem;
+}
+
+.session-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.session-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-sub {
+  font-size: 0.85rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-age {
+  font-size: 0.8rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--dot-unknown);
+}
+
+.dot-run {
+  background: var(--dot-run);
+}
+
+.dot-idle {
+  background: var(--dot-idle);
+}
+
+.dot-dead {
+  background: var(--dot-dead);
+}
+
+.empty {
+  color: var(--muted);
+}
+
+.session-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  flex: 1;
+  min-height: 0;
+}
+
+.session-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.session-bar #session-back {
+  min-width: 2.75rem;
+}
+
+.session-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-exit {
+  font-size: 0.8rem;
+  color: var(--danger);
+  flex-shrink: 0;
+}
+
+.session-exit[hidden] {
+  display: none;
+}
+
+.term-pane {
+  background: var(--term-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  min-height: 16rem;
+  height: 46dvh;
+}
+
+.term-placeholder {
+  color: var(--muted);
+  padding: 1rem;
+}
+
+.term-fit {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  /* Single-finger pans the xterm viewport natively; pinch reaches the
+   * zoom handler instead of the browser. */
+  touch-action: pan-x pan-y;
+}
+
+.term-scale {
+  transform-origin: top left;
+}
+
+.term-controls {
+  display: flex;
+  gap: var(--gap);
+}
+
+.term-controls button {
+  min-width: 2.75rem;
+}
+
+#term-latest {
+  margin-left: auto;
+}
+
+#term-latest[hidden] {
+  display: none;
+}
+
+.keybar {
+  display: flex;
+  gap: var(--gap);
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+
+.keybar .key {
+  flex: 1 0 auto;
+  min-width: 3rem;
+  font-family: var(--font-mono);
+}
+
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.composer-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 3.5rem;
+  padding: 0.5rem 0.6rem;
+}
+
+.composer-row {
+  display: flex;
+  gap: var(--gap);
+  align-items: center;
+}
+
+.composer-error {
+  flex: 1;
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--danger);
+  overflow-wrap: anywhere;
+}
+
+.composer-error[hidden] {
+  display: none;
+}
+
+.composer-send {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: transparent;
+  margin-left: auto;
+}
+
+@media (min-width: 48rem) {
+  .term-pane {
+    height: 60dvh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
