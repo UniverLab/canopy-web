@@ -190,6 +190,14 @@ describe("room fetch", () => {
     const ninth = clientOf(room.fetch(upgradeRequest("device")));
     ninth.accept();
     expect(await nextClose(ninth)).toBe(4008);
+    // Mirror the runtime: it drops the closed, unattached socket before
+    // calling webSocketClose, which then finds nothing to broadcast.
+    for (const socket of state.getWebSockets()) {
+      if (socket.deserializeAttachment() === null) {
+        state.remove(socket);
+        room.webSocketClose(socket);
+      }
+    }
     expect(state.getWebSockets()).toHaveLength(8);
   });
 });
@@ -232,6 +240,32 @@ describe("routing", () => {
     room.webSocketMessage(device, oversized);
     expect(host.sent).toHaveLength(1);
     expect(device.frames()).toEqual([{ from: "relay", body: { t: "error", code: "too_large" } }]);
+  });
+
+  it("pins the exact envelope bytes a host matches", () => {
+    const { state, room } = setup();
+    const device = attachFake(state, room, "device");
+    const host = attachFake(state, room, "host", { host_id: HOST_ID, label: "devbox" });
+    room.webSocketMessage(device, JSON.stringify({ to: `h:${HOST_ID}`, body: { t: "offer", sdp: "v=0" } }));
+    expect(host.sent).toEqual([`{"from":"d:1","body":{"t":"offer","sdp":"v=0"}}`]);
+    room.webSocketMessage(host, JSON.stringify({ to: "d:1", body: { t: "answer" } }));
+    room.webSocketMessage(device, JSON.stringify({ to: "h:deadbeefdeadbeef", body: { t: "offer" } }));
+    expect(device.sent).toEqual([
+      `{"from":"h:${HOST_ID}","body":{"t":"answer"}}`,
+      `{"from":"relay","body":{"t":"error","code":"no_target"}}`,
+    ]);
+  });
+
+  it("pins the exact hosts notice bytes", async () => {
+    const { room } = setup();
+    const device = clientOf(room.fetch(upgradeRequest("device")));
+    device.accept();
+    expect(await nextMessage(device)).toBe(`{"from":"relay","body":{"t":"hosts","items":[]}}`);
+    const seen = nextMessage(device);
+    room.fetch(upgradeRequest("host", { "x-relay-host-id": HOST_ID, "x-relay-label": "devbox" }));
+    expect(await seen).toBe(
+      `{"from":"relay","body":{"t":"hosts","items":[{"host_id":"${HOST_ID}","label":"devbox"}]}}`,
+    );
   });
 
   it("rejects malformed and binary frames", () => {

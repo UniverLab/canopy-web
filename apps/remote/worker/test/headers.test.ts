@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, expect, it } from "vitest";
 import worker, { type Env } from "../src/index.js";
+import { signSession } from "../src/auth.js";
 import { UserRoom } from "../src/room.js";
 import type { RoomNamespace, RoomStub } from "../src/ws.js";
 import { FakeRoomState } from "./fakes.js";
@@ -68,6 +69,27 @@ describe("security headers", () => {
       expectSecurityHeaders(response);
     });
   }
+
+  it("carries the headers on an internal 500", async () => {
+    const throwing: Env = {
+      ...env,
+      USER_ROOM: {
+        idFromName: (name: string): unknown => {
+          void name;
+          throw new Error("boom");
+        },
+        get: (id: unknown): RoomStub => {
+          void id;
+          throw new Error("boom");
+        },
+      },
+    };
+    const session = await signSession(123, "octo", env.SESSION_SECRET as string, Math.floor(Date.now() / 1000));
+    const response = await worker.fetch(request("/ws/device", { cookie: `cr_session=${session}` }), throwing);
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: "internal" });
+    expectSecurityHeaders(response);
+  });
 
   it("carries the headers on the room's 426 and 400", () => {
     const room = new UserRoom(new FakeRoomState());

@@ -35,32 +35,44 @@ const ROUTE_METHODS: Record<string, string> = {
 };
 
 export default {
-  fetch(req: Request, env: Env): Response | Promise<Response> {
+  fetch(req: Request, env: Env): Promise<Response> {
     const pathname = new URL(req.url).pathname;
     const method = ROUTE_METHODS[pathname];
     if (method === undefined) {
-      return json({ error: "not_found" }, 404);
+      return Promise.resolve(json({ error: "not_found" }, 404));
     }
     if (req.method !== method) {
-      return json({ error: "method_not_allowed" }, 405);
+      return Promise.resolve(json({ error: "method_not_allowed" }, 405));
     }
+    return dispatch(pathname, req, env);
+  },
+};
+
+/**
+ * Run the routed handler; an unexpected throw or rejection answers 500
+ * with the security headers, never the runtime's bare error page.
+ */
+async function dispatch(pathname: string, req: Request, env: Env): Promise<Response> {
+  try {
     switch (pathname) {
       case "/auth/login":
         return handleLogin(req, env);
       case "/auth/callback":
-        return handleCallback(req, env);
+        return await handleCallback(req, env);
       case "/auth/logout":
         return handleLogout(req, env);
       case "/auth/me":
-        return handleMe(req, env);
+        return await handleMe(req, env);
       case "/ws/device":
-        return handleDeviceWs(req, env);
+        return await handleDeviceWs(req, env);
       case "/ws/host":
-        return handleHostWs(req, env);
+        return await handleHostWs(req, env);
       case "/turn":
-        return handleTurn(req, env);
+        return await handleTurn(req, env);
       default:
         return json({ error: "not_found" }, 404);
     }
-  },
-};
+  } catch {
+    return json({ error: "internal" }, 500);
+  }
+}

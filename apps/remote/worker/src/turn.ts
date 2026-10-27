@@ -70,7 +70,7 @@ export async function handleTurn(
   let response: Response;
   try {
     response = await fetchImpl(
-      `https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(keyId)}/credentials/generate`,
+      `https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(keyId)}/credentials/generate-ice-servers`,
       {
         method: "POST",
         headers: {

@@ -85,10 +85,13 @@ export class UserRoom {
     }
     if (role === "device" && this.deviceCount() >= MAX_DEVICES) {
       const pair = new WebSocketPair();
-      // The runtime only delivers the close on an accepted socket; the
-      // socket still never joins the room.
-      pair[1].accept();
-      pair[1].close(4008, "too_many_devices");
+      const refused = pair[1];
+      // Through the hibernation API like every other socket: the runtime
+      // only delivers the close on an accepted socket. It carries no
+      // attachment, so it is invisible to counts and broadcasts, and its
+      // close removes it again.
+      this.state.acceptWebSocket(refused);
+      refused.close(4008, "too_many_devices");
       return upgradeResponse(pair[0]);
     }
     if (role === "host") {

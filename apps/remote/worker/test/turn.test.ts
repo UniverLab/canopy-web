@@ -48,7 +48,7 @@ beforeEach(() => {
 
 describe("GET /turn", () => {
   it("serves a cookied browser with upstream entries plus STUN", async () => {
-    const fake = fakeFetch([{ url: "credentials/generate", status: 200, body: UPSTREAM }]);
+    const fake = fakeFetch([{ url: "credentials/generate-ice-servers", status: 201, body: UPSTREAM }]);
     const { fetchImpl, seen } = recording(fake);
     const session = await signSession(123, "octo", SECRET, Math.floor(Date.now() / 1000));
     const response = await handleTurn(request(`cr_session=${session}`), env, fetchImpl);
@@ -56,15 +56,16 @@ describe("GET /turn", () => {
     expect(await response.json()).toEqual({
       iceServers: [...UPSTREAM.iceServers, { urls: "stun:stun.cloudflare.com:3478" }],
     });
-    expect(fake.calls).toHaveLength(1);
-    expect(fake.calls[0]).toContain("rtc.live.cloudflare.com/v1/turn/keys/turn-key-id/credentials/generate");
+    expect(fake.calls).toEqual([
+      "https://rtc.live.cloudflare.com/v1/turn/keys/turn-key-id/credentials/generate-ice-servers",
+    ]);
     expect(JSON.parse(fake.bodies[0] as string)).toEqual({ ttl: 3600 });
     expect(seen[0]?.["authorization"]).toBe("Bearer turn-api-token");
   });
 
   it("serves a host bearer without touching GitHub twice", async () => {
     const fake = fakeFetch([
-      { url: "credentials/generate", status: 200, body: UPSTREAM },
+      { url: "credentials/generate-ice-servers", status: 200, body: UPSTREAM },
       { url: "api.github.com/user", status: 200, body: { id: 456, login: "host-user" } },
     ]);
     const first = await handleTurn(request(undefined, "gho_valid"), env, fake.fetchImpl);
@@ -76,7 +77,7 @@ describe("GET /turn", () => {
 
   it("answers 502 when the upstream fails, without forwarding its body", async () => {
     const fake = fakeFetch([
-      { url: "credentials/generate", status: 500, body: { internal: "details" } },
+      { url: "credentials/generate-ice-servers", status: 500, body: { internal: "details" } },
     ]);
     const session = await signSession(123, "octo", SECRET, Math.floor(Date.now() / 1000));
     const response = await handleTurn(request(`cr_session=${session}`), env, fake.fetchImpl);
@@ -85,7 +86,7 @@ describe("GET /turn", () => {
   });
 
   it("answers 401 with neither credential", async () => {
-    const fake = fakeFetch([{ url: "credentials/generate", status: 200, body: UPSTREAM }]);
+    const fake = fakeFetch([{ url: "credentials/generate-ice-servers", status: 200, body: UPSTREAM }]);
     const response = await handleTurn(request(), env, fake.fetchImpl);
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({ error: "unauthorized" });
