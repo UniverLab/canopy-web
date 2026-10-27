@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // The composer at the bottom of the session view: a multi-line textarea
 // and Send, which ships a prompt frame. On ok the text clears; on error
-// the text stays and the message shows. The Builder button belongs to the
-// next spec; it fires a callback the shell wires.
+// the text stays and the message shows. Builder opens the Prompt Builder
+// sheet, which the shell owns.
 
 import { newReqId } from "./protocol.js";
 

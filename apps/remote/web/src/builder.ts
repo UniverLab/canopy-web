@@ -249,15 +249,19 @@ export class Builder {
     const presets = this.catalog.presets;
     const selected = this.state.draft.preset ?? "";
     const head = `<option value=""${selected === "" ? " selected" : ""}>No preset</option>`;
-    return (
-      head +
-      presets
-        .map(
-          (preset) =>
-            `<option value="${esc(preset.name)}"${preset.name === selected ? " selected" : ""}>${esc(preset.name)}</option>`,
-        )
-        .join("")
+    const options = presets.map(
+      (preset) =>
+        `<option value="${esc(preset.name)}"${preset.name === selected ? " selected" : ""}>${esc(preset.name)}</option>`,
     );
+    // A preset the draft still carries but the host no longer lists stays
+    // visible (like an unknown skill), so the picker shows what Send will
+    // send and choosing "No preset" can clear it.
+    if (selected !== "" && !presets.some((preset) => preset.name === selected)) {
+      options.push(
+        `<option value="${esc(selected)}" selected>${esc(selected)} (not in catalog)</option>`,
+      );
+    }
+    return head + options.join("");
   }
 
   // Skills from the catalog plus any the draft still carries, so a skill
@@ -293,15 +297,18 @@ export class Builder {
     const projects = this.catalog.projects;
     const selected = this.state.draft.project ?? "";
     const head = `<option value=""${selected === "" ? " selected" : ""}>No project</option>`;
-    return (
-      head +
-      projects
-        .map(
-          (project) =>
-            `<option value="${esc(project.name)}"${project.name === selected ? " selected" : ""}>${esc(project.name)}</option>`,
-        )
-        .join("")
+    const options = projects.map(
+      (project) =>
+        `<option value="${esc(project.name)}"${project.name === selected ? " selected" : ""}>${esc(project.name)}</option>`,
     );
+    // Same as the preset: a project the catalog dropped stays visible so the
+    // picker never claims "No project" while the draft still sends one.
+    if (selected !== "" && !projects.some((project) => project.name === selected)) {
+      options.push(
+        `<option value="${esc(selected)}" selected>${esc(selected)} (not in catalog)</option>`,
+      );
+    }
+    return head + options.join("");
   }
 
   private selectedPreset() {

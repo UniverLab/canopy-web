@@ -266,6 +266,7 @@ describe("Builder", () => {
 
   it("shows unknown preset, skill and project errors beside their fields", () => {
     open();
+    setValue(".section-title", "Goal");
     query<HTMLButtonElement>("#builder-preview").click();
     expect(builder.handleError("unknown preset: fast", composed[0]?.req ?? "", "unknown_preset")).toBe(
       true,
@@ -291,7 +292,33 @@ describe("Builder", () => {
     expect(builder.handleError("late", "no-such-req", "internal")).toBe(false);
     // The form keeps its draft on error.
     expect(builder.isOpen).toBe(true);
-    expect(titles()).toEqual([""]);
+    expect(titles()).toEqual(["Goal"]);
+  });
+
+  it("keeps a draft preset and project the catalog no longer lists selectable", () => {
+    saveDraft({ sections: [], skills: [], preset: "gone", project: "gone-project" }, storage);
+    open();
+    const preset = query<HTMLSelectElement>("#builder-preset");
+    expect(preset.value).toBe("gone");
+    expect([...preset.options].map((option) => option.value)).toEqual(["", "review", "plan", "gone"]);
+    expect(preset.selectedOptions[0]?.textContent).toBe("gone (not in catalog)");
+    const project = query<HTMLSelectElement>("#builder-project");
+    expect(project.value).toBe("gone-project");
+    expect([...project.options].map((option) => option.value)).toEqual([
+      "",
+      "demo",
+      "other",
+      "gone-project",
+    ]);
+
+    // Choosing the empty option clears them, so the next send no longer
+    // carries the values the host just rejected.
+    select("#builder-preset", "");
+    select("#builder-project", "");
+    expect(query<HTMLSelectElement>("#builder-preset").value).toBe("");
+    expect(query<HTMLSelectElement>("#builder-project").value).toBe("");
+    query<HTMLButtonElement>("#builder-send").click();
+    expect(sends[0]?.draft).toEqual({ sections: [], skills: [] });
   });
 
   it("says so when the sheet is not connected", () => {
