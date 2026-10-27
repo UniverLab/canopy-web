@@ -1,0 +1,57 @@
+/* Self-hosted from Google Fonts (fonts.gstatic.com, latin subset, 2026-10-27); OFL license texts beside this file. */
+
+@font-face {
+  font-family: 'Old Standard TT';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./old-standard-tt-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Old Standard TT';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./old-standard-tt-400-italic.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'EB Garamond';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./eb-garamond-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'EB Garamond';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./eb-garamond-400-italic.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'EB Garamond';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./eb-garamond-500.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Sometype Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./sometype-mono-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Sometype Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./sometype-mono-500.woff2') format('woff2');
+}

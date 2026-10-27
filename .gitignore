@@ -147,3 +147,11 @@ $RECYCLE.BIN/
 .wrangler/
 .dev.vars
 .dev.vars.*
+
+# Generated look kit output (npm run build:look)
+apps/graphs/public/look/
+apps/remote/web/public/look/
+
+# The shared look kit ships its stylesheets as source
+!packages/look/*.css
+!packages/look/*/*.css

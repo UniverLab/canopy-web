@@ -8,7 +8,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "npm run build:remote-web",
+    "build": "npm run build:look && npm run build:remote-web",
+    "build:look": "node scripts/build-look.mjs",
     "build:remote-web": "vite build --config apps/remote/web/vite.config.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -31,6 +32,7 @@
     "@eslint/js": "^9.18.0",
     "@playwright/test": "1.64.0",
     "@types/node": "^22.10.0",
+    "esbuild": "0.28.2",
     "eslint": "^9.18.0",
     "fake-indexeddb": "6.2.5",
     "happy-dom": "21.0.1",

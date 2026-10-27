@@ -1,0 +1,119 @@
+/* Ported from univerlab src/components/Footer.astro following quorum c69ed6d and 0dfcc71 */
+
+/* The lab's signature — always dark, regardless of the page surface. It
+   anchors the brand at the bottom of every page: a dark footer on a light
+   page gives contrast and identity; on a dark page it stays coherent. */
+.look-colophon {
+  --f-bg: #000000;
+  --f-bg-raise: #0a0a0a;
+  --f-ink: #e3e6e8;
+  --f-ink-dim: #8a8d93;
+  --f-ink-faint: #4a4d53;
+  --f-line: #1a1a1a;
+  position: relative;
+  overflow: hidden;
+  background: var(--f-bg);
+  color: var(--f-ink);
+  border-top: 1px solid var(--f-line);
+  margin-top: 2rem;
+  z-index: 1;
+}
+.look-colophon :focus-visible { outline-color: var(--f-ink); }
+
+/* The engraved machinery frieze, already grey and low-contrast: absolutely
+   over the dark ink at the very top, filling the width like a texture and
+   sinking into it through a mask so the text below never competes with it. */
+.look-colophon .colophon-band {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 16rem;
+  opacity: 0.8;
+  -webkit-mask-image: linear-gradient(180deg, #000 10%, transparent 78%);
+  mask-image: linear-gradient(180deg, #000 10%, transparent 78%);
+}
+.look-colophon .colophon-band img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 45%;
+}
+
+.look-colophon .colophon-content {
+  position: relative;
+  max-width: 72rem;
+  margin: 0 auto;
+  /* 12rem of headroom clear the 16rem band's densest third; the mask starts
+     fading before the first line of content. */
+  padding: 12rem max(1.5rem, env(safe-area-inset-right)) 2rem max(1.5rem, env(safe-area-inset-left));
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2.5rem;
+}
+
+.look-colophon .colophon-brand { grid-column: 1 / -1; display: grid; gap: 0.6rem; }
+.look-colophon .colophon-title {
+  margin: 0;
+  font-family: var(--font-display, 'Old Standard TT', Georgia, serif);
+  font-weight: 400;
+  font-size: 2rem;
+  line-height: 1.1;
+  color: var(--f-ink);
+}
+.look-colophon .colophon-sub,
+.look-colophon .colophon-label,
+.look-colophon .colophon-credits {
+  margin: 0;
+  font-family: var(--font-mono, 'Sometype Mono', ui-monospace, Menlo, monospace);
+  color: var(--f-ink-dim);
+}
+.look-colophon .colophon-sub { font-size: 0.75rem; }
+.look-colophon .colophon-label {
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Nav links in the colophon face (Quorum's rule: serif links, mono labels);
+   every target keeps a 32px tap reach on touch screens. */
+.look-colophon .colophon-col {
+  display: grid;
+  gap: 0.35rem;
+  align-content: start;
+}
+.look-colophon .colophon-col a,
+.look-colophon .colophon-credits a {
+  color: var(--f-ink);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--f-ink) 40%, transparent);
+  text-underline-offset: 0.2em;
+  transition: text-decoration-color 0.15s ease;
+}
+.look-colophon .colophon-col a {
+  width: fit-content;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  font-family: var(--font-display, 'Old Standard TT', Georgia, serif);
+  font-size: 1.15rem;
+}
+.look-colophon .colophon-col a:hover,
+.look-colophon .colophon-credits a:hover { text-decoration-color: var(--teal, #3fb8b0); }
+
+/* The garnet seal ahead of the credits, below a 25% currentColor rule. */
+.look-colophon .colophon-credits {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding-top: 1.2rem;
+  font-size: 0.75rem;
+  border-top: 1px solid color-mix(in srgb, var(--f-ink) 25%, transparent);
+}
+.look-colophon .colophon-credits img { flex: none; }
+
+@media (max-width: 40rem) {
+  .look-colophon .colophon-content { grid-template-columns: 1fr; gap: 1.6rem; padding-top: 9rem; }
+}

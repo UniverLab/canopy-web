@@ -1,0 +1,34 @@
+/* Source: univerlab src/styles/global.css ([data-surface='tui'], html[data-surface='tui'] extras, :root essence and type) */
+
+/* canopy — the Auros abyssal terminal: Liquid Abyss canvas, Liquid Kelp
+   raised, Liquid Mist body, Silver Mist secondary. */
+[data-surface='tui'] {
+  --surface-bg: #012624;
+  --surface-bg-raise: #003734;
+  --surface-ink: #edfffe;
+  --surface-ink-dim: #bbc7c6;
+  --surface-ink-faint: #9aa8a7;
+  --surface-line: rgba(255,255,255,.10);
+}
+
+/* Canopy page extras: the recessed well, Platinum display ink, Lavender
+   Phosphor for large stats, the Aurora CTA gradient, card/control radii. */
+html[data-surface='tui'] {
+  --bg-deep: #011d1c;
+  --ink-hi: #fff;
+  --phosphor: #fde9ff;
+  --cta-gradient: linear-gradient(90deg, rgb(203,255,252) 0%, rgb(237,255,254) 26.25%, rgb(255,253,250) 47.57%, rgb(250,209,255) 88.96%);
+  --radius-card: 16px;
+  --radius-ctl: 6px;
+}
+
+:root {
+  /* The Canopy experiment essence and the honeycomb comb teal. */
+  --canopy: #00a9a0;
+  --teal: #3fb8b0;
+
+  /* The lab's three typefaces, self-hosted beside this file (see fonts/). */
+  --font-display: 'Old Standard TT', Georgia, serif;
+  --font-body: 'EB Garamond', Garamond, Georgia, serif;
+  --font-mono: 'Sometype Mono', ui-monospace, Menlo, monospace;
+}

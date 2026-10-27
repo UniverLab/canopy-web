@@ -1,0 +1,27 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`renderColophon > renders the footer 1`] = `
+"<footer class="look-colophon">
+  <picture class="colophon-band" aria-hidden="true">
+    <source type="image/avif" srcset="/look/colophon/frieze-960.avif 960w, /look/colophon/frieze-1920.avif 1920w" sizes="100vw">
+    <img src="/look/colophon/frieze-1920.webp" srcset="/look/colophon/frieze-960.webp 960w, /look/colophon/frieze-1920.webp 1920w" sizes="100vw" width="1920" height="608" alt="" loading="lazy" decoding="async">
+  </picture>
+  <div class="colophon-content">
+    <div class="colophon-brand">
+      <p class="colophon-title">Canopy</p>
+      <p class="colophon-sub">Part of UniverLab · EXP-001 Canopy</p>
+    </div>
+    <nav class="colophon-col" aria-label="UniverLab">
+      <p class="colophon-label">UniverLab</p>
+      <a href="https://univerlab.org/" target="_blank" rel="noopener noreferrer">UniverLab</a>
+      <a href="https://univerlab.org/experiments" target="_blank" rel="noopener noreferrer">Experiments</a>
+      <a href="https://univerlab.org/canopy" target="_blank" rel="noopener noreferrer">Canopy</a>
+    </nav>
+    <p class="colophon-credits">
+      <img src="/look/colophon/sello-lacre.svg" width="28" height="28" alt="" aria-hidden="true">
+      <span>Artifact conceived and forged at <a href="https://univerlab.org" target="_blank" rel="noopener noreferrer">UniverLab</a></span>
+    </p>
+  </div>
+</footer>
+"
+`;
