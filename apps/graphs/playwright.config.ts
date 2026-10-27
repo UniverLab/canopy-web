@@ -23,7 +23,11 @@ export default defineConfig({
     command: "npx wrangler dev --config wrangler.e2e.toml --port 8790",
     url: "http://127.0.0.1:8790/",
     cwd: path.resolve(import.meta.dirname),
-    reuseExistingServer: !process.env.CI,
+    // Always start our own server. A leftover one on the port can be wedged —
+    // its health check then waits without ever answering, which is how a run
+    // hangs instead of failing — and even a healthy one may serve assets older
+    // than this run. With this false, a busy port is a one-second EADDRINUSE.
+    reuseExistingServer: false,
     timeout: 120_000,
   },
 });

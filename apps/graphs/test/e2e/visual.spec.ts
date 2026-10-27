@@ -35,22 +35,33 @@ for (const viewport of VIEWPORTS) {
       expect(surface).toBe(SURFACE_BG);
 
       // The kit's three faces loaded for real (the unit tests only see the CSS).
+      // `document.fonts.check()` alone would pass on the fallback stack, so
+      // read the FontFaceSet itself: a stylesheet that never arrived leaves it
+      // empty, and a broken woff2 leaves its face in "error".
       const faces = await page.evaluate(async () => {
         await document.fonts.ready;
+        const registered = [...document.fonts].map((face) => ({
+          family: face.family.replace(/^["']|["']$/g, ""),
+          status: face.status,
+        }));
         return {
           status: document.fonts.status,
-          display: document.fonts.check(`16px "Old Standard TT"`),
-          body: document.fonts.check(`16px "EB Garamond"`),
-          mono: document.fonts.check(`16px "Sometype Mono"`),
+          families: [...new Set(registered.map((face) => face.family))].sort(),
+          loaded: [...new Set(registered.filter((face) => face.status === "loaded").map((face) => face.family))].sort(),
           heading: getComputedStyle(document.querySelector("h1") ?? document.body).fontFamily,
+          body: getComputedStyle(document.body).fontFamily,
           wordmark: getComputedStyle(document.querySelector(".wordmark") ?? document.body).fontFamily,
         };
       });
       expect(faces.status).toBe("loaded");
-      expect(faces.display).toBe(true);
-      expect(faces.body).toBe(true);
-      expect(faces.mono).toBe(true);
+      const kit = ["EB Garamond", "Old Standard TT", "Sometype Mono"];
+      // All three are registered by the kit, and each has a face actually loaded.
+      expect(faces.families).toEqual(expect.arrayContaining(kit));
+      expect(faces.loaded).toEqual(expect.arrayContaining(kit));
+      // And the page applies them: display to the heading, body to the text,
+      // mono to the wordmark.
       expect(faces.heading).toContain("Old Standard TT");
+      expect(faces.body).toContain("EB Garamond");
       expect(faces.wordmark).toContain("Sometype Mono");
 
       // The live honeycomb is mounted, hidden from assistive tech, unfocusable.
@@ -101,6 +112,17 @@ for (const viewport of VIEWPORTS) {
       expect(width.view).toBeLessThanOrEqual(viewport.width);
       expect(width.scroll).toBeLessThanOrEqual(width.view);
 
+      // Kept beside the report for the operator's review (no baseline). Taken
+      // before the Tab below, so no screenshot carries a focus ring.
+      const shot = await page.screenshot({
+        fullPage: true,
+        path: testInfo.outputPath(`${target.label}-${viewport.label}.png`),
+      });
+      await testInfo.attach(`${target.label}-${viewport.label}`, {
+        body: shot,
+        contentType: "image/png",
+      });
+
       // A visible focus outline on the first tabbable element.
       await page.keyboard.press("Tab");
       const focus = await page.evaluate(() => {
@@ -110,16 +132,6 @@ for (const viewport of VIEWPORTS) {
       });
       expect(focus.label).toContain("graphs");
       expect(focus.outline).not.toBe("none");
-
-      // Kept beside the report for the operator's review (no baseline).
-      const shot = await page.screenshot({
-        fullPage: true,
-        path: testInfo.outputPath(`${target.label}-${viewport.label}.png`),
-      });
-      await testInfo.attach(`${target.label}-${viewport.label}`, {
-        body: shot,
-        contentType: "image/png",
-      });
     });
   }
 }

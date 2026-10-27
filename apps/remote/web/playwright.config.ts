@@ -15,7 +15,9 @@ export default defineConfig({
   webServer: {
     command: "npx vite --config ./vite.config.ts --port 5199 --strictPort",
     url: "http://127.0.0.1:5199/fake.html",
-    reuseExistingServer: !process.env.CI,
+    // Own server only: see apps/graphs/playwright.config.ts — a reused server
+    // can be wedged (the health check never answers) or out of date.
+    reuseExistingServer: false,
     timeout: 120_000,
   },
 });

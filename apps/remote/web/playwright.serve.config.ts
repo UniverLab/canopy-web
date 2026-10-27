@@ -23,7 +23,9 @@ export default defineConfig({
     command:
       "npm run build:remote-web && npx wrangler dev --config ../worker/wrangler.toml --port 8787 --var SESSION_SECRET:dev-serve-secret",
     url: "http://127.0.0.1:8787/",
-    reuseExistingServer: !process.env.CI,
+    // Own server only: see apps/graphs/playwright.config.ts — a reused server
+    // can be wedged (the health check never answers) or out of date.
+    reuseExistingServer: false,
     timeout: 120_000,
   },
 });
