@@ -181,6 +181,28 @@ describe("redirects", () => {
     expect(response.status).toBe(410);
     expect(((await response.json()) as { error: string }).error).toBe("blocked");
   });
+
+  it("answers a pinned-ref install of a blocked document with 410, never fetching the ref", async () => {
+    const kv = await seeded();
+    const block: BlockedEntry = {
+      kind: "graph",
+      repo: "UniverLab/canopy-web",
+      slug: "hello-graph",
+      reason: "Broken or invalid",
+      issue: "https://github.com/UniverLab/canopy-web/issues/14",
+      blocked_at: "2026-10-27",
+    };
+    await kv.put(blockedDocKey("graph", "UniverLab", "canopy-web", "hello-graph"), JSON.stringify(block));
+    // A block outranks a pinned ref: the 410 arrives before any live fetch,
+    // so pinning a tag cannot install what the catalogue removed.
+    const response = await call("/i/graph/hello-graph?ref=v1.2.0", { env: { INDEX: kv } });
+    expect(response.status).toBe(410);
+    expect(await response.json()).toEqual({
+      error: "blocked",
+      reason: block.reason,
+      issue: block.issue,
+    });
+  });
 });
 
 describe("explicit refs go live", () => {
