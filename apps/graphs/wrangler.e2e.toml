@@ -3,11 +3,16 @@
 # `wrangler dev --config wrangler.e2e.toml` serves this module instead of
 # src/index.ts: the production Worker built with createWorker over the page
 # tests' stub table (test/stubs.ts), so the browser sees the real pages and
-# the real look kit with no live GitHub. No vars and no bindings are needed;
-# analytics stays off (its env values are absent).
+# the real look kit with no live GitHub. No vars are needed; analytics
+# stays off (its env values are absent). The index binding is served from
+# memory and seeded by the fixture Worker through the indexer.
 name = "canopy-graphs-e2e"
 main = "test/e2e/worker.ts"
 compatibility_date = "2026-10-26"
+
+[[kv_namespaces]]
+binding = "INDEX"
+id = "e2e-index"
 
 # The generated look kit, exactly as the deploy serves it. The pages are
 # rendered, so an asset miss must fall through to this fixture Worker.

@@ -1,8 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
+/**
+ * The JSON API, served from a seeded index: every test runs the indexer
+ * over a stub table into a fresh in-memory KV, then calls the API with
+ * an empty upstream — no request-path call may reach GitHub. Shapes,
+ * paging and errors stay exactly the live search's.
+ */
 import { describe, expect, it } from "vitest";
 import { handleApi } from "../src/api.js";
-import { FakeCache, dirBody, fakeFetch, fileBody, type Stub } from "./fakes.js";
-import { VALID_GRAPH_TEXT, VALID_NODE_TEXT } from "./documents-fixture.js";
+import { createGitHub } from "../src/github.js";
+import { runIndexer } from "../src/indexer.js";
+import { resetIndexMemo } from "../src/store.js";
+import { FakeCache, FakeKV, fakeFetch, fileBody, dirBody, type FakeFetch, type Stub } from "./fakes.js";
+import { INVALID_GRAPH_TEXT, VALID_GRAPH_TEXT, VALID_NODE_TEXT } from "./documents-fixture.js";
 
 const SEARCH = "search/repositories";
 const REPO_DIR = "repos/UniverLab/canopy-web";
@@ -20,34 +29,73 @@ function stubs(): Stub[] {
   ];
 }
 
+/** One community repository holding a graph called flow. */
+function flowStubs(): Stub[] {
+  return [{
+    url: SEARCH,
+    status: 200,
+    body: {
+      total_count: 5,
+      items: [{ name: "things", owner: { login: "acme" }, default_branch: "main", stargazers_count: 2 }],
+    },
+  }, {
+    url: "repos/acme/things/git/trees/main",
+    status: 200,
+    body: { tree: [{ path: "graphs/flow/graph.json", type: "blob" }] },
+  }, {
+    url: "repos/acme/things/contents/graphs/flow/graph.json",
+    status: 200,
+    body: fileBody("graphs/flow/graph.json", VALID_GRAPH_TEXT),
+  }, {
+    url: "repos/acme/things/contents/graphs/flow/README.md",
+    status: 404,
+    body: {},
+  }];
+}
+
+/** Seed a fresh KV by running the indexer over the stub table. */
+async function seeded(stubsToSeed: Stub[]): Promise<FakeKV> {
+  const fake = fakeFetch(stubsToSeed);
+  const kv = new FakeKV();
+  const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
+  await runIndexer({ github, index: kv, authenticated: true });
+  return kv;
+}
+
 interface Options {
   stubs?: Stub[];
   env?: Record<string, string>;
+  /** Upstream answers for the request itself (analytics SQL, never GitHub). */
+  requestStubs?: Stub[];
+  /** Skip seeding: the cold start, before the first scheduled run. */
+  cold?: boolean;
 }
 
-async function call(path: string, options: Options = {}): Promise<Response> {
-  const fake = fakeFetch(options.stubs ?? stubs());
-  const cache = new FakeCache();
+async function call(path: string, options: Options = {}): Promise<{ response: Response; fetch: FakeFetch }> {
+  resetIndexMemo();
+  const kv = options.cold === true ? new FakeKV() : await seeded(options.stubs ?? stubs());
+  const fake = fakeFetch(options.requestStubs ?? []);
   const req = new Request(`https://graphs.univerlab.org${path}`);
-  const answer = await handleApi(req, options.env ?? {}, {
+  const answer = await handleApi(req, { ...options.env, INDEX: kv }, {
     fetchImpl: fake.fetchImpl,
-    cache,
+    cache: new FakeCache(),
   });
   expect(answer).not.toBe(true);
-  return answer as unknown as Response;
+  return { response: answer as unknown as Response, fetch: fake };
 }
 
 describe("the JSON API", () => {
   it("answers /api/official with graphs and nodes", async () => {
-    const response = await call("/api/official");
+    const { response, fetch } = await call("/api/official");
     expect(response.status).toBe(200);
     const body = (await response.json()) as { graphs: unknown[]; nodes: unknown[] };
     expect(body.graphs.length).toBe(1);
     expect(body.nodes.length).toBe(1);
+    expect(fetch.calls).toEqual([]);
   });
 
   it("answers /api/official with empty lists when the registry folders do not exist", async () => {
-    const response = await call("/api/official", {
+    const { response } = await call("/api/official", {
       stubs: [{ url: `${REPO_DIR}/contents/registry/graphs`, status: 404, body: {} }],
     });
     expect(response.status).toBe(200);
@@ -57,61 +105,176 @@ describe("the JSON API", () => {
   });
 
   it("answers /api/search with items and echoed filters", async () => {
-    const listing = [...stubs(), {
-      url: SEARCH,
-      status: 200,
-      body: {
-        total_count: 5,
-        items: [{ name: "things", owner: { login: "acme" }, default_branch: "main", stargazers_count: 2 }],
-      },
-    }, {
-      url: "repos/acme/things/git/trees/main",
-      status: 200,
-      body: { tree: [{ path: "graphs/flow/graph.json", type: "blob" }] },
-    }, {
-      url: "repos/acme/things/contents/graphs/flow/graph.json",
-      status: 200,
-      body: fileBody("graphs/flow/graph.json", VALID_GRAPH_TEXT),
-    }, {
-      url: "repos/acme/things/contents/graphs/flow/README.md",
-      status: 404,
-      body: {},
-    }];
-    const response = await call("/api/search?q=flow&sort=new&page=2", { stubs: listing });
-    const body = (await response.json()) as { items: unknown[]; q: string; sort: string; page: number; total: number };
+    const { response } = await call("/api/search?q=flow&sort=new&page=1", {
+      stubs: [...stubs(), ...flowStubs()],
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      items: unknown[];
+      q: string;
+      sort: string;
+      page: number;
+      total: number;
+      truncated: boolean;
+    };
     expect(body.items.length).toBe(1);
     expect(body.q).toBe("flow");
     expect(body.sort).toBe("new");
-    expect(body.page).toBe(2);
-    expect(body.total).toBe(5);
+    expect(body.page).toBe(1);
+    expect(body.total).toBe(1);
+    expect(body.truncated).toBe(false);
+  });
+
+  it("filters case-insensitively over name, slug, description and repo", async () => {
+    const table = [...stubs(), ...flowStubs()];
+    // The slug alone names the community graph, whatever the case.
+    const bySlug = (await (await call("/api/search?q=FLOW", { stubs: table })).response.json()) as {
+      items: Array<{ slug: string; repo: string }>;
+    };
+    expect(bySlug.items.map((item) => item.slug)).toEqual(["flow"]);
+    // The repository pair matches too.
+    const byRepo = (await (await call("/api/search?q=acme/things", { stubs: table })).response.json()) as {
+      items: Array<{ slug: string }>;
+    };
+    expect(byRepo.items.map((item) => item.slug)).toEqual(["flow"]);
+    // The name matches both documents carrying it, official and community.
+    const byName = (await (await call("/api/search?q=hello-graph", { stubs: table })).response.json()) as {
+      items: Array<{ slug: string }>;
+    };
+    expect(byName.items.length).toBe(2);
+    // The description matches the same two.
+    const byDescription = (await (await call("/api/search?q=Minimal example graph", { stubs: table })).response.json()) as {
+      items: Array<{ slug: string }>;
+    };
+    expect(byDescription.items.length).toBe(2);
+    // An empty query lists everything indexed.
+    const all = (await (await call("/api/search", { stubs: table })).response.json()) as {
+      items: unknown[];
+      total: number;
+    };
+    expect(all.total).toBe(3);
+  });
+
+  it("sorts top by stars and new by updated", async () => {
+    const table = stubs().map((stub) =>
+      stub.url === "repos/UniverLab/canopy-web"
+        ? { ...stub, body: { stargazers_count: 7, updated_at: "2026-10-27T08:00:00Z", default_branch: "main" } }
+        : stub,
+    );
+    const flow = flowStubs().map((stub) =>
+      stub.url === SEARCH
+        ? {
+          ...stub,
+          body: {
+            total_count: 1,
+            items: [{
+              name: "things",
+              owner: { login: "acme" },
+              default_branch: "main",
+              stargazers_count: 20,
+              updated_at: "2026-10-20T08:00:00Z",
+            }],
+          },
+        }
+        : stub,
+    );
+    const both = [...table, ...flow];
+    const top = (await (await call("/api/search?sort=top", { stubs: both })).response.json()) as {
+      items: Array<{ slug: string; stars: number }>;
+    };
+    expect(top.items.map((item) => item.slug)).toEqual(["flow", "hello-graph", "hello-node"]);
+    const fresh = (await (await call("/api/search?sort=new", { stubs: both })).response.json()) as {
+      items: Array<{ slug: string; updated: string }>;
+    };
+    expect(fresh.items.map((item) => item.slug)).toEqual(["hello-graph", "hello-node", "flow"]);
+  });
+
+  it("pages through index matches 20 at a time", async () => {
+    const names = Array.from({ length: 21 }, (_, i) => `p-${String(i + 1).padStart(2, "0")}`);
+    const table: Stub[] = [
+      { url: `${REPO_DIR}/contents/registry/graphs`, status: 404, body: {} },
+      { url: `${REPO_DIR}/contents/registry/nodes`, status: 404, body: {} },
+      { url: "repos/UniverLab/canopy-web", status: 200, body: { stargazers_count: 1 } },
+      {
+        url: SEARCH,
+        status: 200,
+        body: {
+          total_count: 21,
+          items: names.map((name) => ({
+            name,
+            owner: { login: "acme" },
+            default_branch: "main",
+            stargazers_count: 1,
+          })),
+        },
+      },
+      ...names.flatMap((name) => {
+        const base = `repos/acme/${name}`;
+        return [
+          { url: `${base}/git/trees/main`, status: 200, body: { tree: [{ path: "graphs/flow/graph.json", type: "blob" }] } },
+          { url: `${base}/contents/graphs/flow/graph.json`, status: 200, body: fileBody("graphs/flow/graph.json", VALID_GRAPH_TEXT) },
+          { url: `${base}/contents/graphs/flow/README.md`, status: 404, body: {} },
+        ] as Stub[];
+      }),
+    ];
+    const first = (await (await call("/api/search?page=1", { stubs: table })).response.json()) as {
+      items: unknown[];
+      total: number;
+      truncated: boolean;
+    };
+    expect(first.items.length).toBe(20);
+    expect(first.total).toBe(21);
+    expect(first.truncated).toBe(true);
+    const second = (await (await call("/api/search?page=2", { stubs: table })).response.json()) as {
+      items: unknown[];
+      total: number;
+      truncated: boolean;
+    };
+    expect(second.items.length).toBe(1);
+    expect(second.total).toBe(21);
+    expect(second.truncated).toBe(false);
   });
 
   it("rejects a bad sort and a bad page with typed 400s", async () => {
     const badSort = await call("/api/search?sort=hottest");
-    expect(badSort.status).toBe(400);
+    expect(badSort.response.status).toBe(400);
     const badPage = await call("/api/search?page=zero");
-    expect(badPage.status).toBe(400);
-    const body = (await badPage.json()) as { kind: string };
+    expect(badPage.response.status).toBe(400);
+    const body = (await badPage.response.json()) as { kind: string };
     expect(body.kind).toBe("invalid-query");
   });
 
   it("answers /api/g/<official> with the validated document attached", async () => {
-    const response = await call("/api/g/UniverLab/canopy-web/hello-graph");
+    const { response } = await call("/api/g/UniverLab/canopy-web/hello-graph");
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
-      doc: { kind: string; slug: string; repo: string };
+      doc: { kind: string; slug: string; repo: string; readme: string };
       document: { format_version: number; nodes: unknown[] };
     };
     expect(body.doc.kind).toBe("graph");
     expect(body.doc.slug).toBe("hello-graph");
+    expect(body.doc.readme).toBe("# hello-graph\n");
     expect(body.document.format_version).toBe(6);
     expect(Array.isArray(body.document.nodes)).toBe(true);
   });
 
   it("answers /api/n/<community> for a node document", async () => {
-    const response = await call("/api/n/acme/things/hello-node", {
+    const { response } = await call("/api/n/acme/things/hello-node", {
       stubs: [
         ...stubs(),
+        {
+          url: SEARCH,
+          status: 200,
+          body: {
+            total_count: 1,
+            items: [{ name: "things", owner: { login: "acme" }, default_branch: "main", stargazers_count: 2 }],
+          },
+        },
+        {
+          url: "repos/acme/things/git/trees/main",
+          status: 200,
+          body: { tree: [{ path: "nodes/hello-node/node.json", type: "blob" }] },
+        },
         { url: "repos/acme/things/contents/nodes/hello-node/node.json", status: 200, body: fileBody("nodes/hello-node/node.json", VALID_NODE_TEXT) },
         { url: "repos/acme/things/contents/nodes/hello-node/README.md", status: 404, body: {} },
       ],
@@ -123,16 +286,12 @@ describe("the JSON API", () => {
   });
 
   it("answers the kind the route names, never the other one", async () => {
-    const fake = fakeFetch([
-      {
-        url: `${REPO_DIR}/contents/registry/graphs/hello-graph/graph.json`,
-        status: 200,
-        body: fileBody("graphs/hello-graph/graph.json", VALID_GRAPH_TEXT),
-      },
-    ]);
+    resetIndexMemo();
+    const kv = await seeded(stubs());
+    const fake = fakeFetch([]);
     const answer = await handleApi(
       new Request("https://graphs.univerlab.org/api/n/UniverLab/canopy-web/hello-graph"),
-      {},
+      { INDEX: kv },
       { fetchImpl: fake.fetchImpl, cache: new FakeCache() },
     );
     const response = answer as unknown as Response;
@@ -140,71 +299,104 @@ describe("the JSON API", () => {
     const body = (await response.json()) as { kind: string; message: string };
     expect(body.kind).toBe("invalid-document");
     expect(body.message).toContain("no node named");
-    // A node request never reads the graph folder, so a miss stays one probe.
-    expect(fake.calls.some((url) => url.includes("registry/graphs/hello-graph"))).toBe(false);
+    // A node request never fetches at all: the index already said no.
+    expect(fake.calls).toEqual([]);
   });
 
-  it("turns an unreadable upstream body into a typed error, never a throw", async () => {
+  it("leaves unreadable documents out of the index instead of throwing", async () => {
     const html = { "content-type": "text/html" };
-    const listing = await call("/api/official", {
-      stubs: [{ url: `${REPO_DIR}/contents/registry/graphs`, status: 200, text: "<html>portal</html>", headers: html }],
-    });
-    expect(listing.status).toBe(502);
-    expect(((await listing.json()) as { kind: string }).kind).toBe("upstream");
+    const table = stubs().map((stub) =>
+      stub.url.endsWith("hello-graph/graph.json")
+        ? { ...stub, text: "<html>portal</html>", headers: html, body: undefined }
+        : stub,
+    );
+    const listing = await call("/api/official", { stubs: table });
+    expect(listing.response.status).toBe(200);
+    const graphs = (await listing.response.json()) as { graphs: unknown[] };
+    expect(graphs.graphs).toEqual([]);
 
-    const document = await call("/api/g/UniverLab/canopy-web/hello-graph", {
-      stubs: [
-        {
-          url: `${REPO_DIR}/contents/registry/graphs/hello-graph/graph.json`,
-          status: 200,
-          text: "<html>portal</html>",
-          headers: html,
-        },
-      ],
-    });
-    expect(document.status).toBe(404);
-    expect(((await document.json()) as { kind: string }).kind).toBe("invalid-document");
+    const document = await call("/api/g/UniverLab/canopy-web/hello-graph", { stubs: table });
+    expect(document.response.status).toBe(404);
+    expect(((await document.response.json()) as { kind: string }).kind).toBe("invalid-document");
   });
 
   it("answers a missing document with a typed 404, never a 500", async () => {
-    const fake = fakeFetch([
-      { url: "repos/UniverLab/canopy-web/contents/registry/graphs/missing/graph.json", status: 404, body: {} },
-      { url: "repos/UniverLab/canopy-web/contents/registry/nodes/missing/node.json", status: 404, body: {} },
-    ]);
-    const cache = new FakeCache();
-    const answer = await handleApi(
-      new Request("https://graphs.univerlab.org/api/g/UniverLab/canopy-web/missing"),
-      {},
-      { fetchImpl: fake.fetchImpl, cache },
-    );
-    const response = answer as unknown as Response;
+    const { response } = await call("/api/g/UniverLab/canopy-web/missing");
     expect(response.status).toBe(404);
     const body = (await response.json()) as { kind: string; message: string };
     expect(body.kind).toBe("invalid-document");
     expect(body.message).toContain("missing");
   });
 
-  it("surfaces a rate limit as a typed 429 for agents to show", async () => {
-    const response = await call("/api/official", {
-      stubs: [
-        {
-          url: `${REPO_DIR}/contents/registry/graphs`,
-          status: 403,
-          headers: { "x-ratelimit-remaining": "0", "x-ratelimit-reset": "2000000000" },
+  it("answers /api/index-status with the run's accounting", async () => {
+    const { response } = await call("/api/index-status");
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      built_at: string;
+      duration_ms: number;
+      calls: number;
+      repos_seen: number;
+      documents: number;
+      invalid: unknown[];
+      truncated: boolean;
+      authenticated: boolean;
+    };
+    expect(typeof body.built_at).toBe("string");
+    expect(body.calls).toBeGreaterThan(0);
+    expect(body.repos_seen).toBe(1);
+    expect(body.documents).toBe(2);
+    expect(body.invalid).toEqual([]);
+    expect(body.truncated).toBe(false);
+    expect(body.authenticated).toBe(true);
+  });
+
+  it("trims /api/index-status invalid details past the first 20", async () => {
+    const slugs = Array.from({ length: 25 }, (_, i) => `bad-${String(i + 1).padStart(2, "0")}`);
+    const base = "repos/acme/things";
+    const table: Stub[] = [
+      ...stubs(),
+      {
+        url: SEARCH,
+        status: 200,
+        body: {
+          total_count: 1,
+          items: [{ name: "things", owner: { login: "acme" }, default_branch: "main", stargazers_count: 1 }],
         },
-      ],
-    });
-    expect(response.status).toBe(429);
-    const body = (await response.json()) as { kind: string; retryAfter?: number };
-    expect(body.kind).toBe("rate-limit");
-    expect(body.retryAfter).toBeGreaterThan(0);
+      },
+      {
+        url: `${base}/git/trees/main`,
+        status: 200,
+        body: { tree: slugs.map((slug) => ({ path: `graphs/${slug}/graph.json`, type: "blob" })) },
+      },
+      ...slugs.map((slug): Stub => ({
+        url: `${base}/contents/graphs/${slug}/graph.json`,
+        status: 200,
+        body: fileBody(`graphs/${slug}/graph.json`, INVALID_GRAPH_TEXT),
+      })),
+    ];
+    const { response } = await call("/api/index-status", { stubs: table });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { invalid: Array<{ slug: string; reason: string }> };
+    expect(body.invalid.length).toBe(20);
+    expect(body.invalid[0]).toEqual({ repo: "acme/things", slug: "bad-01", reason: "schema validation failed" });
+  });
+
+  it("answers every data route with a 503 before the first scheduled run", async () => {
+    for (const path of [
+      "/api/official",
+      "/api/search?q=flow",
+      "/api/g/UniverLab/canopy-web/hello-graph",
+      "/api/index-status",
+    ]) {
+      const { response } = await call(path, { cold: true });
+      expect(response.status, path).toBe(503);
+      expect(await response.json(), path).toEqual({ error: "indexing" });
+    }
   });
 
   it("is CORS-open for GET and answers OPTIONS with 204", async () => {
-    const response = await call("/api/official");
+    const { response } = await call("/api/official");
     expect(response.headers.get("access-control-allow-origin")).toBe("*");
-    const options = await call("/api/official", { stubs: [] });
-    void options;
     const preflight = await handleApi(
       new Request("https://graphs.univerlab.org/api/official", { method: "OPTIONS" }),
       {},
@@ -214,7 +406,7 @@ describe("the JSON API", () => {
   });
 
   it("answers unknown API routes with a typed 400", async () => {
-    const response = await call("/api/what");
+    const { response } = await call("/api/what");
     expect(response.status).toBe(400);
     const body = (await response.json()) as { kind: string };
     expect(body.kind).toBe("invalid-path");
@@ -232,8 +424,7 @@ describe("the JSON API", () => {
   it("attaches install counts when analytics is configured and leaves them out otherwise", async () => {
     const enriched = await call("/api/official", {
       env: { CF_ACCOUNT_ID: "acct", CF_ANALYTICS_TOKEN: "tok" },
-      stubs: [
-        ...stubs(),
+      requestStubs: [
         {
           url: "analytics_engine/sql",
           status: 200,
@@ -241,17 +432,17 @@ describe("the JSON API", () => {
         },
       ],
     });
-    const withCounts = (await enriched.json()) as { graphs: Array<{ downloads?: number }> };
+    const withCounts = (await enriched.response.json()) as { graphs: Array<{ downloads?: number }> };
     expect(withCounts.graphs[0].downloads).toBe(5);
 
-    const plain = (await (await call("/api/official")).json()) as { graphs: Array<{ downloads?: number }> };
+    const plain = (await (await call("/api/official")).response.json()) as { graphs: Array<{ downloads?: number }> };
     expect(plain.graphs[0].downloads).toBeUndefined();
   });
 
   it("does not list official stars as zero when the repo call fails", async () => {
     const withoutStars = stubs().filter((stub) => stub.url !== "repos/UniverLab/canopy-web");
     withoutStars.push({ url: "repos/UniverLab/canopy-web", status: 404, body: {}, });
-    const response = await call("/api/official", { stubs: withoutStars });
+    const { response } = await call("/api/official", { stubs: withoutStars });
     const body = (await response.json()) as { graphs: Array<{ stars: unknown }> };
     expect(response.status).toBe(200);
     expect(body.graphs[0].stars).toBeNull();

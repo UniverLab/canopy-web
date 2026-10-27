@@ -10,32 +10,33 @@
  *   GET /llms.txt                             one line per document: name, description, ref
  *   GET /publish, /publish.md                 how to list a graph or node (page, markdown twin)
  *
- * Every route reads the catalogue through the data layer (official.ts,
- * documents.ts, search.ts) and only renders what comes back. A typed
- * data-layer error answers a calm page with status 503, a missing
- * document a calm 404, and nothing here ever shows a stack trace. Any
- * path this router does not claim answers NOT_PAGE, so index.ts keeps the
- * install redirector exactly as it was.
+ * Every route reads the catalogue through the scheduled index (store.ts,
+ * catalog.ts) and only renders what comes back: no page reaches GitHub,
+ * so traffic never spends quota. Before the first scheduled run builds
+ * the index, data routes answer the indexing page with status 503, a
+ * missing document a calm 404, and nothing here ever shows a stack
+ * trace. Any path this router does not claim answers NOT_PAGE, so
+ * index.ts keeps the install redirector exactly as it was.
  */
 import { type ApiDeps, type ApiEnv } from "../api.js";
 import { attachDownloads, createAnalytics, type Downloads } from "../analytics.js";
-import { type Log, createGitHub, isApiError } from "../github.js";
+import { type Log } from "../github.js";
 import { OFFICIAL_OWNER, OFFICIAL_REPO, OWNER_RE, REPO_RE, SLUG_RE } from "../lib.js";
 import { structureOf, type GraphDocument, type NodeDocument } from "../plate/document.js";
 import { renderNodePlate, renderPlate } from "../plate/render.js";
 import { harnessColor } from "../plate/vocabulary.js";
 import type { DocumentKind, JsonValue } from "../../../../src/schema.js";
 import type { Doc } from "../documents.js";
-import { documentDirectory, loadDocument } from "../documents.js";
-import { communityRepo, listOfficial, loadOfficialDocument } from "../official.js";
-import { type SearchSort, searchCommunity } from "../search.js";
+import { createStore } from "../store.js";
+import { documentFromStored, entryFor, officialFromIndex, searchFromIndex } from "../catalog.js";
+import { type SearchSort } from "../search.js";
 import { isArray, isRecord, isString, stringField } from "../json.js";
 import {
-  BUSY_BODY,
-  BUSY_HEADING,
   EMPTY_OFFICIAL_GRAPHS,
   EMPTY_OFFICIAL_NODES,
   GRAPHS_HEADING,
+  INDEXING_BODY,
+  INDEXING_HEADING,
   INSTALL_HEADING,
   LLMS_HEADER,
   NEW_TAB,
@@ -110,15 +111,10 @@ function splitPath(pathname: string): string[] {
   });
 }
 
-/** The pages' GitHub transport and analytics, wired like the API's. */
+/** The pages' index reads and analytics, wired like the API's. */
 function readers(env: PageEnv, deps: PageDeps) {
   const log = deps.log ?? NO_LOG;
-  const github = createGitHub({
-    fetchImpl: deps.fetchImpl,
-    cache: deps.cache,
-    token: env.GITHUB_TOKEN,
-    log,
-  });
+  const store = createStore(env.INDEX);
   const volumes = async (): Promise<Downloads | null> =>
     createAnalytics({
       fetchImpl: deps.fetchImpl,
@@ -127,12 +123,15 @@ function readers(env: PageEnv, deps: PageDeps) {
       token: env.CF_ANALYTICS_TOKEN,
       log,
     }).volume();
-  return { github, log, volumes };
+  return { store, log, volumes };
 }
 
-/** The calm 503: the data layer failed, and the page says so, calmly. */
-function busy(req: Request): Response {
-  return page(req, calmPage(BUSY_HEADING, BUSY_BODY), 503);
+/** The cold-start 503: no index yet, back once the first run lands. */
+function indexing(req: Request): Response {
+  const response = page(req, calmPage(INDEXING_HEADING, INDEXING_BODY), 503);
+  const headers = new Headers(response.headers);
+  headers.set("retry-after", "120");
+  return new Response(response.body, { status: response.status, headers });
 }
 
 /** The calm 404: no document at this address. */
@@ -419,45 +418,33 @@ function searchPage(q: string, sort: SearchSort, items: Doc[]): Page {
   return { title: heading, description: TAGLINE, html, markdown };
 }
 
-/** The document route: load through the data layer, then render. */
+/** The document route: join the index entry to its stored document, then render. */
 async function documentResponse(req: Request, env: PageEnv, deps: PageDeps, ref: PageRef): Promise<Response> {
-  const { github, log, volumes } = readers(env, deps);
-  const loaded = ref.official
-    ? await loadOfficialDocument(github, ref.kind, ref.slug, log)
-    : await (async () => {
-      const info = await communityRepo(github, ref.owner, ref.repo);
-      return loadDocument(
-        github,
-        {
-          owner: ref.owner,
-          repo: ref.repo,
-          directory: documentDirectory(ref.owner, ref.repo, ref.kind, ref.slug),
-          kind: ref.kind,
-          slug: ref.slug,
-          stars: info.stars,
-          updated: info.updated,
-          ref: info.branch,
-        },
-        log,
-      );
-    })();
-  // The load result is a tagged union, not an ApiError: "doc" wins first.
-  if (loaded.kind === "absent") {
+  const { store, volumes } = readers(env, deps);
+  const index = await store.getIndex();
+  if (index === null) {
+    return indexing(req);
+  }
+  const entry = entryFor(index, ref.kind, ref.owner, ref.repo, ref.slug);
+  if (entry === null) {
     return notFound(req);
   }
-  if (loaded.kind !== "doc") {
-    return busy(req);
+  const stored = await store.getDoc(ref.kind, ref.owner, ref.repo, ref.slug);
+  if (stored === null) {
+    return notFound(req);
   }
-  const [doc] = attachDownloads([loaded.entry.doc], await volumes());
-  return page(req, documentPage(doc, loaded.entry.document, ref));
+  const loaded = documentFromStored(entry, stored);
+  const [doc] = attachDownloads([loaded.doc], await volumes());
+  return page(req, documentPage(doc, loaded.document, ref));
 }
 
 async function homeResponse(req: Request, env: PageEnv, deps: PageDeps): Promise<Response> {
-  const { github, log, volumes } = readers(env, deps);
-  const listing = await listOfficial(github, log);
-  if (isApiError(listing)) {
-    return busy(req);
+  const { store, volumes } = readers(env, deps);
+  const index = await store.getIndex();
+  if (index === null) {
+    return indexing(req);
   }
+  const listing = officialFromIndex(index);
   const counts = await volumes();
   return page(req, homePage(attachDownloads(listing.graphs, counts), attachDownloads(listing.nodes, counts)));
 }
@@ -465,21 +452,30 @@ async function homeResponse(req: Request, env: PageEnv, deps: PageDeps): Promise
 async function searchResponse(req: Request, url: URL, env: PageEnv, deps: PageDeps): Promise<Response> {
   const q = (url.searchParams.get("q") ?? "").slice(0, 256);
   const sort: SearchSort = url.searchParams.get("sort") === "new" ? "new" : "top";
-  const { github, log, volumes } = readers(env, deps);
-  const outcome = await searchCommunity(github, { q, sort, page: 1 }, log);
-  if (isApiError(outcome)) {
-    return busy(req);
+  const { store, volumes } = readers(env, deps);
+  const index = await store.getIndex();
+  if (index === null) {
+    return indexing(req);
   }
+  const outcome = searchFromIndex(index, { q, sort, page: 1 });
   return page(req, searchPage(q, sort, attachDownloads(outcome.items, await volumes())));
 }
 
 /** llms.txt: plain text, one tab-separated line per official document. */
-async function llmsResponse(env: PageEnv, deps: PageDeps): Promise<Response> {
-  const { github, log, volumes } = readers(env, deps);
-  const listing = await listOfficial(github, log);
-  if (isApiError(listing)) {
-    return textResponse(`${BUSY_BODY}\n`, 503);
+async function llmsResponse(req: Request, env: PageEnv, deps: PageDeps): Promise<Response> {
+  const { store, volumes } = readers(env, deps);
+  const index = await store.getIndex();
+  if (index === null) {
+    return new Response(`${INDEXING_BODY}\n`, {
+      status: 503,
+      headers: {
+        "content-type": "text/plain; charset=utf-8",
+        "cache-control": "no-store",
+        "retry-after": "120",
+      },
+    });
   }
+  const listing = officialFromIndex(index);
   const docs = attachDownloads([...listing.graphs, ...listing.nodes], await volumes());
   const lines = [LLMS_HEADER, ""];
   for (const doc of docs) {
@@ -509,7 +505,7 @@ export async function handlePage(
     return searchResponse(req, url, env, deps);
   }
   if (segments.length === 1 && segments[0] === "llms.txt") {
-    return llmsResponse(env, deps);
+    return llmsResponse(req, env, deps);
   }
   if (segments.length === 1 && segments[0] === "publish") {
     return page(req, publishPage());

@@ -7,6 +7,7 @@
  * createGitHub/createAnalytics/handleApi, never into the runtime.
  */
 import { type CacheLike } from "../src/github.js";
+import { type KV } from "../src/store.js";
 
 interface Stored {
   status: number;
@@ -96,6 +97,48 @@ export function fakeFetch(stubs: Stub[]): FakeFetch {
     return new Response("{}", { status: 404, headers: new Headers() });
   }) as unknown as typeof fetch;
   return { fetchImpl, calls, bodies, missing };
+}
+
+/** A Map-backed KV namespace: the index binding the tests seed. */
+export class FakeKV implements KV {
+  private entries = new Map<string, string>();
+
+  get(key: string): Promise<string | null> {
+    return Promise.resolve(this.entries.get(key) ?? null);
+  }
+
+  put(key: string, value: string): Promise<void> {
+    this.entries.set(key, value);
+    return Promise.resolve();
+  }
+
+  delete(key: string): Promise<void> {
+    this.entries.delete(key);
+    return Promise.resolve();
+  }
+
+  list(options?: { prefix?: string; cursor?: string }): Promise<{
+    keys: Array<{ name: string }>;
+    list_complete: boolean;
+    cursor?: string;
+  }> {
+    const prefix = options?.prefix ?? "";
+    const after = options?.cursor ?? "";
+    const names = [...this.entries.keys()]
+      .filter((name) => name.startsWith(prefix) && (after === "" || name > after))
+      .sort();
+    return Promise.resolve({ keys: names.map((name) => ({ name })), list_complete: true });
+  }
+
+  /** True when a key is stored. */
+  has(key: string): boolean {
+    return this.entries.has(key);
+  }
+
+  /** Every stored key, for vanished-key assertions. */
+  storedKeys(): string[] {
+    return [...this.entries.keys()].sort();
+  }
 }
 
 /** Standard base64 of a text, the contents-API encoding. */

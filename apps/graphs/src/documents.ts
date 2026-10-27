@@ -269,6 +269,88 @@ function harnessesOf(kind: DocumentKind, document: JsonValue): string[] {
   return [...found].sort();
 }
 
+/** The fields a rendered Doc needs beyond the document and README. */
+export interface DocContext {
+  kind: DocumentKind;
+  slug: string;
+  owner: string;
+  repo: string;
+  stars: number | null;
+  updated?: string | null;
+  ref?: string;
+}
+
+/**
+ * Render one validated document and its README into the row and page
+ * shape. The live loader and the scheduled index share it, so a document
+ * reads identically however it was reached.
+ */
+export function docFromDocument(
+  context: DocContext,
+  document: JsonValue,
+  readme: string,
+): Doc {
+  const ref = context.ref ?? "";
+  return {
+    kind: context.kind,
+    slug: context.slug,
+    name: isRecord(document) ? stringField(document, "name") || context.slug : context.slug,
+    description: isRecord(document) ? stringField(document, "description") : "",
+    readme,
+    nodeCount: nodeCountOf(context.kind, document),
+    repo: `${context.owner}/${context.repo}`,
+    stars: context.stars,
+    updated: context.updated ?? null,
+    harnesses: harnessesOf(context.kind, document),
+    sourceRef: ref === "" ? null : ref,
+  };
+}
+
+/**
+ * Load, validate and render one document, carrying the drop reason. An
+ * `absent` miss is ordinary (no folder, no file) and carries no reason;
+ * an invalid document carries why it failed to validate, for the
+ * indexer's meta. A typed error means GitHub itself is the problem.
+ */
+export async function loadDocumentWithReason(
+  github: GitHub,
+  source: DocumentSource,
+  log: (message: string) => void,
+): Promise<
+  | { kind: "doc"; entry: CatalogEntry }
+  | { kind: "absent"; reason: string | null }
+  | ApiError
+> {
+  const { owner, repo, kind } = source;
+  const ref = source.ref ?? "";
+  const jsonPath = `${source.directory}/${documentFile(kind)}`;
+  const documentText = await readText(github, owner, repo, jsonPath, ref, log);
+  if (documentText.kind === "absent") {
+    log(`documents: dropped ${owner}/${repo} ${jsonPath}: missing document file`);
+    return { kind: "absent", reason: null };
+  }
+  if (documentText.kind !== "text") {
+    return documentText;
+  }
+  const parsed = parseJson(documentText.text);
+  if (!parsed.ok || !isRecord(parsed.value)) {
+    log(`documents: dropped ${owner}/${repo} ${jsonPath}: unparseable JSON`);
+    return { kind: "absent", reason: "unparseable JSON" };
+  }
+  if (!isValidDocument(kind, parsed.value)) {
+    log(`documents: dropped ${owner}/${repo} ${jsonPath}: invalid document`);
+    return { kind: "absent", reason: "schema validation failed" };
+  }
+  const document = parsed.value;
+  const readmePath = `${source.directory}/README.md`;
+  const readme = await readText(github, owner, repo, readmePath, ref, log);
+  const readmeText = readme.kind === "text" ? readme.text : "";
+  if (readme.kind === "absent") {
+    log(`documents: ${owner}/${repo} ${jsonPath} listed without a README`);
+  }
+  return { kind: "doc", entry: { document, doc: docFromDocument(source, document, readmeText) } };
+}
+
 /**
  * Load, validate and render one document. Returns `absent` for the ordinary
  * misses (no folder, no file, README only missing), a typed error when
@@ -284,48 +366,11 @@ export async function loadDocument(
   | { kind: "absent" }
   | ApiError
 > {
-  const { owner, repo, kind, slug } = source;
-  const ref = source.ref ?? "";
-  const jsonPath = `${source.directory}/${documentFile(kind)}`;
-  const documentText = await readText(github, owner, repo, jsonPath, ref, log);
-  if (documentText.kind === "absent") {
-    log(`documents: dropped ${owner}/${repo} ${jsonPath}: missing document file`);
+  const loaded = await loadDocumentWithReason(github, source, log);
+  if (loaded.kind === "absent") {
     return { kind: "absent" };
   }
-  if (documentText.kind !== "text") {
-    return documentText;
-  }
-  const parsed = parseJson(documentText.text);
-  if (!parsed.ok || !isRecord(parsed.value) || !isValidDocument(kind, parsed.value)) {
-    log(`documents: dropped ${owner}/${repo} ${jsonPath}: invalid document`);
-    return { kind: "absent" };
-  }
-  const document = parsed.value;
-  const readmePath = `${source.directory}/README.md`;
-  const readme = await readText(github, owner, repo, readmePath, ref, log);
-  const readmeText = readme.kind === "text" ? readme.text : "";
-  if (readme.kind === "absent") {
-    log(`documents: ${owner}/${repo} ${jsonPath} listed without a README`);
-  }
-  return {
-    kind: "doc",
-    entry: {
-      document,
-      doc: {
-        kind,
-        slug,
-        name: stringField(document, "name") || slug,
-        description: stringField(document, "description"),
-        readme: readmeText,
-        nodeCount: nodeCountOf(kind, document),
-        repo: `${owner}/${repo}`,
-        stars: source.stars,
-        updated: source.updated ?? null,
-        harnesses: harnessesOf(kind, document),
-        sourceRef: ref === "" ? null : ref,
-      },
-    },
-  };
+  return loaded;
 }
 
 /** Read `stargazers_count` from a `/repos/...` body, null when absent. */

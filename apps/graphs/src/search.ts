@@ -8,21 +8,14 @@
  * catalogue never re-sorts. The document cap keeps a request bounded, and a
  * bounded-away page is reported with `truncated: true`.
  */
-import type { DocumentKind } from "../../../src/schema.js";
 import type { ApiError, GitHub, Log } from "./github.js";
 import { isApiError } from "./github.js";
-import { isArray, isNumber, isRecord, isString, readJson, stringField } from "./json.js";
-import type { DocumentSource } from "./documents.js";
-import {
-  type CatalogEntry,
-  type Doc,
-  communityDir,
-  documentDirectory,
-  pathsFromTree,
-  sourcesFromTree,
-  toDateOnly,
-} from "./documents.js";
+import { isArray, isNumber, isRecord, readJson, stringField } from "./json.js";
+import { type CatalogEntry, type Doc, toDateOnly } from "./documents.js";
 import { loadDocument } from "./documents.js";
+import { CATALOGUE_TOPIC, discoverSources } from "./discovery.js";
+
+export { CATALOGUE_TOPIC };
 
 /** Repositories per page, matching the spec's 20-per-page contract. */
 export const SEARCH_PAGE_SIZE = 20;
@@ -75,12 +68,6 @@ function hitOf(value: unknown): RepoHit | null {
   };
 }
 
-/**
- * The GitHub topic that lists a repository in the catalogue. The Publish
- * page names it, so it lives here, next to the query that reads it.
- */
-export const CATALOGUE_TOPIC = "canopy-graph";
-
 export function searchUrl(options: SearchInput): string {
   const text = options.q.trim();
   const q = `topic:${CATALOGUE_TOPIC}${text === "" ? "" : ` ${text}`}`;
@@ -92,49 +79,6 @@ export function searchUrl(options: SearchInput): string {
     page: String(options.page),
   });
   return `https://api.github.com/search/repositories?${params.toString()}`;
-}
-
-/** The dirs of `graphs/`/`nodes/`, the fallback when a tree is truncated. */
-async function directoriesFallback(
-  github: GitHub,
-  owner: string,
-  repo: string,
-  branch: string,
-  log: Log,
-): Promise<DocumentSource[]> {
-  const sources: DocumentSource[] = [];
-  const prefix = branch === "" ? "" : `?ref=${encodeURIComponent(branch)}`;
-  for (const kind of ["graph", "node"] as const) {
-    const listing = await github.get(
-      `https://api.github.com/repos/${owner}/${repo}/contents/${communityDir(kind)}${prefix}`,
-      "contents",
-    );
-    if (isApiError(listing)) {
-      if (listing.kind !== "not-found") {
-        log(`search: ${owner}/${repo} listing ${kind}s failed: ${listing.kind}`);
-      }
-      continue;
-    }
-    const body = await readJson(listing);
-    if (!body.ok || !Array.isArray(body.value)) {
-      continue;
-    }
-    for (const entry of body.value) {
-      if (isRecord(entry) && entry["type"] === "dir" && isString(entry["name"])) {
-        sources.push({
-          owner,
-          repo,
-          directory: documentDirectory(owner, repo, kind, entry["name"]),
-          kind: kind as DocumentKind,
-          slug: entry["name"],
-          stars: null,
-          updated: null,
-          ref: branch,
-        });
-      }
-    }
-  }
-  return sources;
 }
 
 /**
@@ -177,30 +121,11 @@ export async function searchCommunity(
     if (hit === null) {
       continue;
     }
-    const treeResponse = await github.get(
-      `https://api.github.com/repos/${hit.owner}/${hit.repo}/git/trees/${encodeURIComponent(hit.defaultBranch)}?recursive=1`,
-      "contents",
-    );
-    if (isApiError(treeResponse)) {
-      if (treeResponse.kind === "rate-limit") {
-        return treeResponse;
-      }
-      log(`search: ${hit.owner}/${hit.repo} skipped: ${treeResponse.kind}`);
-      continue;
-    }
-    const treeBody = await readJson(treeResponse);
-    if (!treeBody.ok) {
-      log(`search: ${hit.owner}/${hit.repo} tree did not parse as JSON, skipped`);
-      continue;
-    }
-    const tree = treeBody.value;
-    let sources = sourcesFromTree(hit.owner, hit.repo, pathsFromTree(tree));
-    const truncatedTree = isRecord(tree) && tree["truncated"] === true;
-    if (truncatedTree && sources.length === 0) {
-      sources = await directoriesFallback(github, hit.owner, hit.repo, hit.defaultBranch, log);
+    let sources = await discoverSources(github, hit.owner, hit.repo, hit.defaultBranch, log);
+    if (isApiError(sources)) {
+      return sources;
     }
     if (sources.length === 0) {
-      log(`search: ${hit.owner}/${hit.repo} tree has no document folders`);
       continue;
     }
     if (sources.length > SEARCH_DOC_CAP - entries.length) {

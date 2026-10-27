@@ -1,16 +1,21 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * The catalogue pages: route snapshots against mocked data, the markdown
- * twin, the sanitizer, the SVG drawing, the calm 503 and the page shell.
- * Everything runs on the injected fakes (fakes.ts), never a global.
+ * The catalogue pages: route snapshots against a seeded index, the
+ * markdown twin, the sanitizer, the SVG drawing, the cold-start 503 and
+ * the page shell. Every test runs the indexer over a stub table into a
+ * fresh in-memory KV, then renders with an empty upstream — no page may
+ * reach GitHub.
  */
 import { describe, expect, it } from "vitest";
 import { NOT_PAGE, handlePage } from "../src/pages/routes.js";
-import { BUSY_BODY, BUSY_HEADING, COPY_BUTTON, EMPTY_OFFICIAL_GRAPHS, EMPTY_OFFICIAL_NODES, SEARCH_BUTTON, SEARCH_LABEL } from "../src/pages/copy.js";
-import { FakeCache, dirBody, fakeFetch, fileBody, type Stub } from "./fakes.js";
+import { INDEXING_BODY, INDEXING_HEADING, COPY_BUTTON, EMPTY_OFFICIAL_GRAPHS, EMPTY_OFFICIAL_NODES, SEARCH_BUTTON, SEARCH_LABEL } from "../src/pages/copy.js";
+import { createGitHub } from "../src/github.js";
+import { runIndexer } from "../src/indexer.js";
+import { resetIndexMemo } from "../src/store.js";
+import { FakeCache, FakeKV, dirBody, fakeFetch, fileBody, type Stub } from "./fakes.js";
 import { EVIL_README_TEXT, FIVE_NODE_GRAPH_TEXT, PAGES_README_TEXT } from "./pages-fixture.js";
 import { VALID_GRAPH_TEXT } from "./documents-fixture.js";
-import { communityStubs, officialStubs, REPO_DIR, searchStubs } from "./stubs.js";
+import { communityStubs, flowSearchStubs, officialStubs, REPO_DIR, searchStubs } from "./stubs.js";
 
 const ORIGIN = "https://graphs.univerlab.org";
 const HTML = { "content-type": "text/html" };
@@ -20,20 +25,38 @@ interface Options {
   accept?: string;
   env?: Record<string, string>;
   method?: string;
+  /** Upstream answers for the request itself (analytics SQL, never GitHub). */
+  requestStubs?: Stub[];
+  /** Skip seeding: the cold start, before the first scheduled run. */
+  cold?: boolean;
+}
+
+/** Seed a fresh KV by running the indexer over the stub table. */
+async function seeded(stubsToSeed: Stub[]): Promise<FakeKV> {
+  const fake = fakeFetch(stubsToSeed);
+  const kv = new FakeKV();
+  const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
+  await runIndexer({ github, index: kv, authenticated: true });
+  return kv;
 }
 
 async function call(path: string, options: Options = {}): Promise<Response> {
-  const fake = fakeFetch(options.stubs ?? officialStubs());
+  resetIndexMemo();
+  const kv = options.cold === true ? new FakeKV() : await seeded(options.stubs ?? officialStubs());
+  const fake = fakeFetch(options.requestStubs ?? []);
   const headers = new Headers();
   if (options.accept !== undefined) {
     headers.set("accept", options.accept);
   }
   const req = new Request(`${ORIGIN}${path}`, { method: options.method ?? "GET", headers });
-  const answer = await handlePage(req, options.env ?? {}, {
+  const answer = await handlePage(req, { ...options.env, INDEX: kv }, {
     fetchImpl: fake.fetchImpl,
     cache: new FakeCache(),
   });
   expect(answer).not.toBe(NOT_PAGE);
+  if (options.requestStubs === undefined) {
+    expect(fake.calls, "no page may reach upstream").toEqual([]);
+  }
   return answer as unknown as Response;
 }
 
@@ -56,7 +79,7 @@ describe("route snapshots", () => {
   });
 
   it("renders /g/<owner>/<repo>/<slug> with the community ref", async () => {
-    const response = await call("/g/acme/things/flow", { stubs: [...officialStubs(), ...communityStubs()] });
+    const response = await call("/g/acme/things/flow", { stubs: searchStubs() });
     expect(await response.text()).toMatchSnapshot();
   });
 
@@ -180,32 +203,32 @@ describe("the plate drawing", () => {
   });
 });
 
-describe("data-layer failures", () => {
-  it("answers a typed GitHub error with a calm 503, never a stack trace", async () => {
-    const response = await call("/g/hello-graph", {
-      stubs: [{ url: `${REPO_DIR}/contents/registry/graphs/hello-graph/graph.json`, status: 500, body: {} }],
-    });
-    expect(response.status).toBe(503);
-    const html = await response.text();
-    expect(html).toContain(BUSY_BODY);
-    expect(html).not.toContain("Error:");
-    expect(html).not.toContain("at Object");
-    expect(html).not.toContain("stack");
+describe("the cold start", () => {
+  it("answers every data route with the indexing 503 before the first run", async () => {
+    for (const path of ["/", "/search?q=flow", "/g/hello-graph", "/n/hello-node"]) {
+      const response = await call(path, { cold: true });
+      expect(response.status, path).toBe(503);
+      expect(response.headers.get("retry-after"), path).toBe("120");
+      const body = await response.text();
+      expect(body, path).toContain(INDEXING_HEADING);
+      expect(body, path).toContain(INDEXING_BODY);
+      expect(body, path).not.toContain("stack");
+    }
+    // llms.txt is plain text, so its cold answer carries only the message.
+    const llms = await call("/llms.txt", { cold: true });
+    expect(llms.status).toBe(503);
+    expect(llms.headers.get("retry-after")).toBe("120");
+    expect(await llms.text()).toBe(`${INDEXING_BODY}\n`);
   });
 
-  it("answers a rate-limited listing with the same calm 503", async () => {
-    const response = await call("/", {
-      stubs: [{
-        url: `${REPO_DIR}/contents/registry/graphs`,
-        status: 403,
-        headers: { "x-ratelimit-remaining": "0", "x-ratelimit-reset": "2000000000" },
-      }],
-    });
+  it("answers the indexing twin as markdown when asked", async () => {
+    const response = await call("/g/hello-graph", { cold: true, accept: "text/markdown" });
     expect(response.status).toBe(503);
-    expect(await response.text()).toContain(BUSY_BODY);
+    expect(response.headers.get("content-type")).toBe("text/markdown; charset=utf-8");
+    expect(await response.text()).toContain(INDEXING_BODY);
   });
 
-  it("answers a missing registry folder with the empty official home, not the busy page", async () => {
+  it("answers a missing registry folder with the empty official home, not the indexing page", async () => {
     const response = await call("/", {
       stubs: [{ url: `${REPO_DIR}/contents/registry/graphs`, status: 404, body: {} }],
     });
@@ -213,25 +236,17 @@ describe("data-layer failures", () => {
     const html = await response.text();
     expect(html).toContain(EMPTY_OFFICIAL_GRAPHS);
     expect(html).toContain(EMPTY_OFFICIAL_NODES);
-    expect(html).not.toContain(BUSY_HEADING);
+    expect(html).not.toContain(INDEXING_HEADING);
     // The rest of the home keeps working: search box and the two tabs.
     expect(html).toContain(`<label class="sr-only" for="q">${SEARCH_LABEL}</label>`);
     expect(html).toContain(`<a href="/search?sort=top">`);
-  });
-
-  it("answers a 500 listing with the same calm 503", async () => {
-    const response = await call("/", {
-      stubs: [{ url: `${REPO_DIR}/contents/registry/graphs`, status: 500, body: {} }],
-    });
-    expect(response.status).toBe(503);
-    expect(await response.text()).toContain(BUSY_BODY);
   });
 
   it("answers an unreadable upstream body with the calm page, never a crash", async () => {
     const response = await call("/g/hello-graph", {
       stubs: [{ url: `${REPO_DIR}/contents/registry/graphs/hello-graph/graph.json`, status: 200, text: "<html>portal</html>", headers: HTML }],
     });
-    // The data layer degrades an unreadable body into a missing document.
+    // The indexer drops an unreadable body, so the page finds no document.
     expect(response.status).toBe(404);
     expect(await response.text()).toContain("Not found");
   });
@@ -295,8 +310,7 @@ describe("the page shell", () => {
   it("shows stars, the repo link and the agent nodes in the datasheet", async () => {
     const html = await (await call("/g/hello-graph", {
       env: { CF_ACCOUNT_ID: "acct", CF_ANALYTICS_TOKEN: "tok" },
-      stubs: [
-        ...officialStubs(),
+      requestStubs: [
         { url: "analytics_engine/sql", status: 200, body: { data: [{ index: "UniverLab/canopy-web/graph/hello-graph", count: 12 }] } },
       ],
     })).text();
@@ -316,7 +330,7 @@ describe("the page shell", () => {
   });
 
   it("gives the community graph the owner/repo/slug ref", async () => {
-    const html = await (await call("/g/acme/things/flow", { stubs: [...officialStubs(), ...communityStubs()] })).text();
+    const html = await (await call("/g/acme/things/flow", { stubs: searchStubs() })).text();
     expect(html).toContain("canopy graph install acme/things/flow");
     expect(html).toContain(`<a class="button" href="https://github.com/acme/things">Star on GitHub</a>`);
   });
@@ -491,5 +505,13 @@ describe("routing", () => {
     expect(twin).toContain(`](/g/${encoded})`);
     // No link target in the twin may carry a raw quote.
     expect(twin).not.toMatch(/\]\(\/g\/[^)\n]*"/i);
+  });
+
+  it("passes the community graph's indexed stars to its page", async () => {
+    const html = await (await call("/g/acme/things/flow", {
+      stubs: [...officialStubs(), ...communityStubs(), ...flowSearchStubs()],
+    })).text();
+    expect(html).toContain("<dt>Stars</dt><dd>2 stars</dd>");
+    expect(html).toContain("<dt>Ref</dt><dd>main</dd>");
   });
 });

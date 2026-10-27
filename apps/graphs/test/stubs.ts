@@ -33,11 +33,9 @@ export function communityStubs(): Stub[] {
   ];
 }
 
-/** The search answer the /search tests read: one repository holding flow. */
-export function searchStubs(): Stub[] {
+/** The discovery answer: one repository holding flow, plus its tree. */
+export function flowSearchStubs(): Stub[] {
   return [
-    ...officialStubs(),
-    ...communityStubs(),
     {
       url: "search/repositories",
       status: 200,
@@ -47,5 +45,14 @@ export function searchStubs(): Stub[] {
       },
     },
     { url: "repos/acme/things/git/trees/main", status: 200, body: { tree: [{ path: "graphs/flow/graph.json", type: "blob" }] } },
+  ];
+}
+
+/** The search answer the /search tests read: one repository holding flow. */
+export function searchStubs(): Stub[] {
+  return [
+    ...officialStubs(),
+    ...communityStubs(),
+    ...flowSearchStubs(),
   ];
 }

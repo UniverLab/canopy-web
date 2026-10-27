@@ -127,9 +127,9 @@ export const SHEET_EDGES = "Edges";
 export const SHEET_ENSEMBLES = "Ensembles";
 export const SHEET_AGENTS = "Agent nodes";
 
-/** The calm 503: GitHub (or its rate limit) failed the data layer. */
-export const BUSY_HEADING = "GitHub is busy";
-export const BUSY_BODY = "The catalogue could not reach GitHub right now. Please try again in a moment.";
+/** The cold-start 503: the first scheduled run has not built the index yet. */
+export const INDEXING_HEADING = "Indexing the catalogue";
+export const INDEXING_BODY = "The catalogue is being indexed — back in a few minutes";
 
 /** The calm 404: no such document. */
 export const NOT_FOUND_HEADING = "Not found";
@@ -268,9 +268,9 @@ export function publishCheckSchemas(graphLabel: string, nodeLabel: string): stri
 /** When it shows up: GitHub indexes a new topic within minutes. */
 export const PUBLISH_WHEN_INDEX = "GitHub indexes a new topic within minutes.";
 
-/** When it shows up: over the minutes the worker caches search results. */
-export function publishWhenCache(minutes: number): string {
-  return `The catalogue caches search results for ${minutes} minutes.`;
+/** When it shows up: over the minutes between scheduled index builds. */
+export function publishWhenIndex(minutes: number): string {
+  return `The catalogue re-indexes every ${minutes} minutes, so new documents appear within ${minutes} minutes.`;
 }
 
 /** How people install it: the graph installs by owner, repo and slug. */

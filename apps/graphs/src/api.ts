@@ -7,24 +7,30 @@
  *   GET /api/search?q=&sort=top|new&page=    -> { items, q, sort, page, total, truncated }
  *   GET /api/g/<owner>/<repo>/<slug>         -> one graph document
  *   GET /api/n/<owner>/<repo>/<slug>         -> one node document
+ *   GET /api/index-status                    -> the last index run's accounting
  *
- * Every answer is CORS-open for GET, every error is a typed JSON body
- * (never an HTML stack trace, never a 500 the pages cannot show). `index.ts`
- * hands `/api/*` here first; the install redirector keeps its routes.
+ * Every answer is read from the scheduled index in KV (store.ts): no API
+ * call reaches GitHub, so traffic never spends quota. Before the first
+ * scheduled run builds the index, data routes answer 503
+ * `{ error: "indexing" }`. Every answer is CORS-open for GET, every error
+ * is a typed JSON body (never an HTML stack trace, never a 500 the pages
+ * cannot show). `index.ts` hands `/api/*` here first; the install
+ * redirector keeps its routes.
  */
 import { attachDownloads, createAnalytics } from "./analytics.js";
-import { createGitHub, isApiError, type ApiError, type CacheLike, type GitHub, type Log } from "./github.js";
+import { type CacheLike, type Log } from "./github.js";
 import type { DocumentKind } from "../../../src/schema.js";
-import { SLUG_RE, OWNER_RE, REPO_RE, isOfficialRepo } from "./lib.js";
-import { documentDirectory, loadDocument } from "./documents.js";
-import { listOfficial, loadOfficialDocument } from "./official.js";
-import { searchCommunity, type SearchSort } from "./search.js";
+import { SLUG_RE, OWNER_RE, REPO_RE } from "./lib.js";
+import { createStore, type KV } from "./store.js";
+import { documentFromStored, entryFor, officialFromIndex, searchFromIndex } from "./catalog.js";
+import { type SearchSort } from "./search.js";
 
-/** Environment the API reads: three optional values, no bindings here. */
+/** Environment the API reads: analytics config plus the index binding. */
 export interface ApiEnv {
   GITHUB_TOKEN?: string;
   CF_ACCOUNT_ID?: string;
   CF_ANALYTICS_TOKEN?: string;
+  INDEX?: KV;
 }
 
 /** Dependency injection for tests; production defaults. */
@@ -54,27 +60,46 @@ function jsonResponse(payload: unknown, status: number, maxAge: number): Respons
   });
 }
 
-function errorResponse(error: ApiError): Response {
+interface ApiErrorBody {
+  kind: string;
+  message: string;
+  status: number;
+}
+
+function errorResponse(error: ApiErrorBody): Response {
   return jsonResponse(
-    { kind: error.kind, message: error.message, status: error.status, retryAfter: error.retryAfter ?? undefined },
+    { kind: error.kind, message: error.message, status: error.status },
     error.status,
     60,
   );
 }
 
+/** The cold start: no index yet, the first scheduled run is still ahead. */
+function indexingResponse(): Response {
+  return new Response(`${JSON.stringify({ error: "indexing" })}\n`, {
+    status: 503,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+      "retry-after": "120",
+      ...corsHeaders(),
+    },
+  });
+}
+
 /** A non-API request: index.ts keeps routing it to the redirector. */
 export const NOT_API = true as const;
 
-function badQuery(message: string): ApiError {
+function badQuery(message: string): ApiErrorBody {
   return { kind: "invalid-query", message, status: 400 };
 }
 
-function invalidPath(message: string): ApiError {
+function invalidPath(message: string): ApiErrorBody {
   return { kind: "invalid-path", message, status: 400 };
 }
 
 /** Read `q`, `sort` and `page` out of a search request, 400s when malformed. */
-function readSearchInput(url: URL): { input: { q: string; sort: SearchSort; page: number } } | ApiError {
+function readSearchInput(url: URL): { input: { q: string; sort: SearchSort; page: number } } | ApiErrorBody {
   const q = url.searchParams.get("q") ?? "";
   if (q.length > 256) {
     return badQuery("q must be at most 256 characters");
@@ -115,46 +140,6 @@ function partsInvalid(owner: string, repo: string, slug: string): string | null 
 }
 
 /**
- * One document, of the kind the route names: `GET /api/g` answers a graph or
- * nothing, `GET /api/n` a node or nothing. `document` is the validated JSON
- * itself, for the pages' renderer.
- */
-async function singleDocument(
-  github: GitHub,
-  kind: DocumentKind,
-  owner: string,
-  repo: string,
-  slug: string,
-  log: Log,
-): Promise<Response> {
-  const loaded = isOfficialRepo(owner, repo)
-    ? await loadOfficialDocument(github, kind, slug, log)
-    : await loadDocument(
-        github,
-        {
-          owner,
-          repo,
-          directory: documentDirectory(owner, repo, kind, slug),
-          kind,
-          slug,
-          stars: null,
-        },
-        log,
-      );
-  if (loaded.kind === "doc") {
-    return jsonResponse(loaded.entry, 200, 300);
-  }
-  if (loaded.kind !== "absent") {
-    return errorResponse(loaded);
-  }
-  return errorResponse({
-    kind: "invalid-document",
-    message: `no ${kind} named ${slug} in ${owner}/${repo}`,
-    status: 404,
-  });
-}
-
-/**
  * The API router. Returns NOT_API for paths outside `/api/*` so index.ts
  * keeps its redirect routes untouched, a JSON answer for every API request,
  * and typed errors everywhere.
@@ -179,12 +164,15 @@ export async function handleApi(
     return errorResponse({ kind: "invalid-path", message: "only GET is supported", status: 400 });
   }
 
-  const github = createGitHub({
-    fetchImpl: deps.fetchImpl,
-    cache: deps.cache,
-    token: env.GITHUB_TOKEN,
-    log,
-  });
+  const store = createStore(env.INDEX);
+  const volumes = async () =>
+    createAnalytics({
+      fetchImpl: deps.fetchImpl,
+      cache: deps.cache,
+      accountId: env.CF_ACCOUNT_ID,
+      token: env.CF_ANALYTICS_TOKEN,
+      log,
+    }).volume();
 
   switch (route.verb) {
 
@@ -192,21 +180,16 @@ export async function handleApi(
       if (route.segments.length !== 0) {
         return errorResponse(invalidPath("usage: GET /api/official"));
       }
-      const listing = await listOfficial(github, log);
-      if (isApiError(listing)) {
-        return errorResponse(listing);
+      const index = await store.getIndex();
+      if (index === null) {
+        return indexingResponse();
       }
-      const volumes = await createAnalytics({
-        fetchImpl: deps.fetchImpl,
-        cache: deps.cache,
-        accountId: env.CF_ACCOUNT_ID,
-        token: env.CF_ANALYTICS_TOKEN,
-        log,
-      }).volume();
+      const listing = officialFromIndex(index);
+      const counts = await volumes();
       return jsonResponse(
         {
-          graphs: attachDownloads(listing.graphs, volumes),
-          nodes: attachDownloads(listing.nodes, volumes),
+          graphs: attachDownloads(listing.graphs, counts),
+          nodes: attachDownloads(listing.nodes, counts),
         },
         200,
         300,
@@ -220,19 +203,14 @@ export async function handleApi(
       if ("kind" in parsed) {
         return errorResponse(parsed);
       }
-      const outcome = await searchCommunity(github, parsed.input, log);
-      if (isApiError(outcome)) {
-        return errorResponse(outcome);
+      const index = await store.getIndex();
+      if (index === null) {
+        return indexingResponse();
       }
-      const volumes = await createAnalytics({
-        fetchImpl: deps.fetchImpl,
-        cache: deps.cache,
-        accountId: env.CF_ACCOUNT_ID,
-        token: env.CF_ANALYTICS_TOKEN,
-        log,
-      }).volume();
+      const outcome = searchFromIndex(index, parsed.input);
+      const counts = await volumes();
       return jsonResponse(
-        { ...outcome, items: attachDownloads(outcome.items, volumes) },
+        { ...outcome, items: attachDownloads(outcome.items, counts) },
         200,
         60,
       );
@@ -242,16 +220,49 @@ export async function handleApi(
       if (route.segments.length !== 3) {
         return errorResponse(invalidPath(`usage: GET /api/${route.verb}/<owner>/<repo>/<slug>`));
       }
-      const [owner, repo, slug] = route.segments;
+      const [owner, repo, slug] = route.segments as [string, string, string];
       const invalid = partsInvalid(owner, repo, slug);
       if (invalid !== null) {
         return errorResponse(invalidPath(invalid));
       }
       const kind: DocumentKind = route.verb === "g" ? "graph" : "node";
-      return singleDocument(github, kind, owner, repo, slug, log);
+      const index = await store.getIndex();
+      if (index === null) {
+        return indexingResponse();
+      }
+      // One document, of the kind the route names: `GET /api/g` answers a
+      // graph or nothing, `GET /api/n` a node or nothing. `document` is the
+      // validated JSON itself, for the pages' renderer.
+      const entry = entryFor(index, kind, owner, repo, slug);
+      if (entry === null) {
+        return errorResponse({
+          kind: "invalid-document",
+          message: `no ${kind} named ${slug} in ${owner}/${repo}`,
+          status: 404,
+        });
+      }
+      const stored = await store.getDoc(kind, owner, repo, slug);
+      if (stored === null) {
+        return errorResponse({
+          kind: "invalid-document",
+          message: `no ${kind} named ${slug} in ${owner}/${repo}`,
+          status: 404,
+        });
+      }
+      return jsonResponse(documentFromStored(entry, stored), 200, 300);
+    }
+    case "index-status": {
+      if (route.segments.length !== 0) {
+        return errorResponse(invalidPath("usage: GET /api/index-status"));
+      }
+      const meta = await store.getMeta();
+      if (meta === null) {
+        return indexingResponse();
+      }
+      const { invalid, ...rest } = meta;
+      return jsonResponse({ ...rest, invalid: invalid.slice(0, 20) }, 200, 60);
     }
     default:
       return errorResponse(invalidPath("unknown API route"));
   }
 }
-

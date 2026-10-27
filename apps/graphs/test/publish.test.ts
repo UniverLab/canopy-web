@@ -7,7 +7,9 @@
  */
 import { describe, expect, it } from "vitest";
 import worker from "../src/index.js";
-import { TTL } from "../src/github.js";
+import { INDEX_CRON_MINUTES, runIndexer } from "../src/indexer.js";
+import { resetIndexMemo } from "../src/store.js";
+import { createGitHub } from "../src/github.js";
 import { OFFICIAL_REPOSITORY, SLUG_PATTERN, documentPrefix } from "../src/lib.js";
 import { communityDir, documentFile } from "../src/documents.js";
 import { CATALOGUE_TOPIC } from "../src/search.js";
@@ -39,7 +41,7 @@ import {
 } from "../src/pages/copy.js";
 import { NOT_PAGE, handlePage } from "../src/pages/routes.js";
 import { escapeHtml } from "../src/pages/md.js";
-import { FakeCache, fakeFetch } from "./fakes.js";
+import { FakeCache, FakeKV, fakeFetch } from "./fakes.js";
 import { officialStubs } from "./stubs.js";
 
 const ORIGIN = "https://graphs.univerlab.org";
@@ -56,12 +58,17 @@ const STEPS = [
 ];
 
 async function call(path: string, accept?: string): Promise<Response> {
-  const fake = fakeFetch(officialStubs());
+  resetIndexMemo();
+  const seed = fakeFetch(officialStubs());
+  const kv = new FakeKV();
+  const github = createGitHub({ fetchImpl: seed.fetchImpl, cache: new FakeCache() });
+  await runIndexer({ github, index: kv, authenticated: true });
+  const fake = fakeFetch([]);
   const headers = new Headers();
   if (accept !== undefined) {
     headers.set("accept", accept);
   }
-  const answer = await handlePage(new Request(`${ORIGIN}${path}`, { headers }), {}, {
+  const answer = await handlePage(new Request(`${ORIGIN}${path}`, { headers }), { INDEX: kv }, {
     fetchImpl: fake.fetchImpl,
     cache: new FakeCache(),
   });
@@ -100,10 +107,11 @@ describe("the publish route", () => {
 });
 
 describe("the page states the code's own values", () => {
-  it("renders the cache minutes from TTL.search", async () => {
+  it("renders the index minutes from the cron constant, never as literal text", async () => {
     const html = await (await call("/publish")).text();
-    const minutes = TTL.search / 60;
-    expect(html).toContain(`for <code>${minutes} minutes</code>`);
+    const minutes = INDEX_CRON_MINUTES;
+    expect(html).toContain(`every <code>${minutes} minutes</code>`);
+    expect(html).toContain(`new documents appear within ${minutes} minutes`);
   });
 
   it("states the paths the search actually reads", async () => {
@@ -204,7 +212,7 @@ describe("the markdown twin", () => {
       nodePath,
       SLUG_PATTERN,
       CATALOGUE_TOPIC,
-      `for \`${TTL.search / 60} minutes\``,
+      `new documents appear within ${INDEX_CRON_MINUTES} minutes`,
       EXPORT_GRAPH_COMMAND,
       `${VALIDATE_GRAPH_PREFIX} ${examplePath}`,
       installCommand("graph", graphRef),

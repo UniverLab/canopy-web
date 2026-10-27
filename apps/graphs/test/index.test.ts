@@ -1,8 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 import { SELF } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import worker, { type DataPoint, type Env } from "../src/index.js";
+import worker, { createWorker, type DataPoint, type Env } from "../src/index.js";
+import { createGitHub } from "../src/github.js";
+import { runIndexer } from "../src/indexer.js";
+import { INDEXING_BODY } from "../src/pages/copy.js";
+import { resetIndexMemo } from "../src/store.js";
+import { FakeCache, FakeKV, fakeFetch, fileBody, type Stub } from "./fakes.js";
+import { VALID_GRAPH_TEXT, VALID_NODE_TEXT, INVALID_GRAPH_TEXT } from "./documents-fixture.js";
 import { SLUG_PATTERN, SLUG_RE } from "../src/lib.js";
+import { officialStubs, searchStubs } from "./stubs.js";
 
 const ORIGIN = "https://graphs.univerlab.org";
 
@@ -18,6 +25,16 @@ interface Options {
   env?: Env;
 }
 
+/** Seed a fresh KV with the official registry and one community graph. */
+async function seeded(): Promise<FakeKV> {
+  resetIndexMemo();
+  const fake = fakeFetch(searchStubs());
+  const kv = new FakeKV();
+  const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
+  await runIndexer({ github, index: kv, authenticated: true });
+  return kv;
+}
+
 function request(path: string, options: Options = {}): Request {
   const headers = new Headers();
   if (options.ua !== null) {
@@ -30,13 +47,18 @@ function request(path: string, options: Options = {}): Request {
   return req;
 }
 
-function call(path: string, options: Options = {}): Response {
-  return worker.fetch(request(path, options), options.env ?? {}) as Response;
+async function call(path: string, options: Options = {}): Promise<Response> {
+  // The memo belongs to the previous case's KV; each call starts unmemoised.
+  if (options.env?.INDEX === undefined) {
+    resetIndexMemo();
+  }
+  return worker.fetch(request(path, options), options.env ?? {});
 }
 
 /** An env whose Analytics Engine binding records what the Worker sends it. */
-function counting(points: DataPoint[]): Env {
+async function counting(points: DataPoint[]): Promise<Env> {
   return {
+    INDEX: await seeded(),
     INSTALLS: {
       writeDataPoint: (point: DataPoint): void => {
         points.push(point);
@@ -46,58 +68,157 @@ function counting(points: DataPoint[]): Env {
 }
 
 describe("redirects", () => {
-  it("sends an official graph to the registry layout on GitHub", () => {
-    const response = call("/i/graph/hello-graph");
+  it("sends an official graph to the registry layout on GitHub", async () => {
+    const response = await call("/i/graph/hello-graph", { env: { INDEX: await seeded() } });
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(official("graph", "hello-graph"));
   });
 
-  it("sends an official node to the registry layout on GitHub", () => {
-    const response = call("/i/node/hello-node");
+  it("sends an official node to the registry layout on GitHub", async () => {
+    const response = await call("/i/node/hello-node", { env: { INDEX: await seeded() } });
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(official("node", "hello-node"));
   });
 
-  it("serves the same redirect through the deployed Worker", async () => {
+  it("answers installs with a 503 through the deployed Worker before the first run", async () => {
+    // The isolate memo is shared with the deployed Worker under test.
+    resetIndexMemo();
     const response = await SELF.fetch(`${ORIGIN}/i/graph/hello-graph`, { redirect: "manual" });
-    expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe(official("graph", "hello-graph"));
+    expect(response.status).toBe(503);
+    expect(await response.text()).toContain(INDEXING_BODY);
   });
 
-  it("sends a community node to the repository without the registry prefix", () => {
-    const response = call("/i/acme/things/node/cool-node");
+  it("sends a community node to the repository without the registry prefix", async () => {
+    const kv = new FakeKV();
+    resetIndexMemo();
+    const fake = fakeFetch([
+      ...officialStubs(),
+      {
+        url: "search/repositories",
+        status: 200,
+        body: {
+          total_count: 1,
+          items: [{ name: "things", owner: { login: "acme" }, default_branch: "main", stargazers_count: 2 }],
+        },
+      },
+      {
+        url: "repos/acme/things/git/trees/main",
+        status: 200,
+        body: { tree: [{ path: "nodes/cool-node/node.json", type: "blob" }] },
+      },
+      { url: "repos/acme/things/contents/nodes/cool-node/node.json", status: 200, body: fileBody("nodes/cool-node/node.json", VALID_NODE_TEXT) },
+      { url: "repos/acme/things/contents/nodes/cool-node/README.md", status: 404, body: {} },
+    ]);
+    const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
+    await runIndexer({ github, index: kv, authenticated: true });
+    const response = await call("/i/acme/things/node/cool-node", { env: { INDEX: kv } });
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(community("acme", "things", "node", "cool-node"));
   });
 
-  it("sends a community graph to the repository without the registry prefix", () => {
-    const response = call("/i/acme/things/graph/flow");
+  it("sends a community graph to the repository without the registry prefix", async () => {
+    const response = await call("/i/acme/things/graph/flow", { env: { INDEX: await seeded() } });
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(community("acme", "things", "graph", "flow"));
   });
 
-  it("honours ?ref= for a tag", () => {
-    const response = call("/i/graph/hello-graph?ref=v1.2.0");
+  it("answers an install for a document the index never listed with a 404", async () => {
+    const response = await call("/i/graph/no-such-graph", { env: { INDEX: await seeded() } });
+    expect(response.status).toBe(404);
+    expect(await response.text()).toContain("no graph named no-such-graph");
+  });
+
+  it("answers installs with a 503 before the first scheduled run", async () => {
+    const response = await call("/i/graph/hello-graph", { env: {} });
+    expect(response.status).toBe(503);
+    expect(response.headers.get("retry-after")).toBe("120");
+    expect(await response.text()).toContain(INDEXING_BODY);
+  });
+
+  it("tolerates a trailing slash", async () => {
+    const response = await call("/i/graph/hello-graph/", { env: { INDEX: await seeded() } });
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(official("graph", "hello-graph"));
+  });
+
+  it("never returns the document itself", async () => {
+    const response = await call("/i/graph/hello-graph", { env: { INDEX: await seeded() } });
+    expect(response.body).toBeNull();
+    expect(response.headers.get("content-type")).toBeNull();
+  });
+});
+
+describe("explicit refs go live", () => {
+  /** A Worker whose upstream is the stub table; the index stays empty. */
+  function liveWorker(stubs: Stub[]) {
+    const fake = fakeFetch(stubs);
+    return {
+      worker: createWorker({ fetchImpl: fake.fetchImpl, cache: new FakeCache() }),
+      fetch: fake,
+    };
+  }
+
+  it("honours ?ref= for a tag", async () => {
+    const { worker: live } = liveWorker(officialStubs());
+    const response = await live.fetch(
+      new Request(`${ORIGIN}/i/graph/hello-graph?ref=v1.2.0`),
+      {},
+    );
+    expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(official("graph", "hello-graph", "v1.2.0"));
   });
 
-  it("honours ?ref= for a branch containing a slash", () => {
-    const response = call("/i/acme/things/node/cool-node?ref=release/1.x");
+  it("honours ?ref= for a branch containing a slash", async () => {
+    const { worker: live } = liveWorker([
+      { url: "repos/acme/things/contents/nodes/cool-node/node.json", status: 200, body: fileBody("nodes/cool-node/node.json", VALID_NODE_TEXT) },
+      { url: "repos/acme/things/contents/nodes/cool-node/README.md", status: 404, body: {} },
+    ]);
+    const response = await live.fetch(
+      new Request(`${ORIGIN}/i/acme/things/node/cool-node?ref=release/1.x`),
+      {},
+    );
+    expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(
       community("acme", "things", "node", "cool-node", "release/1.x"),
     );
   });
 
-  it("tolerates a trailing slash", () => {
-    const response = call("/i/graph/hello-graph/");
-    expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe(official("graph", "hello-graph"));
+  it("answers a 404 when the pinned ref has no such document", async () => {
+    const { worker: live } = liveWorker([
+      { url: "repos/acme/things/contents/graphs/flow/graph.json", status: 404, body: {} },
+    ]);
+    const response = await live.fetch(
+      new Request(`${ORIGIN}/i/acme/things/graph/flow?ref=v9.9.9`),
+      {},
+    );
+    expect(response.status).toBe(404);
+    expect(await response.text()).toContain("no graph named flow");
   });
 
-  it("never returns the document itself", () => {
-    const response = call("/i/graph/hello-graph");
-    expect(response.body).toBeNull();
-    expect(response.headers.get("content-type")).toBeNull();
+  it("answers a 404 when the pinned ref holds an invalid document", async () => {
+    const { worker: live } = liveWorker([
+      { url: "repos/acme/things/contents/graphs/flow/graph.json", status: 200, body: fileBody("graphs/flow/graph.json", INVALID_GRAPH_TEXT) },
+    ]);
+    const response = await live.fetch(
+      new Request(`${ORIGIN}/i/acme/things/graph/flow?ref=main`),
+      {},
+    );
+    expect(response.status).toBe(404);
+    expect(await response.text()).toContain("no graph named flow");
+  });
+
+  it("fetches the pinned ref live even during the cold start", async () => {
+    const { worker: live, fetch } = liveWorker([
+      { url: "repos/acme/things/contents/graphs/flow/graph.json", status: 200, body: fileBody("graphs/flow/graph.json", VALID_GRAPH_TEXT) },
+      { url: "repos/acme/things/contents/graphs/flow/README.md", status: 404, body: {} },
+    ]);
+    // No INDEX binding at all: the cold start does not touch ?ref= installs.
+    const response = await live.fetch(
+      new Request(`${ORIGIN}/i/acme/things/graph/flow?ref=main`),
+      {},
+    );
+    expect(response.status).toBe(302);
+    expect(fetch.calls.length).toBeGreaterThan(0);
   });
 });
 
@@ -125,7 +246,7 @@ describe("bad requests", () => {
 
   it("rejects every invalid shape with a 400 and a one-line reason", async () => {
     for (const { path, reason } of cases) {
-      const response = call(path);
+      const response = await call(path);
       expect(response.status, path).toBe(400);
       expect(response.headers.get("content-type"), path).toBe("text/plain; charset=utf-8");
       const text = await response.text();
@@ -143,7 +264,7 @@ describe("bad requests", () => {
 
 describe("bare install path", () => {
   it.each(["/i/", "/i"])("answers %s with a 404 and the usage text", async (path) => {
-    const response = call(path);
+    const response = await call(path);
     expect(response.status).toBe(404);
     const text = await response.text();
     expect(text).toContain("/i/<kind>/<slug>");
@@ -153,9 +274,9 @@ describe("bare install path", () => {
 });
 
 describe("counting", () => {
-  it("writes one point for a redirect", () => {
+  it("writes one point for a redirect", async () => {
     const points: DataPoint[] = [];
-    const response = call("/i/graph/hello-graph", { ua: "curl/8.5.0", env: counting(points) });
+    const response = await call("/i/graph/hello-graph", { ua: "curl/8.5.0", env: await counting(points) });
     expect(response.status).toBe(302);
     expect(points).toHaveLength(1);
     expect(points[0]).toEqual({
@@ -165,12 +286,12 @@ describe("counting", () => {
     });
   });
 
-  it("records the Canopy version and country without the raw user-agent", () => {
+  it("records the Canopy version and country without the raw user-agent", async () => {
     const points: DataPoint[] = [];
-    call("/i/node/hello-node", {
+    await call("/i/node/hello-node", {
       ua: `canopy/1.7.2 ${"x".repeat(200)}`,
       country: "CO",
-      env: counting(points),
+      env: await counting(points),
     });
     expect(points).toHaveLength(1);
     const blobs = points[0]?.blobs ?? [];
@@ -180,7 +301,7 @@ describe("counting", () => {
     expect(blobs.join(" ")).not.toContain("x".repeat(10));
   });
 
-  it("tells browsers and unknown clients from scripts", () => {
+  it("tells browsers and unknown clients from scripts", async () => {
     const cases: Array<[string | null, string]> = [
       ["Mozilla/5.0 (Macintosh) Safari/605", "browser"],
       ["wget/1.21", "other"],
@@ -188,15 +309,15 @@ describe("counting", () => {
     ];
     for (const [ua, client] of cases) {
       const points: DataPoint[] = [];
-      call("/i/graph/hello-graph", { ua, env: counting(points) });
+      await call("/i/graph/hello-graph", { ua, env: await counting(points) });
       expect(points[0]?.blobs?.[2], String(ua)).toBe(client);
       expect(points[0]?.blobs?.[3], String(ua)).toBe("");
     }
   });
 
-  it("writes a bad-request point with the parts it could read", () => {
+  it("writes a bad-request point with the parts it could read", async () => {
     const points: DataPoint[] = [];
-    const response = call("/i/graph/Not_A_Slug", { env: counting(points) });
+    const response = await call("/i/graph/Not_A_Slug", { env: await counting(points) });
     expect(response.status).toBe(400);
     expect(points).toEqual([
       {
@@ -207,40 +328,36 @@ describe("counting", () => {
     ]);
   });
 
-  it("writes a bad-request point for the bare /i/", () => {
+  it("writes a bad-request point for the bare /i/", async () => {
     const points: DataPoint[] = [];
-    const response = call("/i/", { env: counting(points) });
+    const response = await call("/i/", { env: await counting(points) });
     expect(response.status).toBe(404);
     expect(points).toEqual([
       { indexes: ["?/?/?/?"], blobs: ["?", "?/?/?", "curl", "", "", "bad-request"], doubles: [1] },
     ]);
   });
 
-  it("writes one point per request, never two", () => {
+  it("writes one point per request, never two", async () => {
     const points: DataPoint[] = [];
-    for (const path of ["/i/graph/hello-graph", "/i/graph/hello-graph?ref=main", "/health"]) {
-      call(path, { env: counting(points) });
+    const env = await counting(points);
+    for (const path of ["/i/graph/hello-graph", "/i/graph/no-such-graph", "/health"]) {
+      await call(path, { env });
     }
     expect(points).toHaveLength(3);
   });
 });
 
 describe("analytics never changes the answer", () => {
-  it("still redirects when the binding throws", () => {
+  it("still redirects when the binding throws", async () => {
     const env: Env = {
+      INDEX: await seeded(),
       INSTALLS: {
         writeDataPoint: (): void => {
           throw new Error("analytics engine is down");
         },
       },
     };
-    const response = call("/i/graph/hello-graph", { env });
-    expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe(official("graph", "hello-graph"));
-  });
-
-  it("still redirects when the binding is missing", () => {
-    const response = call("/i/graph/hello-graph", { env: {} });
+    const response = await call("/i/graph/hello-graph", { env });
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(official("graph", "hello-graph"));
   });
@@ -253,9 +370,44 @@ describe("analytics never changes the answer", () => {
         },
       },
     };
-    const response = call("/i/preset/hello-graph", { env });
+    const response = await call("/i/preset/hello-graph", { env });
     expect(response.status).toBe(400);
     expect(await response.text()).toContain("kind must be graph or node");
+  });
+});
+
+describe("the scheduled run", () => {
+  it("fills the index from the scheduled handler, authenticated with the token", async () => {
+    const fake = fakeFetch(officialStubs());
+    const kv = new FakeKV();
+    const scheduled = createWorker({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
+    let waited = 0;
+    await scheduled.scheduled(
+      { scheduledTime: Date.now(), cron: "*/15 * * * *" },
+      { INDEX: kv, GITHUB_TOKEN: "tok" },
+      { waitUntil: (promise: Promise<unknown>) => { void promise; waited += 1; } },
+    );
+    expect(waited).toBe(1);
+    const index = JSON.parse((await kv.get("index:v1")) as string) as { entries: unknown[] };
+    expect(index.entries.length).toBe(2);
+    const meta = JSON.parse((await kv.get("index:meta")) as string) as { authenticated: boolean };
+    expect(meta.authenticated).toBe(true);
+  });
+
+  it("runs unauthenticated without a token", async () => {
+    const fake = fakeFetch(officialStubs());
+    const kv = new FakeKV();
+    const scheduled = createWorker({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
+    await scheduled.scheduled({ scheduledTime: Date.now(), cron: "*/15 * * * *" }, { INDEX: kv });
+    const meta = JSON.parse((await kv.get("index:meta")) as string) as { authenticated: boolean; calls: number };
+    expect(meta.authenticated).toBe(false);
+    expect(meta.calls).toBeLessThanOrEqual(50);
+  });
+
+  it("does nothing without the index binding", async () => {
+    await expect(
+      worker.scheduled({ scheduledTime: Date.now(), cron: "*/15 * * * *" }, {}),
+    ).resolves.toBeUndefined();
   });
 });
 

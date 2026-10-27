@@ -3,13 +3,13 @@
  * The Publish page: how to list a graph or node in the catalogue.
  *
  * A pure `Page`, prose from copy.ts and every checkable value from the
- * code that reads it: the topic from the search query, the paths from
- * the document folders the search reads, the cache minutes from the
- * search TTL, the install commands from the same builder the document
+ * code that reads it: the topic from the discovery query, the paths from
+ * the document folders the indexer reads, the index minutes from the
+ * cron constant, the install commands from the same builder the document
  * pages print, and the slug rule from the shared pattern. The page
  * cannot drift from the code because it is rendered from it.
  */
-import { TTL } from "../github.js";
+import { INDEX_CRON_MINUTES } from "../indexer.js";
 import { OFFICIAL_REPOSITORY, SLUG_PATTERN, documentPrefix } from "../lib.js";
 import { communityDir, documentFile } from "../documents.js";
 import { CATALOGUE_TOPIC } from "../search.js";
@@ -54,7 +54,7 @@ import {
   publishShareGraph,
   publishShareNode,
   publishTopicStep,
-  publishWhenCache,
+  publishWhenIndex,
 } from "./copy.js";
 import { type Page } from "./layout.js";
 import { copyButton } from "./look.js";
@@ -124,7 +124,7 @@ export function publishPage(): Page {
     "node",
     `${PUBLISH_EXAMPLE_OWNER}/${PUBLISH_EXAMPLE_REPO}/${PUBLISH_EXAMPLE_NODE}`,
   );
-  const minutes = TTL.search / 60;
+  const minutes = INDEX_CRON_MINUTES;
 
   const sections: Array<{ heading: string; html: string[]; markdown: string[] }> = [
     {
@@ -191,11 +191,11 @@ export function publishPage(): Page {
       heading: PUBLISH_WHEN_HEADING,
       html: [
         para(PUBLISH_WHEN_INDEX),
-        para(publishWhenCache(minutes), [`${minutes} minutes`]),
+        para(publishWhenIndex(minutes), [`${minutes} minutes`]),
       ],
       markdown: [
         mdPara(PUBLISH_WHEN_INDEX),
-        mdPara(publishWhenCache(minutes), [`${minutes} minutes`]),
+        mdPara(publishWhenIndex(minutes), [`${minutes} minutes`]),
       ],
     },
     {

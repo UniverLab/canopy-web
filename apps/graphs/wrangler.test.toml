@@ -17,3 +17,9 @@ account_id = "d7b81bdd721f503968523dd903d967be"
 [[analytics_engine_datasets]]
 binding = "INSTALLS"
 dataset = "canopy_graph_installs"
+
+# The index binding the tests seed: the workers pool serves it from
+# memory, so no test touches the real namespace.
+[[kv_namespaces]]
+binding = "INDEX"
+id = "test-index"

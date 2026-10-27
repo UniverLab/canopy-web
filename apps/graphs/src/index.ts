@@ -9,11 +9,18 @@
  * catalogue pages (/, /search, /g, /n, /llms.txt, /publish) are the
  * HTML/markdown renderer (pages/routes.ts), and everything else that
  * is not an install URL falls through to the redirector below, which
- * answers with either a
- * 302 to the document on GitHub or a 400/404 explaining why not. The
- * Worker never fetches or proxies the document: GitHub stays the download
- * origin and the trust anchor, so this adds no supply-chain surface beyond
- * a redirect.
+ * verifies the document against the scheduled index and answers with
+ * either a 302 to the document on GitHub or a 400/404 explaining why
+ * not. The Worker never fetches or proxies the document: GitHub stays
+ * the download origin and the trust anchor, so this adds no
+ * supply-chain surface beyond a redirect. The one exception is an
+ * explicit `?ref=`: a pinned ref is not in the index, so the Worker
+ * fetches that ref live through the cached client and validates it
+ * before redirecting.
+ *
+ * A Cron Trigger also wakes the Worker every 15 minutes to rebuild the
+ * index into KV (indexer.ts). Until the first run lands, data routes
+ * answer 503 and ask the client to retry.
  *
  * It DOES record one aggregate data point per request (Analytics Engine):
  * which document, which kind of client, the Canopy version when there is one,
@@ -34,7 +41,12 @@ import {
 } from "./lib.js";
 import { handleApi, type ApiEnv } from "./api.js";
 import { handlePage, NOT_PAGE } from "./pages/routes.js";
-import { type CacheLike } from "./github.js";
+import { createGitHub, type CacheLike } from "./github.js";
+import { documentDirectory, loadDocument } from "./documents.js";
+import { entryFor } from "./catalog.js";
+import { runIndexer } from "./indexer.js";
+import { createStore } from "./store.js";
+import { INDEXING_BODY } from "./pages/copy.js";
 
 /** The single Analytics Engine method this Worker uses. */
 export interface DataPoint {
@@ -62,6 +74,18 @@ function textResponse(body: string, status: number): Response {
   return new Response(body, {
     status,
     headers: { "content-type": "text/plain; charset=utf-8" },
+  });
+}
+
+/** The cold start: the index does not exist yet, back in a few minutes. */
+function indexingResponse(): Response {
+  return new Response(`${INDEXING_BODY}\n`, {
+    status: 503,
+    headers: {
+      "content-type": "text/plain; charset=utf-8",
+      "cache-control": "no-store",
+      "retry-after": "120",
+    },
   });
 }
 
@@ -100,7 +124,7 @@ function firstSegment(pathname: string): string {
   return pathname.replace(/^\/+/, "").split("/")[0] ?? "";
 }
 
-/** The page routes: everything else stays the synchronous redirector. */
+/** The page routes: everything else stays the install redirector. */
 function isPagePath(pathname: string): boolean {
   const first = firstSegment(pathname);
   return first === "" || first === "search" || first === "llms.txt" || first === "g" || first === "n" ||
@@ -115,51 +139,160 @@ export interface WorkerDeps {
   cache?: CacheLike;
 }
 
+/** The scheduled event the Cron Trigger wakes the Worker with. */
+export interface ScheduledEvent {
+  scheduledTime: number;
+  cron: string;
+}
+
+/** The execution context the scheduler passes; only `waitUntil` matters. */
+export interface ScheduledContext {
+  waitUntil(promise: Promise<unknown>): void;
+}
+
 /** Answer one request: JSON API, catalogue pages, else the redirector. */
-function answer(req: Request, env: Env, deps: WorkerDeps): Response | Promise<Response> {
+async function answer(req: Request, env: Env, deps: WorkerDeps): Promise<Response> {
   const url = new URL(req.url);
   const apiDeps = { cache: deps.cache ?? defaultCache(), fetchImpl: deps.fetchImpl };
   if (url.pathname.startsWith("/api")) {
-    return handleApi(req, env, apiDeps).then(
-      (result) => result === true ? install(req, env, url) : result,
-    );
+    const result = await handleApi(req, env, apiDeps);
+    return result === true ? install(req, env, url, deps) : result;
   }
   // The catalogue pages claim /, /search, /g, /n, /llms.txt and /publish;
   // every other path (the /i install routes above all) stays a redirect.
   if (isPagePath(url.pathname)) {
-    return handlePage(req, env, apiDeps).then(
-      (result) => result === NOT_PAGE ? install(req, env, url) : result,
-    );
+    const result = await handlePage(req, env, apiDeps);
+    return result === NOT_PAGE ? install(req, env, url, deps) : result;
   }
-  return install(req, env, url);
+  return install(req, env, url, deps);
 }
 
 /**
  * Build the Worker over an injected transport. Production calls it with no
- * arguments (the default export below); the visual e2e fixture wires the
- * same `fakeFetch` table the page tests use, so no browser check reaches
- * live GitHub.
+ * arguments (the default export below); the visual e2e fixture seeds the
+ * index through the indexer and serves it from an in-memory KV, so no
+ * browser check reaches live GitHub.
  */
 export function createWorker(deps: WorkerDeps = {}) {
   return {
-    fetch(req: Request, env: Env): Response | Promise<Response> {
+    fetch(req: Request, env: Env): Promise<Response> {
       return answer(req, env, deps);
+    },
+    scheduled(event: ScheduledEvent, env: Env, ctx?: ScheduledContext): Promise<void> {
+      void event;
+      const kv = env.INDEX;
+      if (kv === undefined) {
+        return Promise.resolve();
+      }
+      const github = createGitHub({
+        fetchImpl: deps.fetchImpl,
+        cache: deps.cache ?? defaultCache(),
+        token: env.GITHUB_TOKEN,
+        log: () => undefined,
+      });
+      const run = runIndexer({
+        github,
+        index: kv,
+        authenticated: (env.GITHUB_TOKEN ?? "") !== "",
+      });
+      if (ctx !== undefined) {
+        ctx.waitUntil(run);
+      }
+      return run.then(() => undefined);
     },
   };
 }
 
 export default createWorker();
 
-/** The install redirector: 302 to GitHub, or a 400/404 explaining why not. */
-function install(req: Request, env: Env, url: URL): Response {
+/** An explicit `?ref=`: fetch that ref live, validate it, redirect to it. */
+async function installAtRef(
+  req: Request,
+  env: Env,
+  deps: WorkerDeps,
+  parsed: Extract<ReturnType<typeof parseTarget>, { ok: true }>,
+): Promise<Response> {
+  const target = parsed.target;
+  const github = createGitHub({
+    fetchImpl: deps.fetchImpl,
+    cache: deps.cache ?? defaultCache(),
+    token: env.GITHUB_TOKEN,
+    log: () => undefined,
+  });
+  const loaded = await loadDocument(
+    github,
+    {
+      owner: target.owner,
+      repo: target.repo,
+      directory: documentDirectory(target.owner, target.repo, target.kind, target.slug),
+      kind: target.kind,
+      slug: target.slug,
+      stars: null,
+      ref: target.ref,
+    },
+    () => undefined,
+  );
+  if (loaded.kind === "doc") {
+    record(env, req, target, "redirect");
+    return Response.redirect(buildUrl(target), 302);
+  }
+  record(env, req, target, "bad-request");
+  if (loaded.kind !== "absent") {
+    if (loaded.kind === "rate-limit") {
+      const headers: Record<string, string> = { "content-type": "text/plain; charset=utf-8" };
+      if (loaded.retryAfter !== undefined) {
+        headers["retry-after"] = String(loaded.retryAfter);
+      }
+      return new Response("GitHub rate limit reached; try again in a moment.\n", {
+        status: 429,
+        headers,
+      });
+    }
+    return textResponse("GitHub is unreachable right now; try again in a moment.\n", 502);
+  }
+  return textResponse(
+    `no ${target.kind} named ${target.slug} in ${target.owner}/${target.repo} at ref ${target.ref}\n`,
+    404,
+  );
+}
+
+/**
+ * The install redirector: the index verifies the document exists, then a
+ * 302 to the document on GitHub, or a 400/404 explaining why not. An
+ * explicit `?ref=` is not in the index, so it is fetched live instead.
+ */
+async function install(req: Request, env: Env, url: URL, deps: WorkerDeps): Promise<Response> {
   const parsed = parseTarget(url.pathname, url.searchParams.get("ref"));
 
-    if (!parsed.ok) {
-      record(env, req, parsed.rejection, "bad-request");
-      const body = parsed.rejection.status === 404 ? `${USAGE}\n` : `${parsed.rejection.reason}\n`;
-      return textResponse(body, parsed.rejection.status);
-    }
+  if (!parsed.ok) {
+    record(env, req, parsed.rejection, "bad-request");
+    const body = parsed.rejection.status === 404 ? `${USAGE}\n` : `${parsed.rejection.reason}\n`;
+    return textResponse(body, parsed.rejection.status);
+  }
 
-    record(env, req, parsed.target, "redirect");
-    return Response.redirect(buildUrl(parsed.target), 302);
+  if (url.searchParams.has("ref")) {
+    return installAtRef(req, env, deps, parsed);
+  }
+
+  const target = parsed.target;
+  const store = createStore(env.INDEX);
+  const index = await store.getIndex();
+  if (index === null) {
+    record(env, req, target, "bad-request");
+    return indexingResponse();
+  }
+  const entry = entryFor(index, target.kind, target.owner, target.repo, target.slug);
+  const stored = entry === null
+    ? null
+    : await store.getDoc(target.kind, target.owner, target.repo, target.slug);
+  if (entry === null || stored === null) {
+    record(env, req, target, "bad-request");
+    return textResponse(
+      `no ${target.kind} named ${target.slug} in ${target.owner}/${target.repo}\n`,
+      404,
+    );
+  }
+
+  record(env, req, target, "redirect");
+  return Response.redirect(buildUrl(target), 302);
 }
