@@ -235,9 +235,9 @@ function docList(docs: Doc[], emptyLine: string): string {
   return `<ol class="index">${docs.map(docItem).join("")}</ol>`;
 }
 
-/** Backslash the markdown punctuation one line of text may carry. */
+/** One line of twin text: flattened, with markdown punctuation backslashed. */
 function mdText(text: string): string {
-  return text.replace(/([[\]])/g, "\\$1");
+  return text.replace(/\r\n|\r|\n/g, " ").replace(/([[\]])/g, "\\$1");
 }
 
 function docListMarkdown(docs: Doc[], emptyLine: string): string {
@@ -312,7 +312,7 @@ function commandBlock(command: RunCommand): string {
 function promptBlock(prompt: RunPrompt): string {
   const preview = prompt.source === "builtin"
     ? builtinPresetLine(prompt.text)
-    : prompt.text.split("\n").slice(0, 3).join("\n");
+    : prompt.text.split(/\r?\n/).slice(0, 3).join("\n");
   const body = prompt.source === "builtin"
     ? `<p class="run-builtin">${escapeHtml(builtinPresetLine(prompt.text))}</p>`
     : `<pre class="run-prompt-text"><code>${escapeHtml(prompt.text)}</code></pre>`;
@@ -343,6 +343,16 @@ function runsSectionHtml(kind: DocumentKind, document: JsonValue): string {
 }
 
 /**
+ * One fenced block for the twin: the fence outgrows any backtick run the
+ * text carries, so a command containing ``` stays one block.
+ */
+function fencedBlock(info: string, text: string): string[] {
+  const longest = (text.match(/`+/g) ?? []).reduce((found, run) => Math.max(found, run.length), 0);
+  const fence = "`".repeat(Math.max(3, longest + 1));
+  return [`${fence}${info}`, text, fence, ``];
+}
+
+/**
  * The same section for the markdown twin: commands and prompts in fenced
  * blocks under their titles, attention marks as plain lines, so an agent
  * reading the twin sees what the page shows.
@@ -356,7 +366,7 @@ function runsSectionMarkdown(kind: DocumentKind, document: JsonValue): string {
     ``,
   ];
   for (const command of runs.commands) {
-    lines.push(`### ${mdText(command.where)}`, ``, "```sh", command.text, "```", ``);
+    lines.push(`### ${mdText(command.where)}`, ``, ...fencedBlock("sh", command.text));
     const marks = attentionFor(command.text);
     if (marks.length > 0) {
       lines.push(`Attention: ${marks.join(", ")}.`, ``);
@@ -364,7 +374,7 @@ function runsSectionMarkdown(kind: DocumentKind, document: JsonValue): string {
   }
   for (const prompt of runs.prompts) {
     const text = prompt.source === "builtin" ? builtinPresetLine(prompt.text) : prompt.text;
-    lines.push(`### ${mdText(prompt.where)}`, ``, "```text", text, "```", ``);
+    lines.push(`### ${mdText(prompt.where)}`, ``, ...fencedBlock("text", text));
   }
   return lines.join("\n").trimEnd();
 }

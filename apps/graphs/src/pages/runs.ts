@@ -134,7 +134,7 @@ export const ATTENTION_PATTERNS: AttentionPattern[] = [
 export function attentionFor(text: string): string[] {
   const labels: string[] = [];
   for (const pattern of ATTENTION_PATTERNS) {
-    if (text.split("\n").some((line) => pattern.test(line))) {
+    if (text.split(/\r?\n/).some((line) => pattern.test(line))) {
       labels.push(pattern.label);
     }
   }

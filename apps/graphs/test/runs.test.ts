@@ -209,6 +209,7 @@ describe("the attention patterns", () => {
     const test = pattern("sensitive-path");
     expect(test("echo key >> ~/.ssh/authorized_keys")).toBe(true);
     expect(test("cp id_rsa ~/.ssh/")).toBe(true);
+    expect(test("printf 'x' > ~/.config/canopy/settings")).toBe(true);
     expect(test("cat motd > /etc/motd")).toBe(true);
     expect(test("cat ~/.ssh/config")).toBe(false);
     expect(test("echo /etcetera")).toBe(false);
@@ -236,5 +237,9 @@ describe("the attention patterns", () => {
   it("names each matched pattern once, in list order, across lines", () => {
     expect(attentionFor("sudo apt update\nrm -rf /tmp/x\nsudo apt clean")).toEqual(["sudo", "rm -rf"]);
     expect(attentionFor("npm test")).toEqual([]);
+  });
+
+  it("matches a sensitive path at the line end under CRLF endings", () => {
+    expect(attentionFor("cp id_rsa ~/.ssh\r\n")).toEqual(["sensitive path write"]);
   });
 });

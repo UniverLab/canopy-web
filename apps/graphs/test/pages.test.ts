@@ -636,6 +636,28 @@ describe("what this runs", () => {
     const official = await (await call("/g/hello-graph", { accept: "text/markdown" })).text();
     expect(official.indexOf(`## What this runs`)).toBeLessThan(official.indexOf(`## README`));
   });
+
+  it("keeps the twin fenced when a command carries triple backticks", async () => {
+    const graph = JSON.parse(FIVE_NODE_GRAPH_TEXT) as {
+      nodes: Array<{ name: string; config: Record<string, unknown> }>;
+    };
+    for (const node of graph.nodes) {
+      if (node.name === "test") {
+        node.config["command"] = "echo '```'\necho done";
+        node.name = "test\ncheck";
+      }
+    }
+    const stubs = officialStubs().map((stub) =>
+      stub.url.endsWith("hello-graph/graph.json")
+        ? { ...stub, body: fileBody("graphs/hello-graph/graph.json", JSON.stringify(graph)) }
+        : stub,
+    );
+    const twin = await (await call("/g/hello-graph", { stubs, accept: "text/markdown" })).text();
+    // The fence outgrows the backticks inside, so the block stays one block.
+    expect(twin).toContain("````sh\necho '```'\necho done\n````");
+    // The newline in the node name flattens instead of breaking the heading.
+    expect(twin).toContain(`### node "test check"`);
+  });
 });
 
 describe("the community warning", () => {
