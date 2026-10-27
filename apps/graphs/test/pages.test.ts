@@ -151,6 +151,19 @@ describe("the markdown twin", () => {
     expect(twin).not.toContain("- Edges:");
     expect(twin).not.toContain("## README");
   });
+
+  it("ends the twins with the UniverLab privacy and terms links", async () => {
+    const home = await (await call("/", { stubs: searchStubs(), accept: "text/markdown" })).text();
+    const doc = await (await call("/g/hello-graph", { accept: "text/markdown" })).text();
+    for (const [path, twin] of [["/", home], ["/g/hello-graph", doc]] as const) {
+      expect(twin, path).toContain("## UniverLab");
+      expect(twin, path).toContain("- [Privacy](https://univerlab.org/privacy/)");
+      expect(twin, path).toContain("- [Terms](https://univerlab.org/terms/)");
+      expect(twin, path).not.toContain("<");
+      // The footer is the twin's last section, after its last line.
+      expect(twin.trimEnd().endsWith("- [Terms](https://univerlab.org/terms/)"), path).toBe(true);
+    }
+  });
 });
 
 describe("the sanitizer", () => {
@@ -296,6 +309,9 @@ describe("the page shell", () => {
     expect(html).toContain(`<footer class="look-colophon">`);
     expect(html).toContain("Part of UniverLab · EXP-001 Canopy graphs");
     expect(html).toContain(`/look/colophon/frieze-1920.avif`);
+    // The colophon's UniverLab links carry the lab's privacy and terms.
+    expect(html).toContain(`href="https://univerlab.org/privacy/"`);
+    expect(html).toContain(`href="https://univerlab.org/terms/"`);
     // The day/night toggle is gone: the Canopy page is a dark surface.
     expect(html).not.toContain("theme-toggle");
     expect(html).not.toContain("localStorage");

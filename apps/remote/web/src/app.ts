@@ -197,6 +197,7 @@ export function createShell(
       <h1>Canopy remote</h1>
       <p>Sign in with GitHub to reach your hosts.</p>
       <button type="button" class="primary" id="signin-go">Sign in with GitHub</button>
+      <p>Signing in shares your GitHub username and numeric id with this relay, kept in a 12-hour session cookie. Your sessions travel encrypted between your browser and your machine. <a href="https://univerlab.org/privacy/">Privacy</a></p>
     </main>
     ${COLOPHON}`;
     root.querySelector("#signin-go")?.addEventListener("click", () => {

@@ -211,14 +211,31 @@ describe("createShell", () => {
   it("renders the colophon on sign-in and pair only", () => {
     shell.showSignIn();
     expect(root.querySelector("footer.look-colophon")?.textContent).toContain("Canopy remote");
+    expect(root.querySelector("footer.look-colophon")?.innerHTML).toContain('href="https://univerlab.org/privacy/"');
+    expect(root.querySelector("footer.look-colophon")?.innerHTML).toContain('href="https://univerlab.org/terms/"');
     shell.showPair();
     expect(root.querySelector("footer.look-colophon")).not.toBeNull();
+    expect(root.querySelector("footer.look-colophon")?.innerHTML).toContain('href="https://univerlab.org/privacy/"');
+    expect(root.querySelector("footer.look-colophon")?.innerHTML).toContain('href="https://univerlab.org/terms/"');
     shell.showHosts();
     expect(root.querySelector("footer.look-colophon")).toBeNull();
     shell.showSessions();
     expect(root.querySelector("footer.look-colophon")).toBeNull();
     shell.showSession("s1", "build");
     expect(root.querySelector("footer.look-colophon")).toBeNull();
+  });
+
+  it("says what signing in shares before the click", () => {
+    shell.showSignIn();
+    const note = query<HTMLButtonElement>("#signin-go").nextElementSibling;
+    expect(note?.tagName).toBe("P");
+    expect(note?.textContent).toMatch(
+      /^Signing in shares your GitHub username and numeric id with this relay, kept in a 12-hour session cookie\./,
+    );
+    expect(note?.textContent).toContain("Your sessions travel encrypted between your browser and your machine.");
+    expect(
+      root.querySelector('.signin a[href="https://univerlab.org/privacy/"]')?.textContent,
+    ).toBe("Privacy");
   });
 
   it("marks the body with the current view", () => {

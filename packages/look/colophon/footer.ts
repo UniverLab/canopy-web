@@ -38,6 +38,12 @@ export interface ColophonOptions {
   links: ColophonLink[];
 }
 
+/** The lab's privacy and terms, in every colophon's UniverLab link group. */
+const LEGAL: ColophonLink[] = [
+  { label: "Privacy", href: "https://univerlab.org/privacy/" },
+  { label: "Terms", href: "https://univerlab.org/terms/" },
+];
+
 /**
  * Render the footer HTML. Labels, product and experiment are escaped;
  * absolute links open in a new tab, as on univerlab.org; anything that is
@@ -46,7 +52,7 @@ export interface ColophonOptions {
 export function renderColophon(opts: ColophonOptions): string {
   const product = escapeHtml(opts.product);
   const exp = escapeHtml(opts.exp);
-  const items = opts.links
+  const items = [...opts.links, ...LEGAL]
     .map((link) => {
       const href = safeHref(link.href);
       const external = isExternal(href) ? ` target="_blank" rel="noopener noreferrer"` : ``;

@@ -16,6 +16,8 @@ exports[`renderColophon > renders the footer 1`] = `
       <a href="https://univerlab.org/" target="_blank" rel="noopener noreferrer">UniverLab</a>
       <a href="https://univerlab.org/experiments" target="_blank" rel="noopener noreferrer">Experiments</a>
       <a href="https://univerlab.org/canopy" target="_blank" rel="noopener noreferrer">Canopy</a>
+      <a href="https://univerlab.org/privacy/" target="_blank" rel="noopener noreferrer">Privacy</a>
+      <a href="https://univerlab.org/terms/" target="_blank" rel="noopener noreferrer">Terms</a>
     </nav>
     <p class="colophon-credits">
       <img src="/look/colophon/sello-lacre.svg" width="28" height="28" alt="" aria-hidden="true">

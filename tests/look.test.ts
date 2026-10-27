@@ -44,6 +44,18 @@ describe("renderColophon", () => {
     }
   });
 
+  it("links the lab's privacy and terms pages from the UniverLab group", () => {
+    const html = renderColophon({ product: "Canopy", exp: "EXP-001", links: LINKS });
+    expect(html).toContain('href="https://univerlab.org/privacy/"');
+    expect(html).toContain('href="https://univerlab.org/terms/"');
+    expect(html).toContain(">Privacy</a>");
+    expect(html).toContain(">Terms</a>");
+    // They ride in the aria-label="UniverLab" nav, like every other link.
+    const nav = html.slice(html.indexOf('aria-label="UniverLab"'), html.indexOf("</nav>"));
+    expect(nav).toContain('href="https://univerlab.org/privacy/"');
+    expect(nav).toContain('href="https://univerlab.org/terms/"');
+  });
+
   it("escapes the product, the experiment and the links", () => {
     const html = renderColophon({
       product: "<img src=x>",

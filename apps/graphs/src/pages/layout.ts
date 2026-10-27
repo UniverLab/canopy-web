@@ -16,6 +16,7 @@ import {
   COLOPHON_EXP,
   COLOPHON_LINKS,
   COLOPHON_PRODUCT,
+  MD_FOOTER,
   PUBLISH_HREF,
   PUBLISH_LABEL,
   SEARCH_BUTTON,
@@ -107,13 +108,21 @@ function htmlDocument(q: string, page: Page): string {
 }
 
 /**
+ * Close a markdown twin with the UniverLab footer section: the privacy and
+ * terms links, after exactly one blank line over the twin's last line.
+ */
+export function withMarkdownFooter(markdown: string): string {
+  return `${markdown.replace(/\n+$/, "")}\n\n${MD_FOOTER}`;
+}
+
+/**
  * Answer a page request: the markdown twin when asked for, the HTML shell
  * otherwise. Both carry a short public cache, like the JSON API's.
  */
 export function page(req: Request, content: Page, status = 200): Response {
   const cacheControl = status === 200 ? "public, max-age=300" : "no-store";
   if (wantsMarkdown(req)) {
-    return new Response(content.markdown, {
+    return new Response(withMarkdownFooter(content.markdown), {
       status,
       headers: {
         "content-type": "text/markdown; charset=utf-8",

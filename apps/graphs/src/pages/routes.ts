@@ -86,7 +86,7 @@ import {
   resultsFor,
   runsSummary,
 } from "./copy.js";
-import { page, type Page } from "./layout.js";
+import { page, type Page, withMarkdownFooter } from "./layout.js";
 import { escapeHtml, renderMarkdown } from "./md.js";
 import { publishPage } from "./publish.js";
 import { docPath, docRef, pagePath, pageRef, type PageRef } from "./ref.js";
@@ -685,7 +685,7 @@ export async function handlePage(
     return page(req, publishPage());
   }
   if (segments.length === 1 && segments[0] === "publish.md") {
-    return new Response(publishPage().markdown, {
+    return new Response(withMarkdownFooter(publishPage().markdown), {
       status: 200,
       headers: {
         "content-type": "text/markdown; charset=utf-8",

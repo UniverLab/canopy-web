@@ -165,6 +165,13 @@ export const COLOPHON_LINKS: Array<{ label: string; href: string }> = [
   { label: SOURCE_LABEL, href: SOURCE_HREF },
 ];
 
+/**
+ * The markdown twin's footer section: every twin ends with the lab's
+ * privacy and terms links, the counterpart of the HTML colophon's.
+ */
+export const MD_FOOTER =
+  "## UniverLab\n\n- [Privacy](https://univerlab.org/privacy/)\n- [Terms](https://univerlab.org/terms/)";
+
 /** The datasheet's field labels, in sheet order. */
 export const SHEET_KIND = "Kind";
 export const SHEET_NAME = "Name";
