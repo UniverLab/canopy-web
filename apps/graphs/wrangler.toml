@@ -8,15 +8,18 @@ name = "canopy-graphs"
 main = "src/index.ts"
 compatibility_date = "2026-10-26"
 
+# Inlined on purpose: the account has a single Worker account, and the deploy
+# workflow then needs exactly one secret (CLOUDFLARE_API_TOKEN).
+account_id = "d7b81bdd721f503968523dd903d967be"
+
+# The domain attached by API on 2026-10-27, declared in config.
+routes = [{ pattern = "graphs.univerlab.org", custom_domain = true }]
+
 [vars]
 # The Analytics Engine account the downloads API reads; the SQL API is the
 # only consumer. The token arrives as a secret (CF_ANALYTICS_TOKEN), the
 # token for GitHub arrives as GITHUB_TOKEN.
 CF_ACCOUNT_ID = "d7b81bdd721f503968523dd903d967be"
-
-# Inlined on purpose: the account has a single Worker account, and the deploy
-# workflow then needs exactly one secret (CLOUDFLARE_API_TOKEN).
-account_id = "d7b81bdd721f503968523dd903d967be"
 
 # Aggregate counting. Analytics Engine is the right store: writes are
 # fire-and-forget (no latency added to the redirect), there is no database to
@@ -48,9 +51,6 @@ id = "14f08f7af605474585288b2169d80d9b"
 # INDEX_CRON in src/indexer.ts, which tells the pages what to promise.
 [triggers]
 crons = ["*/15 * * * *"]
-
-# The domain attached by API on 2026-10-27, declared in config.
-routes = [{ pattern = "graphs.univerlab.org", custom_domain = true }]
 
 # The static assets: the shared look kit (packages/look), copied into
 # public/look by `npm run build:look`. The pages are rendered strings, so

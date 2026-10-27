@@ -9,10 +9,10 @@ name = "canopy-graphs-test"
 main = "src/index.ts"
 compatibility_date = "2026-10-26"
 
+account_id = "d7b81bdd721f503968523dd903d967be"
+
 [vars]
 CF_ACCOUNT_ID = "d7b81bdd721f503968523dd903d967be"
-
-account_id = "d7b81bdd721f503968523dd903d967be"
 
 [[analytics_engine_datasets]]
 binding = "INSTALLS"
