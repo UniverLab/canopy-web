@@ -5,18 +5,23 @@
  * A route builds a `Page` — a title, a meta description, the HTML body and
  * its markdown twin — and `page()` answers the request with one or the
  * other: a request sending `Accept: text/markdown` gets the twin (content
- * type `text/markdown`), everything else the full HTML document with the
- * theme, fonts and footer of univerlab.org's visual system.
+ * type `text/markdown`), everything else the full HTML document dressed in
+ * the shared look kit of the Canopy page: the deep-teal surface with the
+ * live honeycomb behind a centred column, the lab's three typefaces, the
+ * mono wordmark, and the UniverLab colophon as footer.
  */
-import { SITE_NAME, TAGLINE, TITLE_SEPARATOR, FOOTER_HREF, FOOTER_TEXT } from "./copy.js";
-import { escapeHtml } from "./md.js";
 import {
-  copyScript,
-  fontLinks,
-  themeCss,
-  themeScript,
-  themeToggle,
-} from "./theme.js";
+  CANOPY_HREF,
+  COLOPHON_EXP,
+  COLOPHON_LINKS,
+  COLOPHON_PRODUCT,
+  SITE_NAME,
+  TITLE_SEPARATOR,
+  WORDMARK,
+} from "./copy.js";
+import { renderColophon } from "../../../../packages/look/colophon/footer.js";
+import { escapeHtml } from "./md.js";
+import { copyScript, fondoHost, fondoScript, lookCss, lookLinks } from "./look.js";
 
 /** What one route renders: HTML for browsers, markdown for agents. */
 export interface Page {
@@ -37,30 +42,32 @@ function htmlDocument(page: Page): string {
   const description = escapeHtml(page.description);
   return [
     `<!doctype html>`,
-    `<html lang="en">`,
+    `<html lang="en" data-surface="tui">`,
     `<head>`,
     `<meta charset="utf-8">`,
     `<meta name="viewport" content="width=device-width, initial-scale=1">`,
     `<title>${title}</title>`,
     `<meta name="description" content="${description}">`,
-    fontLinks(),
+    lookLinks(),
     `<style>`,
-    themeCss(),
+    lookCss(),
     `</style>`,
-    `<script>`,
-    themeScript(),
-    `</script>`,
     `</head>`,
     `<body>`,
+    fondoHost(),
+    `<div class="look-shell">`,
     `<header class="site-header">`,
-    `<a class="brand" href="/">${escapeHtml(SITE_NAME)}</a>`,
-    themeToggle(),
+    `<a class="wordmark" href="${CANOPY_HREF}">${escapeHtml(WORDMARK)}</a>`,
     `</header>`,
-    `<p class="tagline">${escapeHtml(TAGLINE)}</p>`,
-    `<main>`,
+    `<main class="look-col">`,
     page.html,
     `</main>`,
-    `<footer class="site-footer"><a href="${FOOTER_HREF}">${FOOTER_TEXT}</a></footer>`,
+    renderColophon({ product: COLOPHON_PRODUCT, exp: COLOPHON_EXP, links: COLOPHON_LINKS }),
+    `</div>`,
+    `<script src="/look/fondo.js" defer></script>`,
+    `<script>`,
+    fondoScript(),
+    `</script>`,
     `<script>`,
     copyScript(),
     `</script>`,

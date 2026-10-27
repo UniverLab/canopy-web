@@ -70,7 +70,7 @@ import {
 import { page, type Page } from "./layout.js";
 import { escapeHtml, renderMarkdown } from "./md.js";
 import { docPath, docRef, pageRef, type PageRef } from "./ref.js";
-import { copyButton } from "./theme.js";
+import { copyButton } from "./look.js";
 
 /** A non-page request: index.ts keeps routing it to the redirector. */
 export const NOT_PAGE = true as const;
@@ -185,7 +185,7 @@ function docItem(doc: Doc): string {
   if (doc.downloads !== undefined) {
     stats.push(countLine(DOWNLOADS_LABEL, doc.downloads));
   }
-  const meta = stats.length === 0 ? "" : ` — ${escapeHtml(stats.join(" · "))}`;
+  const meta = stats.length === 0 ? "" : ` <span class="doc-stats">${escapeHtml(stats.join(" · "))}</span>`;
   return (
     `<li><a class="doc-name" href="${docPath(doc)}">${escapeHtml(doc.name)}</a>${meta}` +
     `<span class="doc-description">${escapeHtml(doc.description)}</span></li>`
@@ -261,7 +261,7 @@ function documentPage(doc: Doc, document: JsonValue, ref: PageRef): Page {
   if (doc.downloads !== undefined) {
     stats.push(countLine(DOWNLOADS_LABEL, doc.downloads));
   }
-  const meta = stats.length === 0 ? "" : ` — ${escapeHtml(stats.join(" · "))}`;
+  const meta = stats.length === 0 ? "" : ` <span class="doc-stats">${escapeHtml(stats.join(" · "))}</span>`;
   const agents = ref.kind === "graph" ? agentNames(document) : [];
 
   const html = [
@@ -307,6 +307,7 @@ function documentPage(doc: Doc, document: JsonValue, ref: PageRef): Page {
 
 function homePage(graphs: Doc[], nodes: Doc[]): Page {
   const html = [
+    `<h1 class="hero-title">${escapeHtml(TAGLINE)}</h1>`,
     searchForm(""),
     tabs("", null),
     `<h2>${OFFICIAL_HEADING}</h2>`,
@@ -335,9 +336,9 @@ function homePage(graphs: Doc[], nodes: Doc[]): Page {
 function searchPage(q: string, sort: SearchSort, items: Doc[]): Page {
   const heading = resultsFor(q);
   const html = [
+    `<h1>${escapeHtml(heading)}</h1>`,
     searchForm(q),
     tabs(q, sort),
-    `<h2>${escapeHtml(heading)}</h2>`,
     items.length === 0 ? `<p>${NO_RESULTS}</p>` : docList(items, NO_RESULTS),
   ].join("\n");
   const markdown = [

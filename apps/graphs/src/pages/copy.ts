@@ -10,14 +10,20 @@
 import type { DocumentKind } from "../../../../src/schema.js";
 import type { Doc } from "../documents.js";
 
-/** The site's name, in the header and the page titles. */
+/** The site's name, in the page titles. */
 export const SITE_NAME = "graphs.univerlab.org";
 
 /** Suffix for `<title>`: "hello-graph · graphs.univerlab.org". */
 export const TITLE_SEPARATOR = " · ";
 
-/** One-line tagline under the site name. */
+/** The catalogue in one line: the home's hero, and the meta description. */
 export const TAGLINE = "A catalogue of Canopy graphs and nodes.";
+
+/** The header's wordmark, set in the mono face. */
+export const WORDMARK = "graphs";
+
+/** The Canopy page the wordmark links back to. */
+export const CANOPY_HREF = "https://univerlab.org/canopy/";
 
 /** The search field's visible label. */
 export const SEARCH_LABEL = "Search graphs and nodes";
@@ -73,6 +79,9 @@ export const COPY_BUTTON = "Copy";
 /** The copy button's accessible label. */
 export const COPY_ARIA = "Copy the install command to the clipboard";
 
+/** The copy button's confirmation, shown for a moment after a copy. */
+export const COPY_DONE = "Copied";
+
 /** The drawing's heading: the plate figure below it. */
 export const DRAWING_HEADING = "Drawing";
 
@@ -90,12 +99,14 @@ export const AGENT_NODES_NOTE = "These agent nodes need a harness to run.";
 /** The README section heading. */
 export const README_HEADING = "README";
 
-/** The footer line, linking to the Canopy page on univerlab.org. */
-export const FOOTER_TEXT = "Canopy · UniverLab";
-export const FOOTER_HREF = "https://univerlab.org/canopy/";
-
-/** The theme toggle's accessible label. */
-export const THEME_TOGGLE = "Switch between day and night";
+/** The UniverLab colophon: the product line, its experiment and its links. */
+export const COLOPHON_PRODUCT = "Canopy graphs";
+export const COLOPHON_EXP = "EXP-001";
+export const COLOPHON_LINKS: Array<{ label: string; href: string }> = [
+  { label: "Canopy", href: CANOPY_HREF },
+  { label: "univerlab.org", href: "https://univerlab.org/" },
+  { label: "Source", href: "https://github.com/UniverLab/canopy-web" },
+];
 
 /** The calm 503: GitHub (or its rate limit) failed the data layer. */
 export const BUSY_HEADING = "GitHub is busy";

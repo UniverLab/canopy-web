@@ -105,24 +105,48 @@ function isPagePath(pathname: string): boolean {
   return first === "" || first === "search" || first === "llms.txt" || first === "g" || first === "n";
 }
 
-export default {
-  fetch(req: Request, env: Env): Response | Promise<Response> {
-    const url = new URL(req.url);
-    if (url.pathname.startsWith("/api")) {
-      return handleApi(req, env, { cache: defaultCache() }).then(
-        (answer) => answer === true ? install(req, env, url) : answer,
-      );
-    }
-    // The catalogue pages claim /, /search, /g, /n and /llms.txt; every
-    // other path (the /i install routes above all) stays a redirect.
-    if (isPagePath(url.pathname)) {
-      return handlePage(req, env, { cache: defaultCache() }).then(
-        (answer) => answer === NOT_PAGE ? install(req, env, url) : answer,
-      );
-    }
-    return install(req, env, url);
-  },
-};
+/** The injected transport and cache: production defaults, test overrides. */
+export interface WorkerDeps {
+  /** The upstream transport; the e2e fixtures inject a stub table. */
+  fetchImpl?: typeof fetch;
+  /** The Cache API stand-in; defaults to the runtime's `caches.default`. */
+  cache?: CacheLike;
+}
+
+/** Answer one request: JSON API, catalogue pages, else the redirector. */
+function answer(req: Request, env: Env, deps: WorkerDeps): Response | Promise<Response> {
+  const url = new URL(req.url);
+  const apiDeps = { cache: deps.cache ?? defaultCache(), fetchImpl: deps.fetchImpl };
+  if (url.pathname.startsWith("/api")) {
+    return handleApi(req, env, apiDeps).then(
+      (result) => result === true ? install(req, env, url) : result,
+    );
+  }
+  // The catalogue pages claim /, /search, /g, /n and /llms.txt; every
+  // other path (the /i install routes above all) stays a redirect.
+  if (isPagePath(url.pathname)) {
+    return handlePage(req, env, apiDeps).then(
+      (result) => result === NOT_PAGE ? install(req, env, url) : result,
+    );
+  }
+  return install(req, env, url);
+}
+
+/**
+ * Build the Worker over an injected transport. Production calls it with no
+ * arguments (the default export below); the visual e2e fixture wires the
+ * same `fakeFetch` table the page tests use, so no browser check reaches
+ * live GitHub.
+ */
+export function createWorker(deps: WorkerDeps = {}) {
+  return {
+    fetch(req: Request, env: Env): Response | Promise<Response> {
+      return answer(req, env, deps);
+    },
+  };
+}
+
+export default createWorker();
 
 /** The install redirector: 302 to GitHub, or a 400/404 explaining why not. */
 function install(req: Request, env: Env, url: URL): Response {

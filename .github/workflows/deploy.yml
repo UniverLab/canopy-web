@@ -22,6 +22,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # The pages link the shared look kit, which `npm run build:look` copies
+      # into apps/graphs/public/look: the [assets] directory must exist before
+      # wrangler deploys. Same generator both apps use, one source of truth.
+      - run: npm run build:look
       - name: Deploy with Wrangler
         uses: cloudflare/wrangler-action@v3
         with:

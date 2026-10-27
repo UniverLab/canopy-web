@@ -7,8 +7,9 @@ export default defineWorkersConfig({
     poolOptions: {
       workers: {
         // Single-file Worker: the pool loads this config, so tests speak to
-        // the same code and bindings `wrangler deploy` will ship.
-        wrangler: { configPath: "./wrangler.toml" },
+        // the same code and bindings `wrangler deploy` will ship. It is the
+        // production file minus [assets] — the pool serves no static folder.
+        wrangler: { configPath: "./wrangler.test.toml" },
       },
     },
   },

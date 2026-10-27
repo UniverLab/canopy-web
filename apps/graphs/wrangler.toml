@@ -36,3 +36,13 @@ account_id = "d7b81bdd721f503968523dd903d967be"
 [[analytics_engine_datasets]]
 binding = "INSTALLS"
 dataset = "canopy_graph_installs"
+
+# The static assets: the shared look kit (packages/look), copied into
+# public/look by `npm run build:look`. The pages are rendered strings, so
+# only the kit lives on disk. `run_worker_first` keeps the JSON API and the
+# install redirector in the Worker; every other request tries the assets
+# first and an asset miss falls through to the Worker, which is exactly the
+# catalogue's route table (/ , /search, /g, /n, /llms.txt).
+[assets]
+directory = "public"
+run_worker_first = ["/api/*", "/i/*"]

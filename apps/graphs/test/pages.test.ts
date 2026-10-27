@@ -6,57 +6,14 @@
  */
 import { describe, expect, it } from "vitest";
 import { NOT_PAGE, handlePage } from "../src/pages/routes.js";
-import { BUSY_BODY, BUSY_HEADING, COPY_BUTTON, EMPTY_OFFICIAL_GRAPHS, EMPTY_OFFICIAL_NODES, FOOTER_HREF, FOOTER_TEXT, SEARCH_BUTTON, SEARCH_LABEL } from "../src/pages/copy.js";
+import { BUSY_BODY, BUSY_HEADING, COPY_BUTTON, EMPTY_OFFICIAL_GRAPHS, EMPTY_OFFICIAL_NODES, SEARCH_BUTTON, SEARCH_LABEL } from "../src/pages/copy.js";
 import { FakeCache, dirBody, fakeFetch, fileBody, type Stub } from "./fakes.js";
-import {
-  EVIL_README_TEXT,
-  FIVE_NODE_GRAPH_TEXT,
-  PAGES_README_TEXT,
-} from "./pages-fixture.js";
-import { VALID_GRAPH_TEXT, VALID_NODE_TEXT } from "./documents-fixture.js";
+import { EVIL_README_TEXT, PAGES_README_TEXT } from "./pages-fixture.js";
+import { VALID_GRAPH_TEXT } from "./documents-fixture.js";
+import { communityStubs, officialStubs, REPO_DIR, searchStubs } from "./stubs.js";
 
 const ORIGIN = "https://graphs.univerlab.org";
-const REPO_DIR = "repos/UniverLab/canopy-web";
-const SEARCH = "search/repositories";
 const HTML = { "content-type": "text/html" };
-
-/** Everything the official listing needs: one five-node graph, one node. */
-function officialStubs(): Stub[] {
-  return [
-    { url: `${REPO_DIR}/contents/registry/graphs`, status: 200, body: dirBody([{ name: "hello-graph", type: "dir" }]) },
-    { url: `${REPO_DIR}/contents/registry/nodes`, status: 200, body: dirBody([{ name: "hello-node", type: "dir" }]) },
-    { url: `${REPO_DIR}/contents/registry/graphs/hello-graph/graph.json`, status: 200, body: fileBody("graphs/hello-graph/graph.json", FIVE_NODE_GRAPH_TEXT) },
-    { url: `${REPO_DIR}/contents/registry/graphs/hello-graph/README.md`, status: 200, body: fileBody("graphs/hello-graph/README.md", PAGES_README_TEXT) },
-    { url: `${REPO_DIR}/contents/registry/nodes/hello-node/node.json`, status: 200, body: fileBody("nodes/hello-node/node.json", VALID_NODE_TEXT) },
-    { url: `${REPO_DIR}/contents/registry/nodes/hello-node/README.md`, status: 404, body: {} },
-    { url: REPO_DIR, status: 200, body: { stargazers_count: 7 } },
-  ];
-}
-
-/** One community repository holding a graph called flow. */
-function communityStubs(): Stub[] {
-  return [
-    { url: "repos/acme/things/contents/graphs/flow/graph.json", status: 200, body: fileBody("graphs/flow/graph.json", VALID_GRAPH_TEXT) },
-    { url: "repos/acme/things/contents/graphs/flow/README.md", status: 404, body: {} },
-  ];
-}
-
-/** The search answer the /search tests read: one repository holding flow. */
-function searchStubs(): Stub[] {
-  return [
-    ...officialStubs(),
-    ...communityStubs(),
-    {
-      url: SEARCH,
-      status: 200,
-      body: {
-        total_count: 1,
-        items: [{ name: "things", owner: { login: "acme" }, default_branch: "main", stargazers_count: 2 }],
-      },
-    },
-    { url: "repos/acme/things/git/trees/main", status: 200, body: { tree: [{ path: "graphs/flow/graph.json", type: "blob" }] } },
-  ];
-}
 
 interface Options {
   stubs?: Stub[];
@@ -159,14 +116,16 @@ describe("the sanitizer", () => {
       stub.url.endsWith("README.md") ? { ...stub, body: fileBody("graphs/hello-graph/README.md", EVIL_README_TEXT) } : stub,
     );
     const html = await (await call("/g/hello-graph", { stubs: evil })).text();
+    // Scope to the rendered README: the colophon below carries real images.
+    const readme = html.slice(html.indexOf(`<div class="readme">`), html.indexOf(`</main>`));
     // The tags survive only as escaped text, never as markup.
-    expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
-    expect(html).toContain("&lt;img src=x onerror=");
-    expect(html).not.toContain("<img");
-    expect(html).not.toContain("<b>");
-    expect(html).not.toContain('onerror="alert');
-    expect(html).not.toContain('href="javascript:');
-    expect(html).toContain(`<a href="https://example.com/page?a=1&amp;b=2" rel="nofollow">`);
+    expect(readme).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+    expect(readme).toContain("&lt;img src=x onerror=");
+    expect(readme).not.toContain("<img");
+    expect(readme).not.toContain("<b>");
+    expect(readme).not.toContain('onerror="alert');
+    expect(readme).not.toContain('href="javascript:');
+    expect(readme).toContain(`<a href="https://example.com/page?a=1&amp;b=2" rel="nofollow">`);
   });
 });
 
@@ -176,7 +135,8 @@ describe("the plate drawing", () => {
     expect(html).toMatchSnapshot();
     // The figure scrolls horizontally on narrow screens; the page never overflows.
     expect(html).toContain(`<figure class="plate">`);
-    expect(html).toContain(`.plate { margin: 1rem 0; overflow-x: auto; max-width: 100%; }`);
+    // The figure scrolls horizontally inside itself; the page never overflows.
+    expect(html).toMatch(/figure\.plate \{[^}]*max-width: 100%;[^}]*overflow-x: auto;/);
     // One labelled shape per node: agents are circles, checks rounded
     // squares, gates and routers diamonds — the router reads as a gate.
     for (const label of ["build", "test", "gate", "triage", "docs"]) {
@@ -270,26 +230,52 @@ describe("data-layer failures", () => {
 });
 
 describe("the page shell", () => {
-  it("carries the fonts, both theme pairs, the hour script, the footer and a keyboard copy button", async () => {
+  it("dresses the page in the Canopy look kit: surface, faces, honeycomb and colophon", async () => {
     const html = await (await call("/g/hello-graph")).text();
-    // The visual system of univerlab.org.
-    expect(html).toContain("fonts.googleapis.com/css2");
-    expect(html).toContain("Old+Standard+TT");
-    expect(html).toContain("EB+Garamond");
-    expect(html).toContain("Sometype+Mono");
-    for (const hex of ["#f4f0ea", "#1d1510", "#222928", "#ecebe4", "#3fb8b0"]) {
-      expect(html).toContain(hex);
-    }
-    expect(html).toContain("localStorage");
-    expect(html).toContain("getHours");
-    expect(html).toContain(`<a href="${FOOTER_HREF}">${FOOTER_TEXT}</a>`);
+    // The Canopy surface and the kit's three stylesheets, from their folders.
+    expect(html).toContain(`<html lang="en" data-surface="tui">`);
+    expect(html).toContain(`<link rel="stylesheet" href="/look/tokens.css">`);
+    expect(html).toContain(`<link rel="stylesheet" href="/look/fonts/fonts.css">`);
+    expect(html).toContain(`<link rel="stylesheet" href="/look/colophon/colophon.css">`);
+    // The honeycomb: a hidden host and the kit's bundle behind the content.
+    expect(html).toContain(`<div class="fondo" id="fondo" aria-hidden="true"></div>`);
+    expect(html).toContain(`<script src="/look/fondo.js" defer></script>`);
+    expect(html).toContain(`mountCanopyBackground`);
+    expect(html).toContain(`/look/fondo/assets/`);
+    expect(html).toContain(`<main class="look-col">`);
+    // The kit's variables, and both of its faces, drive the page stylesheet.
+    expect(html).toContain("background: var(--surface-bg)");
+    expect(html).toContain("color: var(--surface-ink)");
+    expect(html).toContain("font-family: var(--font-body)");
+    expect(html).toContain("font-family: var(--font-mono)");
+    expect(html).toContain("font-family: var(--font-display)");
+    expect(html).toContain("var(--radius-card)");
+    expect(html).toContain("var(--cta-gradient)");
+    // The header wordmark and the UniverLab colophon as footer.
+    expect(html).toContain(`<a class="wordmark" href="https://univerlab.org/canopy/">graphs</a>`);
+    expect(html).toContain(`<footer class="look-colophon">`);
+    expect(html).toContain("Part of UniverLab · EXP-001 Canopy graphs");
+    expect(html).toContain(`/look/colophon/frieze-1920.avif`);
+    // The day/night toggle is gone: the Canopy page is a dark surface.
+    expect(html).not.toContain("theme-toggle");
+    expect(html).not.toContain("localStorage");
+    expect(html).not.toContain("getHours");
     // Accessibility and weight: no framework, real buttons, reduced motion.
     expect(html).toContain("prefers-reduced-motion");
+    expect(html).toContain(":focus-visible { outline: 2px solid var(--teal)");
     expect(html).toMatch(/<button type="button" class="copy" data-copy="canopy graph install hello-graph"/);
     expect(html).toContain(COPY_BUTTON);
     expect(html).toContain(`aria-label="Copy the install command to the clipboard"`);
     expect(html).not.toContain("react");
     expect(html.length).toBeLessThan(150_000);
+  });
+
+  it("gives every listing page one h1 hero", async () => {
+    const home = await (await call("/")).text();
+    expect(home).toMatch(/<h1 class="hero-title">A catalogue of Canopy graphs and nodes\.<\/h1>/);
+    const search = await (await call("/search?q=flow&sort=top", { stubs: searchStubs() })).text();
+    expect(search).toContain(`<h1>Results for “flow”</h1>`);
+    expect(search).not.toMatch(/<h1>.*<\/h1>[\s\S]*<h1>/);
   });
 
   it("shows stars, downloads when configured, the repo link and the agent nodes", async () => {
