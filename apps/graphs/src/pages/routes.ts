@@ -33,7 +33,8 @@ import {
   BUSY_HEADING,
   DOWNLOADS_LABEL,
   DRAWING_HEADING,
-  EMPTY_LIST,
+  EMPTY_OFFICIAL_GRAPHS,
+  EMPTY_OFFICIAL_NODES,
   GRAPHS_HEADING,
   INSTALL_HEADING,
   LLMS_HEADER,
@@ -185,9 +186,9 @@ function docItem(doc: Doc): string {
   );
 }
 
-function docList(docs: Doc[]): string {
+function docList(docs: Doc[], emptyLine: string): string {
   if (docs.length === 0) {
-    return `<p>${EMPTY_LIST}</p>`;
+    return `<p>${emptyLine}</p>`;
   }
   return `<ul class="doc-list">${docs.map(docItem).join("")}</ul>`;
 }
@@ -197,9 +198,9 @@ function mdText(text: string): string {
   return text.replace(/([[\]])/g, "\\$1");
 }
 
-function docListMarkdown(docs: Doc[]): string {
+function docListMarkdown(docs: Doc[], emptyLine: string): string {
   if (docs.length === 0) {
-    return `${EMPTY_LIST}\n`;
+    return `${emptyLine}\n`;
   }
   const lines = docs.map(
     (doc) => `- [${mdText(doc.name)}](${docPath(doc)}) — ${mdText(doc.description)} — ${docRef(doc).ref}`,
@@ -266,9 +267,9 @@ function homePage(graphs: Doc[], nodes: Doc[]): Page {
     tabs("", null),
     `<h2>${OFFICIAL_HEADING}</h2>`,
     `<h3>${GRAPHS_HEADING}</h3>`,
-    docList(graphs),
+    docList(graphs, EMPTY_OFFICIAL_GRAPHS),
     `<h3>${NODES_HEADING}</h3>`,
-    docList(nodes),
+    docList(nodes, EMPTY_OFFICIAL_NODES),
   ].join("\n");
   const markdown = [
     `# ${SITE_NAME}`,
@@ -279,10 +280,10 @@ function homePage(graphs: Doc[], nodes: Doc[]): Page {
     ``,
     `### ${GRAPHS_HEADING}`,
     ``,
-    docListMarkdown(graphs),
+    docListMarkdown(graphs, EMPTY_OFFICIAL_GRAPHS),
     `### ${NODES_HEADING}`,
     ``,
-    docListMarkdown(nodes),
+    docListMarkdown(nodes, EMPTY_OFFICIAL_NODES),
   ].join("\n");
   return { title: SITE_NAME, description: TAGLINE, html, markdown };
 }
@@ -293,14 +294,14 @@ function searchPage(q: string, sort: SearchSort, items: Doc[]): Page {
     searchForm(q),
     tabs(q, sort),
     `<h2>${escapeHtml(heading)}</h2>`,
-    items.length === 0 ? `<p>${NO_RESULTS}</p>` : docList(items),
+    items.length === 0 ? `<p>${NO_RESULTS}</p>` : docList(items, NO_RESULTS),
   ].join("\n");
   const markdown = [
     `# ${heading}`,
     ``,
     `## ${TOP_TAB} / ${NEW_TAB}`,
     ``,
-    items.length === 0 ? `${NO_RESULTS}\n` : docListMarkdown(items),
+    items.length === 0 ? `${NO_RESULTS}\n` : docListMarkdown(items, NO_RESULTS),
   ].join("\n");
   return { title: heading, description: TAGLINE, html, markdown };
 }

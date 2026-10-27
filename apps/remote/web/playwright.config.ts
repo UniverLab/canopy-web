@@ -8,7 +8,6 @@ export default defineConfig({
   use: {
     baseURL: "http://127.0.0.1:5199",
     viewport: { width: 360, height: 640 },
-    channel: "chrome",
     launchOptions: {
       args: ["--no-sandbox", "--disable-dev-shm-usage"],
     },

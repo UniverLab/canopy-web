@@ -46,6 +46,16 @@ describe("the JSON API", () => {
     expect(body.nodes.length).toBe(1);
   });
 
+  it("answers /api/official with empty lists when the registry folders do not exist", async () => {
+    const response = await call("/api/official", {
+      stubs: [{ url: `${REPO_DIR}/contents/registry/graphs`, status: 404, body: {} }],
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { graphs: unknown[]; nodes: unknown[] };
+    expect(body.graphs).toEqual([]);
+    expect(body.nodes).toEqual([]);
+  });
+
   it("answers /api/search with items and echoed filters", async () => {
     const listing = [...stubs(), {
       url: SEARCH,

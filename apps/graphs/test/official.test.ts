@@ -111,4 +111,44 @@ describe("the official listing", () => {
     const error = await listOfficial(github, () => undefined);
     expect("kind" in error ? error.kind : "").toBe("rate-limit");
   });
+
+  it("treats a missing registry folder as an empty catalogue", async () => {
+    const fake = fakeFetch([{ url: `${REPO_DIR}/contents/registry/graphs`, status: 404, body: {} }]);
+    const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
+    const notes: string[] = [];
+    const listing = (await listOfficial(github, (message) => notes.push(message))) as OfficialListing;
+
+    // Both kinds answer 404 (the nodes folder is not even stubbed): the
+    // listing is empty, not an ApiError, and the loop ran past the first miss.
+    expect("kind" in listing).toBe(false);
+    expect(listing.graphs).toEqual([]);
+    expect(listing.nodes).toEqual([]);
+    expect(notes.some((message) => message.includes("absent"))).toBe(true);
+    expect(fake.calls.some((url) => url.includes("registry/nodes"))).toBe(true);
+  });
+
+  it("lists graphs while the nodes folder is missing", async () => {
+    const partial = [
+      ...STUBS(false).slice(0, 1),
+      { url: `${REPO_DIR}/contents/registry/nodes`, status: 404, body: {} },
+      ...STUBS(false).slice(2),
+    ];
+    const fake = fakeFetch(partial);
+    const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
+    const listing = (await listOfficial(github, () => undefined)) as OfficialListing;
+
+    expect("kind" in listing).toBe(false);
+    expect(listing.graphs.length).toBe(1);
+    expect(listing.graphs[0].slug).toBe("hello-graph");
+    expect(listing.nodes).toEqual([]);
+  });
+
+  it("keeps a 500 on the listing as a typed error", async () => {
+    const fake = fakeFetch([
+      { url: `${REPO_DIR}/contents/registry/graphs`, status: 500, body: {} },
+    ]);
+    const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
+    const error = await listOfficial(github, () => undefined);
+    expect("kind" in error ? error.kind : "").toBe("upstream");
+  });
 });

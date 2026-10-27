@@ -1,0 +1,18 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`a real README > renders the quality-bubble README as it reads on the site 1`] = `
+"<h1>quality-bubble</h1>
+<p>What this graph is for: covering the change already in the worktree
+with honest tests, with no spec to write. The bubble tests the current
+uncommitted change by design, so it has no lock and no clean-tree
+start check — run it with the change already present but uncommitted.
+Every failure routes back to the implementer for another attempt.</p>
+<p>Nodes in order:</p>
+<ol><li><code>implementer</code> (agent) — writes a small, focused set of tests for the uncommitted change; never commits.</li><li><code>test-run</code> (check) — runs the project's tests (installer placeholder).</li><li><code>test-size-cap</code> (check) — rejects a bloated diff: added plus removed lines must stay within the cap.</li><li><code>anti-cheat-reviewer</code> (agent, commit rights) — rejects cheating tests (copied expectations, tests that cannot fail, disabled tests, over-mocking) and lands exactly one commit when the tests honestly cover the change.</li></ol>
+<p>Fail edges: <code>test-run</code>, <code>test-size-cap</code>, and <code>anti-cheat-reviewer</code>
+all route <code>fail</code> back to <code>implementer</code>.</p>
+<p>What the installer must fill in:</p>
+<ul><li>Harness: every agent node carries no <code>platform</code>/<code>model</code> — bind one per agent node (<code>implementer</code>, <code>anti-cheat-reviewer</code>) at install time.</li><li>Gate command: <code>test-run</code> is a failing placeholder. Replace it with the project's test command.</li><li>Size cap: <code>test-size-cap</code> caps the diff at 600 added-plus-removed lines. Adjust the cap to the project's test budget (marked <code>EDIT ME</code> in the command).</li><li>Workdir: point the installed graph at the repository it should run in.</li></ul>
+<p>Install:</p>
+<pre><code>canopy graph install quality-bubble</code></pre>"
+`;

@@ -69,7 +69,10 @@ async function officialStars(github: GitHub): Promise<number | null> {
 /**
  * List the official catalogue. Both directories are read with two calls and
  * the repository call gives stars once, so a warm cache costs three cache
- * hits and each document costs its own folder call.
+ * hits and each document costs its own folder call. A directory GitHub has
+ * never heard of (404) is an empty list of that kind, not an outage: the
+ * registry is empty until the first merge. Every other error still comes
+ * back as the typed ApiError the pages turn into the calm 503.
  */
 export async function listOfficial(
   github: GitHub,
@@ -85,6 +88,10 @@ export async function listOfficial(
       "contents",
     );
     if (isApiError(listing)) {
+      if (listing.kind === "not-found") {
+        log(`official: registry/${kind}s is absent; listing it as empty`);
+        continue;
+      }
       return listing;
     }
     const body = await readJson(listing);

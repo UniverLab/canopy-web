@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { NOT_PAGE, handlePage } from "../src/pages/routes.js";
-import { BUSY_BODY, COPY_BUTTON, FOOTER_HREF, FOOTER_TEXT, SEARCH_BUTTON, SEARCH_LABEL } from "../src/pages/copy.js";
+import { BUSY_BODY, BUSY_HEADING, COPY_BUTTON, EMPTY_OFFICIAL_GRAPHS, EMPTY_OFFICIAL_NODES, FOOTER_HREF, FOOTER_TEXT, SEARCH_BUTTON, SEARCH_LABEL } from "../src/pages/copy.js";
 import { FakeCache, dirBody, fakeFetch, fileBody, type Stub } from "./fakes.js";
 import {
   EVIL_README_TEXT,
@@ -185,6 +185,28 @@ describe("data-layer failures", () => {
         status: 403,
         headers: { "x-ratelimit-remaining": "0", "x-ratelimit-reset": "2000000000" },
       }],
+    });
+    expect(response.status).toBe(503);
+    expect(await response.text()).toContain(BUSY_BODY);
+  });
+
+  it("answers a missing registry folder with the empty official home, not the busy page", async () => {
+    const response = await call("/", {
+      stubs: [{ url: `${REPO_DIR}/contents/registry/graphs`, status: 404, body: {} }],
+    });
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain(EMPTY_OFFICIAL_GRAPHS);
+    expect(html).toContain(EMPTY_OFFICIAL_NODES);
+    expect(html).not.toContain(BUSY_HEADING);
+    // The rest of the home keeps working: search box and the two tabs.
+    expect(html).toContain(`<label for="q">${SEARCH_LABEL}</label>`);
+    expect(html).toContain(`<a href="/search?sort=top">`);
+  });
+
+  it("answers a 500 listing with the same calm 503", async () => {
+    const response = await call("/", {
+      stubs: [{ url: `${REPO_DIR}/contents/registry/graphs`, status: 500, body: {} }],
     });
     expect(response.status).toBe(503);
     expect(await response.text()).toContain(BUSY_BODY);

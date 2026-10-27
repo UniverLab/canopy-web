@@ -42,8 +42,9 @@ export const NODES_HEADING = "Nodes";
 /** Heading over the search results list. */
 export const RESULTS_HEADING = "Results";
 
-/** Shown when a listing or a search came back empty. */
-export const EMPTY_LIST = "Nothing here yet.";
+/** Shown in the Official section when a kind has no documents yet. */
+export const EMPTY_OFFICIAL_GRAPHS = "No official graphs published yet.";
+export const EMPTY_OFFICIAL_NODES = "No official nodes published yet.";
 
 /** Shown when a search matched nothing. */
 export const NO_RESULTS = "No graphs or nodes matched your search.";
