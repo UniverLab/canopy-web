@@ -233,6 +233,30 @@ describe("blob url cache", () => {
       spy.mockRestore();
     }
   });
+
+  it("evicts one file's url on request and ignores an unknown id", () => {
+    const revoked: string[] = [];
+    const spy = vi
+      .spyOn(URL, "revokeObjectURL")
+      .mockImplementation((url: string) => {
+        revoked.push(url);
+      });
+    try {
+      const lru = new BlobLru(1000);
+      const a = lru.put("a", new Uint8Array(100), "image/png");
+      lru.put("b", new Uint8Array(100), "image/png");
+      lru.evict("a");
+      expect(revoked).toEqual([a]);
+      expect(lru.get("a")).toBeNull();
+      expect(lru.get("b")).not.toBeNull();
+      expect(lru.bytes).toBe(100);
+      // Evicting what the cache never held changes nothing.
+      lru.evict("missing");
+      expect(revoked).toEqual([a]);
+    } finally {
+      spy.mockRestore();
+    }
+  });
 });
 
 describe("shelf surfaces", () => {
@@ -286,6 +310,46 @@ describe("shelf surfaces", () => {
     // The badge belongs to the session view; leaving drops it with the view.
     shell.showSessions();
     expect(root.querySelector("#session-files")).toBeNull();
+  });
+
+  it("revokes a removed file's bytes and refetches a re-added id", () => {
+    const { root, shelf, sent } = shellHarness();
+    const revoked: string[] = [];
+    const spy = vi
+      .spyOn(URL, "revokeObjectURL")
+      .mockImplementation((url: string) => {
+        revoked.push(url);
+      });
+    try {
+      shelf.handleHello(["shelf"]);
+      shelf.open(root, "s1");
+      shelf.handleList({ req: null, id: "s1", items: [shelfItem({ file_id: "f1" })] });
+      // The cell is on screen; tapping it asks for the bytes.
+      root.querySelector<HTMLButtonElement>(".shelf-cell")?.click();
+      const frame = (line: string): { t: string; req: string } => JSON.parse(line);
+      const gets = () => sent.filter((line) => frame(line).t === "shelf_get");
+      expect(gets()).toHaveLength(1);
+      shelf.handlePart({
+        req: frame(gets()[0] ?? "").req,
+        file_id: "f1",
+        part: 0,
+        data: new Uint8Array([1, 2, 3]),
+        last: true,
+      });
+      expect(revoked).toHaveLength(0);
+
+      // The host takes the file back: its url dies with it.
+      shelf.handleRemoved("f1");
+      expect(revoked).toHaveLength(1);
+      expect(root.querySelectorAll(".shelf-cell")).toHaveLength(0);
+
+      // A new file wearing the same id is fetched again, never stale.
+      shelf.handleList({ req: null, id: "s1", items: [shelfItem({ file_id: "f1" })] });
+      root.querySelector<HTMLButtonElement>(".shelf-cell")?.click();
+      expect(gets()).toHaveLength(2);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("renders a caption carrying markup as plain text", () => {

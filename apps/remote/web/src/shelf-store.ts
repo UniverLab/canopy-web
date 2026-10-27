@@ -4,7 +4,8 @@
 // that keeps the shelf inside 50 MB of memory, and the transfer queue
 // behind shelf_get — at most two files in flight, parts reassembled in
 // part order, a busy reply retried after 500 ms. No DOM here: the
-// sheet, the viewer and the controller live in shelf.ts.
+// sheet, the viewer and the controller live in shelf.ts and
+// shelf-controller.ts.
 
 import { buildShelfGet, buildShelfList, newReqId } from "./protocol.js";
 import type { FilePart, ReplyError, ShelfItem, ShelfList } from "./protocol.js";
@@ -194,6 +195,15 @@ export class BlobLru {
     for (const fileId of [...this.entries.keys()]) {
       this.drop(fileId);
     }
+  }
+
+  /**
+   * One file's url goes now: a shelf_removed upstream makes those bytes
+   * stale, so a later file wearing the same id must be fetched again
+   * instead of being served from the cache.
+   */
+  evict(fileId: string): void {
+    this.drop(fileId);
   }
 
   get bytes(): number {

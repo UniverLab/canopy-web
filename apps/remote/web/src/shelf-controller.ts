@@ -163,6 +163,9 @@ export class ShelfController implements ShelfHandle, ShelfFrames {
       return;
     }
     this.store.remove(fileId);
+    // Those bytes belonged to a file the host took back: a future file
+    // wearing the same id must be fetched again, never served stale.
+    this.lru.evict(fileId);
   }
 
   handlePart(part: FilePart): boolean {
