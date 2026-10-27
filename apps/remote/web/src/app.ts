@@ -15,8 +15,9 @@ import { defaultDeviceLabel } from "./pairing.js";
 import { connectFailMessage } from "./peer.js";
 import type { PromptDraft, SpawnRequest } from "./protocol.js";
 import type { OnlineHost } from "./relay.js";
+import type { ShelfHandle } from "./shelf-controller.js";
 import { renderSessions } from "./sessions.js";
-import type { SessionStore } from "./sessions.js";
+import type { SessionListShelf, SessionStore } from "./sessions.js";
 import { createXtermHandle, TerminalView } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
 import { readFitOnly, writeFitOnly } from "./terminal-prefs.js";
@@ -71,6 +72,8 @@ export interface Shell {
 export interface ShellDeps {
   terminalFactory?: TerminalFactory;
   catalog?: CatalogStore;
+  /** The session shelf; without it (or without the feature) no UI. */
+  shelf?: ShelfHandle;
 }
 
 type Route = "signin" | "pair" | "hosts" | "sessions" | "session";
@@ -102,6 +105,7 @@ export function createShell(
   deps?: ShellDeps,
 ): Shell {
   const terminalFactory = deps?.terminalFactory ?? createXtermHandle;
+  const shelf = deps?.shelf ?? null;
   let route: Route = "signin";
   let login: string | null = null;
   let hostLabel = "";
@@ -132,6 +136,7 @@ export function createShell(
   const closeSheets = () => {
     newDialog.close();
     builder.close();
+    shelf?.close();
   };
 
   const snapshotDraft = () => {
@@ -282,11 +287,47 @@ export function createShell(
     }
   };
 
+  const shelfListArgs = (): SessionListShelf | undefined => {
+    if (!shelf) {
+      return undefined;
+    }
+    return {
+      enabled: shelf.enabled(),
+      hostCount: shelf.count(null),
+      count: (id) => shelf.count(id),
+      onOpenShelf: () => shelf.open(root, null),
+    };
+  };
+
   const renderSessionsList = (slot: HTMLElement) => {
-    renderSessions(slot, store.list(), Date.now(), {
-      onOpen: (id) => callbacks.onOpenSession(id),
-      onNew: () => openNew(),
-    });
+    renderSessions(
+      slot,
+      store.list(),
+      Date.now(),
+      {
+        onOpen: (id) => callbacks.onOpenSession(id),
+        onNew: () => openNew(),
+      },
+      shelfListArgs(),
+    );
+  };
+
+  // The Files badge lives in the session bar; every shelf change either
+  // patches it (session route) or repaints the list (sessions route).
+  const syncFilesBadge = () => {
+    const button = root.querySelector<HTMLElement>("#session-files");
+    if (!button) {
+      return;
+    }
+    const enabled = shelf?.enabled() ?? false;
+    button.hidden = !enabled;
+    const badge = button.querySelector<HTMLElement>("#session-files-badge");
+    if (!badge) {
+      return;
+    }
+    const unseen = !enabled || sessionId === null ? 0 : shelf?.unseen(sessionId) ?? 0;
+    badge.hidden = unseen === 0;
+    badge.textContent = unseen === 0 ? "" : String(unseen);
   };
 
   const openNew = () => {
@@ -325,6 +366,9 @@ export function createShell(
         <button type="button" id="session-back" aria-label="Back to sessions">‹</button>
         <span class="session-title">${esc(sessionName)}</span>
         <span class="session-exit" id="session-exit" hidden></span>
+        <button type="button" id="session-files" hidden>Files<span
+          class="files-badge" id="session-files-badge" hidden
+        ></span></button>
       </div>
       <div class="term-pane" id="term-pane">
         <p class="term-placeholder">Attaching…</p>
@@ -346,6 +390,14 @@ export function createShell(
     </main>`;
     wireConnBanner();
     root.querySelector("#session-back")?.addEventListener("click", () => callbacks.onLeaveSession());
+    // The Files sheet only exists behind hello.features "shelf"; the
+    // button itself is rendered hidden and syncFilesBadge reveals it.
+    root.querySelector("#session-files")?.addEventListener("click", () => {
+      if (sessionId !== null) {
+        shelf?.open(root, sessionId);
+      }
+    });
+    syncFilesBadge();
     root.querySelector("#term-zoom-in")?.addEventListener("click", () => terminalView?.zoomIn());
     root.querySelector("#term-zoom-out")?.addEventListener("click", () => terminalView?.zoomOut());
     // Fit off (default) keeps the readable floor; Fit on is pure
@@ -401,6 +453,17 @@ export function createShell(
       if (slot) {
         renderSessionsList(slot);
       }
+    }
+  });
+
+  const stopShelf = shelf?.subscribe(() => {
+    if (route === "sessions") {
+      const slot = root.querySelector<HTMLElement>("#session-list");
+      if (slot) {
+        renderSessionsList(slot);
+      }
+    } else if (route === "session") {
+      syncFilesBadge();
     }
   });
 
@@ -594,6 +657,7 @@ export function createShell(
     dispose(): void {
       globalThis.clearInterval(ticker);
       stopStore();
+      stopShelf?.();
       closeSheets();
       teardownSessionWidgets();
       composer?.unmount();

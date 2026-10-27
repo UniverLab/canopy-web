@@ -64,7 +64,7 @@ export interface HostItem {
 export const SECURITY_HEADERS: Record<string, string> = {
   "content-security-policy":
     "default-src 'self'; connect-src 'self' wss://remote.univerlab.org; " +
-    "img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'",
+    "img-src 'self' data: blob:; style-src 'self'; script-src 'self'; frame-ancestors 'none'",
   "referrer-policy": "no-referrer",
   "x-content-type-options": "nosniff",
 };

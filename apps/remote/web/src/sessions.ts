@@ -69,6 +69,14 @@ export interface SessionListCallbacks {
   onNew: () => void;
 }
 
+/** The shelf's share of the list: counts and the host's own row. */
+export interface SessionListShelf {
+  enabled: boolean;
+  hostCount: number;
+  count: (id: string) => number;
+  onOpenShelf: () => void;
+}
+
 function esc(text: string): string {
   return text
     .replace(/&/g, "&amp;")
@@ -77,13 +85,23 @@ function esc(text: string): string {
     .replace(/"/g, "&quot;");
 }
 
-// nowMs is injected so tests pin the relative times.
+// nowMs is injected so tests pin the relative times. The shelf argument
+// is optional: without it (or without hello.features "shelf") the list
+// carries no file affordance at all.
 export function renderSessions(
   root: HTMLElement,
   items: SessionItem[],
   nowMs: number,
   callbacks: SessionListCallbacks,
+  shelf?: SessionListShelf,
 ): void {
+  const files = (id: string): string => {
+    if (!shelf?.enabled) {
+      return "";
+    }
+    const count = shelf.count(id);
+    return count === 0 ? "" : `<span class="session-files">📎 ${count}</span>`;
+  };
   const rows = items
     .map((item) => {
       const cliModel = [item.cli, item.model].filter((part) => part !== "").join(" · ");
@@ -94,18 +112,30 @@ export function renderSessions(
         `<span class="dot dot-${esc(statusDot(item.status))}" title="${esc(item.status)}" aria-hidden="true"></span>` +
         `<span class="session-main"><span class="session-name">${esc(item.name || item.id)}</span>` +
         (sub === "" ? "" : `<span class="session-sub">${esc(sub)}</span>`) +
-        `</span><span class="session-age">${esc(formatLastOutput(nowMs, item.lastOutputAt))}</span>` +
+        `</span>${files(item.id)}` +
+        `<span class="session-age">${esc(formatLastOutput(nowMs, item.lastOutputAt))}</span>` +
         `</button></li>`
       );
     })
     .join("");
+  // The host's own shelf rides above the sessions, but only while it
+  // holds files and only behind the feature flag.
+  const shelfOn = shelf?.enabled === true && shelf.hostCount > 0;
+  const shelfRow = shelfOn && shelf
+    ? `<li><button type="button" class="session-row shelf-row" id="host-shelf-row">` +
+      `<span class="session-main"><span class="session-name">Shelf</span>` +
+      `<span class="session-sub">Files the host sent</span></span>` +
+      `<span class="session-files">📎 ${shelf.hostCount}</span></button></li>`
+    : "";
+  const list = items.length === 0 && shelfRow === "";
   root.innerHTML =
     `<div class="sessions-head"><h2>Sessions</h2>` +
     `<button type="button" id="session-new">New agent</button></div>` +
-    (items.length === 0
-      ? `<p class="empty">No sessions on this host.</p>`
-      : `<ul class="session-list">${rows}</ul>`);
+    (list ? `<p class="empty">No sessions on this host.</p>` : `<ul class="session-list">${shelfRow}${rows}</ul>`);
   root.querySelector("#session-new")?.addEventListener("click", () => callbacks.onNew());
+  if (shelfOn) {
+    root.querySelector("#host-shelf-row")?.addEventListener("click", () => shelf?.onOpenShelf());
+  }
   for (const button of root.querySelectorAll<HTMLButtonElement>("[data-session]")) {
     button.addEventListener("click", () => {
       const id = button.getAttribute("data-session");

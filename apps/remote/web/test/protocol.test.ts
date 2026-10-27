@@ -11,6 +11,8 @@ import {
   buildList,
   buildPrompt,
   buildPromptDraft,
+  buildShelfGet,
+  buildShelfList,
   buildSpawn,
   decodeSnapshotData,
   decodeUtf8,
@@ -20,12 +22,17 @@ import {
   parseComposed,
   parseError,
   parseExited,
+  parseFilePart,
+  parseHello,
   parseOk,
   parseOut,
   parseSessionAdded,
   parseSessionItem,
   parseSessionRemoved,
   parseSessions,
+  parseShelf,
+  parseShelfAdded,
+  parseShelfRemoved,
   parseSpawned,
   statusDot,
   workdirBasename,
@@ -261,5 +268,107 @@ describe("display helpers", () => {
     expect(statusDot("idle")).toBe("idle");
     expect(statusDot("exited")).toBe("dead");
     expect(statusDot("mystery")).toBe("unknown");
+  });
+});
+
+// The shelf half of v1: additive frames, each parsed on its own, so a
+// host that sends none of them changes nothing.
+describe("shelf frames", () => {
+  const shelfItem = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
+    file_id: "f1",
+    session_id: "s1",
+    name: "gradient.png",
+    mime: "image/png",
+    size: 4096,
+    caption: "colour wash",
+    from: "muse",
+    created_at: 1793100000,
+    ...overrides,
+  });
+
+  it("builds the exact shelf requests", () => {
+    expect(JSON.parse(buildShelfList("r1"))).toEqual({ t: "shelf_list", req: "r1" });
+    expect(JSON.parse(buildShelfList("r2", "s1"))).toEqual({
+      t: "shelf_list",
+      req: "r2",
+      id: "s1",
+    });
+    expect(JSON.parse(buildShelfGet("r3", "f9"))).toEqual({
+      t: "shelf_get",
+      req: "r3",
+      file_id: "f9",
+    });
+  });
+
+  it("reads hello features and treats a broken hello as featureless", () => {
+    expect(parseHello({ t: "hello", features: ["shelf"] })).toEqual(["shelf"]);
+    expect(parseHello({ t: "hello", features: [] })).toEqual([]);
+    expect(parseHello({ t: "hello" })).toEqual([]);
+    expect(parseHello({ t: "hello", features: ["shelf", 7] })).toEqual(["shelf"]);
+    expect(parseHello({ t: "sessions", items: [] })).toBeNull();
+    expect(parseHello(null)).toBeNull();
+  });
+
+  it("parses a shelf reply newest first, dropping broken items", () => {
+    const parsed = parseShelf({
+      t: "shelf",
+      req: "r1",
+      id: "s1",
+      items: [
+        shelfItem({ file_id: "old", created_at: 1793100000 }),
+        shelfItem({ file_id: "new", created_at: 1793100060 }),
+        shelfItem({ file_id: "" }),
+        shelfItem({ session_id: 42 }),
+        shelfItem({ file_id: "host", session_id: null, created_at: 1793100120 }),
+      ],
+    });
+    expect(parsed?.req).toBe("r1");
+    expect(parsed?.id).toBe("s1");
+    expect(parsed?.items.map((item) => item.file_id)).toEqual(["host", "new", "old"]);
+    // unix seconds in, epoch milliseconds out
+    expect(parsed?.items[0]?.created_at).toBe(1793100120_000);
+    expect(parsed?.items[0]?.session_id).toBeNull();
+    expect(parsed?.items[1]?.caption).toBe("colour wash");
+    // no id means the host's own shelf
+    expect(parseShelf({ t: "shelf", req: "r2", items: [] })?.id).toBeNull();
+    expect(parseShelf({ t: "shelf", req: "r2" })).toBeNull();
+    expect(parseShelf({ t: "sessions", items: [] })).toBeNull();
+  });
+
+  it("parses shelf_added and shelf_removed", () => {
+    expect(parseShelfAdded({ t: "shelf_added", item: shelfItem() })?.file_id).toBe("f1");
+    expect(parseShelfAdded({ t: "shelf_added" })).toBeNull();
+    expect(parseShelfAdded({ t: "shelf", items: [] })).toBeNull();
+    expect(parseShelfRemoved({ t: "shelf_removed", file_id: "f1" })).toBe("f1");
+    expect(parseShelfRemoved({ t: "shelf_removed", file_id: "" })).toBeNull();
+    expect(parseShelfRemoved({ t: "shelf_removed" })).toBeNull();
+  });
+
+  it("parses file parts and refuses broken payloads", () => {
+    const data = b64encode(new TextEncoder().encode("hello"));
+    const part = parseFilePart({
+      t: "file",
+      req: "r1",
+      file_id: "f1",
+      part: 0,
+      data,
+      last: true,
+    });
+    expect(part?.req).toBe("r1");
+    expect(part?.last).toBe(true);
+    expect(part?.data).toEqual(new TextEncoder().encode("hello"));
+    expect(parseFilePart({ t: "file", req: "r1", file_id: "f1", part: 0, data: "!!", last: true })).toBeNull();
+    expect(parseFilePart({ t: "file", req: "r1", file_id: "", part: 0, data, last: true })).toBeNull();
+    expect(parseFilePart({ t: "file", req: "r1", file_id: "f1", part: "0", data, last: true })).toBeNull();
+    expect(parseFilePart({ t: "out", req: "r1" })).toBeNull();
+  });
+
+  it("ignores frames it does not know", () => {
+    const unknown = { t: "shelf_v2", items: [] };
+    expect(parseShelf(unknown)).toBeNull();
+    expect(parseShelfAdded(unknown)).toBeNull();
+    expect(parseShelfRemoved(unknown)).toBeNull();
+    expect(parseFilePart(unknown)).toBeNull();
+    expect(parseHello(unknown)).toBeNull();
   });
 });

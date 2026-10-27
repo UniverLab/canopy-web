@@ -19,6 +19,7 @@ import { RelaySocket, defaultRelayUrl, parseHostsList } from "./relay.js";
 import { createFrameRouter } from "./router.js";
 import type { OnlineHost } from "./relay.js";
 import { SessionController } from "./session.js";
+import { ShelfController } from "./shelf-controller.js";
 import { SessionStore } from "./sessions.js";
 import { getHost, listHosts, loadDeviceKey, saveDeviceKey, saveHost } from "./store.js";
 import type { HostRecord } from "./store.js";
@@ -80,6 +81,11 @@ async function main(): Promise<void> {
   const catalog = new CatalogStore();
   let onlineHosts: OnlineHost[] = [];
   let manager: ConnectionManager | null = null;
+  // The shelf speaks only while the host's hello carries "shelf".
+  const shelf = new ShelfController({
+    send: (data) => manager?.send(data) ?? false,
+    sessions: store,
+  });
 
   const shell: Shell = createShell(
     root,
@@ -118,7 +124,7 @@ async function main(): Promise<void> {
       onCompose: (draft, req) => manager?.send(buildCompose(req, draft)) ?? false,
       onSendDraft: (draft, req) => controller.sendPromptDraft(draft, req),
     },
-    { catalog },
+    { catalog, shelf },
   );
 
   const controller = new SessionController({
@@ -134,13 +140,14 @@ async function main(): Promise<void> {
     shell.setPairedHosts(await listHosts());
   };
 
-  const router = createFrameRouter({ store, controller, shell, catalog });
+  const router = createFrameRouter({ store, controller, shell, catalog, shelf });
 
   function startSession(host: HostRecord): void {
     // Detach while the old connection is still open so the host sees it.
     controller.close();
     manager?.stop();
     catalog.clear();
+    shelf.reset();
     shell.setHostLabel(host.label);
     shell.showSessions();
     const frames = createChannelHandler({
@@ -214,6 +221,7 @@ async function main(): Promise<void> {
     manager?.stop();
     manager = null;
     catalog.clear();
+    shelf.reset();
     const stored = await listHosts();
     await refreshPaired();
     if (stored.length === 0) {

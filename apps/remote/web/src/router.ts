@@ -13,14 +13,20 @@ import {
   parseComposed,
   parseError,
   parseExited,
+  parseFilePart,
+  parseHello,
   parseOk,
   parseOut,
   parseSessionAdded,
   parseSessionRemoved,
   parseSessions,
+  parseShelf,
+  parseShelfAdded,
+  parseShelfRemoved,
   parseSpawned,
 } from "./protocol.js";
 import type { SessionController } from "./session.js";
+import type { ShelfFrames } from "./shelf-controller.js";
 import type { SessionStore } from "./sessions.js";
 
 export interface FrameRouter {
@@ -33,10 +39,12 @@ export interface FrameRouterDeps {
   controller: SessionController;
   shell: Shell;
   catalog: CatalogStore;
+  /** The session shelf; absent in tests that do not exercise it. */
+  shelf?: ShelfFrames;
 }
 
 export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
-  const { store, controller, shell, catalog } = deps;
+  const { store, controller, shell, catalog, shelf } = deps;
 
   function handleSnapshot(snapshot: JoinedSnapshot): void {
     shell.ensureTerminal(snapshot.id, snapshot.cols, snapshot.rows);
@@ -85,6 +93,34 @@ export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
       shell.sheetComposed(composed.req, composed.text);
       return;
     }
+    // The shelf half of v1: hello gates the whole feature, the rest is
+    // list/push/removal/file-part. Every parser here is additive, so a
+    // host that sends none of them changes nothing.
+    const hello = parseHello(frame);
+    if (hello !== null) {
+      shelf?.handleHello(hello);
+      return;
+    }
+    const shelfList = parseShelf(frame);
+    if (shelfList) {
+      shelf?.handleList(shelfList);
+      return;
+    }
+    const shelfAdded = parseShelfAdded(frame);
+    if (shelfAdded) {
+      shelf?.handleAdded(shelfAdded);
+      return;
+    }
+    const shelfRemoved = parseShelfRemoved(frame);
+    if (shelfRemoved !== null) {
+      shelf?.handleRemoved(shelfRemoved);
+      return;
+    }
+    const filePart = parseFilePart(frame);
+    if (filePart) {
+      shelf?.handlePart(filePart);
+      return;
+    }
     const ok = parseOk(frame);
     if (ok !== null) {
       shell.composerOk(ok);
@@ -93,6 +129,11 @@ export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
     }
     const error = parseError(frame);
     if (error) {
+      // A shelf transfer answers its own req (busy, not_found, …) and
+      // must never surface as a composer or dialog error.
+      if (shelf?.handleError(error)) {
+        return;
+      }
       shell.composerError(error.message, error.req);
       shell.sheetError(error.message, error.req, error.code);
     }

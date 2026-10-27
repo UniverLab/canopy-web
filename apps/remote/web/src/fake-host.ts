@@ -10,10 +10,13 @@ import { createChannelHandler } from "./channel.js";
 import { b64encode } from "./crypto.js";
 import { mountCanopyBackground } from "../../../../packages/look/fondo/index.js";
 import { buildCatalog, buildList, newReqId } from "./protocol.js";
-import type { PromptDraft, SessionItem } from "./protocol.js";
+import type { PromptDraft, SessionItem, ShelfItem } from "./protocol.js";
 import { createFrameRouter } from "./router.js";
 import { SessionController } from "./session.js";
+import { ShelfController } from "./shelf-controller.js";
 import { SessionStore } from "./sessions.js";
+import { hostShelfImage, pushedShelfImage, smokeShelfImages } from "../test/fixtures/shelf-images.js";
+import type { ShelfImage } from "../test/fixtures/shelf-images.js";
 import "./styles.css";
 
 const b64 = (text: string): string => b64encode(new TextEncoder().encode(text));
@@ -104,6 +107,49 @@ function main(): void {
     frames.push(JSON.stringify(frame));
   };
 
+  // The shelf: three images for the smoke session, one on the host's
+  // own shelf, and one more the host pushes 2 s after attach.
+  interface FakeShelfFile {
+    item: ShelfItem;
+    bytes: Uint8Array;
+  }
+  const startedAt = Date.now();
+  const shelfFiles: FakeShelfFile[] = [];
+  let shelfFileCounter = 0;
+  let pushedFor: string | null = null;
+
+  const putShelfFile = (
+    image: ShelfImage,
+    sessionId: string | null,
+    from: string,
+    ageMs: number,
+  ): ShelfItem => {
+    shelfFileCounter += 1;
+    const item: ShelfItem = {
+      file_id: `f${shelfFileCounter}`,
+      session_id: sessionId,
+      name: image.name,
+      mime: image.mime,
+      size: image.bytes.length,
+      caption: image.caption,
+      from,
+      created_at: startedAt - ageMs,
+    };
+    shelfFiles.push({ item, bytes: image.bytes });
+    return item;
+  };
+
+  for (const [index, image] of smokeShelfImages().entries()) {
+    putShelfFile(image, "smoke", "muse", (index + 1) * 60_000);
+  }
+  putShelfFile(hostShelfImage(), null, "canopy", 5 * 60_000);
+
+  const shelfItemsFor = (sessionId: string | null): ShelfItem[] =>
+    shelfFiles
+      .filter((file) => file.item.session_id === sessionId)
+      .map((file) => file.item)
+      .sort((a, b) => b.created_at - a.created_at);
+
   const sessionItems = () =>
     sessions.map((item) => ({
       id: item.id,
@@ -125,6 +171,7 @@ function main(): void {
       model?: string;
       workdir?: string;
       name?: string;
+      file_id?: string;
       draft?: PromptDraft;
     };
     sent.push(frame);
@@ -136,6 +183,46 @@ function main(): void {
       const full = b64(SMOKE_OUTPUT);
       deliver({ t: "snapshot", id: frame.id, cols: 80, rows: 24, seq, data: full.slice(0, 10) });
       deliver({ t: "snapshot_more", id: frame.id, data: full.slice(10), last: true });
+      const attached = frame.id;
+      if (pushedFor === null) {
+        pushedFor = attached;
+        globalThis.setTimeout(() => {
+          const item = putShelfFile(pushedShelfImage(), attached, "muse", 0);
+          deliver({ t: "shelf_added", item });
+        }, 2000);
+      }
+    } else if (frame.t === "shelf_list") {
+      const id = typeof frame.id === "string" && frame.id !== "" ? frame.id : null;
+      const reply: Record<string, unknown> = {
+        t: "shelf",
+        req: frame.req,
+        items: shelfItemsFor(id),
+      };
+      if (id !== null) {
+        reply.id = id;
+      }
+      deliver(reply);
+    } else if (frame.t === "shelf_get" && typeof frame.req === "string" && typeof frame.file_id === "string") {
+      const file = shelfFiles.find((row) => row.item.file_id === frame.file_id);
+      if (!file) {
+        deliver({ t: "error", req: frame.req, code: "not_found", message: "no such file" });
+      } else {
+        // 12 KiB parts, so even the smallest shelf crosses a boundary.
+        const PART = 12 * 1024;
+        const total = file.bytes.length;
+        const partCount = Math.max(1, Math.ceil(total / PART));
+        for (let part = 0; part < partCount; part += 1) {
+          const slice = file.bytes.subarray(part * PART, Math.min(total, (part + 1) * PART));
+          deliver({
+            t: "file",
+            req: frame.req,
+            file_id: file.item.file_id,
+            part,
+            data: b64encode(slice),
+            last: part === partCount - 1,
+          });
+        }
+      }
     } else if (frame.t === "spawn") {
       nextSpawn += 1;
       const id = `spawned-${nextSpawn}`;
@@ -164,6 +251,9 @@ function main(): void {
     }
     return true;
   };
+
+  // The shelf controller the real entry point wires the same way.
+  const shelf = new ShelfController({ send, sessions: store });
 
   const shell = createShell(
     root,
@@ -198,7 +288,7 @@ function main(): void {
       onCompose: (draft, req) => send(JSON.stringify({ t: "compose", req, draft })),
       onSendDraft: (draft, req) => controller.sendPromptDraft(draft, req),
     },
-    { catalog },
+    { catalog, shelf },
   );
 
   const controller = new SessionController({
@@ -219,11 +309,14 @@ function main(): void {
   });
 
   // The smoke test drives the same routing the app uses.
-  const router = createFrameRouter({ store, controller, shell, catalog });
+  const router = createFrameRouter({ store, controller, shell, catalog, shelf });
   const frames = createChannelHandler({
     onSnapshot: router.handleSnapshot,
     onFrame: router.handleFrame,
   });
+
+  // The host greets first: hello.features is what turns the shelf UI on.
+  deliver({ t: "hello", features: ["shelf"] });
 
   shell.setLogin("smoke");
   shell.setHostLabel("smoke host");

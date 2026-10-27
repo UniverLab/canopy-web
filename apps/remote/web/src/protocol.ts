@@ -92,9 +92,9 @@ function frameType(frame: unknown): string | null {
   return frame.t;
 }
 
-// last_output_at arrives as unix seconds (number), unix milliseconds, an
-// ISO string, or nothing at all; normalize to epoch milliseconds.
-function parseLastOutputAt(value: unknown): number | null {
+// last_output_at and created_at arrive as unix seconds (number), unix
+// milliseconds, an ISO string, or nothing at all; normalize to epoch ms.
+function parseEpochMs(value: unknown): number | null {
   if (value === null || value === undefined) {
     return null;
   }
@@ -123,7 +123,7 @@ export function parseSessionItem(item: unknown): SessionItem | null {
     model: asString(item.model),
     workdir: asString(item.workdir),
     status: asString(item.status),
-    lastOutputAt: parseLastOutputAt(item.last_output_at),
+    lastOutputAt: parseEpochMs(item.last_output_at),
   };
 }
 
@@ -309,6 +309,124 @@ export function parseComposed(frame: unknown): { req: string; text: string } | n
   return { req: frame.req, text: frame.text };
 }
 
+// --- The session shelf (additive to v1) -------------------------------
+// The host advertises the shelf in hello.features; without "shelf" in
+// that list the browser sends no shelf frame and shows no shelf UI.
+
+export interface ShelfItem {
+  file_id: string;
+  /** The owning session, or null for the host's own shelf. */
+  session_id: string | null;
+  name: string;
+  mime: string;
+  size: number;
+  caption: string | null;
+  from: string;
+  created_at: number;
+}
+
+export interface ShelfList {
+  req: string | null;
+  /** The shelf the reply describes; null is the host shelf. */
+  id: string | null;
+  /** Newest first, as the host sends them. */
+  items: ShelfItem[];
+}
+
+export interface FilePart {
+  req: string;
+  file_id: string;
+  part: number;
+  data: Uint8Array;
+  last: boolean;
+}
+
+// A hello without features (or with a malformed list) advertises nothing,
+// so it parses to an empty feature set and the shelf stays hidden.
+export function parseHello(frame: unknown): string[] | null {
+  if (frameType(frame) !== "hello" || !isRecord(frame)) {
+    return null;
+  }
+  if (!Array.isArray(frame.features)) {
+    return [];
+  }
+  return frame.features.filter((feature): feature is string => typeof feature === "string");
+}
+
+// One shelf entry is dropped when its file_id is missing or empty; the
+// rest of the reply still renders, like a catalog frame.
+function parseShelfItem(value: unknown): ShelfItem | null {
+  if (!isRecord(value) || typeof value.file_id !== "string" || value.file_id === "") {
+    return null;
+  }
+  const session = value.session_id;
+  if (session !== null && session !== undefined && typeof session !== "string") {
+    return null;
+  }
+  return {
+    file_id: value.file_id,
+    session_id: typeof session === "string" && session !== "" ? session : null,
+    name: asString(value.name),
+    mime: asString(value.mime),
+    size: typeof value.size === "number" && Number.isFinite(value.size) ? value.size : 0,
+    caption: typeof value.caption === "string" && value.caption !== "" ? value.caption : null,
+    from: asString(value.from),
+    created_at: parseEpochMs(value.created_at) ?? 0,
+  };
+}
+
+export function parseShelf(frame: unknown): ShelfList | null {
+  if (frameType(frame) !== "shelf" || !isRecord(frame) || !Array.isArray(frame.items)) {
+    return null;
+  }
+  const items: ShelfItem[] = [];
+  for (const value of frame.items) {
+    const item = parseShelfItem(value);
+    if (item) {
+      items.push(item);
+    }
+  }
+  // The host promises newest first; normalize so one clock skew or one
+  // older host build never puts a stale file on top of the grid.
+  items.sort((a, b) => b.created_at - a.created_at);
+  return {
+    req: typeof frame.req === "string" ? frame.req : null,
+    id: typeof frame.id === "string" && frame.id !== "" ? frame.id : null,
+    items,
+  };
+}
+
+export function parseShelfAdded(frame: unknown): ShelfItem | null {
+  if (frameType(frame) !== "shelf_added" || !isRecord(frame)) {
+    return null;
+  }
+  return parseShelfItem(frame.item);
+}
+
+export function parseShelfRemoved(frame: unknown): string | null {
+  if (frameType(frame) !== "shelf_removed" || !isRecord(frame)) {
+    return null;
+  }
+  return typeof frame.file_id === "string" && frame.file_id !== "" ? frame.file_id : null;
+}
+
+export function parseFilePart(frame: unknown): FilePart | null {
+  if (frameType(frame) !== "file" || !isRecord(frame)) {
+    return null;
+  }
+  if (typeof frame.req !== "string" || typeof frame.file_id !== "string" || frame.file_id === "") {
+    return null;
+  }
+  if (typeof frame.part !== "number" || typeof frame.data !== "string" || typeof frame.last !== "boolean") {
+    return null;
+  }
+  const data = b64Bytes(frame.data);
+  if (!data) {
+    return null;
+  }
+  return { req: frame.req, file_id: frame.file_id, part: frame.part, data, last: frame.last };
+}
+
 export function buildList(req: string): string {
   return JSON.stringify({ t: "list", req });
 }
@@ -358,6 +476,18 @@ export function buildInputText(id: string, text: string): string {
 
 export function buildPrompt(req: string, id: string, text: string): string {
   return JSON.stringify({ t: "prompt", req, id, text });
+}
+
+// The shelf requests: a list carries the session id, absent for the
+// host's own shelf; a get always names one file.
+export function buildShelfList(req: string, id?: string): string {
+  return id === undefined
+    ? JSON.stringify({ t: "shelf_list", req })
+    : JSON.stringify({ t: "shelf_list", req, id });
+}
+
+export function buildShelfGet(req: string, fileId: string): string {
+  return JSON.stringify({ t: "shelf_get", req, file_id: fileId });
 }
 
 let reqCounter = 0;

@@ -216,3 +216,122 @@ test("composer keeps the text and shows the error", async ({ page }) => {
   await expect(page.locator(".composer-error")).toHaveText("host is gone");
   await expect(page.locator(".composer-input")).toHaveValue("do the thing");
 });
+
+// --- The session shelf (hello.features "shelf") -------------------------
+
+async function horizontalOverflow(page: import("@playwright/test").Page): Promise<number> {
+  return page.evaluate(() => {
+    const el = document.scrollingElement ?? document.documentElement;
+    return el.scrollWidth - el.clientWidth;
+  });
+}
+
+async function gridColumns(page: import("@playwright/test").Page): Promise<number> {
+  return page.evaluate(() => {
+    const grid = document.querySelector(".shelf-grid") as Element | null;
+    if (!grid) {
+      return 0;
+    }
+    return getComputedStyle(grid).gridTemplateColumns.split(" ").filter(Boolean).length;
+  });
+}
+
+test("shelf badge, sheet and viewer at 390x844", async ({ page }, testInfo) => {
+  const badge = page.locator("#session-files-badge");
+  // Nothing is unseen until the host pushes a file two seconds after attach.
+  await expect(badge).toBeHidden();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(badge).toBeVisible();
+  await expect(badge).toHaveText("1");
+  const pushedShot = await page.screenshot({
+    path: testInfo.outputPath("shelf-badge-390x844.png"),
+  });
+  await testInfo.attach("shelf-badge-390x844", { body: pushedShot, contentType: "image/png" });
+
+  await page.locator("#session-files").click();
+  await expect(page.locator(".shelf-cell")).toHaveCount(4);
+  // The shelf was looked at, so the badge clears as the sheet opens.
+  await expect(badge).toBeHidden();
+  // Two columns on a phone.
+  expect(await gridColumns(page)).toBe(2);
+  const sheetShot = await page.screenshot({
+    path: testInfo.outputPath("shelf-sheet-390x844.png"),
+  });
+  await testInfo.attach("shelf-sheet-390x844", { body: sheetShot, contentType: "image/png" });
+  expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
+
+  // The SVG is a file like any other: fetched once, shown through an img.
+  const svg = page.locator('.shelf-cell[title="layout.svg"] img');
+  await expect(svg).toBeVisible();
+  await expect
+    .poll(() => svg.evaluate((el) => (el as HTMLImageElement).naturalWidth))
+    .toBeGreaterThan(0);
+  expect(await svg.getAttribute("src")).toMatch(/^blob:/);
+  // Never inlined, never in a frame.
+  expect(await page.locator(".sheet object, .sheet iframe, .sheet embed").count()).toBe(0);
+
+  // The viewer opens on a tap and closes on Esc, leaving the sheet up.
+  await page.locator('.shelf-cell[title="layout.svg"]').click();
+  await expect(page.locator("#shelf-viewer")).toBeVisible();
+  await expect(page.locator("#shelf-viewer-img")).toBeVisible();
+  await expect(page.locator("#shelf-count")).toHaveText("3 / 4");
+  const viewerShot = await page.screenshot({
+    path: testInfo.outputPath("shelf-viewer-390x844.png"),
+  });
+  await testInfo.attach("shelf-viewer-390x844", { body: viewerShot, contentType: "image/png" });
+  expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#shelf-viewer")).toBeHidden();
+  await expect(page.locator(".shelf-cell")).toHaveCount(4);
+  await page.keyboard.press("Escape");
+  await expect(page.locator('[data-sheet="shelf"]')).toBeHidden();
+});
+
+test("shelf grid, arrow steps and list counts at 1280x900", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const badge = page.locator("#session-files-badge");
+  await expect(badge).toBeVisible();
+  await expect(badge).toHaveText("1");
+
+  await page.locator("#session-files").click();
+  await expect(page.locator(".shelf-cell")).toHaveCount(4);
+  // Four columns from 900 px up.
+  expect(await gridColumns(page)).toBe(4);
+  await expect(page.locator('.shelf-cell[title="gradient.png"] img')).toBeVisible();
+  await expect(page.locator('.shelf-cell[title="layout.svg"] img')).toBeVisible();
+  expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
+
+  // The viewer steps with the arrow keys and downloads the blob URL.
+  await page.locator(".shelf-cell").first().click();
+  await expect(page.locator("#shelf-viewer")).toBeVisible();
+  await expect(page.locator("#shelf-count")).toHaveText("1 / 4");
+  await expect(page.locator("#shelf-download")).toHaveAttribute("href", /^blob:/);
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator("#shelf-count")).toHaveText("2 / 4");
+  const viewerShot = await page.screenshot({
+    path: testInfo.outputPath("shelf-viewer-1280x900.png"),
+  });
+  await testInfo.attach("shelf-viewer-1280x900", { body: viewerShot, contentType: "image/png" });
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#shelf-viewer")).toBeHidden();
+  await page.keyboard.press("Escape");
+  await expect(page.locator('[data-sheet="shelf"]')).toBeHidden();
+
+  // The session list carries the counts: one 📎 per row plus the host's own.
+  await page.locator("#session-back").click();
+  await expect(page.locator("#host-shelf-row")).toBeVisible();
+  await expect(page.locator("#host-shelf-row")).toContainText("📎 1");
+  await expect(page.locator('[data-session="smoke"]')).toContainText("📎 4");
+  const listShot = await page.screenshot({
+    path: testInfo.outputPath("shelf-list-1280x900.png"),
+  });
+  await testInfo.attach("shelf-list-1280x900", { body: listShot, contentType: "image/png" });
+  expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
+
+  // The Shelf row opens the same sheet over the host's own files.
+  await page.locator("#host-shelf-row").click();
+  await expect(page.locator(".shelf-cell")).toHaveCount(1);
+  await expect(page.locator('.shelf-cell[title="host-mark.png"] img')).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator('[data-sheet="shelf"]')).toBeHidden();
+});
