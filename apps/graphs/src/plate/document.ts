@@ -10,7 +10,7 @@ import { isArray, isNumber, isRecord, isString } from "../json.js";
 import type { JsonValue } from "../../../../src/schema.js";
 import { harnessStem, type Kind } from "./vocabulary.js";
 
-/** A graph document as `renderPlate` takes it: the registry's format v6. */
+/** A graph document as `renderPlate` takes it: the catalogue's format v6. */
 export interface GraphDocument {
   name: string;
   nodes: GraphNodeDoc[];

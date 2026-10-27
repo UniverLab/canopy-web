@@ -127,7 +127,7 @@ describe("the markdown twin", () => {
       "# hello-graph",
       "- Kind: graph",
       "- Name: hello-graph",
-      "- Source: https://github.com/UniverLab/canopy-web",
+      "- Source: https://github.com/UniverLab/canopy-graphs",
       "- Stars: 7 stars",
       "- Nodes: agent 2 · check 1 · gate 1 · router 1",
       "- Edges: 5 edges · 1 fail",
@@ -252,9 +252,9 @@ describe("the cold start", () => {
     expect(await response.text()).toContain(INDEXING_BODY);
   });
 
-  it("answers a missing registry folder with the empty official home, not the indexing page", async () => {
+  it("answers a missing official graphs folder with the empty official home, not the indexing page", async () => {
     const response = await call("/", {
-      stubs: [{ url: `${REPO_DIR}/contents/registry/graphs`, status: 404, body: {} }],
+      stubs: [{ url: `${REPO_DIR}/contents/graphs`, status: 404, body: {} }],
     });
     expect(response.status).toBe(200);
     const html = await response.text();
@@ -268,7 +268,7 @@ describe("the cold start", () => {
 
   it("answers an unreadable upstream body with the calm page, never a crash", async () => {
     const response = await call("/g/hello-graph", {
-      stubs: [{ url: `${REPO_DIR}/contents/registry/graphs/hello-graph/graph.json`, status: 200, text: "<html>portal</html>", headers: HTML }],
+      stubs: [{ url: `${REPO_DIR}/contents/graphs/hello-graph/graph.json`, status: 200, text: "<html>portal</html>", headers: HTML }],
     });
     // The indexer drops an unreadable body, so the page finds no document.
     expect(response.status).toBe(404);
@@ -276,7 +276,7 @@ describe("the cold start", () => {
   });
 
   it("answers a missing document with a calm 404", async () => {
-    const response = await call("/g/nope", { stubs: [{ url: `${REPO_DIR}/contents/registry/graphs/nope`, status: 404, body: {} }] });
+    const response = await call("/g/nope", { stubs: [{ url: `${REPO_DIR}/contents/graphs/nope`, status: 404, body: {} }] });
     expect(response.status).toBe(404);
     expect(await response.text()).toContain("Not found");
   });
@@ -338,11 +338,11 @@ describe("the page shell", () => {
     const html = await (await call("/g/hello-graph", {
       env: { CF_ACCOUNT_ID: "acct", CF_ANALYTICS_TOKEN: "tok" },
       requestStubs: [
-        { url: "analytics_engine/sql", status: 200, body: { data: [{ index: "UniverLab/canopy-web/graph/hello-graph", count: 12 }] } },
+        { url: "analytics_engine/sql", status: 200, body: { data: [{ index: "UniverLab/canopy-graphs/graph/hello-graph", count: 12 }] } },
       ],
     })).text();
     expect(html).toContain("<dt>Stars</dt><dd>7 stars</dd>");
-    expect(html).toContain(`<a class="button" href="https://github.com/UniverLab/canopy-web">Star on GitHub</a>`);
+    expect(html).toContain(`<a class="button" href="https://github.com/UniverLab/canopy-graphs">Star on GitHub</a>`);
     expect(html).toContain("<dt>Agent nodes</dt><dd>build, docs</dd>");
     expect(html).toContain("<dt>Nodes</dt><dd>agent 2 · check 1 · gate 1 · router 1</dd>");
     expect(html).toContain("<dt>Edges</dt><dd>5 edges · 1 fail</dd>");
@@ -363,7 +363,7 @@ describe("the page shell", () => {
   });
 
   it("serves the short official form and the long one identically", async () => {
-    const long = await call("/g/UniverLab/canopy-web/hello-graph");
+    const long = await call("/g/UniverLab/canopy-graphs/hello-graph");
     const html = await long.text();
     expect(html).toContain("canopy graph install hello-graph");
   });
@@ -520,9 +520,9 @@ describe("routing", () => {
     const slug = 'evil" onmouseover="alert(1)';
     const encoded = "evil%22%20onmouseover%3D%22alert(1)";
     const stubs = [
-      { url: `${REPO_DIR}/contents/registry/graphs`, status: 200, body: dirBody([{ name: slug, type: "dir" }]) },
-      { url: `${REPO_DIR}/contents/registry/graphs/evil%22%20onmouseover=%22alert(1)/graph.json`, status: 200, body: fileBody("graphs/x/graph.json", VALID_GRAPH_TEXT) },
-      { url: `${REPO_DIR}/contents/registry/graphs/${encoded}/README.md`, status: 404, body: {} },
+      { url: `${REPO_DIR}/contents/graphs`, status: 200, body: dirBody([{ name: slug, type: "dir" }]) },
+      { url: `${REPO_DIR}/contents/graphs/evil%22%20onmouseover=%22alert(1)/graph.json`, status: 200, body: fileBody("graphs/x/graph.json", VALID_GRAPH_TEXT) },
+      { url: `${REPO_DIR}/contents/graphs/${encoded}/README.md`, status: 404, body: {} },
       { url: REPO_DIR, status: 200, body: { stargazers_count: 1 } },
     ];
     const html = await (await call("/", { stubs })).text();
@@ -730,15 +730,15 @@ describe("the report links", () => {
     const report = reportUrl(
       "graph",
       "UniverLab",
-      "canopy-web",
+      "canopy-graphs",
       "hello-graph",
       "https://graphs.univerlab.org/g/hello-graph",
     );
     expect(html).toContain(`<dt>${REPORT_LABEL}</dt><dd><a href="${escapeHtml(report)}"`);
     expect(html).toContain(`target="_blank" rel="noopener noreferrer">${REPORT_LABEL}</a>`);
     // The attribute is escaped once, for HTML; the URL itself carries `&`.
-    expect(html).toContain("&amp;kind=graph&amp;source=UniverLab%2Fcanopy-web");
-    expect(report).toContain("&kind=graph&source=UniverLab%2Fcanopy-web");
+    expect(html).toContain("&amp;kind=graph&amp;source=UniverLab%2Fcanopy-graphs");
+    expect(report).toContain("&kind=graph&source=UniverLab%2Fcanopy-graphs");
     // The sheet ends with the install box, then Report.
     expect(html.indexOf(`<dt>${REPORT_LABEL}</dt>`)).toBeGreaterThan(
       html.indexOf(`<dt>Install</dt>`),
@@ -768,7 +768,7 @@ describe("the report links", () => {
     const report = reportUrl(
       "graph",
       "UniverLab",
-      "canopy-web",
+      "canopy-graphs",
       "hello-graph",
       "https://graphs.univerlab.org/g/hello-graph",
     );
@@ -787,10 +787,10 @@ describe("the report links", () => {
 describe("the blocked list", () => {
   const blocked: BlockedEntry = {
     kind: "graph",
-    repo: "UniverLab/canopy-web",
+    repo: "UniverLab/canopy-graphs",
     slug: "hello-graph",
     reason: "Malicious or dangerous command",
-    issue: "https://github.com/UniverLab/canopy-web/issues/12",
+    issue: "https://github.com/UniverLab/canopy-graphs/issues/12",
     blocked_at: "2026-10-27",
   };
 
@@ -823,7 +823,7 @@ describe("the blocked list", () => {
       blocked: [{
         repo: "acme/things",
         reason: "Copyright or licence",
-        issue: "https://github.com/UniverLab/canopy-web/issues/13",
+        issue: "https://github.com/UniverLab/canopy-graphs/issues/13",
         blocked_at: "2026-10-27",
       }],
     });

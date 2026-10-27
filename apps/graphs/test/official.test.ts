@@ -6,12 +6,12 @@ import { createGitHub } from "../src/github.js";
 import { FakeCache, dirBody, fakeFetch, fileBody } from "./fakes.js";
 import { INVALID_GRAPH_TEXT, VALID_GRAPH_TEXT } from "./documents-fixture.js";
 
-const REPO_DIR = "repos/UniverLab/canopy-web";
+const REPO_DIR = "repos/UniverLab/canopy-graphs";
 
 /** The GitHub-shaped stubs behind one and two official documents. */
 const STUBS = (brokenToo: boolean) => [
   {
-    url: `${REPO_DIR}/contents/registry/graphs`,
+    url: `${REPO_DIR}/contents/graphs`,
     status: 200,
     body: dirBody(
       brokenToo
@@ -19,12 +19,12 @@ const STUBS = (brokenToo: boolean) => [
         : [{ name: "hello-graph", type: "dir" }],
     ),
   },
-  { url: `${REPO_DIR}/contents/registry/nodes`, status: 200, body: [] },
-  { url: `${REPO_DIR}/contents/registry/graphs/hello-graph/graph.json`, status: 200, body: fileBody("graphs/hello-graph/graph.json", VALID_GRAPH_TEXT) },
-  { url: `${REPO_DIR}/contents/registry/graphs/broken-graph/graph.json`, status: 200, body: fileBody("graphs/broken-graph/graph.json", INVALID_GRAPH_TEXT) },
-  { url: `${REPO_DIR}/contents/registry/graphs/hello-graph/README.md`, status: 200, body: fileBody("graphs/hello-graph/README.md", "# hello-graph\n\nA tiny graph.\n") },
-  { url: `${REPO_DIR}/contents/registry/graphs/broken-graph/README.md`, status: 404, body: {} },
-  { url: "repos/UniverLab/canopy-web", status: 200, body: { stargazers_count: 7 } },
+  { url: `${REPO_DIR}/contents/nodes`, status: 200, body: [] },
+  { url: `${REPO_DIR}/contents/graphs/hello-graph/graph.json`, status: 200, body: fileBody("graphs/hello-graph/graph.json", VALID_GRAPH_TEXT) },
+  { url: `${REPO_DIR}/contents/graphs/broken-graph/graph.json`, status: 200, body: fileBody("graphs/broken-graph/graph.json", INVALID_GRAPH_TEXT) },
+  { url: `${REPO_DIR}/contents/graphs/hello-graph/README.md`, status: 200, body: fileBody("graphs/hello-graph/README.md", "# hello-graph\n\nA tiny graph.\n") },
+  { url: `${REPO_DIR}/contents/graphs/broken-graph/README.md`, status: 404, body: {} },
+  { url: REPO_DIR, status: 200, body: { stargazers_count: 7 } },
 ];
 
 describe("the official listing", () => {
@@ -42,7 +42,7 @@ describe("the official listing", () => {
     expect(doc.name).toBe("hello-graph");
     expect(doc.readme).toContain("A tiny graph");
     expect(doc.nodeCount).toBe(4);
-    expect(doc.repo).toBe("UniverLab/canopy-web");
+    expect(doc.repo).toBe("UniverLab/canopy-graphs");
     expect(doc.stars).toBe(7);
     expect("downloads" in doc).toBe(false);
   });
@@ -78,19 +78,19 @@ describe("the official listing", () => {
       STUBS(false)[0],
       STUBS(false)[1],
       {
-        url: `${REPO_DIR}/contents/registry/graphs/hello-graph/graph.json`,
+        url: `${REPO_DIR}/contents/graphs/hello-graph/graph.json`,
         status: 200,
         // exactly what GitHub answers for a file over 1 MB
-        body: { name: "graph.json", path: "registry/graphs/hello-graph/graph.json", size: 2000000, content: "", encoding: "none" },
+        body: { name: "graph.json", path: "graphs/hello-graph/graph.json", size: 2000000, content: "", encoding: "none" },
       },
-      { url: `${REPO_DIR}/contents/registry/graphs/hello-graph/README.md`, status: 404, body: {} },
+      { url: `${REPO_DIR}/contents/graphs/hello-graph/README.md`, status: 404, body: {} },
       {
-        url: "raw.githubusercontent.com/UniverLab/canopy-web/HEAD/registry/graphs/hello-graph/graph.json",
+        url: "raw.githubusercontent.com/UniverLab/canopy-graphs/HEAD/graphs/hello-graph/graph.json",
         status: 200,
         text: VALID_GRAPH_TEXT,
         headers: { "content-type": "text/plain" },
       },
-      { url: "repos/UniverLab/canopy-web", status: 200, body: { stargazers_count: 7 } },
+      { url: REPO_DIR, status: 200, body: { stargazers_count: 7 } },
     ]);
     const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
     const listing = (await listOfficial(github, () => undefined)) as OfficialListing;
@@ -102,7 +102,7 @@ describe("the official listing", () => {
   it("surfaces a rate limit from the directory listing as a typed error", async () => {
     const fake = fakeFetch([
       {
-        url: `${REPO_DIR}/contents/registry/graphs`,
+        url: `${REPO_DIR}/contents/graphs`,
         status: 403,
         headers: { "x-ratelimit-remaining": "0" },
       },
@@ -112,8 +112,8 @@ describe("the official listing", () => {
     expect("kind" in error ? error.kind : "").toBe("rate-limit");
   });
 
-  it("treats a missing registry folder as an empty catalogue", async () => {
-    const fake = fakeFetch([{ url: `${REPO_DIR}/contents/registry/graphs`, status: 404, body: {} }]);
+  it("treats a missing graphs folder as an empty catalogue", async () => {
+    const fake = fakeFetch([{ url: `${REPO_DIR}/contents/graphs`, status: 404, body: {} }]);
     const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
     const notes: string[] = [];
     const listing = (await listOfficial(github, (message) => notes.push(message))) as OfficialListing;
@@ -124,13 +124,13 @@ describe("the official listing", () => {
     expect(listing.graphs).toEqual([]);
     expect(listing.nodes).toEqual([]);
     expect(notes.some((message) => message.includes("absent"))).toBe(true);
-    expect(fake.calls.some((url) => url.includes("registry/nodes"))).toBe(true);
+    expect(fake.calls.some((url) => url.includes("canopy-graphs/contents/nodes"))).toBe(true);
   });
 
   it("lists graphs while the nodes folder is missing", async () => {
     const partial = [
       ...STUBS(false).slice(0, 1),
-      { url: `${REPO_DIR}/contents/registry/nodes`, status: 404, body: {} },
+      { url: `${REPO_DIR}/contents/nodes`, status: 404, body: {} },
       ...STUBS(false).slice(2),
     ];
     const fake = fakeFetch(partial);
@@ -145,7 +145,7 @@ describe("the official listing", () => {
 
   it("keeps a 500 on the listing as a typed error", async () => {
     const fake = fakeFetch([
-      { url: `${REPO_DIR}/contents/registry/graphs`, status: 500, body: {} },
+      { url: `${REPO_DIR}/contents/graphs`, status: 500, body: {} },
     ]);
     const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
     const error = await listOfficial(github, () => undefined);

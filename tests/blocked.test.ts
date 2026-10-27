@@ -2,15 +2,16 @@
 /**
  * The removal list as a contract: `schema/blocked.schema.json` validates the
  * shape, and the validator adds the one rule JSON Schema cannot state across
- * sibling fields — a slug needs its kind. The committed file stays empty
- * until a maintainer merges a decided report.
+ * sibling fields — a slug needs its kind. The live list lives in
+ * UniverLab/canopy-graphs; the fixture here stays empty, exactly as a
+ * fresh repository's does until a maintainer merges a decided report.
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { validateBlocked, validateBlockedFile } from "../src/validate.js";
 
-const BLOCKED = path.resolve(import.meta.dirname, "../registry/blocked.json");
+const BLOCKED = path.resolve(import.meta.dirname, "fixtures/blocked.json");
 
 const ISSUE = "https://github.com/UniverLab/canopy-web/issues/7";
 
@@ -68,7 +69,7 @@ describe("the blocked list schema", () => {
     expect(validateBlocked("blocked.json", [withoutKind])).toEqual([]);
   });
 
-  it("keeps the committed list empty and valid", () => {
+  it("keeps the fixture list empty and valid, as the official repo's does before its first merge", () => {
     expect(validateBlockedFile(BLOCKED)).toEqual([]);
     expect(JSON.parse(readFileSync(BLOCKED, "utf8"))).toEqual([]);
   });

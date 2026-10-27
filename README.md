@@ -11,7 +11,10 @@ Each app is its own Cloudflare Worker with its own secrets and origin.
 
 ## Graphs catalogue
 
-Shareable Canopy documents live in `registry/`. Two kinds:
+Official documents live in
+[UniverLab/canopy-graphs](https://github.com/UniverLab/canopy-graphs), the
+public catalogue repository — the same layout any community repo uses.
+Two kinds:
 
 - **Graphs** — a graph's portable design (`GraphExportDocument`,
   format version 6): name, nodes, edges, ensembles, hooks, infra node,
@@ -31,9 +34,6 @@ canopy-web/
     schema.ts           # imports the schemas, never copies them
     slug.ts             # slug rule helpers
     validate.ts         # `npm run validate` (CLI + library)
-  registry/
-    graphs/<slug>/graph.json + README.md
-    nodes/<slug>/node.json + README.md
   apps/graphs/          # Cloudflare Worker serving the catalogue
   tests/                # vitest suite + fixtures
 ```
@@ -47,14 +47,9 @@ To list a graph or node from your own repo, follow the Publish page:
 https://graphs.univerlab.org/publish — any public repo with the
 `canopy-graph` topic is listed.
 
-Official documents live in this repo's `registry/`:
-
-1. Put the document at `registry/graphs/<slug>/graph.json` (graphs) or
-   `registry/nodes/<slug>/node.json` (nodes), where `<slug>` matches the
-   document's `name`.
-2. Add a `README.md` beside it describing what the document does.
-3. Add the `canopy-graph` topic to the GitHub repository.
-4. Run `npm run validate` — it must pass.
+Official documents live in UniverLab/canopy-graphs and are proposed by
+pull request there. The quickest way to start a graphs repo is to fork
+canopy-graphs or use it as a template.
 
 ## Commands
 
@@ -64,7 +59,7 @@ Official documents live in this repo's `registry/`:
 | `npm run typecheck` | `tsc --noEmit` (strict)                       |
 | `npm test`        | vitest suite (documents + worker)                |
 | `npm run test:worker` | worker suite only, in the Workers runtime    |
-| `npm run validate [paths...]` | validate registry documents (files or folders; no args = all of `registry/`) |
+| `npm run validate [paths...]` | validate document folders (files or folders; no args = this repo's example documents under `apps/graphs/test/fixtures/`) |
 
 The schemas in `schema/` are the single contract the worker and
 Canopy's `graph validate` agree on — import them, never copy them.

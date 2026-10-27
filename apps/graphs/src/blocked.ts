@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * The community blocked list, `registry/blocked.json` in this repository.
+ * The community blocked list, `blocked.json` at the root of the official
+ * catalogue repository (UniverLab/canopy-graphs).
  *
- * A report files a GitHub issue (`.github/ISSUE_TEMPLATE/report-document.yml`);
- * a maintainer decides by pull request to `registry/blocked.json`. The file is
- * a JSON array of entries: with a `slug` one document is blocked, without one
- * the whole repository is. The indexer reads it once per run, records each
- * entry under its own `blocked:v1:*` key and never writes a blocked document
- * to `doc:v1:*`; the request path reads those keys before the index, so a
- * stale index cannot serve a document a later run removed.
+ * A report files a GitHub issue on the official repository
+ * (`report-document.yml`); a maintainer decides by pull request to
+ * `blocked.json`. The file is a JSON array of entries: with a `slug` one
+ * document is blocked, without one the whole repository is. The indexer
+ * reads it once per run, records each entry under its own `blocked:v1:*`
+ * key and never writes a blocked document to `doc:v1:*`; the request path
+ * reads those keys before the index, so a stale index cannot serve a
+ * document a later run removed.
  *
  * Everything here is pure and total: no network, no KV, no exception. Keys
  * lowercase `owner/repo` exactly as `docKey` does; the slug keeps its case.
@@ -19,7 +21,7 @@ import { isArray, isRecord, parseJson, stringField } from "./json.js";
 /** Prefix of every blocked key, document and repository alike. */
 export const BLOCKED_PREFIX = "blocked:v1:";
 
-/** One entry of `registry/blocked.json`, as README and issue describe it. */
+/** One entry of `blocked.json`, as README and issue describe it. */
 export interface BlockedEntry {
   /** Ignored when the whole repository is blocked (no `slug`). */
   kind?: DocumentKind;
@@ -88,7 +90,7 @@ export function blockedEntryOf(value: unknown): BlockedEntry | null {
 }
 
 /**
- * Parse `registry/blocked.json`: the entries, or null when the text is not a
+ * Parse `blocked.json`: the entries, or null when the text is not a
  * JSON array. The indexer distinguishes null (unreadable: keep the previous
  * blocks) from `[]` (a real, empty list: delete every stale key).
  */

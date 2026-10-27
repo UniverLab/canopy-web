@@ -216,7 +216,7 @@ export function openApiDocument(): Record<string, unknown> {
       "/api/official": {
         get: {
           operationId: "official",
-          summary: "The official listing: registry graphs and nodes.",
+          summary: "The official listing: graphs and nodes from the official repository.",
           responses: {
             "200": {
               description: "Official entries split by kind, in index order.",

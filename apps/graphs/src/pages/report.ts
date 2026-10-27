@@ -2,9 +2,9 @@
 /**
  * The report links a document page carries.
  *
- * Reporting and removal are GitHub's: the form pre-fills an issue in this
- * repository, and a maintainer decides by pull request to
- * `registry/blocked.json`. No endpoint, no storage and no moderation UI of
+ * Reporting and removal are GitHub's: the form pre-fills an issue in the
+ * official catalogue repository, and a maintainer decides by pull request
+ * to `blocked.json` there. No endpoint, no storage and no moderation UI of
  * our own. This module is the one place the pre-filled URL is built, so the
  * issue form's field ids (`REPORT_PREFILL_IDS`) cannot drift from the page
  * that fills them.
@@ -14,7 +14,7 @@ import { OFFICIAL_OWNER, OFFICIAL_REPO, type Kind } from "../lib.js";
 /** The issue form that receives a report. */
 export const REPORT_TEMPLATE = "report-document.yml";
 
-/** Where a report lands: a new issue in the catalogue repository. */
+/** Where a report lands: a new issue in the official catalogue repository. */
 export const REPORT_ISSUE_HREF =
   `https://github.com/${OFFICIAL_OWNER}/${OFFICIAL_REPO}/issues/new`;
 

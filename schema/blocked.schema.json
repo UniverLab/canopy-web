@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://graphs.univerlab.org/schema/blocked.schema.json",
   "title": "Canopy blocked documents",
-  "description": "The catalogue's removal list, registry/blocked.json. One entry with a slug blocks that document; one without a slug blocks the whole repository. A maintainer adds an entry by pull request after deciding the report issue; the indexer honours it on its next run. Structural only: the rule that a slug needs its kind is checked by the validator, because JSON Schema cannot express it over sibling fields.",
+  "description": "The catalogue's removal list, blocked.json at the root of the official repository (UniverLab/canopy-graphs). One entry with a slug blocks that document; one without a slug blocks the whole repository. A maintainer adds an entry by pull request after deciding the report issue; the indexer honours it on its next run. Structural only: the rule that a slug needs its kind is checked by the validator, because JSON Schema cannot express it over sibling fields.",
   "type": "array",
   "items": {
     "type": "object",

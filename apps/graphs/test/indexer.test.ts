@@ -25,15 +25,15 @@ import {
   VALID_GRAPH_TEXT,
 } from "./documents-fixture.js";
 
-const OFFICIAL_GRAPHS = "repos/UniverLab/canopy-web/contents/registry/graphs";
-const OFFICIAL_NODES = "repos/UniverLab/canopy-web/contents/registry/nodes";
-const OFFICIAL_BLOCKED = "repos/UniverLab/canopy-web/contents/registry/blocked.json";
-const OFFICIAL_REPO = "repos/UniverLab/canopy-web";
+const OFFICIAL_GRAPHS = "repos/UniverLab/canopy-graphs/contents/graphs";
+const OFFICIAL_NODES = "repos/UniverLab/canopy-graphs/contents/nodes";
+const OFFICIAL_BLOCKED = "repos/UniverLab/canopy-graphs/contents/blocked.json";
+const OFFICIAL_REPO = "repos/UniverLab/canopy-graphs";
 
 /** The issue every blocked fixture names. */
-const BLOCK_ISSUE = "https://github.com/UniverLab/canopy-web/issues/9";
+const BLOCK_ISSUE = "https://github.com/UniverLab/canopy-graphs/issues/9";
 
-/** An empty official registry: both directories missing, the repo known. */
+/** An empty official repository: both directories missing, the repo known. */
 function emptyOfficialStubs(): Stub[] {
   return [
     { url: OFFICIAL_BLOCKED, status: 404, body: {} },
@@ -49,7 +49,7 @@ function blockedStubs(entries: unknown[]): Stub[] {
     {
       url: OFFICIAL_BLOCKED,
       status: 200,
-      body: fileBody("registry/blocked.json", JSON.stringify(entries)),
+      body: fileBody("blocked.json", JSON.stringify(entries)),
     },
   ];
 }
@@ -138,9 +138,9 @@ describe("the scheduled indexer", () => {
           total_count: 101,
           items: [
             searchHit("r-101", 101),
-            // The official repository in discovery results is already
-            // indexed as official; it must not appear twice.
-            { name: "canopy-web", owner: { login: "UniverLab" }, default_branch: "main", stargazers_count: 9 },
+            // The official repository carries the catalogue topic too and
+            // is already indexed as official; it must not appear twice.
+            { name: "canopy-graphs", owner: { login: "UniverLab" }, default_branch: "main", stargazers_count: 9 },
           ],
         },
       },
@@ -519,10 +519,10 @@ describe("the scheduled indexer", () => {
 
   it("keeps the previous block keys when the list cannot be read", async () => {
     const kv = new FakeKV();
-    const key = blockedDocKey("graph", "UniverLab", "canopy-web", "hello-graph");
+    const key = blockedDocKey("graph", "UniverLab", "canopy-graphs", "hello-graph");
     const block: BlockedEntry = {
       kind: "graph",
-      repo: "UniverLab/canopy-web",
+      repo: "UniverLab/canopy-graphs",
       slug: "hello-graph",
       reason: "Copyright or licence",
       issue: BLOCK_ISSUE,
@@ -530,14 +530,14 @@ describe("the scheduled indexer", () => {
     };
     await kv.put(key, JSON.stringify(block));
 
-    // officialStubs() answers 404 for registry/blocked.json.
+    // officialStubs() answers 404 for blocked.json.
     const { meta } = await run(officialStubs(), { kv });
 
     expect(meta.blocked).toBe(0);
     expect(kv.has(key)).toBe(true);
   });
 
-  it("flags official entries and indexes the registry in the same run", async () => {
+  it("flags official entries and indexes the official repository in the same run", async () => {
     const { meta, kv } = await run(officialStubs());
     const index = await storedIndex(kv);
     expect(index.entries.length).toBe(2);
@@ -553,7 +553,39 @@ describe("the scheduled indexer", () => {
     expect(meta.documents).toBe(2);
     expect(meta.repos_seen).toBe(1);
     expect(meta.truncated).toBe(false);
-    expect(await kv.get(docKey("graph", "UniverLab", "canopy-web", "hello-graph"))).not.toBeNull();
+    expect(await kv.get(docKey("graph", "UniverLab", "canopy-graphs", "hello-graph"))).not.toBeNull();
+  });
+
+  it("indexes the official repository once even when discovery returns it", async () => {
+    // canopy-graphs carries the catalogue topic, so the topic search finds
+    // it as a community repo: the run must not list its documents twice.
+    const { meta, kv, fake } = await run([
+      ...officialStubs(),
+      {
+        url: "search/repositories",
+        status: 200,
+        body: {
+          total_count: 1,
+          items: [
+            { name: "canopy-graphs", owner: { login: "UniverLab" }, default_branch: "main", stargazers_count: 9 },
+          ],
+        },
+      },
+      // Would-be community answers for the same documents, never fetched:
+      // the queued set already holds the official repository.
+      { url: "repos/UniverLab/canopy-graphs/git/trees/main", status: 200, body: { tree: [{ path: "graphs/hello-graph/graph.json", type: "blob" }] } },
+    ]);
+
+    const index = await storedIndex(kv);
+    expect(index.entries.map((entry) => `${entry["kind"]}/${entry["slug"]}`).sort()).toEqual([
+      "graph/hello-graph",
+      "node/hello-node",
+    ]);
+    for (const entry of index.entries) {
+      expect(entry["official"]).toBe(true);
+    }
+    expect(meta.documents).toBe(2);
+    expect(fake.calls.some((url) => url.includes("git/trees"))).toBe(false);
   });
 
   it("keeps the previous entries when discovery fails", async () => {

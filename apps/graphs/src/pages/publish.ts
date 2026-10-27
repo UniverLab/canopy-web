@@ -10,11 +10,12 @@
  * cannot drift from the code because it is rendered from it.
  */
 import { INDEX_CRON_MINUTES } from "../indexer.js";
-import { OFFICIAL_REPOSITORY, SLUG_PATTERN, documentPrefix } from "../lib.js";
+import { OFFICIAL_REPOSITORY, SLUG_PATTERN } from "../lib.js";
 import { communityDir, documentFile } from "../documents.js";
 import { CATALOGUE_TOPIC } from "../search.js";
 import {
   EXPORT_GRAPH_COMMAND,
+  OFFICIAL_HREF,
   PUBLISH_BARE_KEYS,
   PUBLISH_CHECK_HEADING,
   PUBLISH_CHECK_VALIDATE,
@@ -45,7 +46,6 @@ import {
   SCHEMA_GRAPH_URL,
   SCHEMA_NODE_LABEL,
   SCHEMA_NODE_URL,
-  SOURCE_HREF,
   VALIDATE_GRAPH_PREFIX,
   installCommand,
   publishCheckSchemas,
@@ -220,17 +220,14 @@ export function publishPage(): Page {
     {
       heading: PUBLISH_OFFICIAL_HEADING,
       html: [
-        paraLinks(publishOfficial(OFFICIAL_REPOSITORY, documentPrefix()), [
-          { label: OFFICIAL_REPOSITORY, href: SOURCE_HREF },
-        ]).replace(
-          escapeHtml(documentPrefix()),
-          `<code>${escapeHtml(documentPrefix())}</code>`,
-        ),
+        paraLinks(publishOfficial(OFFICIAL_REPOSITORY), [
+          { label: OFFICIAL_REPOSITORY, href: OFFICIAL_HREF },
+        ]),
       ],
       markdown: [
-        mdLinks(publishOfficial(OFFICIAL_REPOSITORY, documentPrefix()), [
-          { label: OFFICIAL_REPOSITORY, href: SOURCE_HREF },
-        ]).replace(documentPrefix(), `\`${documentPrefix()}\``),
+        mdLinks(publishOfficial(OFFICIAL_REPOSITORY), [
+          { label: OFFICIAL_REPOSITORY, href: OFFICIAL_HREF },
+        ]),
       ],
     },
     {

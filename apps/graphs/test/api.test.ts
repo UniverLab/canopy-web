@@ -15,18 +15,18 @@ import { FakeCache, FakeKV, fakeFetch, fileBody, dirBody, type FakeFetch, type S
 import { INVALID_GRAPH_TEXT, VALID_GRAPH_TEXT, VALID_NODE_TEXT } from "./documents-fixture.js";
 
 const SEARCH = "search/repositories";
-const REPO_DIR = "repos/UniverLab/canopy-web";
+const REPO_DIR = "repos/UniverLab/canopy-graphs";
 
 /** Everything one official graph plus one node need to answer an API call. */
 function stubs(): Stub[] {
   return [
-    { url: `${REPO_DIR}/contents/registry/graphs`, status: 200, body: dirBody([{ name: "hello-graph", type: "dir" }]) },
-    { url: `${REPO_DIR}/contents/registry/nodes`, status: 200, body: dirBody([{ name: "hello-node", type: "dir" }]) },
-    { url: `${REPO_DIR}/contents/registry/graphs/hello-graph/graph.json`, status: 200, body: fileBody("graphs/hello-graph/graph.json", VALID_GRAPH_TEXT) },
-    { url: `${REPO_DIR}/contents/registry/graphs/hello-graph/README.md`, status: 200, body: fileBody("graphs/hello-graph/README.md", "# hello-graph\n") },
-    { url: `${REPO_DIR}/contents/registry/nodes/hello-node/node.json`, status: 200, body: fileBody("nodes/hello-node/node.json", VALID_NODE_TEXT) },
-    { url: `${REPO_DIR}/contents/registry/nodes/hello-node/README.md`, status: 404, body: {} },
-    { url: "repos/UniverLab/canopy-web", status: 200, body: { stargazers_count: 7 } },
+    { url: `${REPO_DIR}/contents/graphs`, status: 200, body: dirBody([{ name: "hello-graph", type: "dir" }]) },
+    { url: `${REPO_DIR}/contents/nodes`, status: 200, body: dirBody([{ name: "hello-node", type: "dir" }]) },
+    { url: `${REPO_DIR}/contents/graphs/hello-graph/graph.json`, status: 200, body: fileBody("graphs/hello-graph/graph.json", VALID_GRAPH_TEXT) },
+    { url: `${REPO_DIR}/contents/graphs/hello-graph/README.md`, status: 200, body: fileBody("graphs/hello-graph/README.md", "# hello-graph\n") },
+    { url: `${REPO_DIR}/contents/nodes/hello-node/node.json`, status: 200, body: fileBody("nodes/hello-node/node.json", VALID_NODE_TEXT) },
+    { url: `${REPO_DIR}/contents/nodes/hello-node/README.md`, status: 404, body: {} },
+    { url: "repos/UniverLab/canopy-graphs", status: 200, body: { stargazers_count: 7 } },
   ];
 }
 
@@ -95,9 +95,9 @@ describe("the JSON API", () => {
     expect(fetch.calls).toEqual([]);
   });
 
-  it("answers /api/official with empty lists when the registry folders do not exist", async () => {
+  it("answers /api/official with empty lists when the official folders do not exist", async () => {
     const { response } = await call("/api/official", {
-      stubs: [{ url: `${REPO_DIR}/contents/registry/graphs`, status: 404, body: {} }],
+      stubs: [{ url: `${REPO_DIR}/contents/graphs`, status: 404, body: {} }],
     });
     expect(response.status).toBe(200);
     const body = (await response.json()) as { graphs: unknown[]; nodes: unknown[] };
@@ -158,7 +158,7 @@ describe("the JSON API", () => {
 
   it("sorts top by stars and new by updated", async () => {
     const table = stubs().map((stub) =>
-      stub.url === "repos/UniverLab/canopy-web"
+      stub.url === "repos/UniverLab/canopy-graphs"
         ? { ...stub, body: { stargazers_count: 7, updated_at: "2026-10-27T08:00:00Z", default_branch: "main" } }
         : stub,
     );
@@ -193,9 +193,9 @@ describe("the JSON API", () => {
   it("pages through index matches 20 at a time", async () => {
     const names = Array.from({ length: 21 }, (_, i) => `p-${String(i + 1).padStart(2, "0")}`);
     const table: Stub[] = [
-      { url: `${REPO_DIR}/contents/registry/graphs`, status: 404, body: {} },
-      { url: `${REPO_DIR}/contents/registry/nodes`, status: 404, body: {} },
-      { url: "repos/UniverLab/canopy-web", status: 200, body: { stargazers_count: 1 } },
+      { url: `${REPO_DIR}/contents/graphs`, status: 404, body: {} },
+      { url: `${REPO_DIR}/contents/nodes`, status: 404, body: {} },
+      { url: "repos/UniverLab/canopy-graphs", status: 200, body: { stargazers_count: 1 } },
       {
         url: SEARCH,
         status: 200,
@@ -246,7 +246,7 @@ describe("the JSON API", () => {
   });
 
   it("answers /api/g/<official> with the validated document attached", async () => {
-    const { response } = await call("/api/g/UniverLab/canopy-web/hello-graph");
+    const { response } = await call("/api/g/UniverLab/canopy-graphs/hello-graph");
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
       doc: { kind: string; slug: string; repo: string; readme: string };
@@ -291,7 +291,7 @@ describe("the JSON API", () => {
     const kv = await seeded(stubs());
     const fake = fakeFetch([]);
     const answer = await handleApi(
-      new Request("https://graphs.univerlab.org/api/n/UniverLab/canopy-web/hello-graph"),
+      new Request("https://graphs.univerlab.org/api/n/UniverLab/canopy-graphs/hello-graph"),
       { INDEX: kv },
       { fetchImpl: fake.fetchImpl, cache: new FakeCache() },
     );
@@ -316,7 +316,7 @@ describe("the JSON API", () => {
     const graphs = (await listing.response.json()) as { graphs: unknown[] };
     expect(graphs.graphs).toEqual([]);
 
-    const document = await call("/api/g/UniverLab/canopy-web/hello-graph", { stubs: table });
+    const document = await call("/api/g/UniverLab/canopy-graphs/hello-graph", { stubs: table });
     expect(document.response.status).toBe(404);
     expect(((await document.response.json()) as { kind: string }).kind).toBe("invalid-document");
   });
@@ -326,18 +326,18 @@ describe("the JSON API", () => {
     const kv = await seeded(stubs());
     const block: BlockedEntry = {
       kind: "graph",
-      repo: "UniverLab/canopy-web",
+      repo: "UniverLab/canopy-graphs",
       slug: "hello-graph",
       reason: "Broken or invalid",
-      issue: "https://github.com/UniverLab/canopy-web/issues/12",
+      issue: "https://github.com/UniverLab/canopy-graphs/issues/12",
       blocked_at: "2026-10-27",
     };
     await kv.put(
-      blockedDocKey("graph", "UniverLab", "canopy-web", "hello-graph"),
+      blockedDocKey("graph", "UniverLab", "canopy-graphs", "hello-graph"),
       JSON.stringify(block),
     );
     const answer = await handleApi(
-      new Request("https://graphs.univerlab.org/api/g/UniverLab/canopy-web/hello-graph"),
+      new Request("https://graphs.univerlab.org/api/g/UniverLab/canopy-graphs/hello-graph"),
       { INDEX: kv },
       { fetchImpl: fakeFetch([]).fetchImpl, cache: new FakeCache() },
     );
@@ -353,7 +353,7 @@ describe("the JSON API", () => {
   });
 
   it("answers a missing document with a typed 404, never a 500", async () => {
-    const { response } = await call("/api/g/UniverLab/canopy-web/missing");
+    const { response } = await call("/api/g/UniverLab/canopy-graphs/missing");
     expect(response.status).toBe(404);
     const body = (await response.json()) as { kind: string; message: string };
     expect(body.kind).toBe("invalid-document");
@@ -417,7 +417,7 @@ describe("the JSON API", () => {
     for (const path of [
       "/api/official",
       "/api/search?q=flow",
-      "/api/g/UniverLab/canopy-web/hello-graph",
+      "/api/g/UniverLab/canopy-graphs/hello-graph",
       "/api/index-status",
     ]) {
       const { response } = await call(path, { cold: true });
@@ -460,7 +460,7 @@ describe("the JSON API", () => {
         {
           url: "analytics_engine/sql",
           status: 200,
-          body: { data: [{ index: "UniverLab/canopy-web/graph/hello-graph", count: 5 }] },
+          body: { data: [{ index: "UniverLab/canopy-graphs/graph/hello-graph", count: 5 }] },
         },
       ],
     });
@@ -472,8 +472,8 @@ describe("the JSON API", () => {
   });
 
   it("does not list official stars as zero when the repo call fails", async () => {
-    const withoutStars = stubs().filter((stub) => stub.url !== "repos/UniverLab/canopy-web");
-    withoutStars.push({ url: "repos/UniverLab/canopy-web", status: 404, body: {}, });
+    const withoutStars = stubs().filter((stub) => stub.url !== "repos/UniverLab/canopy-graphs");
+    withoutStars.push({ url: "repos/UniverLab/canopy-graphs", status: 404, body: {}, });
     const { response } = await call("/api/official", { stubs: withoutStars });
     const body = (await response.json()) as { graphs: Array<{ stars: unknown }> };
     expect(response.status).toBe(200);

@@ -5,14 +5,14 @@ import { listOfficial } from "../src/official.js";
 import { FakeCache, dirBody, fakeFetch, fileBody, type Stub } from "./fakes.js";
 import { VALID_GRAPH_TEXT } from "./documents-fixture.js";
 
-const REPO_DIR = "repos/UniverLab/canopy-web";
+const REPO_DIR = "repos/UniverLab/canopy-graphs";
 
 const STUBS: Stub[] = [
-  { url: `${REPO_DIR}/contents/registry/graphs`, status: 200, body: dirBody([{ name: "hello-graph", type: "dir" }]) },
-  { url: `${REPO_DIR}/contents/registry/nodes`, status: 200, body: [] },
-  { url: `${REPO_DIR}/contents/registry/graphs/hello-graph/graph.json`, status: 200, body: fileBody("graphs/hello-graph/graph.json", VALID_GRAPH_TEXT) },
-  { url: `${REPO_DIR}/contents/registry/graphs/hello-graph/README.md`, status: 200, body: fileBody("graphs/hello-graph/README.md", "# hello-graph\n") },
-  { url: "repos/UniverLab/canopy-web", status: 200, body: { stargazers_count: 7 } },
+  { url: `${REPO_DIR}/contents/graphs`, status: 200, body: dirBody([{ name: "hello-graph", type: "dir" }]) },
+  { url: `${REPO_DIR}/contents/nodes`, status: 200, body: [] },
+  { url: `${REPO_DIR}/contents/graphs/hello-graph/graph.json`, status: 200, body: fileBody("graphs/hello-graph/graph.json", VALID_GRAPH_TEXT) },
+  { url: `${REPO_DIR}/contents/graphs/hello-graph/README.md`, status: 200, body: fileBody("graphs/hello-graph/README.md", "# hello-graph\n") },
+  { url: "repos/UniverLab/canopy-graphs", status: 200, body: { stargazers_count: 7 } },
 ];
 
 describe("the Cache API contract", () => {
@@ -35,7 +35,7 @@ describe("the Cache API contract", () => {
   });
 
   it("caches analytics results for an hour", async () => {
-    const analyticsBody = { data: [{ index: "UniverLab/canopy-web/graph/hello-graph", count: 3 }] };
+    const analyticsBody = { data: [{ index: "UniverLab/canopy-graphs/graph/hello-graph", count: 3 }] };
     const fake = fakeFetch([
       { url: "analytics_engine/sql", status: 200, body: analyticsBody },
     ]);

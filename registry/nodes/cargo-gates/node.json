@@ -1,9 +1,0 @@
-{
-  "format_version": 1,
-  "name": "cargo-gates",
-  "kind": "check",
-  "description": "Deterministic Rust gates: formatter, linter, and tests in one check command.",
-  "config": {
-    "command": "cargo fmt --all && cargo clippy --all-targets -- -D warnings && cargo test"
-  }
-}

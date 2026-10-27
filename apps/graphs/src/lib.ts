@@ -36,18 +36,7 @@ export const DEFAULT_REF = "HEAD";
 
 export const OFFICIAL_OWNER = "UniverLab";
 
-export const OFFICIAL_REPO = "canopy-web";
-
-/** Official documents live under the registry layout; community repos do not. */
-const OFFICIAL_PREFIX = "registry/";
-
-/**
- * The directory prefix inside a repository that holds the official
- * catalogue documents. Reused by buildUrl and by the catalogue API.
- */
-export function documentPrefix(): string {
-  return OFFICIAL_PREFIX;
-}
+export const OFFICIAL_REPO = "canopy-graphs";
 
 /** True when owner/repo names the official catalogue repository. */
 export function isOfficialRepo(owner: string, repo: string): boolean {
@@ -66,7 +55,7 @@ const UNKNOWN = "?";
 export const USAGE = [
   "graphs.univerlab.org redirects to the document on GitHub.",
   "",
-  "  GET /i/<kind>/<slug>                  official: UniverLab/canopy-web",
+  "  GET /i/<kind>/<slug>                  official: UniverLab/canopy-graphs",
   "  GET /i/<owner>/<repo>/<kind>/<slug>   community repository",
   "",
   "<kind> is graph or node; ?ref=<branch|tag|commit> defaults to HEAD.",
@@ -227,10 +216,14 @@ export function parseTarget(pathname: string, ref: string | null): Parsed {
   return route(segments, ref);
 }
 
-/** Where the document really lives. This is the only URL the Worker hands out. */
+/**
+ * Where the document really lives. This is the only URL the Worker hands
+ * out. Official and community documents share one layout — the official
+ * repository is an ordinary catalogue repository — so the path only ever
+ * names the owner, repo, kind and slug.
+ */
 export function buildUrl(target: Target): string {
-  const prefix = target.official ? documentPrefix() : "";
-  return `https://raw.githubusercontent.com/${target.owner}/${target.repo}/${target.ref}/${prefix}${target.kind}s/${target.slug}/${target.kind}.json`;
+  return `https://raw.githubusercontent.com/${target.owner}/${target.repo}/${target.ref}/${target.kind}s/${target.slug}/${target.kind}.json`;
 }
 
 const CANOPY_RE = /^canopy\/([0-9A-Za-z][0-9A-Za-z.+-]{0,31})/;

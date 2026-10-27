@@ -3,16 +3,16 @@
  * The scheduled catalogue index.
  *
  * A Cron Trigger runs this every 15 minutes: it reads the community
- * removal list (`registry/blocked.json`) first, discovers every repository
- * tagged `topic:canopy-graph`, lists each one's document folders through
- * the same discovery the live search uses, fetches and validates every
- * document, indexes the official registry in the same run, and writes the
- * catalogue into KV — `index:v1` (entries, no full documents), one
- * `doc:v1:*` key per document plus its README, one `blocked:v1:*` key per
- * blocked entry, and `index:meta` with the run's accounting. A blocked
- * document or repository is never written to `doc:v1:*`, and a stale
- * `doc:v1:*` key is deleted. The request path then serves everything from
- * KV and never spends GitHub quota on traffic.
+ * removal list (`blocked.json` in the official repository) first,
+ * discovers every repository tagged `topic:canopy-graph`, lists each one's
+ * document folders through the same discovery the live search uses, fetches
+ * and validates every document, indexes the official repository in the same
+ * run, and writes the catalogue into KV — `index:v1` (entries, no full
+ * documents), one `doc:v1:*` key per document plus its README, one
+ * `blocked:v1:*` key per blocked entry, and `index:meta` with the run's
+ * accounting. A blocked document or repository is never written to
+ * `doc:v1:*`, and a stale `doc:v1:*` key is deleted. The request path then
+ * serves everything from KV and never spends GitHub quota on traffic.
  *
  * The run is budgeted (1,200 GitHub calls authenticated, 50 without a
  * token). When the budget, a rate limit or a failed discovery page stops
@@ -96,12 +96,13 @@ export const DESCRIPTION_TRIM = 280;
 
 /**
  * The removal list, read once per run from `main` before anything else:
- * `registry/blocked.json` in the catalogue repository, through the contents
- * API so the run spends one call and no more. A refusal to read it keeps
- * the previous blocks (the KV keys stay); a readable list replaces them.
+ * `blocked.json` at the root of the official catalogue repository, through
+ * the contents API so the run spends one call and no more. A refusal to
+ * read it keeps the previous blocks (the KV keys stay); a readable list
+ * replaces them.
  */
 export const BLOCKED_FILE_URL =
-  `https://api.github.com/repos/${OFFICIAL_REPOSITORY}/contents/registry/blocked.json?ref=main`;
+  `https://api.github.com/repos/${OFFICIAL_REPOSITORY}/contents/blocked.json?ref=main`;
 
 /** What one read of the removal list proved: the entries, and whether it read. */
 interface BlockedRead {
@@ -114,9 +115,9 @@ async function readBlocked(github: GitHub, log: Log): Promise<BlockedRead> {
   const response = await github.get(BLOCKED_FILE_URL, "contents");
   if (isApiError(response)) {
     if (response.kind === "rate-limit") {
-      throw new StopRun("rate-limited reading registry/blocked.json");
+      throw new StopRun("rate-limited reading blocked.json");
     }
-    log(`indexer: registry/blocked.json ${response.kind}; keeping the previous blocks`);
+    log(`indexer: blocked.json ${response.kind}; keeping the previous blocks`);
     return { entries: [], loaded: false };
   }
   const body = await readJson(response);
@@ -124,7 +125,7 @@ async function readBlocked(github: GitHub, log: Log): Promise<BlockedRead> {
   const text = decodeBase64(content);
   const entries = text === null ? null : parseBlockedList(text);
   if (entries === null) {
-    log("indexer: registry/blocked.json did not parse as a JSON array; keeping the previous blocks");
+    log("indexer: blocked.json did not parse as a JSON array; keeping the previous blocks");
     return { entries: [], loaded: false };
   }
   return { entries, loaded: true };
@@ -308,7 +309,7 @@ interface RunState {
   entries: IndexEntry[];
   documents: Map<string, StoredDoc>;
   invalid: IndexInvalid[];
-  /** The entries `registry/blocked.json` held at the start of this run. */
+  /** The entries `blocked.json` held at the start of this run. */
   blocked: BlockedEntry[];
   /** Repositories fully processed: their previous entries are replaced. */
   visited: Set<string>;
@@ -368,34 +369,34 @@ async function indexSource(
 }
 
 /**
- * Index the official registry: both `registry/` directories, every folder
- * through validation. A missing directory is an empty kind, not an
- * outage; anything else unreadable logs and contributes nothing.
+ * Index the official repository: both `graphs/` and `nodes/` directories,
+ * every folder through validation. A missing directory is an empty kind,
+ * not an outage; anything else unreadable logs and contributes nothing.
  */
 async function indexOfficial(state: RunState): Promise<void> {
   const repoBlock = blockedRepository(state.blocked, OFFICIAL_OWNER, OFFICIAL_REPO);
   if (repoBlock !== null) {
-    state.log(`indexer: blocked the official registry: ${repoBlock.reason}`);
+    state.log(`indexer: blocked the official repository: ${repoBlock.reason}`);
     return;
   }
   const slugs: Record<DocumentKind, string[]> = { graph: [], node: [] };
   for (const kind of ["graph", "node"] as const) {
     const listing = await state.github.get(
-      `https://api.github.com/repos/${OFFICIAL_REPOSITORY}/contents/registry/${kind}s`,
+      `https://api.github.com/repos/${OFFICIAL_REPOSITORY}/contents/${kind}s`,
       "contents",
     );
     if (isApiError(listing)) {
       if (listing.kind === "rate-limit") {
-        throw new StopRun("rate-limited listing the official registry");
+        throw new StopRun("rate-limited listing the official repository");
       }
       if (listing.kind !== "not-found") {
-        state.log(`indexer: official registry/${kind}s failed: ${listing.kind}`);
+        state.log(`indexer: official ${kind}s failed: ${listing.kind}`);
       }
       continue;
     }
     const body = await readJson(listing);
     if (!body.ok) {
-      state.log(`indexer: official registry/${kind}s did not parse as JSON`);
+      state.log(`indexer: official ${kind}s did not parse as JSON`);
       continue;
     }
     slugs[kind] = listedDirectories(body.value);
@@ -408,7 +409,7 @@ async function indexOfficial(state: RunState): Promise<void> {
         {
           owner: OFFICIAL_OWNER,
           repo: OFFICIAL_REPO,
-          directory: documentDirectory(OFFICIAL_OWNER, OFFICIAL_REPO, kind, slug),
+          directory: documentDirectory(kind, slug),
           kind,
           slug,
           stars: info.stars,

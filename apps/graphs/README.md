@@ -15,7 +15,7 @@ anchor — this Worker is just a prettier doorway.
 
 | Route | Where it points |
 |---|---|
-| `GET /i/<kind>/<slug>` | official: `https://raw.githubusercontent.com/UniverLab/canopy-web/<ref>/registry/<kind>s/<slug>/<kind>.json` |
+| `GET /i/<kind>/<slug>` | official: `https://raw.githubusercontent.com/UniverLab/canopy-graphs/<ref>/<kind>s/<slug>/<kind>.json` |
 | `GET /i/<owner>/<repo>/<kind>/<slug>` | community: `https://raw.githubusercontent.com/<owner>/<repo>/<ref>/<kind>s/<slug>/<kind>.json` |
 
 - `<kind>` is `graph` or `node`.
@@ -27,9 +27,10 @@ anchor — this Worker is just a prettier doorway.
   `404` with the same one-line usage reason, and `GET /i/` answers `404`
   with the usage text.
 
-Official documents are the ones in this repo's `registry/` — the `registry/`
-prefix is implicit in the short route, so `/i/graph/hello-graph` and the
-community form `/i/UniverLab/canopy-web/graph/hello-graph` point at the same file.
+Official documents are the ones in [UniverLab/canopy-graphs](https://github.com/UniverLab/canopy-graphs),
+the public catalogue repository — an ordinary catalogue repository with the
+`canopy-graph` topic, so `/i/graph/hello-graph` and the community form
+`/i/UniverLab/canopy-graphs/graph/hello-graph` point at the same file.
 
 ## What it counts
 
@@ -38,9 +39,9 @@ One aggregate data point per request, via
 
 | Field | Example | Why |
 |---|---|---|
-| index | `UniverLab/canopy-web/graph/hello-graph` | which document is installed |
+| index | `UniverLab/canopy-graphs/graph/hello-graph` | which document is installed |
 | kind | `graph` / `node` | graphs vs nodes |
-| document | `UniverLab/canopy-web/hello-graph` | document, without repeating the kind |
+| document | `UniverLab/canopy-graphs/hello-graph` | document, without repeating the kind |
 | client | `canopy`, `curl`, `browser`, `other` | a real install, a script, or someone looking |
 | canopy version | `1.7.2` | which Canopy release installs what |
 | country | `CO` | rough geography |
@@ -59,7 +60,7 @@ database, the Cache API is still the only state:
 
 | Route | Answer |
 |---|---|
-| `GET /api/official` | `{graphs, nodes}` — the `registry/` listing |
+| `GET /api/official` | `{graphs, nodes}` — the official repository listing |
 | `GET /api/search?q=&sort=top\|new&page=` | `{items, q, sort, page, total, truncated}` — `topic:canopy-graph` plus free text |
 | `GET /api/g/<owner>/<repo>/<slug>` | one graph document, validated JSON attached |
 | `GET /api/n/<owner>/<repo>/<slug>` | one node document, validated JSON attached |

@@ -5,7 +5,7 @@
  * The indexer (indexer.ts) writes three shapes: `index:v1` (one JSON
  * value with every listed entry, no full documents), one `doc:v1:*` key
  * per validated document plus its README, and `index:meta` with the
- * run's accounting — plus one `blocked:v1:*` key per `registry/blocked.json`
+ * run's accounting — plus one `blocked:v1:*` key per `blocked.json`
  * entry, which the request path reads before the index. Every page and
  * API answer reads through this module.
  * The index is memoised in the isolate for 60 seconds; documents and
@@ -104,7 +104,7 @@ export interface IndexMeta {
   calls: number;
   repos_seen: number;
   documents: number;
-  /** How many `registry/blocked.json` entries the run read. */
+  /** How many `blocked.json` entries the run read. */
   blocked: number;
   invalid: IndexInvalid[];
   truncated: boolean;

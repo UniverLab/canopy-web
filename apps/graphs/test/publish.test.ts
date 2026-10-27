@@ -10,11 +10,12 @@ import worker from "../src/index.js";
 import { INDEX_CRON_MINUTES, runIndexer } from "../src/indexer.js";
 import { resetIndexMemo } from "../src/store.js";
 import { createGitHub } from "../src/github.js";
-import { OFFICIAL_REPOSITORY, SLUG_PATTERN, documentPrefix } from "../src/lib.js";
+import { OFFICIAL_REPOSITORY, SLUG_PATTERN } from "../src/lib.js";
 import { communityDir, documentFile } from "../src/documents.js";
 import { CATALOGUE_TOPIC } from "../src/search.js";
 import {
   EXPORT_GRAPH_COMMAND,
+  OFFICIAL_HREF,
   PUBLISH_BARE_KEYS,
   PUBLISH_CHECK_HEADING,
   PUBLISH_DESCRIPTION,
@@ -171,12 +172,29 @@ describe("the page states the code's own values", () => {
     }
   });
 
-  it("links the schemas and the official registry from their constants", async () => {
+  it("links the schemas from this repo and the official repository from its own constant", async () => {
     const html = await (await call("/publish")).text();
     expect(html).toContain(`href="${SCHEMA_GRAPH_URL}"`);
     expect(html).toContain(`href="${SCHEMA_NODE_URL}"`);
     expect(html).toContain(OFFICIAL_REPOSITORY);
-    expect(html).toContain(documentPrefix());
+    expect(html).toContain(`href="${OFFICIAL_HREF}"`);
+    expect(OFFICIAL_HREF).toBe("https://github.com/UniverLab/canopy-graphs");
+    // The schemas stay pinned to this repo, not the official documents repo.
+    expect(SCHEMA_GRAPH_URL).toContain("UniverLab/canopy-web");
+  });
+
+  it("tells readers official documents live in the official repo, proposed by pull request", async () => {
+    const html = await (await call("/publish")).text();
+    expect(html).toContain(
+      `Official documents live in <a href="${OFFICIAL_HREF}" rel="nofollow">${OFFICIAL_REPOSITORY}</a>.`,
+    );
+    expect(html).toContain("proposed by pull request there");
+    expect(html).toContain("the quickest way to start a graphs repo");
+    const twin = await (await call("/publish.md")).text();
+    expect(twin).toContain(
+      `Official documents live in [${OFFICIAL_REPOSITORY}](${OFFICIAL_HREF}).`,
+    );
+    expect(twin).toContain("the quickest way to start a graphs repo");
   });
 
   it("explains reporting and removal: anyone reports, maintainers decide, authors appeal", async () => {

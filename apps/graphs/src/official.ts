@@ -2,10 +2,11 @@
 /**
  * The official listing for graphs.univerlab.org.
  *
- * UniverLab/canopy-web is the database: `registry/graphs/` and `registry/nodes/`
- * hold one folder per document. This module lists the two directories, then
- * loads each folder through the same validate-and-render path as everything
- * else. Nothing is persisted beyond the Cache API.
+ * UniverLab/canopy-graphs is the database: `graphs/` and `nodes/`
+ * hold one folder per document, the same layout every community repo
+ * uses. This module lists the two directories, then loads each folder
+ * through the same validate-and-render path as everything else. Nothing
+ * is persisted beyond the Cache API.
  */
 import type { DocumentKind, JsonValue } from "../../../src/schema.js";
 import {
@@ -88,7 +89,7 @@ async function officialRepo(github: GitHub, repository: string): Promise<RepoInf
  * the repository call gives stars once, so a warm cache costs three cache
  * hits and each document costs its own folder call. A directory GitHub has
  * never heard of (404) is an empty list of that kind, not an outage: the
- * registry is empty until the first merge. Every other error still comes
+ * repository is empty until the first merge. Every other error still comes
  * back as the typed ApiError the pages turn into the calm 503.
  */
 export async function listOfficial(
@@ -101,22 +102,22 @@ export async function listOfficial(
   };
   for (const kind of ["graph", "node"] as const) {
     const listing = await github.get(
-      `https://api.github.com/repos/${OFFICIAL_REPOSITORY}/contents/registry/${kind}s`,
+      `https://api.github.com/repos/${OFFICIAL_REPOSITORY}/contents/${kind}s`,
       "contents",
     );
     if (isApiError(listing)) {
       if (listing.kind === "not-found") {
-        log(`official: registry/${kind}s is absent; listing it as empty`);
+        log(`official: ${kind}s is absent; listing it as empty`);
         continue;
       }
       return listing;
     }
     const body = await readJson(listing);
     if (!body.ok) {
-      log(`official: registry/${kind}s listing did not parse as JSON`);
+      log(`official: ${kind}s listing did not parse as JSON`);
       return {
         kind: "upstream",
-        message: `GitHub contents for registry/${kind}s answered something other than JSON`,
+        message: `GitHub contents for ${kind}s answered something other than JSON`,
         status: 502,
       };
     }
@@ -139,7 +140,7 @@ export async function listOfficial(
       const source = {
         owner: OFFICIAL_OWNER,
         repo: OFFICIAL_REPO,
-        directory: documentDirectory(OFFICIAL_OWNER, OFFICIAL_REPO, kind, listed.directory),
+        directory: documentDirectory(kind, listed.directory),
         kind,
         slug: listed.directory,
         stars: info.stars,
@@ -175,7 +176,7 @@ export async function loadOfficialDocument(
   const source = {
     owner: OFFICIAL_OWNER,
     repo: OFFICIAL_REPO,
-    directory: documentDirectory(OFFICIAL_OWNER, OFFICIAL_REPO, kind, slug),
+    directory: documentDirectory(kind, slug),
     kind,
     slug,
     stars: info.stars,

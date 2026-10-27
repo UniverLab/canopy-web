@@ -14,6 +14,7 @@ import { isArray, isNumber, isRecord, readJson, stringField } from "./json.js";
 import { type CatalogEntry, type Doc, toDateOnly } from "./documents.js";
 import { loadDocument } from "./documents.js";
 import { CATALOGUE_TOPIC, discoverSources } from "./discovery.js";
+import { isOfficialRepo } from "./lib.js";
 
 export { CATALOGUE_TOPIC };
 
@@ -85,6 +86,11 @@ export function searchUrl(options: SearchInput): string {
  * Community search. Bounded by design: one search call, at most
  * `SEARCH_PAGE_SIZE` tree calls (one fewer when the tree is truncated),
  * at most `SEARCH_DOC_CAP` documents.
+ *
+ * The official repository carries the catalogue topic too, so the topic
+ * search finds it — but its documents belong to the Official listing, at
+ * their slug-only ref. It is skipped here so one document never appears
+ * twice, once Official and once as a community row.
  */
 export async function searchCommunity(
   github: GitHub,
@@ -119,6 +125,10 @@ export async function searchCommunity(
   for (const item of items.slice(0, SEARCH_PAGE_SIZE)) {
     const hit = hitOf(item);
     if (hit === null) {
+      continue;
+    }
+    if (isOfficialRepo(hit.owner, hit.repo)) {
+      log(`search: ${hit.owner}/${hit.repo} is the official repository; listed as Official`);
       continue;
     }
     let sources = await discoverSources(github, hit.owner, hit.repo, hit.defaultBranch, log);

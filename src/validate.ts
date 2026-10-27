@@ -82,7 +82,7 @@ function blockedCrossField(file: string, list: unknown): ValidationFailure[] {
 }
 
 /**
- * Schema + cross-field failures for one parsed `registry/blocked.json`: an
+ * Schema + cross-field failures for one parsed `blocked.json`: an
  * entry may name one document only when it names its kind too.
  */
 export function validateBlocked(file: string, list: unknown): ValidationFailure[] {
@@ -92,7 +92,12 @@ export function validateBlocked(file: string, list: unknown): ValidationFailure[
   ];
 }
 
-/** Read and validate `registry/blocked.json`; a missing file is a failure. */
+/**
+ * Read and validate a `blocked.json`; a missing file is a failure. The
+ * list itself lives in UniverLab/canopy-graphs now — this repo only keeps
+ * the schema and the parser — so the CLI's default run no longer calls
+ * this; the tests that pin the contract do.
+ */
 export function validateBlockedFile(file: string): ValidationFailure[] {
   if (!existsSync(file)) {
     return [{ file, pointer: "#", message: "missing blocked list" }];
@@ -249,14 +254,14 @@ function collectFolders(root: string, out: string[]): void {
   }
 }
 
-/** Validate every document folder under a registry root. */
+/** Validate every document folder under a documents root. */
 export function validateRegistry(registryDir: string): ValidationFailure[] {
   const folders: string[] = [];
   collectFolders(registryDir, folders);
   return folders.sort().flatMap((folder) => validateFolder(folder));
 }
 
-/** Validate one CLI target: a file, a folder, or a registry root. */
+/** Validate one CLI target: a file, a folder, or a documents root. */
 export function validateTarget(target: string): ValidationFailure[] {
   const resolved = path.resolve(target);
   if (!existsSync(resolved)) {
@@ -285,13 +290,12 @@ function report(failures: ValidationFailure[]): void {
 
 function run(argv: string[]): number {
   const cwd = process.cwd();
-  const targets = argv.length > 0 ? argv : [path.join(cwd, "registry")];
+  // The default run validates this repo's own example documents — the
+  // test fixtures, the same layout every catalogue repository uses. The
+  // official documents live in UniverLab/canopy-graphs and are validated
+  // there, not here.
+  const targets = argv.length > 0 ? argv : [path.join(cwd, "apps", "graphs", "test", "fixtures")];
   const failures = targets.flatMap((target) => validateTarget(path.resolve(cwd, target)));
-  // The default run also checks the removal list, at the registry root.
-  // Explicit targets stay document-only, so a focused check costs nothing.
-  if (argv.length === 0) {
-    failures.push(...validateBlockedFile(path.join(cwd, "registry", "blocked.json")));
-  }
   report(failures);
   if (failures.length > 0) {
     process.stderr.write(`${failures.length} failure(s)\n`);

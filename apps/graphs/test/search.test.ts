@@ -219,6 +219,37 @@ describe("community search", () => {
     expect(outcome.items[0].repo).toBe("acme/good");
   });
 
+  it("skips the official repository the topic search also finds, listing it once as Official", async () => {
+    const fake = fakeFetch([
+      {
+        url: SEARCH,
+        status: 200,
+        body: {
+          total_count: 2,
+          items: [
+            { name: "canopy-graphs", owner: { login: "UniverLab" }, default_branch: "main", stargazers_count: 9 },
+            { name: "things", owner: { login: "acme" }, default_branch: "main", stargazers_count: 5 },
+          ],
+        },
+      },
+      // Community answers for the official repository: never fetched.
+      { url: "repos/UniverLab/canopy-graphs/git/trees/main", status: 200, body: { tree: [{ path: "graphs/hello-graph/graph.json", type: "blob" }] } },
+      ...repoStubs([{ name: "things", graphText: VALID_GRAPH_TEXT, stars: 5 }]),
+    ]);
+    const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
+    const notes: string[] = [];
+    const outcome = (await searchCommunity(
+      github,
+      { q: "", sort: "top", page: 1 },
+      (message) => notes.push(message),
+    )) as SearchOutcome;
+
+    expect(outcome.items.length).toBe(1);
+    expect(outcome.items[0].repo).toBe("acme/things");
+    expect(fake.calls.some((url) => url.includes("repos/UniverLab/canopy-graphs"))).toBe(false);
+    expect(notes.some((message) => message.includes("official repository"))).toBe(true);
+  });
+
   it("turns an unreadable search body into a typed upstream error, never a throw", async () => {
     const fake = fakeFetch([
       { url: SEARCH, status: 200, text: "<html>portal</html>", headers: { "content-type": "text/html" } },

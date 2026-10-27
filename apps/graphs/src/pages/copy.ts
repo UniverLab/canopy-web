@@ -9,7 +9,18 @@
  */
 import type { DocumentKind } from "../../../../src/schema.js";
 import type { Doc } from "../documents.js";
-import { OFFICIAL_OWNER, OFFICIAL_REPO } from "../lib.js";
+import { OFFICIAL_REPOSITORY } from "../lib.js";
+
+/**
+ * The repository the Worker and the JSON Schemas live in. The official
+ * *documents* live elsewhere (`OFFICIAL_REPOSITORY`, the public catalogue
+ * repository); the schemas stay pinned here, next to the validator that
+ * enforces them.
+ */
+export const SITE_REPOSITORY = "UniverLab/canopy-web";
+
+/** Where the official documents live: the public catalogue repository. */
+export const OFFICIAL_HREF = `https://github.com/${OFFICIAL_REPOSITORY}`;
 
 /** The site's name, in the page titles. */
 export const SITE_NAME = "graphs.univerlab.org";
@@ -282,9 +293,9 @@ export const PUBLISH_BARE_KEYS = ["platform", "model", "cli"];
 
 /** The JSON Schemas, at `main` in this repo, as raw file URLs. */
 export const SCHEMA_GRAPH_URL =
-  `https://raw.githubusercontent.com/${OFFICIAL_OWNER}/${OFFICIAL_REPO}/main/schema/graph.schema.json`;
+  `https://raw.githubusercontent.com/${SITE_REPOSITORY}/main/schema/graph.schema.json`;
 export const SCHEMA_NODE_URL =
-  `https://raw.githubusercontent.com/${OFFICIAL_OWNER}/${OFFICIAL_REPO}/main/schema/node.schema.json`;
+  `https://raw.githubusercontent.com/${SITE_REPOSITORY}/main/schema/node.schema.json`;
 
 /** The schema link labels. */
 export const SCHEMA_GRAPH_LABEL = "graph.schema.json";
@@ -359,9 +370,17 @@ export const PUBLISH_INSTALL_NODE = "People install the node with:";
 /** How people install it: the same commands the document pages print. */
 export const PUBLISH_INSTALL_SAME = "The commands are the same ones each document page prints.";
 
-/** Official documents live in this repo's registry and arrive by pull request. */
-export function publishOfficial(repo: string, prefix: string): string {
-  return `Official documents live in ${repo} under ${prefix}. They are proposed by pull request.`;
+/**
+ * The Publish page's Official section: official documents live in the
+ * public catalogue repository and are proposed by pull request there;
+ * forking it (or using it as a template) is the quickest way to start a
+ * graphs repo.
+ */
+export function publishOfficial(repo: string): string {
+  return (
+    `Official documents live in ${repo}. They are proposed by pull request there, and ` +
+    `forking ${repo} — or using it as a template — is the quickest way to start a graphs repo.`
+  );
 }
 
 /** The home twin's pointer to the Publish page, over its label and href. */

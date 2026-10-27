@@ -2,7 +2,7 @@
 /**
  * The reference a document installs by.
  *
- * Official documents install by slug alone — the registry repository is
+ * Official documents install by slug alone — the official repository is
  * implicit — while community documents install by `owner/repo/slug`. This
  * module is the one place that decides, and it reuses the data layer's own
  * notion of "official" (`isOfficialRepo`) so a page and an install command

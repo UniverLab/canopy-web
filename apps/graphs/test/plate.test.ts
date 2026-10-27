@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * The Canopy plates: one snapshot per official registry graph plus the
+ * The Canopy plates: one snapshot per official example graph plus the
  * polish-shaped fixture, the structural invariants behind every snapshot
  * (no overlapping shapes, every edge endpoint drawn, fail routes dashed
  * red, the infra node in the lower lane), the node plate, and the
  * sixty-node render budget.
  */
 import { describe, expect, it } from "vitest";
-import helloGraph from "../../../registry/graphs/hello-graph/graph.json" with { type: "json" };
-import qualityBubble from "../../../registry/graphs/quality-bubble/graph.json" with { type: "json" };
-import singleCommitter from "../../../registry/graphs/single-committer/graph.json" with { type: "json" };
-import specLoop from "../../../registry/graphs/spec-loop/graph.json" with { type: "json" };
+import helloGraph from "./fixtures/graphs/hello-graph/graph.json" with { type: "json" };
+import qualityBubble from "./fixtures/graphs/quality-bubble/graph.json" with { type: "json" };
+import singleCommitter from "./fixtures/graphs/single-committer/graph.json" with { type: "json" };
+import specLoop from "./fixtures/graphs/spec-loop/graph.json" with { type: "json" };
 import {
   structureOf,
   type GraphDocument,

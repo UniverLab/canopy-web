@@ -252,7 +252,7 @@ async function installAtRef(
     {
       owner: target.owner,
       repo: target.repo,
-      directory: documentDirectory(target.owner, target.repo, target.kind, target.slug),
+      directory: documentDirectory(target.kind, target.slug),
       kind: target.kind,
       slug: target.slug,
       stars: null,

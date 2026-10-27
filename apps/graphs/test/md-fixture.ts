@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
  * The quality-bubble README as the markdown renderer's snapshot subject:
- * the real document at registry/graphs/quality-bubble/README.md, copied
- * verbatim (backticks escaped for the template literal), carrying a
+ * the real document at test/fixtures/graphs/quality-bubble/README.md,
+ * copied verbatim (backticks escaped for the template literal), carrying a
  * numbered list, a dashed list, inline code and a fenced block.
  */
 
-/** Verbatim copy of registry/graphs/quality-bubble/README.md. */
+/** Verbatim copy of test/fixtures/graphs/quality-bubble/README.md. */
 export const QUALITY_BUBBLE_README = `# quality-bubble
 
 What this graph is for: covering the change already in the worktree

@@ -15,7 +15,7 @@ import { officialStubs, searchStubs } from "./stubs.js";
 const ORIGIN = "https://graphs.univerlab.org";
 
 const official = (kind: string, slug: string, ref = "HEAD"): string =>
-  `https://raw.githubusercontent.com/UniverLab/canopy-web/${ref}/registry/${kind}s/${slug}/${kind}.json`;
+  `https://raw.githubusercontent.com/UniverLab/canopy-graphs/${ref}/${kind}s/${slug}/${kind}.json`;
 
 const community = (owner: string, repo: string, kind: string, slug: string, ref = "HEAD"): string =>
   `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${kind}s/${slug}/${kind}.json`;
@@ -26,7 +26,7 @@ interface Options {
   env?: Env;
 }
 
-/** Seed a fresh KV with the official registry and one community graph. */
+/** Seed a fresh KV with the official repository and one community graph. */
 async function seeded(): Promise<FakeKV> {
   resetIndexMemo();
   const fake = fakeFetch(searchStubs());
@@ -69,13 +69,13 @@ async function counting(points: DataPoint[]): Promise<Env> {
 }
 
 describe("redirects", () => {
-  it("sends an official graph to the registry layout on GitHub", async () => {
+  it("sends an official graph to the community layout in the official repository", async () => {
     const response = await call("/i/graph/hello-graph", { env: { INDEX: await seeded() } });
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(official("graph", "hello-graph"));
   });
 
-  it("sends an official node to the registry layout on GitHub", async () => {
+  it("sends an official node to the community layout in the official repository", async () => {
     const response = await call("/i/node/hello-node", { env: { INDEX: await seeded() } });
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(official("node", "hello-node"));
@@ -89,7 +89,7 @@ describe("redirects", () => {
     expect(await response.text()).toContain(INDEXING_BODY);
   });
 
-  it("sends a community node to the repository without the registry prefix", async () => {
+  it("sends a community node to its own repository with the same layout", async () => {
     const kv = new FakeKV();
     resetIndexMemo();
     const fake = fakeFetch([
@@ -117,7 +117,7 @@ describe("redirects", () => {
     expect(response.headers.get("location")).toBe(community("acme", "things", "node", "cool-node"));
   });
 
-  it("sends a community graph to the repository without the registry prefix", async () => {
+  it("sends a community graph to its own repository with the same layout", async () => {
     const response = await call("/i/acme/things/graph/flow", { env: { INDEX: await seeded() } });
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(community("acme", "things", "graph", "flow"));
@@ -152,13 +152,13 @@ describe("redirects", () => {
     const kv = await seeded();
     const block: BlockedEntry = {
       kind: "graph",
-      repo: "UniverLab/canopy-web",
+      repo: "UniverLab/canopy-graphs",
       slug: "hello-graph",
       reason: "Malicious or dangerous command",
-      issue: "https://github.com/UniverLab/canopy-web/issues/12",
+      issue: "https://github.com/UniverLab/canopy-graphs/issues/12",
       blocked_at: "2026-10-27",
     };
-    await kv.put(blockedDocKey("graph", "UniverLab", "canopy-web", "hello-graph"), JSON.stringify(block));
+    await kv.put(blockedDocKey("graph", "UniverLab", "canopy-graphs", "hello-graph"), JSON.stringify(block));
     const response = await call("/i/graph/hello-graph", { env: { INDEX: kv } });
     expect(response.status).toBe(410);
     expect(await response.json()).toEqual({
@@ -173,7 +173,7 @@ describe("redirects", () => {
     const block: BlockedEntry = {
       repo: "acme/things",
       reason: "Prompt that steers the agent to do harm",
-      issue: "https://github.com/UniverLab/canopy-web/issues/13",
+      issue: "https://github.com/UniverLab/canopy-graphs/issues/13",
       blocked_at: "2026-10-27",
     };
     await kv.put(blockedRepoKey("acme", "things"), JSON.stringify(block));
@@ -186,13 +186,13 @@ describe("redirects", () => {
     const kv = await seeded();
     const block: BlockedEntry = {
       kind: "graph",
-      repo: "UniverLab/canopy-web",
+      repo: "UniverLab/canopy-graphs",
       slug: "hello-graph",
       reason: "Broken or invalid",
-      issue: "https://github.com/UniverLab/canopy-web/issues/14",
+      issue: "https://github.com/UniverLab/canopy-graphs/issues/14",
       blocked_at: "2026-10-27",
     };
-    await kv.put(blockedDocKey("graph", "UniverLab", "canopy-web", "hello-graph"), JSON.stringify(block));
+    await kv.put(blockedDocKey("graph", "UniverLab", "canopy-graphs", "hello-graph"), JSON.stringify(block));
     // A block outranks a pinned ref: the 410 arrives before any live fetch,
     // so pinning a tag cannot install what the catalogue removed.
     const response = await call("/i/graph/hello-graph?ref=v1.2.0", { env: { INDEX: kv } });
@@ -353,8 +353,8 @@ describe("counting", () => {
     expect(response.status).toBe(302);
     expect(points).toHaveLength(1);
     expect(points[0]).toEqual({
-      indexes: ["UniverLab/canopy-web/graph/hello-graph"],
-      blobs: ["graph", "UniverLab/canopy-web/hello-graph", "curl", "", "", "redirect"],
+      indexes: ["UniverLab/canopy-graphs/graph/hello-graph"],
+      blobs: ["graph", "UniverLab/canopy-graphs/hello-graph", "curl", "", "", "redirect"],
       doubles: [1],
     });
   });
@@ -394,8 +394,8 @@ describe("counting", () => {
     expect(response.status).toBe(400);
     expect(points).toEqual([
       {
-        indexes: ["UniverLab/canopy-web/graph/?"],
-        blobs: ["graph", "UniverLab/canopy-web/?", "curl", "", "", "bad-request"],
+        indexes: ["UniverLab/canopy-graphs/graph/?"],
+        blobs: ["graph", "UniverLab/canopy-graphs/?", "curl", "", "", "bad-request"],
         doubles: [1],
       },
     ]);

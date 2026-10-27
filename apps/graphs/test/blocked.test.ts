@@ -20,7 +20,7 @@ import { createStore, resetIndexMemo } from "../src/store.js";
 import { FakeKV } from "./fakes.js";
 
 /** The issue every fixture was decided on. */
-const ISSUE = "https://github.com/UniverLab/canopy-web/issues/42";
+const ISSUE = "https://github.com/UniverLab/canopy-graphs/issues/42";
 
 function documentBlock(slug = "toxic"): BlockedEntry {
   return {

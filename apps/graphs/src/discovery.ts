@@ -64,7 +64,7 @@ export async function directoriesFallback(
         sources.push({
           owner,
           repo,
-          directory: documentDirectory(owner, repo, kind, entry["name"]),
+          directory: documentDirectory(kind, entry["name"]),
           kind: kind as DocumentKind,
           slug: entry["name"],
           stars: null,

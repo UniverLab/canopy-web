@@ -3,7 +3,7 @@
  * Folder-to-document composition for the catalogue.
  *
  * GitHub's contents API, a repo's git tree or a search hit all say where a
- * document *might* live: `<prefix>/<kind>s/<slug>/<kind>.json` plus a
+ * document *might* live: `<kind>s/<slug>/<kind>.json` plus a
  * README. This module turns that into a validated `Doc`, the shape the
  * pages render, using the fewest GitHub calls possible (the README is only
  * fetched once the document validated) and dropping anything invalid with a
@@ -27,7 +27,7 @@ export interface Doc {
   /** Graph: the number of nodes. Node: 1. */
   nodeCount: number;
   repo: string;
-  /** True when the document ships in this repo's registry. */
+  /** True when the document ships in the official repository. */
   official: boolean;
   /** GitHub stars, or null when nobody told us. Never zero-filled. */
   stars: number | null;
@@ -51,7 +51,7 @@ export interface CatalogEntry {
 export interface DocumentSource {
   owner: string;
   repo: string;
-  /** Directory holding the document, e.g. `registry/graphs/hello-graph`. */
+  /** Directory holding the document, e.g. `graphs/hello-graph`. */
   directory: string;
   kind: DocumentKind;
   slug: string;
@@ -71,7 +71,8 @@ export function documentFile(kind: DocumentKind): string {
 /**
  * The folders the search reads documents from, at the repository root:
  * `graphs/<slug>/graph.json` and `nodes/<slug>/node.json`. The Publish
- * page states these paths, so they live here, not in prose.
+ * page states these paths, so they live here, not in prose. Every
+ * repository — the official one included — uses this layout.
  */
 export const GRAPH_DIR = "graphs";
 
@@ -82,20 +83,9 @@ export function communityDir(kind: DocumentKind): string {
   return kind === "graph" ? GRAPH_DIR : NODE_DIR;
 }
 
-/** `registry/graphs` when the repository is the official one, else ``. */
-export function prefixFor(owner: string, repo: string): string {
-  return isOfficialRepo(owner, repo) ? "registry/" : "";
-}
-
-/** The document folder for a slug, given the repository's prefix. */
-export function documentDirectory(
-  owner: string,
-  repo: string,
-  kind: DocumentKind,
-  slug: string,
-): string {
-  const prefix = prefixFor(owner, repo);
-  return `${prefix}${communityDir(kind)}/${slug}`;
+/** The document folder for a slug: the community layout, for everyone. */
+export function documentDirectory(kind: DocumentKind, slug: string): string {
+  return `${communityDir(kind)}/${slug}`;
 }
 
 function contentsUrl(owner: string, repo: string, path: string, ref: string): string {
@@ -135,7 +125,8 @@ export function pathsFromTree(value: unknown): TreeFile[] {
 /**
  * The document folders a tree implies. A path counts when it is a
  * document file next to its folder: `graphs/<slug>/graph.json` (and
- * `nodes/…/node.json` likewise, matching the publish rule registry follows).
+ * `nodes/…/node.json` likewise, matching the publish rule every
+ * repository follows).
  */
 export function sourcesFromTree(
   owner: string,

@@ -5,6 +5,7 @@
  * the encoding of `-` and `.` and the parameter order the form relies on.
  */
 import { describe, expect, it } from "vitest";
+import { OFFICIAL_REPOSITORY } from "../src/lib.js";
 import {
   REPORT_ISSUE_HREF,
   REPORT_PREFILL_IDS,
@@ -49,5 +50,14 @@ describe("the report URL", () => {
 
   it("points the repository report at GitHub's own form", () => {
     expect(REPORT_REPOSITORY_HREF).toBe("https://github.com/contact/report-content");
+  });
+
+  it("opens reports on the official catalogue repository, wherever the document lives", () => {
+    expect(OFFICIAL_REPOSITORY).toBe("UniverLab/canopy-graphs");
+    expect(REPORT_ISSUE_HREF).toBe("https://github.com/UniverLab/canopy-graphs/issues/new");
+    // A community document reports to the same place: one list, one decider.
+    const url = reportUrl("graph", "acme", "things", "flow", PAGE);
+    expect(url.startsWith(`${REPORT_ISSUE_HREF}?`)).toBe(true);
+    expect(url).toContain("source=acme%2Fthings");
   });
 });
