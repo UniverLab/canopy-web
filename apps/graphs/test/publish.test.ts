@@ -223,4 +223,22 @@ describe("the markdown twin", () => {
     expect(twin).toContain(homePublishLine(PUBLISH_LABEL, PUBLISH_HREF));
     expect(twin).toContain(PUBLISH_HREF);
   });
+
+  it("separates twin blocks with blank lines so commands are code blocks", async () => {
+    const twin = await (await call("/publish.md")).text();
+    const examplePath = `${communityDir("graph")}/${PUBLISH_EXAMPLE_GRAPH}/${documentFile("graph")}`;
+    const graphRef = `${PUBLISH_EXAMPLE_OWNER}/${PUBLISH_EXAMPLE_REPO}/${PUBLISH_EXAMPLE_GRAPH}`;
+    const nodeRef = `${PUBLISH_EXAMPLE_OWNER}/${PUBLISH_EXAMPLE_REPO}/${PUBLISH_EXAMPLE_NODE}`;
+    for (const command of [
+      EXPORT_GRAPH_COMMAND,
+      `${VALIDATE_GRAPH_PREFIX} ${examplePath}`,
+      installCommand("graph", graphRef),
+      installCommand("node", nodeRef),
+    ]) {
+      expect(twin).toContain(`\n\n    ${command}\n\n`);
+    }
+    const graphPath = `${communityDir("graph")}/<slug>/${documentFile("graph")}`;
+    const nodePath = `${communityDir("node")}/<slug>/${documentFile("node")}`;
+    expect(twin).toContain(`\`${graphPath}\`.\n\nPut the node at \`${nodePath}\`.`);
+  });
 });

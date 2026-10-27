@@ -252,7 +252,9 @@ export function publishPage(): Page {
       ``,
       `## ${section.heading}`,
       ``,
-      ...section.markdown.map((block) => block.replace(/\n$/, "")),
+      ...section.markdown
+        .map((block) => block.replace(/\n$/, ""))
+        .flatMap((block, index) => (index === 0 ? [block] : [``, block])),
     ]),
     ``,
   ].join("\n");
