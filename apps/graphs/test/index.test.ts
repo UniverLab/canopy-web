@@ -288,7 +288,6 @@ describe("bad requests", () => {
     { path: "/i/graph", reason: "unknown route" },
     { path: "/i/a/b/c", reason: "unknown route" },
     { path: "/i/graph/hello-graph/extra/route/more", reason: "unknown route" },
-    { path: "/health", reason: "unknown route" },
     { path: "/i/-acme/things/graph/flow", reason: "owner must follow GitHub rules" },
     { path: "/i/acme/re@po/graph/flow", reason: "repo must follow GitHub rules" },
     { path: "/i/acme/things/preset/flow", reason: "kind must be graph or node" },
@@ -316,6 +315,23 @@ describe("bad requests", () => {
     const response = await SELF.fetch(`${ORIGIN}/i/preset/hello-graph`, { redirect: "manual" });
     expect(response.status).toBe(400);
     expect(await response.text()).toContain("kind must be graph or node");
+  });
+});
+
+describe("unknown paths", () => {
+  it.each(["/health", "/.well-known/security.txt"])("answers %s with a 404 and the one-line usage reason", async (path) => {
+    const response = await call(path);
+    expect(response.status).toBe(404);
+    expect(response.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+    const text = await response.text();
+    expect(text).toContain("unknown route");
+    expect(text.trimEnd().split("\n")).toHaveLength(1);
+  });
+
+  it("answers an unknown path with a 404 through the deployed Worker too", async () => {
+    const response = await SELF.fetch(`${ORIGIN}/health`, { redirect: "manual" });
+    expect(response.status).toBe(404);
+    expect(await response.text()).toContain("unknown route");
   });
 });
 

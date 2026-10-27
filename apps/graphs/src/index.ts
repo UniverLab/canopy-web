@@ -39,6 +39,7 @@ import {
   indexKey,
   parseTarget,
 } from "./lib.js";
+import { handleAgentFiles, NOT_AGENT_FILE } from "./agent-files.js";
 import { handleApi, type ApiEnv } from "./api.js";
 import { handlePage, NOT_PAGE } from "./pages/routes.js";
 import { createGitHub, type CacheLike } from "./github.js";
@@ -171,10 +172,16 @@ export interface ScheduledContext {
   waitUntil(promise: Promise<unknown>): void;
 }
 
-/** Answer one request: JSON API, catalogue pages, else the redirector. */
+/** Answer one request: agent files, JSON API, catalogue pages, else the redirector. */
 async function answer(req: Request, env: Env, deps: WorkerDeps): Promise<Response> {
   const url = new URL(req.url);
   const apiDeps = { cache: deps.cache ?? defaultCache(), fetchImpl: deps.fetchImpl };
+  // The discovery files come first, before /api: /api/openapi.json is a
+  // static document here, never an API route.
+  const agentFile = await handleAgentFiles(req, env);
+  if (agentFile !== NOT_AGENT_FILE) {
+    return agentFile;
+  }
   if (url.pathname.startsWith("/api")) {
     const result = await handleApi(req, env, apiDeps);
     return result === true ? install(req, env, url, deps) : result;
@@ -287,7 +294,10 @@ async function install(req: Request, env: Env, url: URL, deps: WorkerDeps): Prom
 
   if (!parsed.ok) {
     record(env, req, parsed.rejection, "bad-request");
-    const body = parsed.rejection.status === 404 ? `${USAGE}\n` : `${parsed.rejection.reason}\n`;
+    // Only the bare /i/ gets the full usage text; every other rejection
+    // — a malformed install's 400, an unknown path's 404 — carries its
+    // one-line reason.
+    const body = parsed.rejection.reason === "no install target" ? `${USAGE}\n` : `${parsed.rejection.reason}\n`;
     return textResponse(body, parsed.rejection.status);
   }
 

@@ -67,9 +67,11 @@ globals.
 ## Static assets
 
 The Worker serves the built browser app (`apps/remote/web/dist`) through the
-`[assets]` binding in `wrangler.toml`: `/` and any non-API path serve the app
-(`single-page-application` fallback, so `/pair` returns `index.html`), while
-`/auth/*`, `/ws/*` and `/turn` always reach the Worker code
+`[assets]` binding in `wrangler.toml`: `/` and any extensionless path serve
+the app (the Worker fetches `index.html` through the `ASSETS` binding, so
+`/pair` keeps working), while agent probes (`/.well-known/*`, `/llms.txt`,
+`/sitemap.xml`) and file paths no built asset holds answer `404`. `/auth/*`,
+`/ws/*`, `/turn` and `/.well-known/*` always reach the Worker code
 (`run_worker_first`). Responses built by the Worker get the security headers
 from `src/protocol.ts`; asset responses get the identical headers from the
 `_headers` file in `apps/remote/web/public/`, which the deploy workflow keeps

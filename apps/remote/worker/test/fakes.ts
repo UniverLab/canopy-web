@@ -8,6 +8,7 @@
  * made it. Closing a fake socket drops it from its state, mirroring the
  * runtime, which removes a closed socket before calling webSocketClose.
  */
+import type { AssetsFetcher } from "../src/index.js";
 import type { RoomAttachment } from "../src/protocol.js";
 import type { RoomSocket, RoomState } from "../src/room.js";
 
@@ -117,5 +118,30 @@ export class FakeRoomState implements RoomState {
   /** A fresh fake socket bound to this state. */
   makeSocket(): FakeRoomSocket {
     return new FakeRoomSocket(this);
+  }
+}
+
+/**
+ * The `[assets]` binding stand-in: the Worker under test has no built
+ * `../web/dist`, so this serves one canned index.html and 404s the rest.
+ * The HTML carries the app's mount point, so a fallback test can tell it
+ * from a JSON 404 without parsing.
+ */
+export class FakeAssets implements AssetsFetcher {
+  constructor(
+    private readonly html = `<html><head><title>Canopy remote</title></head><body><div id="app"></div></body></html>`,
+  ) {}
+
+  fetch(input: Request): Promise<Response> {
+    const pathname = new URL(input.url).pathname;
+    if (pathname !== "/index.html") {
+      return Promise.resolve(new Response("not found\n", { status: 404 }));
+    }
+    return Promise.resolve(
+      new Response(this.html, {
+        status: 200,
+        headers: { "content-type": "text/html; charset=utf-8" },
+      }),
+    );
   }
 }

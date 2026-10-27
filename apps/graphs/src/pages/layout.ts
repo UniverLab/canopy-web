@@ -28,6 +28,7 @@ import {
   TITLE_SEPARATOR,
   WORDMARK,
 } from "./copy.js";
+import { AGENT_LINK_HEADER } from "../agent-files.js";
 import { renderColophon } from "../../../../packages/look/colophon/footer.js";
 import { escapeHtml } from "./md.js";
 import { copyScript, fondoHost, fondoScript, lookCss, lookLinks } from "./look.js";
@@ -117,7 +118,9 @@ export function withMarkdownFooter(markdown: string): string {
 
 /**
  * Answer a page request: the markdown twin when asked for, the HTML shell
- * otherwise. Both carry a short public cache, like the JSON API's.
+ * otherwise. Both carry a short public cache, like the JSON API's. The
+ * HTML branch also carries the agent Link header (llms.txt and the API
+ * catalogue), in univerlab.org's shape; the twin needs none.
  */
 export function page(req: Request, content: Page, status = 200): Response {
   const cacheControl = status === 200 ? "public, max-age=300" : "no-store";
@@ -136,6 +139,7 @@ export function page(req: Request, content: Page, status = 200): Response {
     headers: {
       "content-type": "text/html; charset=utf-8",
       "cache-control": cacheControl,
+      link: AGENT_LINK_HEADER,
     },
   });
 }

@@ -40,3 +40,32 @@ test("answers /auth/me with 401 JSON without a session", async ({ request }) => 
   expect(response.headers()["content-type"]).toContain("application/json");
   expect(await response.json()).toEqual({ error: "unauthorized" });
 });
+
+test("serves robots.txt as static text that keeps crawlers out", async ({
+  request,
+}) => {
+  const response = await request.get("/robots.txt");
+  expect(response.status()).toBe(200);
+  expect(response.headers()["content-type"]).toContain("text/plain");
+  const body = await response.text();
+  expect(body).toContain("User-agent: *");
+  expect(body).toContain("Disallow: /");
+  expect(body).toContain("Content-Signal: search=no, ai-input=no, ai-train=no");
+});
+
+test("answers agent probes with 404 JSON, never the SPA", async ({
+  request,
+}) => {
+  for (const path of ["/llms.txt", "/sitemap.xml", "/.well-known/api-catalog"]) {
+    const response = await request.get(path);
+    expect(response.status(), path).toBe(404);
+    expect(response.headers()["content-type"], path).toContain("application/json");
+  }
+});
+
+test("answers a missing built asset with 404, not index.html", async ({
+  request,
+}) => {
+  const response = await request.get("/app.css");
+  expect(response.status()).toBe(404);
+});

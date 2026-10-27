@@ -4,7 +4,7 @@ import worker, { type Env } from "../src/index.js";
 import { signSession } from "../src/auth.js";
 import { UserRoom } from "../src/room.js";
 import type { RoomNamespace, RoomStub } from "../src/ws.js";
-import { FakeRoomState } from "./fakes.js";
+import { FakeAssets, FakeRoomState } from "./fakes.js";
 
 const ORIGIN = "https://remote.univerlab.org";
 
@@ -28,6 +28,7 @@ class FakeNamespace implements RoomNamespace {
 
 const env: Env = {
   USER_ROOM: new FakeNamespace(),
+  ASSETS: new FakeAssets(),
   GITHUB_CLIENT_ID: "test-client-id",
   GITHUB_CLIENT_SECRET: "test-client-secret",
   SESSION_SECRET: "test-session-secret-that-is-long-enough",
@@ -58,7 +59,7 @@ describe("security headers", () => {
     { name: "device 401", path: "/ws/device", status: 401 },
     { name: "host 401", path: "/ws/host", status: 401 },
     { name: "turn 401", path: "/turn", status: 401 },
-    { name: "unknown path 404", path: "/nope", status: 404 },
+    { name: "missing asset 404", path: "/nope.css", status: 404 },
     { name: "wrong method 405", path: "/auth/me", method: "POST", status: 405 },
   ];
 

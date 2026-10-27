@@ -92,7 +92,7 @@ export interface Parts {
   slug: string;
 }
 
-/** A rejected request: 404 for the bare `/i/`, 400 for anything invalid. */
+/** A rejected request: 404 for the bare `/i/` and for non-`/i` paths, 400 for a malformed install. */
 export interface Rejection extends Parts {
   status: 400 | 404;
   reason: string;
@@ -219,7 +219,10 @@ export function parseTarget(pathname: string, ref: string | null): Parsed {
     return reject("no install target", {}, 404);
   }
   if (segments[0] !== "i") {
-    return reject(`unknown route; ${onOneLine(USAGE)}`);
+    // Not an install URL at all: a 404 with the same one-line usage
+    // reason, so crawlers read it as "nothing here" rather than a
+    // client error. A malformed /i/... request keeps its 400 below.
+    return reject(`unknown route; ${onOneLine(USAGE)}`, {}, 404);
   }
   return route(segments, ref);
 }

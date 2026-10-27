@@ -17,11 +17,16 @@ routes = [{ pattern = "remote.univerlab.org/*", zone_name = "univerlab.org" }]
 # Serve the built browser app from apps/remote/web/dist on the same origin,
 # so the page and its WebSocket share remote.univerlab.org. Paths matching
 # `run_worker_first` always reach the Worker code first; everything else
-# falls back to the assets binding (SPA: unknown paths serve index.html).
+# tries the assets first and an asset miss falls through to the Worker,
+# which serves index.html for extensionless navigation (the SPA fallback)
+# and answers 404 for agent probes (/.well-known/*, /llms.txt,
+# /sitemap.xml) and for file paths no built asset holds. There is
+# deliberately no `not_found_handling`: the fallback lives in the Worker
+# so unknown files 404 honestly instead of claiming to exist with 200 HTML.
 [assets]
 directory = "../web/dist"
-not_found_handling = "single-page-application"
-run_worker_first = ["/auth/*", "/ws/*", "/turn"]
+binding = "ASSETS"
+run_worker_first = ["/auth/*", "/ws/*", "/turn", "/.well-known/*"]
 
 # One room per GitHub user id. The room uses the WebSocket hibernation API
 # with per-socket attachments only — it never touches the storage API.

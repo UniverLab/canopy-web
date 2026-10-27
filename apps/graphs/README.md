@@ -22,8 +22,10 @@ anchor — this Worker is just a prettier doorway.
 - `?ref=` selects a branch, tag or commit sha; it defaults to `HEAD` (the
   default branch).
 - Every path segment is validated (GitHub owner/repo rules, the schema's
-  `^[a-z0-9-]{1,48}$` slug rule, a URL-safe ref). Anything invalid answers
-  `400` with a one-line reason; `GET /i/` answers `404` with the usage text.
+  `^[a-z0-9-]{1,48}$` slug rule, a URL-safe ref). A malformed install
+  answers `400` with a one-line reason; any other unknown path answers
+  `404` with the same one-line usage reason, and `GET /i/` answers `404`
+  with the usage text.
 
 Official documents are the ones in this repo's `registry/` — the `registry/`
 prefix is implicit in the short route, so `/i/graph/hello-graph` and the
@@ -61,6 +63,8 @@ database, the Cache API is still the only state:
 | `GET /api/search?q=&sort=top\|new&page=` | `{items, q, sort, page, total, truncated}` — `topic:canopy-graph` plus free text |
 | `GET /api/g/<owner>/<repo>/<slug>` | one graph document, validated JSON attached |
 | `GET /api/n/<owner>/<repo>/<slug>` | one node document, validated JSON attached |
+| `GET /api/index-status` | the last index run's accounting (invalid trimmed to 20) |
+| `GET /api/openapi.json` | OpenAPI 3.1 description of the five routes above |
 
 The `g`/`n` in a single-document route is the kind asked for: a slug that only
 exists under the other kind is a typed `404`, never a document of the wrong
@@ -74,6 +78,22 @@ typed JSON bodies — `{kind, message, status, retryAfter?}` with kinds
 turn into a 500 for an agent to choke on. `downloads` (90-day install
 counts) is attached when `CF_ACCOUNT_ID` + `CF_ANALYTICS_TOKEN` are set, and
 absent when not: counts are never zero-filled.
+
+## Agent discovery
+
+The catalogue is a public index agents should read, so it speaks the same
+discovery dialect as univerlab.org (same robots wording, same `Link` shape):
+
+| Route | Answer |
+|---|---|
+| `GET /robots.txt` | crawl the catalogue, skip `/i/`; `Content-Signal` grants search and input, not training (third parties authored the documents) |
+| `GET /sitemap.xml` | `/`, `/search`, `/publish`, `/llms.txt` plus every indexed document's page, from the scheduled index — never GitHub |
+| `GET /.well-known/api-catalog` | RFC 9727 linkset: the OpenAPI description, the Publish docs, the index status |
+
+Every HTML page carries
+`Link: </llms.txt>; rel="describedby", </.well-known/api-catalog>; rel="api-catalog"`,
+and every other `/.well-known/*` path answers `404`. The four files live in
+`src/agent-files.ts`, checked before the API router.
 
 ## Tests
 
