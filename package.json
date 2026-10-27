@@ -8,9 +8,12 @@
     "node": ">=22"
   },
   "scripts": {
+    "build": "npm run build:remote-web",
+    "build:remote-web": "vite build --config apps/remote/web/vite.config.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run && npm run test:worker",
+    "test": "vitest run && npm run test:worker && npm run test:remote-web",
+    "test:remote-web": "vitest run --config apps/remote/web/vitest.config.ts",
     "test:worker": "vitest run --config apps/graphs/vitest.config.ts",
     "validate": "tsx src/validate.ts"
   },
@@ -23,9 +26,12 @@
     "@eslint/js": "^9.18.0",
     "@types/node": "^22.10.0",
     "eslint": "^9.18.0",
+    "fake-indexeddb": "6.2.5",
+    "happy-dom": "21.0.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "typescript-eslint": "8.71.2",
+    "vite": "8.3.4",
     "vitest": "^3.0.5",
     "wrangler": "^4.153.0"
   }

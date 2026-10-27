@@ -101,6 +101,7 @@ dist
 *.css
 *.htm
 *.html
+!apps/remote/web/index.html
 *.js
 # The ESLint flat config is source, not a build output.
 !eslint.config.js
