@@ -6,6 +6,8 @@
  * remote session is read in a terminal, and the OS preference no longer
  * flips the palette. */
 
+@import url("./terminal-font.css");
+
 :root {
   color-scheme: dark;
   --bg: var(--surface-bg);
@@ -358,12 +360,17 @@ label > textarea {
 
 /* The terminal card follows the fitted terminal's height (refit writes
  * --term-visual-h), capped at 60vh; before the snapshot arrives the
- * placeholder holds the pane open. */
+ * placeholder holds the pane open. The pane is the scroller: when the
+ * readable floor wins on a phone the 80-column session pans inside the
+ * card (never the page), and the 8 px inset keeps text off the border. */
 .term-pane {
   background: var(--term-bg);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
-  overflow: hidden;
+  padding: 8px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-x pan-y;
 }
 
 .term-placeholder {
@@ -372,19 +379,19 @@ label > textarea {
   min-height: 46dvh;
 }
 
+/* Width 100 % of the pane's content box: the fit scale is measured from
+ * this width, and because .term-fit itself never scrolls (the pane does)
+ * its clientWidth cannot feed back into the scale. */
 .term-fit {
   width: 100%;
   height: min(var(--term-visual-h, 46dvh), 60vh);
-  /* Auto so the zoomed terminal pans inside the pane; at zoom 1 the
-   * scaled content fits exactly and no scrollbar appears. Single-finger
-   * pans the xterm viewport natively; pinch reaches the zoom handler
-   * instead of the browser. */
-  overflow: auto;
+  overflow: visible;
   touch-action: pan-x pan-y;
 }
 
 /* The visual box: natural size × the scale refit wrote, clipping the
- * transformed host so the terminal scales exactly once. */
+ * transformed host so the terminal scales exactly once. Wider than the
+ * fit when the readable floor wins; the pane scrolls it. */
 .term-scale {
   overflow: hidden;
 }

@@ -51,6 +51,24 @@ function composeText(draft: PromptDraft): string {
   return parts.join("\n\n");
 }
 
+// What the smoke session prints: a real canopy-like screen, so the
+// operator's screenshots show the palette, the box drawing and the block
+// elements instead of two grey lines.
+const SMOKE_OUTPUT = [
+  "$ muse run",
+  "hello from the host",
+  "",
+  "\x1b[30m██\x1b[31m██\x1b[32m██\x1b[33m██\x1b[34m██\x1b[35m██\x1b[36m██\x1b[37m██\x1b[0m  normal",
+  "\x1b[90m██\x1b[91m██\x1b[92m██\x1b[93m██\x1b[94m██\x1b[95m██\x1b[96m██\x1b[97m██\x1b[0m  bright",
+  "\x1b[38;2;63;184;176mtruecolor 3fb8b0\x1b[0m",
+  "┌──────────┐",
+  "│ canopy   │",
+  "│ session  │",
+  "└──────────┘",
+  "▁▂▃▄▅▆▇█",
+  "\x1b[32m●\x1b[0m smoke · running · 80×24 · 2.3k tok",
+].join("\r\n") + "\r\n";
+
 function main(): void {
   const root = document.getElementById("app");
   if (!root) {
@@ -65,6 +83,7 @@ function main(): void {
   const store = new SessionStore();
   const catalog = new CatalogStore();
   const sent: unknown[] = [];
+  const terminalOutput: string[] = [];
   let seq = 7;
   let nextSpawn = 0;
   let promptError: { code: string; message: string } | null = null;
@@ -114,7 +133,7 @@ function main(): void {
     } else if (frame.t === "catalog") {
       deliver({ t: "catalog", req: frame.req, ...CATALOG });
     } else if (frame.t === "attach" && typeof frame.id === "string") {
-      const full = b64("$ muse run\nhello from the host\n");
+      const full = b64(SMOKE_OUTPUT);
       deliver({ t: "snapshot", id: frame.id, cols: 80, rows: 24, seq, data: full.slice(0, 10) });
       deliver({ t: "snapshot_more", id: frame.id, data: full.slice(10), last: true });
     } else if (frame.t === "spawn") {
@@ -185,8 +204,16 @@ function main(): void {
   const controller = new SessionController({
     send,
     terminal: () => ({
-      write: (text) => shell.writeTerminal(text),
-      clear: () => shell.clearTerminal(),
+      write: (text) => {
+        // Recorded here, not read back from the DOM: the WebGL renderer
+        // has no .xterm-rows text to assert on.
+        terminalOutput.push(text);
+        shell.writeTerminal(text);
+      },
+      clear: () => {
+        terminalOutput.length = 0;
+        shell.clearTerminal();
+      },
     }),
     onExited: (_id, code) => shell.showSessionExited(code),
   });
@@ -210,6 +237,7 @@ function main(): void {
     clearSent: () => {
       sent.length = 0;
     },
+    terminalText: () => terminalOutput.join(""),
     pushOut: (text: string) => {
       seq += 1;
       deliver({ t: "out", id: "smoke", seq, data: b64(text) });
@@ -225,6 +253,7 @@ declare global {
     __fake: {
       sent: () => unknown[];
       clearSent: () => void;
+      terminalText: () => string;
       pushOut: (text: string) => void;
       failNextPrompt: (code: string, message: string) => void;
     };

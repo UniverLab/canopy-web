@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   clampZoom,
+  computeMinScale,
   computeScale,
   MAX_ZOOM,
   MIN_ZOOM,
@@ -47,6 +48,10 @@ class FakeHandle implements TerminalHandle {
   };
   onScroll = (callback: () => void): (() => void) => {
     this.scrollListeners.push(callback);
+    return () => {};
+  };
+  onReady = (callback: () => void): (() => void) => {
+    callback();
     return () => {};
   };
   dispose = (): void => {
@@ -103,6 +108,59 @@ describe("scale math", () => {
     expect(zoomFromPinch(100, 200, 1)).toBe(2);
     expect(zoomFromPinch(200, 100, 1)).toBe(0.5);
     expect(zoomFromPinch(0, 100, 1)).toBe(1);
+  });
+});
+
+describe("readable floor", () => {
+  // 14 px JetBrains Mono: 8.4 px cell, 17 px row in a real browser.
+  const ROW_HEIGHT = 17;
+  const CELL_WIDTH = 8.4;
+  // Main's 1 rem side padding plus the pane's 1 px border.
+  const paneFor = (viewport: number): number => viewport - 34;
+
+  it("never renders a row below 11 CSS px at 360, 390 or 1280", () => {
+    const minScale = computeMinScale(ROW_HEIGHT);
+    for (const viewport of [360, 390, 1280]) {
+      for (const cols of [80, 120]) {
+        const pane = paneFor(viewport);
+        const content = cols * CELL_WIDTH;
+        const scale = computeScale(pane, content, 1, minScale);
+        expect(scale).toBeCloseTo(Math.max(pane / content, minScale), 10);
+        expect(ROW_HEIGHT * scale).toBeGreaterThanOrEqual(11);
+        // Whatever wins, the terminal never sits narrower than the pane.
+        expect(content * scale).toBeGreaterThanOrEqual(pane - 1e-9);
+      }
+    }
+  });
+
+  it("picks the floor on a phone and fit-to-width on a desktop", () => {
+    const minScale = computeMinScale(ROW_HEIGHT);
+    // 80 columns at 390 px: fit would be 0.53, the floor is 0.647.
+    expect(computeScale(paneFor(390), 80 * CELL_WIDTH, 1, minScale)).toBeCloseTo(minScale, 10);
+    // 80 columns at 1280 px fit comfortably (the app is capped at 48 rem).
+    expect(computeScale(paneFor(1280), 80 * CELL_WIDTH, 1, minScale)).toBeCloseTo(
+      paneFor(1280) / (80 * CELL_WIDTH),
+      10,
+    );
+    // 120 columns still fit at 1280.
+    expect(computeScale(paneFor(1280), 120 * CELL_WIDTH, 1, minScale)).toBeCloseTo(
+      paneFor(1280) / (120 * CELL_WIDTH),
+      10,
+    );
+  });
+
+  it("keeps the − / + zoom on top of either mode", () => {
+    const minScale = computeMinScale(ROW_HEIGHT);
+    expect(computeScale(paneFor(390), 80 * CELL_WIDTH, 2, minScale)).toBeCloseTo(minScale * 2, 10);
+    expect(computeScale(paneFor(390), 80 * CELL_WIDTH, 0.5, minScale)).toBeCloseTo(
+      minScale * 0.5,
+      10,
+    );
+    // Fit on: no floor at all.
+    expect(computeScale(paneFor(390), 80 * CELL_WIDTH, 1, 0)).toBeCloseTo(
+      paneFor(390) / (80 * CELL_WIDTH),
+      10,
+    );
   });
 });
 
@@ -170,6 +228,8 @@ describe("TerminalView", () => {
   it("scales once into the visual box and reports the scale", () => {
     const { parent, view } = setup();
     view.mount(parent, 80, 24);
+    // Pure fit-to-width (Fit on), so the expected scale is pane / content.
+    view.setFitOnly(true);
     const fit = parent.querySelector<HTMLElement>(".term-fit");
     const scaler = parent.querySelector<HTMLElement>(".term-scale");
     const host = parent.querySelector<HTMLElement>(".term-host");
@@ -188,7 +248,38 @@ describe("TerminalView", () => {
     expect(scaler.style.width).toBe("400px");
     expect(scaler.style.height).toBe("240px");
     expect(fit.dataset.scale).toBe("0.5");
+    expect(fit.dataset.fit).toBe("on");
     expect(parent.style.getPropertyValue("--term-visual-h")).toBe("240px");
+    view.dispose();
+  });
+
+  it("applies the 11 px readable floor unless Fit is on", () => {
+    const { parent, view } = setup();
+    view.mount(parent, 80, 24);
+    const fit = parent.querySelector<HTMLElement>(".term-fit");
+    const scaler = parent.querySelector<HTMLElement>(".term-scale");
+    const host = parent.querySelector<HTMLElement>(".term-host");
+    if (!fit || !scaler || !host) {
+      throw new Error("missing scaffold");
+    }
+    Object.defineProperty(fit, "clientWidth", { value: 356, configurable: true });
+    Object.defineProperty(host, "scrollWidth", { value: 672, configurable: true });
+    // 24 rows × 17 px: the floor is 11 / 17, wider than the pane.
+    Object.defineProperty(host, "scrollHeight", { value: 408, configurable: true });
+    view.refit();
+    const floor = computeMinScale(17);
+    expect(view.isFitOnly).toBe(false);
+    expect(host.style.transform).toBe(`scale(${floor})`);
+    expect(fit.dataset.fit).toBe("off");
+    // The visual box is wider than the pane, which is what makes the pane
+    // scroll horizontally instead of shrinking the glyphs.
+    expect(parseFloat(scaler.style.width)).toBeCloseTo(672 * floor, 3);
+    expect(672 * floor).toBeGreaterThan(356);
+    view.setFitOnly(true);
+    expect(view.isFitOnly).toBe(true);
+    expect(fit.dataset.fit).toBe("on");
+    expect(host.style.transform).toBe(`scale(${356 / 672})`);
+    expect(672 * (356 / 672)).toBeCloseTo(356, 6);
     view.dispose();
   });
 });

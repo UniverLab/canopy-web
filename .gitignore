@@ -100,6 +100,7 @@ dist
 *.csr
 *.css
 !apps/remote/web/src/styles.css
+!apps/remote/web/src/terminal-font.css
 *.htm
 *.html
 !apps/remote/web/index.html

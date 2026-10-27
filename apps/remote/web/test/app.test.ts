@@ -45,6 +45,10 @@ class FakeHandle implements TerminalHandle {
     this.scrollListeners.push(callback);
     return () => {};
   };
+  onReady = (callback: () => void): (() => void) => {
+    callback();
+    return () => {};
+  };
   dispose = (): void => {
     this.disposed = true;
   };
@@ -407,6 +411,20 @@ describe("createShell", () => {
     query<HTMLButtonElement>("#term-zoom-in").click();
     query<HTMLButtonElement>("#term-zoom-out").click();
     expect(handles).toHaveLength(1);
+  });
+
+  it("remembers the Fit toggle per device", () => {
+    localStorage.clear();
+    shell.showSession("s1", "build");
+    shell.ensureTerminal("s1", 80, 24);
+    const fit = query<HTMLButtonElement>("#term-fit");
+    expect(fit.getAttribute("aria-pressed")).toBe("false");
+    fit.click();
+    expect(fit.getAttribute("aria-pressed")).toBe("true");
+    expect(localStorage.getItem("canopy.remote.term.fitOnly")).toBe("1");
+    fit.click();
+    expect(fit.getAttribute("aria-pressed")).toBe("false");
+    expect(localStorage.getItem("canopy.remote.term.fitOnly")).toBe("0");
   });
 
   it("spawns from the New sheet and opens the spawned session", () => {

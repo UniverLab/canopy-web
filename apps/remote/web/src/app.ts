@@ -19,6 +19,7 @@ import { renderSessions } from "./sessions.js";
 import type { SessionStore } from "./sessions.js";
 import { createXtermHandle, TerminalView } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
+import { readFitOnly, writeFitOnly } from "./terminal-prefs.js";
 import type { PairSubmit } from "./ui.js";
 import { renderColophon } from "../../../../packages/look/colophon/footer.js";
 
@@ -331,6 +332,13 @@ export function createShell(
       <div class="term-controls">
         <button type="button" id="term-zoom-out" aria-label="Zoom out">−</button>
         <button type="button" id="term-zoom-in" aria-label="Zoom in">+</button>
+        <button
+          type="button"
+          id="term-fit"
+          aria-pressed="${readFitOnly() ? "true" : "false"}"
+          aria-label="Fit terminal to pane width"
+          title="Fit the terminal to the pane width"
+        >Fit</button>
         <button type="button" id="term-latest" hidden>↓ latest</button>
       </div>
       <div class="keybar" id="keybar"></div>
@@ -340,6 +348,15 @@ export function createShell(
     root.querySelector("#session-back")?.addEventListener("click", () => callbacks.onLeaveSession());
     root.querySelector("#term-zoom-in")?.addEventListener("click", () => terminalView?.zoomIn());
     root.querySelector("#term-zoom-out")?.addEventListener("click", () => terminalView?.zoomOut());
+    // Fit off (default) keeps the readable floor; Fit on is pure
+    // fit-to-width. The choice is remembered per device.
+    const fitButton = root.querySelector<HTMLButtonElement>("#term-fit");
+    fitButton?.addEventListener("click", () => {
+      const next = fitButton.getAttribute("aria-pressed") !== "true";
+      writeFitOnly(next);
+      fitButton.setAttribute("aria-pressed", `${next}`);
+      terminalView?.setFitOnly(next);
+    });
     latestButton = root.querySelector<HTMLButtonElement>("#term-latest");
     latestButton?.addEventListener("click", () => {
       terminalView?.scrollToLatest();
@@ -523,14 +540,18 @@ export function createShell(
       pane.replaceChildren();
       sessionCols = cols;
       sessionRows = rows;
-      terminalView = new TerminalView(terminalFactory, {
-        onUserInput: (text) => callbacks.onTerminalInput(text),
-        onFollowChange: ({ following }) => {
-          if (latestButton) {
-            latestButton.hidden = following;
-          }
+      terminalView = new TerminalView(
+        terminalFactory,
+        {
+          onUserInput: (text) => callbacks.onTerminalInput(text),
+          onFollowChange: ({ following }) => {
+            if (latestButton) {
+              latestButton.hidden = following;
+            }
+          },
         },
-      });
+        { fitOnly: readFitOnly() },
+      );
       terminalView.mount(pane, cols, rows);
     },
     writeTerminal(text: string): void {
