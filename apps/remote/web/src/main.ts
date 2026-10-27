@@ -2,16 +2,16 @@
 // Browser entry point: auth check, device key, relay socket, pairing,
 // and the reconnecting host connection behind the session shell. Joined
 // snapshots feed the open session; every other protocol frame is routed
-// to the session store, the composer, or the window events the Prompt
-// Builder (next spec) listens for.
+// to the session store, the catalog cache, a sheet, or the composer.
 
 import { createShell } from "./app.js";
 import type { Shell } from "./app.js";
+import { CatalogStore } from "./catalog.js";
 import { createChannelHandler } from "./channel.js";
 import { generateDeviceKey } from "./crypto.js";
 import type { DeviceKey } from "./crypto.js";
 import { keyBytes } from "./keys.js";
-import { buildList, newReqId } from "./protocol.js";
+import { buildCatalog, buildCompose, buildList, buildSpawn, newReqId } from "./protocol.js";
 import { runPairing } from "./pairing.js";
 import { ConnectionManager } from "./reconnect.js";
 import { RelaySocket, defaultRelayUrl, parseHostsList } from "./relay.js";
@@ -71,6 +71,7 @@ async function main(): Promise<void> {
 
   const relay = new RelaySocket(defaultRelayUrl());
   const store = new SessionStore();
+  const catalog = new CatalogStore();
   let onlineHosts: OnlineHost[] = [];
   let manager: ConnectionManager | null = null;
 
@@ -83,6 +84,7 @@ async function main(): Promise<void> {
       onDisconnect: () => void doDisconnect(),
       onRetry: () => manager?.retryNow(),
       onPairAgain: () => {
+        catalog.clear();
         manager?.stop();
         manager = null;
         shell.showPair();
@@ -106,15 +108,11 @@ async function main(): Promise<void> {
           shell.composerError("Not connected", req);
         }
       },
-      // The New dialog and the Prompt Builder arrive with the next spec;
-      // until then the buttons announce themselves on the window.
-      onNew: () => {
-        globalThis.dispatchEvent(new CustomEvent("canopy:new"));
-      },
-      onBuilder: () => {
-        globalThis.dispatchEvent(new CustomEvent("canopy:builder"));
-      },
+      onSpawn: (spawn, req) => manager?.send(buildSpawn(req, spawn)) ?? false,
+      onCompose: (draft, req) => manager?.send(buildCompose(req, draft)) ?? false,
+      onSendDraft: (draft, req) => controller.sendPromptDraft(draft, req),
     },
+    { catalog },
   );
 
   const controller = new SessionController({
@@ -130,12 +128,13 @@ async function main(): Promise<void> {
     shell.setPairedHosts(await listHosts());
   };
 
-  const router = createFrameRouter({ store, controller, shell });
+  const router = createFrameRouter({ store, controller, shell, catalog });
 
   function startSession(host: HostRecord): void {
     // Detach while the old connection is still open so the host sees it.
     controller.close();
     manager?.stop();
+    catalog.clear();
     shell.setHostLabel(host.label);
     shell.showSessions();
     const frames = createChannelHandler({
@@ -148,7 +147,9 @@ async function main(): Promise<void> {
       shell.setConnectionState(state);
       if (state === "connected") {
         // A fresh connect and a reconnect both land here: refresh the
-        // list, and the open session re-attaches for a fresh snapshot.
+        // catalog and the list, and the open session re-attaches for a
+        // fresh snapshot.
+        next.send(buildCatalog(newReqId()));
         next.send(buildList(newReqId()));
         controller.reattach();
       }
@@ -206,6 +207,7 @@ async function main(): Promise<void> {
     controller.close();
     manager?.stop();
     manager = null;
+    catalog.clear();
     const stored = await listHosts();
     await refreshPaired();
     if (stored.length === 0) {

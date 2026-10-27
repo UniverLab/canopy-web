@@ -4,6 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 import type { Shell } from "../src/app.js";
+import { CatalogStore } from "../src/catalog.js";
 import { createChannelHandler } from "../src/channel.js";
 import { b64encode } from "../src/crypto.js";
 import { createFrameRouter } from "../src/router.js";
@@ -17,23 +18,33 @@ const b64 = (text: string): string => b64encode(new TextEncoder().encode(text));
 interface Harness {
   router: FrameRouter;
   store: SessionStore;
+  catalog: CatalogStore;
   controller: SessionController;
   written: string[];
   terminals: { id: string; cols: number; rows: number }[];
   oks: string[];
   errors: { message: string; req: string | null }[];
   exits: number[];
+  spawned: { req: string; id: string }[];
+  composed: { req: string; text: string }[];
+  sheetOks: string[];
+  sheetErrors: { message: string; req: string | null; code: string }[];
   hostSend: (frame: unknown) => void;
 }
 
 function setup(): Harness {
   const channel = new FakeDataChannel("canopy-session-v1", { ordered: true });
   const store = new SessionStore();
+  const catalog = new CatalogStore();
   const written: string[] = [];
   const terminals: Harness["terminals"] = [];
   const oks: string[] = [];
   const errors: Harness["errors"] = [];
   const exits: number[] = [];
+  const spawned: Harness["spawned"] = [];
+  const composed: Harness["composed"] = [];
+  const sheetOks: string[] = [];
+  const sheetErrors: Harness["sheetErrors"] = [];
   // Only the methods the router calls; main.ts wires the real shell.
   const shell = {
     ensureTerminal: (id: string, cols: number, rows: number) => {
@@ -48,6 +59,18 @@ function setup(): Harness {
     showSessionExited: (code: number) => {
       exits.push(code);
     },
+    sheetSpawned: (req: string, id: string) => {
+      spawned.push({ req, id });
+    },
+    sheetComposed: (req: string, text: string) => {
+      composed.push({ req, text });
+    },
+    sheetOk: (req: string) => {
+      sheetOks.push(req);
+    },
+    sheetError: (message: string, req: string | null, code: string) => {
+      sheetErrors.push({ message, req, code });
+    },
   } as unknown as Shell;
   const controller = new SessionController({
     send: (data) => {
@@ -60,7 +83,7 @@ function setup(): Harness {
     }),
     onExited: (_id, code) => shell.showSessionExited(code),
   });
-  const router = createFrameRouter({ store, controller, shell });
+  const router = createFrameRouter({ store, controller, shell, catalog });
   const frames = createChannelHandler({
     onSnapshot: router.handleSnapshot,
     onFrame: router.handleFrame,
@@ -73,12 +96,17 @@ function setup(): Harness {
   return {
     router,
     store,
+    catalog,
     controller,
     written,
     terminals,
     oks,
     errors,
     exits,
+    spawned,
+    composed,
+    sheetOks,
+    sheetErrors,
     hostSend: (frame: unknown) => channel.deliver(JSON.stringify(frame)),
   };
 }
@@ -118,12 +146,38 @@ describe("createFrameRouter", () => {
     expect(h.written.join("")).toBe("hello!");
   });
 
-  it("routes ok and error replies to the composer", () => {
+  it("routes ok and error replies to the composer and the sheets", () => {
     const h = setup();
     h.hostSend({ t: "ok", req: "r9" });
     expect(h.oks).toEqual(["r9"]);
+    expect(h.sheetOks).toEqual(["r9"]);
     h.hostSend({ t: "error", req: "r10", code: "delivery_failed", message: "host is gone" });
     expect(h.errors).toEqual([{ message: "host is gone", req: "r10" }]);
+    expect(h.sheetErrors).toEqual([
+      { message: "host is gone", req: "r10", code: "delivery_failed" },
+    ]);
+  });
+
+  it("caches the catalog and routes spawned and composed to the shell", () => {
+    const h = setup();
+    h.hostSend({
+      t: "catalog",
+      req: "r1",
+      clis: [{ cli: "muse", label: "Muse", models: ["spark"] }],
+      projects: [{ name: "demo", path: "/home/u/demo" }],
+      presets: [{ name: "review", preview: "look" }],
+      skills: [{ name: "tdd", label: "TDD" }],
+    });
+    expect(h.catalog.isLoaded).toBe(true);
+    expect(h.catalog.clis.map((cli) => cli.cli)).toEqual(["muse"]);
+    expect(h.catalog.projects.map((project) => project.name)).toEqual(["demo"]);
+    expect(h.catalog.presets.map((preset) => preset.name)).toEqual(["review"]);
+    expect(h.catalog.skills.map((skill) => skill.name)).toEqual(["tdd"]);
+
+    h.hostSend({ t: "spawned", req: "r2", id: "s9" });
+    expect(h.spawned).toEqual([{ req: "r2", id: "s9" }]);
+    h.hostSend({ t: "composed", req: "r3", text: "# Goal" });
+    expect(h.composed).toEqual([{ req: "r3", text: "# Goal" }]);
   });
 
   it("ignores unknown frames without throwing", () => {
@@ -136,5 +190,7 @@ describe("createFrameRouter", () => {
     expect(h.store.size).toBe(0);
     expect(h.oks).toEqual([]);
     expect(h.errors).toEqual([]);
+    expect(h.spawned).toEqual([]);
+    expect(h.composed).toEqual([]);
   });
 });

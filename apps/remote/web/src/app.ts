@@ -6,10 +6,14 @@
 // appears only when several hosts are paired.
 
 import { Composer } from "./composer.js";
+import { CatalogStore } from "./catalog.js";
+import { Builder } from "./builder.js";
 import { renderKeyBar } from "./keys.js";
 import type { KeyDef } from "./keys.js";
+import { NewDialog } from "./new-dialog.js";
 import { defaultDeviceLabel } from "./pairing.js";
 import { connectFailMessage } from "./peer.js";
+import type { PromptDraft, SpawnRequest } from "./protocol.js";
 import type { OnlineHost } from "./relay.js";
 import { renderSessions } from "./sessions.js";
 import type { SessionStore } from "./sessions.js";
@@ -28,8 +32,10 @@ export interface ShellCallbacks {
   onKeyPress: (def: KeyDef) => void;
   onTerminalInput: (text: string) => void;
   onComposerSend: (text: string, req: string) => void;
-  onNew: () => void;
-  onBuilder: () => void;
+  /** False when the frame could not be sent; the dialog then says so. */
+  onSpawn: (spawn: SpawnRequest, req: string) => boolean;
+  onCompose: (draft: PromptDraft, req: string) => boolean;
+  onSendDraft: (draft: PromptDraft, req: string) => boolean;
 }
 
 export interface Shell {
@@ -38,6 +44,8 @@ export interface Shell {
   showHosts: () => void;
   showSessions: () => void;
   showSession: (id: string, name: string) => void;
+  showNew: () => void;
+  showBuilder: () => void;
   setLogin: (login: string | null) => void;
   setHostLabel: (label: string) => void;
   setConnectionState: (state: string) => void;
@@ -51,11 +59,16 @@ export interface Shell {
   showSessionExited: (code: number) => void;
   composerOk: (req: string) => void;
   composerError: (message: string, req: string | null) => void;
+  sheetSpawned: (req: string, id: string) => void;
+  sheetComposed: (req: string, text: string) => void;
+  sheetOk: (req: string) => void;
+  sheetError: (message: string, req: string | null, code: string) => void;
   dispose: () => void;
 }
 
 export interface ShellDeps {
   terminalFactory?: TerminalFactory;
+  catalog?: CatalogStore;
 }
 
 type Route = "signin" | "pair" | "hosts" | "sessions" | "session";
@@ -91,6 +104,21 @@ export function createShell(
   let terminalView: TerminalView | null = null;
   let composer: Composer | null = null;
   let latestButton: HTMLButtonElement | null = null;
+
+  // The catalog the host sent and the two sheets that consume it. The
+  // dialogs subscribe to the store themselves while they are open.
+  const catalog = deps?.catalog ?? new CatalogStore();
+  const newDialog = new NewDialog(catalog, {
+    onSpawn: (spawn, req) => callbacks.onSpawn(spawn, req),
+  });
+  const builder = new Builder(catalog, {
+    onCompose: (draft, req) => callbacks.onCompose(draft, req),
+    onSend: (draft, req) => callbacks.onSendDraft(draft, req),
+  });
+  const closeSheets = () => {
+    newDialog.close();
+    builder.close();
+  };
 
   const snapshotDraft = () => {
     const code = root.querySelector<HTMLInputElement>("#pair-code");
@@ -241,8 +269,24 @@ export function createShell(
   const renderSessionsList = (slot: HTMLElement) => {
     renderSessions(slot, store.list(), Date.now(), {
       onOpen: (id) => callbacks.onOpenSession(id),
-      onNew: () => callbacks.onNew(),
+      onNew: () => openNew(),
     });
+  };
+
+  const openNew = () => {
+    if (route !== "sessions") {
+      return;
+    }
+    builder.close();
+    newDialog.open(root);
+  };
+
+  const openBuilder = () => {
+    if (route !== "session") {
+      return;
+    }
+    newDialog.close();
+    builder.open(root);
   };
 
   const teardownSessionWidgets = () => {
@@ -296,7 +340,7 @@ export function createShell(
     if (slot) {
       composer = new Composer({
         onSend: (text, req) => callbacks.onComposerSend(text, req),
-        onBuilder: () => callbacks.onBuilder(),
+        onBuilder: () => openBuilder(),
       });
       composer.mount(slot);
     }
@@ -337,12 +381,14 @@ export function createShell(
 
   return {
     showSignIn(): void {
+      closeSheets();
       teardownSessionWidgets();
       sessionId = null;
       route = "signin";
       render();
     },
     showPair(prefillCode?: string): void {
+      closeSheets();
       teardownSessionWidgets();
       sessionId = null;
       route = "pair";
@@ -356,22 +402,31 @@ export function createShell(
       render();
     },
     showHosts(): void {
+      closeSheets();
       teardownSessionWidgets();
       sessionId = null;
       route = "hosts";
       render();
     },
     showSessions(): void {
+      closeSheets();
       teardownSessionWidgets();
       sessionId = null;
       route = "sessions";
       render();
     },
     showSession(id: string, name: string): void {
+      closeSheets();
       sessionId = id;
       sessionName = name;
       route = "session";
       render();
+    },
+    showNew(): void {
+      openNew();
+    },
+    showBuilder(): void {
+      openBuilder();
     },
     setLogin(next: string | null): void {
       login = next;
@@ -479,9 +534,28 @@ export function createShell(
     composerError(message: string, req: string | null): void {
       composer?.handleError(message, req);
     },
+    sheetSpawned(req: string, id: string): void {
+      if (!newDialog.handleSpawned(req)) {
+        return;
+      }
+      closeSheets();
+      callbacks.onOpenSession(id);
+    },
+    sheetComposed(req: string, text: string): void {
+      builder.handleComposed(req, text);
+    },
+    sheetOk(req: string): void {
+      builder.handleOk(req);
+    },
+    sheetError(message: string, req: string | null, code: string): void {
+      if (!builder.handleError(message, req, code)) {
+        newDialog.handleError(message, req, code);
+      }
+    },
     dispose(): void {
       globalThis.clearInterval(ticker);
       stopStore();
+      closeSheets();
       teardownSessionWidgets();
       composer?.unmount();
       composer = null;

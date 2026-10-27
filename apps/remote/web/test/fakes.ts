@@ -279,6 +279,47 @@ export interface VisibilityHarness {
   setVisible: (visible: boolean) => void;
 }
 
+// sessionStorage stand-in for the Prompt Builder draft: in memory, with
+// switches for the browsers that throw on read or write.
+export class FakeStorage {
+  readonly map = new Map<string, string>();
+  failReads = false;
+  failWrites = false;
+
+  getItem(key: string): string | null {
+    if (this.failReads) {
+      throw new Error("storage read denied");
+    }
+    return this.map.get(key) ?? null;
+  }
+
+  setItem(key: string, value: string): void {
+    if (this.failWrites) {
+      throw new Error("storage write denied");
+    }
+    this.map.set(key, value);
+  }
+
+  removeItem(key: string): void {
+    if (this.failWrites) {
+      throw new Error("storage write denied");
+    }
+    this.map.delete(key);
+  }
+
+  get length(): number {
+    return this.map.size;
+  }
+
+  key(index: number): string | null {
+    return [...this.map.keys()][index] ?? null;
+  }
+
+  clear(): void {
+    this.map.clear();
+  }
+}
+
 export function createVisibilityHarness(initial = true): VisibilityHarness {
   let visible = initial;
   const listeners = new Set<() => void>();

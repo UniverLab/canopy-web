@@ -29,6 +29,58 @@ export interface ReplyError {
   message: string;
 }
 
+// The host's catalog: everything the New dialog and the Prompt Builder
+// offer. The host owns the values; the browser only renders them.
+export interface CatalogCli {
+  cli: string;
+  label: string;
+  models: string[];
+}
+
+export interface CatalogProject {
+  name: string;
+  path: string;
+}
+
+export interface CatalogPreset {
+  name: string;
+  preview: string;
+}
+
+export interface CatalogSkill {
+  name: string;
+  label: string;
+}
+
+export interface Catalog {
+  clis: CatalogCli[];
+  projects: CatalogProject[];
+  presets: CatalogPreset[];
+  skills: CatalogSkill[];
+}
+
+// A prompt draft is what the Prompt Builder sends; the host turns it into
+// text with the same function the TUI uses. The browser never composes.
+export interface PromptDraftSection {
+  title: string;
+  content: string;
+}
+
+export interface PromptDraft {
+  sections: PromptDraftSection[];
+  preset?: string;
+  skills: string[];
+  project?: string;
+}
+
+export interface SpawnRequest {
+  cli: string;
+  model?: string;
+  workdir: string;
+  name?: string;
+  prompt?: string;
+}
+
 function isRecord(frame: unknown): frame is Record<string, unknown> {
   return typeof frame === "object" && frame !== null;
 }
@@ -163,8 +215,129 @@ export function parseError(frame: unknown): ReplyError | null {
   return { req: typeof frame.req === "string" ? frame.req : null, code: frame.code, message: frame.message };
 }
 
+function stringList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const out: string[] = [];
+  for (const item of value) {
+    if (typeof item === "string" && item !== "") {
+      out.push(item);
+    }
+  }
+  return out;
+}
+
+function parseCli(value: unknown): CatalogCli | null {
+  if (!isRecord(value) || typeof value.cli !== "string" || value.cli === "") {
+    return null;
+  }
+  const label = typeof value.label === "string" && value.label !== "" ? value.label : value.cli;
+  return { cli: value.cli, label, models: stringList(value.models) };
+}
+
+function parseProject(value: unknown): CatalogProject | null {
+  if (!isRecord(value) || typeof value.name !== "string" || value.name === "") {
+    return null;
+  }
+  if (typeof value.path !== "string" || value.path === "") {
+    return null;
+  }
+  return { name: value.name, path: value.path };
+}
+
+function parsePreset(value: unknown): CatalogPreset | null {
+  if (!isRecord(value) || typeof value.name !== "string" || value.name === "") {
+    return null;
+  }
+  return { name: value.name, preview: asString(value.preview) };
+}
+
+function parseSkill(value: unknown): CatalogSkill | null {
+  if (!isRecord(value) || typeof value.name !== "string" || value.name === "") {
+    return null;
+  }
+  const label = typeof value.label === "string" && value.label !== "" ? value.label : value.name;
+  return { name: value.name, label };
+}
+
+function collect<T>(value: unknown, parse: (item: unknown) => T | null): T[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const out: T[] = [];
+  for (const item of value) {
+    const parsed = parse(item);
+    if (parsed) {
+      out.push(parsed);
+    }
+  }
+  return out;
+}
+
+// A catalog frame is best-effort: malformed entries are dropped instead of
+// failing the whole reply, so one bad project never empties the pickers.
+export function parseCatalog(frame: unknown): Catalog | null {
+  if (frameType(frame) !== "catalog" || !isRecord(frame)) {
+    return null;
+  }
+  return {
+    clis: collect(frame.clis, parseCli),
+    projects: collect(frame.projects, parseProject),
+    presets: collect(frame.presets, parsePreset),
+    skills: collect(frame.skills, parseSkill),
+  };
+}
+
+export function parseSpawned(frame: unknown): { req: string; id: string } | null {
+  if (frameType(frame) !== "spawned" || !isRecord(frame)) {
+    return null;
+  }
+  if (typeof frame.req !== "string" || typeof frame.id !== "string" || frame.id === "") {
+    return null;
+  }
+  return { req: frame.req, id: frame.id };
+}
+
+export function parseComposed(frame: unknown): { req: string; text: string } | null {
+  if (frameType(frame) !== "composed" || !isRecord(frame)) {
+    return null;
+  }
+  if (typeof frame.req !== "string" || typeof frame.text !== "string") {
+    return null;
+  }
+  return { req: frame.req, text: frame.text };
+}
+
 export function buildList(req: string): string {
   return JSON.stringify({ t: "list", req });
+}
+
+export function buildCatalog(req: string): string {
+  return JSON.stringify({ t: "catalog", req });
+}
+
+export function buildSpawn(req: string, spawn: SpawnRequest): string {
+  const frame: Record<string, unknown> = { t: "spawn", req, kind: "agent", cli: spawn.cli };
+  if (spawn.model !== undefined && spawn.model !== "") {
+    frame.model = spawn.model;
+  }
+  frame.workdir = spawn.workdir;
+  if (spawn.name !== undefined && spawn.name !== "") {
+    frame.name = spawn.name;
+  }
+  if (spawn.prompt !== undefined && spawn.prompt !== "") {
+    frame.prompt = spawn.prompt;
+  }
+  return JSON.stringify(frame);
+}
+
+export function buildCompose(req: string, draft: PromptDraft): string {
+  return JSON.stringify({ t: "compose", req, draft });
+}
+
+export function buildPromptDraft(req: string, id: string, draft: PromptDraft): string {
+  return JSON.stringify({ t: "prompt", req, id, draft });
 }
 
 export function buildAttach(id: string): string {

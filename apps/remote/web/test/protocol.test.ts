@@ -3,15 +3,21 @@ import { describe, expect, it } from "vitest";
 import { b64encode } from "../src/crypto.js";
 import {
   buildAttach,
+  buildCatalog,
+  buildCompose,
   buildDetach,
   buildInput,
   buildInputText,
   buildList,
   buildPrompt,
+  buildPromptDraft,
+  buildSpawn,
   decodeSnapshotData,
   decodeUtf8,
   formatLastOutput,
   newReqId,
+  parseCatalog,
+  parseComposed,
   parseError,
   parseExited,
   parseOk,
@@ -20,6 +26,7 @@ import {
   parseSessionItem,
   parseSessionRemoved,
   parseSessions,
+  parseSpawned,
   statusDot,
   workdirBasename,
 } from "../src/protocol.js";
@@ -27,6 +34,7 @@ import {
 describe("builders", () => {
   it("builds the exact session frames", () => {
     expect(JSON.parse(buildList("r1"))).toEqual({ t: "list", req: "r1" });
+    expect(JSON.parse(buildCatalog("r1"))).toEqual({ t: "catalog", req: "r1" });
     expect(JSON.parse(buildAttach("s1"))).toEqual({ t: "attach", id: "s1" });
     expect(JSON.parse(buildDetach("s1"))).toEqual({ t: "detach", id: "s1" });
     expect(JSON.parse(buildPrompt("r2", "s1", "hello"))).toEqual({
@@ -34,6 +42,40 @@ describe("builders", () => {
       req: "r2",
       id: "s1",
       text: "hello",
+    });
+  });
+
+  it("builds the exact spawn, compose and draft frames", () => {
+    expect(
+      JSON.parse(buildSpawn("r3", { cli: "muse", workdir: "/home/u/demo" })),
+    ).toEqual({ t: "spawn", req: "r3", kind: "agent", cli: "muse", workdir: "/home/u/demo" });
+    expect(
+      JSON.parse(
+        buildSpawn("r4", {
+          cli: "muse",
+          model: "spark",
+          workdir: "/home/u/demo",
+          name: "build",
+          prompt: "do it",
+        }),
+      ),
+    ).toEqual({
+      t: "spawn",
+      req: "r4",
+      kind: "agent",
+      cli: "muse",
+      model: "spark",
+      workdir: "/home/u/demo",
+      name: "build",
+      prompt: "do it",
+    });
+    const draft = { sections: [{ title: "Goal", content: "ship it" }], skills: ["tdd"] };
+    expect(JSON.parse(buildCompose("r5", draft))).toEqual({ t: "compose", req: "r5", draft });
+    expect(JSON.parse(buildPromptDraft("r6", "s1", draft))).toEqual({
+      t: "prompt",
+      req: "r6",
+      id: "s1",
+      draft,
     });
   });
 
@@ -136,6 +178,58 @@ describe("frame parsers", () => {
     });
     expect(parseError({ t: "error", code: "internal", message: "boom" })?.req).toBeNull();
     expect(parseError({ t: "error", code: "internal" })).toBeNull();
+  });
+
+  it("parses spawned and composed", () => {
+    expect(parseSpawned({ t: "spawned", req: "r1", id: "s9" })).toEqual({ req: "r1", id: "s9" });
+    expect(parseSpawned({ t: "spawned", req: "r1" })).toBeNull();
+    expect(parseSpawned({ t: "spawned", req: "r1", id: "" })).toBeNull();
+    expect(parseComposed({ t: "composed", req: "r2", text: "hello" })).toEqual({
+      req: "r2",
+      text: "hello",
+    });
+    expect(parseComposed({ t: "composed", req: "r2" })).toBeNull();
+    expect(parseComposed({ t: "ok", req: "r2" })).toBeNull();
+  });
+
+  it("parses the catalog and drops malformed entries", () => {
+    expect(
+      parseCatalog({
+        t: "catalog",
+        req: "r1",
+        clis: [
+          { cli: "muse", label: "Muse", models: ["spark", 7] },
+          { cli: "", label: "broken" },
+          { label: "no cli" },
+          { cli: "claude" },
+        ],
+        projects: [
+          { name: "demo", path: "/home/u/demo" },
+          { name: "no path" },
+          { name: "empty path", path: "" },
+        ],
+        presets: [{ name: "review", preview: "look" }, { name: "" }, { preview: "orphan" }],
+        skills: [{ name: "tdd", label: "TDD" }, { name: "docs" }],
+      }),
+    ).toEqual({
+      clis: [
+        { cli: "muse", label: "Muse", models: ["spark"] },
+        { cli: "claude", label: "claude", models: [] },
+      ],
+      projects: [{ name: "demo", path: "/home/u/demo" }],
+      presets: [{ name: "review", preview: "look" }],
+      skills: [
+        { name: "tdd", label: "TDD" },
+        { name: "docs", label: "docs" },
+      ],
+    });
+    expect(parseCatalog({ t: "catalog", req: "r1" })).toEqual({
+      clis: [],
+      projects: [],
+      presets: [],
+      skills: [],
+    });
+    expect(parseCatalog({ t: "sessions", items: [] })).toBeNull();
   });
 
   it("decodes snapshot data as UTF-8", () => {

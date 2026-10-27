@@ -2,9 +2,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createShell } from "../src/app.js";
 import type { Shell, ShellCallbacks } from "../src/app.js";
+import { CatalogStore } from "../src/catalog.js";
 import { keyBytes } from "../src/keys.js";
 import type { KeyDef } from "../src/keys.js";
 import { connectFailMessage } from "../src/peer.js";
+import type { PromptDraft, SpawnRequest } from "../src/protocol.js";
 import { SessionStore } from "../src/sessions.js";
 import type { TerminalFactory, TerminalHandle } from "../src/terminal.js";
 import type { PairSubmit } from "../src/ui.js";
@@ -64,14 +66,19 @@ class FakeHandle implements TerminalHandle {
 describe("createShell", () => {
   let root: HTMLDivElement;
   let store: SessionStore;
+  let catalog: CatalogStore;
   let shell: Shell;
   let calls: ShellCallbacks & {
     pairs: PairSubmit[];
     keys: KeyDef[];
     inputs: string[];
     composerSends: { text: string; req: string }[];
+    spawns: { spawn: SpawnRequest; req: string }[];
+    composes: { draft: PromptDraft; req: string }[];
+    draftSends: { draft: PromptDraft; req: string }[];
   };
   let handles: FakeHandle[];
+  let sendable: boolean;
 
   const query = <T extends Element>(selector: string): T => {
     const el = root.querySelector(selector);
@@ -87,7 +94,21 @@ describe("createShell", () => {
     root = document.createElement("div");
     document.body.appendChild(root);
     store = new SessionStore();
+    catalog = new CatalogStore();
+    catalog.replace({
+      clis: [
+        { cli: "muse", label: "Muse", models: ["spark"] },
+        { cli: "claude", label: "Claude", models: [] },
+      ],
+      projects: [
+        { name: "demo", path: "/home/u/demo" },
+        { name: "other", path: "/home/u/other" },
+      ],
+      presets: [{ name: "review", preview: "Review the diff." }],
+      skills: [{ name: "tdd", label: "TDD" }],
+    });
     handles = [];
+    sendable = true;
     const factory: TerminalFactory = (_host, cols, rows) => {
       const handle = new FakeHandle(cols, rows);
       handles.push(handle);
@@ -97,6 +118,9 @@ describe("createShell", () => {
     const keys: KeyDef[] = [];
     const inputs: string[] = [];
     const composerSends: { text: string; req: string }[] = [];
+    const spawns: { spawn: SpawnRequest; req: string }[] = [];
+    const composes: { draft: PromptDraft; req: string }[] = [];
+    const draftSends: { draft: PromptDraft; req: string }[] = [];
     const signal = {
       connected: [] as string[],
       disconnects: 0,
@@ -104,14 +128,15 @@ describe("createShell", () => {
       pairAgains: 0,
       opened: [] as string[],
       left: 0,
-      news: 0,
-      builders: 0,
     };
     calls = {
       pairs,
       keys,
       inputs,
       composerSends,
+      spawns,
+      composes,
+      draftSends,
       onPair: (submit) => pairs.push(submit),
       onConnect: (hostId) => signal.connected.push(hostId),
       onDisconnect: () => {
@@ -130,11 +155,17 @@ describe("createShell", () => {
       onKeyPress: (def) => keys.push(def),
       onTerminalInput: (text) => inputs.push(text),
       onComposerSend: (text, req) => composerSends.push({ text, req }),
-      onNew: () => {
-        signal.news += 1;
+      onSpawn: (spawn, req) => {
+        spawns.push({ spawn, req });
+        return sendable;
       },
-      onBuilder: () => {
-        signal.builders += 1;
+      onCompose: (draft, req) => {
+        composes.push({ draft, req });
+        return sendable;
+      },
+      onSendDraft: (draft, req) => {
+        draftSends.push({ draft, req });
+        return sendable;
       },
     };
     (
@@ -142,7 +173,7 @@ describe("createShell", () => {
         signal: typeof signal;
       }
     ).signal = signal;
-    shell = createShell(root, store, calls, { terminalFactory: factory });
+    shell = createShell(root, store, calls, { terminalFactory: factory, catalog });
   });
 
   afterEach(() => {
@@ -162,8 +193,6 @@ describe("createShell", () => {
           pairAgains: number;
           opened: string[];
           left: number;
-          news: number;
-          builders: number;
         };
       }
     ).signal;
@@ -225,7 +254,9 @@ describe("createShell", () => {
     row.click();
     expect(signal().opened).toEqual(["s1"]);
     query<HTMLButtonElement>("#session-new").click();
-    expect(signal().news).toBe(1);
+    expect(root.querySelector("#new-form")).not.toBeNull();
+    query<HTMLButtonElement>("#new-close").click();
+    expect(root.querySelector(".sheet-overlay")).toBeNull();
     query<HTMLButtonElement>("#conn-disconnect").click();
     expect(signal().disconnects).toBe(1);
   });
@@ -262,7 +293,8 @@ describe("createShell", () => {
     expect(query<HTMLTextAreaElement>(".composer-input").value).toBe("");
 
     query<HTMLButtonElement>(".composer-builder").click();
-    expect(signal().builders).toBe(1);
+    expect(root.querySelector("#builder-form")).not.toBeNull();
+    query<HTMLButtonElement>("#builder-close").click();
     query<HTMLButtonElement>("#session-back").click();
     expect(signal().left).toBe(1);
   });
@@ -354,5 +386,87 @@ describe("createShell", () => {
     query<HTMLButtonElement>("#term-zoom-in").click();
     query<HTMLButtonElement>("#term-zoom-out").click();
     expect(handles).toHaveLength(1);
+  });
+
+  it("spawns from the New sheet and opens the spawned session", () => {
+    shell.showSessions();
+    query<HTMLButtonElement>("#session-new").click();
+    expect(root.querySelector("#new-form")).not.toBeNull();
+    const project = query<HTMLSelectElement>("#new-project");
+    project.value = "demo";
+    project.dispatchEvent(new Event("change", { bubbles: true }));
+    query<HTMLInputElement>("#new-name").value = "build";
+    query<HTMLFormElement>("#new-form").dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+    expect(calls.spawns).toHaveLength(1);
+    expect(calls.spawns[0]?.spawn).toEqual({
+      cli: "muse",
+      workdir: "/home/u/demo",
+      name: "build",
+    });
+    shell.sheetSpawned(calls.spawns[0]?.req ?? "", "s9");
+    expect(signal().opened).toEqual(["s9"]);
+    expect(root.querySelector(".sheet-overlay")).toBeNull();
+  });
+
+  it("keeps the New form when the spawn fails", () => {
+    sendable = false;
+    shell.showSessions();
+    query<HTMLButtonElement>("#session-new").click();
+    const project = query<HTMLSelectElement>("#new-project");
+    project.value = "demo";
+    project.dispatchEvent(new Event("change", { bubbles: true }));
+    query<HTMLFormElement>("#new-form").dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+    expect(query("#new-error").textContent).toBe("Not connected");
+    expect(root.querySelector("#new-form")).not.toBeNull();
+    expect(query<HTMLSelectElement>("#new-project").value).toBe("demo");
+  });
+
+  it("shows a spawn error beside the project field", () => {
+    shell.showSessions();
+    query<HTMLButtonElement>("#session-new").click();
+    const project = query<HTMLSelectElement>("#new-project");
+    project.value = "demo";
+    project.dispatchEvent(new Event("change", { bubbles: true }));
+    query<HTMLFormElement>("#new-form").dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+    shell.sheetError("unknown project: demo", calls.spawns[0]?.req ?? "", "unknown_project");
+    const error = query<HTMLElement>("#new-project-error");
+    expect(error.hidden).toBe(false);
+    expect(error.textContent).toBe("unknown project: demo");
+  });
+
+  it("previews and sends a draft from the Builder", () => {
+    shell.showSession("s1", "build");
+    query<HTMLButtonElement>(".composer-builder").click();
+    expect(root.querySelector("#builder-form")).not.toBeNull();
+    query<HTMLButtonElement>("#builder-preview").click();
+    expect(calls.composes).toHaveLength(1);
+    expect(calls.composes[0]?.draft).toEqual({ sections: [], skills: [] });
+    shell.sheetComposed(calls.composes[0]?.req ?? "", "composed text");
+    expect(query("#builder-composed").textContent).toBe("composed text");
+    expect((query("#builder-composed") as HTMLElement).hidden).toBe(false);
+    query<HTMLButtonElement>("#builder-send").click();
+    expect(calls.draftSends).toHaveLength(1);
+    expect(calls.draftSends[0]?.draft).toEqual({ sections: [], skills: [] });
+    shell.sheetOk(calls.draftSends[0]?.req ?? "");
+    expect(root.querySelector(".sheet-overlay")).toBeNull();
+  });
+
+  it("closes an open sheet on a route change", () => {
+    shell.showSessions();
+    query<HTMLButtonElement>("#session-new").click();
+    expect(root.querySelector(".sheet-overlay")).not.toBeNull();
+    shell.showSession("s1", "build");
+    expect(root.querySelector(".sheet-overlay")).toBeNull();
+
+    query<HTMLButtonElement>(".composer-builder").click();
+    expect(root.querySelector("#builder-form")).not.toBeNull();
+    shell.showSessions();
+    expect(root.querySelector(".sheet-overlay")).toBeNull();
   });
 });

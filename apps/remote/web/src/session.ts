@@ -12,10 +12,11 @@ import {
   buildInput,
   buildInputText,
   buildPrompt,
+  buildPromptDraft,
   decodeSnapshotData,
   decodeUtf8,
 } from "./protocol.js";
-import type { OutFrame } from "./protocol.js";
+import type { OutFrame, PromptDraft } from "./protocol.js";
 
 export interface SessionTerminal {
   write: (text: string) => void;
@@ -94,6 +95,15 @@ export class SessionController {
       return false;
     }
     return this.callbacks.send(buildPrompt(req, this.openId, text));
+  }
+
+  // The Prompt Builder path: the host composes the final text from the
+  // draft, so the browser never reimplements canopy's prompt rules.
+  sendPromptDraft(draft: PromptDraft, req: string): boolean {
+    if (this.openId === null) {
+      return false;
+    }
+    return this.callbacks.send(buildPromptDraft(req, this.openId, draft));
   }
 
   handleSnapshot(snapshot: JoinedSnapshot): void {
