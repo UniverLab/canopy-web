@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 // The host PTY on the phone: an xterm.js terminal created once with the
 // snapshot's cols and rows — the browser never resizes the host — scaled
-// with a CSS transform so its full width fits the screen. Pinch or the
-// +/− buttons zoom, scrolling stays inside xterm's own viewport, output
-// follows the bottom unless the user scrolled up, and tapping the
-// terminal focuses xterm's hidden textarea so the soft keyboard opens and
-// typed characters come back through onData as input.
+// exactly once so its full width fits the pane. .term-host keeps xterm's
+// natural pixel size and transform:scale(s) does the shrinking; the
+// surrounding .term-scale is the visual box (natural × s) that clips it,
+// so the terminal never shrinks twice. Pinch or the +/− buttons zoom that
+// fitted scale (the pane then scrolls to pan), output follows the bottom
+// unless the user scrolled up, and tapping the terminal focuses xterm's
+// hidden textarea so the soft keyboard opens and typed characters come
+// back through onData as input.
 
 import "@xterm/xterm/css/xterm.css";
 import { Terminal } from "@xterm/xterm";
-
-export type TerminalTheme = "light" | "dark";
 
 export interface FollowState {
   following: boolean;
@@ -56,23 +57,18 @@ function touchDistance(a: Touch, b: Touch): number {
   return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
 }
 
-function systemTheme(): TerminalTheme {
-  if (typeof globalThis.matchMedia === "function") {
-    return globalThis.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-  }
-  return "dark";
-}
-
-const THEMES = {
-  dark: { background: "#0c0c0c", foreground: "#e8e6e1", cursor: "#3fb8b0" },
-  light: { background: "#faf8f4", foreground: "#1d1510", cursor: "#0e7c76" },
+// The Canopy dark terminal: the deep canvas and surface ink of the page,
+// with the teal cursor. One theme — the remote is read in a terminal.
+const THEME = {
+  background: "#011d1c",
+  foreground: "#edfffe",
+  cursor: "#3fb8b0",
 } as const;
 
 export function createXtermHandle(
   host: HTMLElement,
   cols: number,
   rows: number,
-  theme?: TerminalTheme,
 ): TerminalHandle {
   const terminal = new Terminal({
     cols,
@@ -80,7 +76,7 @@ export function createXtermHandle(
     scrollback: 2000,
     fontSize: 14,
     fontFamily: `"Sometype Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`,
-    theme: { ...THEMES[theme ?? systemTheme()] },
+    theme: { ...THEME },
   });
   terminal.open(host);
   return {
@@ -115,6 +111,7 @@ export class TerminalView {
   private fit: HTMLElement | null = null;
   private scaler: HTMLElement | null = null;
   private host: HTMLElement | null = null;
+  private pane: HTMLElement | null = null;
   private handle: TerminalHandle | null = null;
   private zoom = 1;
   private following = true;
@@ -126,8 +123,9 @@ export class TerminalView {
     this.callbacks = callbacks;
   }
 
-  // The scaffold: .term-fit (the pane, clips) > .term-scale (the CSS
-  // transform) > .term-host (xterm's own fixed pixel size).
+  // The scaffold: .term-pane (sizes the pane) > .term-fit (clips and
+  // pans) > .term-scale (the visual box) > .term-host (xterm's natural
+  // pixel size, shrunk by one transform:scale).
   mount(parent: HTMLElement, cols: number, rows: number): void {
     this.dispose();
     const fit = document.createElement("div");
@@ -142,6 +140,7 @@ export class TerminalView {
     this.fit = fit;
     this.scaler = scaler;
     this.host = host;
+    this.pane = parent;
     this.handle = this.factory(host, cols, rows);
     this.handle.onUserInput((text) => this.callbacks.onUserInput(text));
     this.handle.onScroll(() => this.refreshFollow());
@@ -220,9 +219,17 @@ export class TerminalView {
     }
     const content = host.firstElementChild ?? host;
     const scale = computeScale(fit.clientWidth, content.scrollWidth, this.zoom);
-    scaler.style.transform = `scale(${scale})`;
+    // One scale, applied once: the host is natural-size and carries the
+    // transform; the scaler is the visual box (natural × scale) that
+    // clips it, so the terminal never renders at scale².
+    host.style.transform = `scale(${scale})`;
     scaler.style.width = `${content.scrollWidth * scale}px`;
     scaler.style.height = `${content.scrollHeight * scale}px`;
+    fit.dataset.scale = `${scale}`;
+    this.pane?.style.setProperty(
+      "--term-visual-h",
+      `${content.scrollHeight * scale}px`,
+    );
   }
 
   dispose(): void {
@@ -234,6 +241,7 @@ export class TerminalView {
     this.fit = null;
     this.scaler = null;
     this.host = null;
+    this.pane = null;
     this.pinchStart = null;
     this.following = true;
   }

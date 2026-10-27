@@ -13,7 +13,10 @@ export default defineConfig({
     },
   },
   webServer: {
-    command: "npx vite --config ./vite.config.ts --port 5199 --strictPort",
+    // build:look first: public/look is generated and gitignored, and the
+    // smoke page wears the kit (tokens, fonts, colophon, honeycomb).
+    command:
+      "npm run build:look && npx vite --config ./vite.config.ts --port 5199 --strictPort",
     url: "http://127.0.0.1:5199/fake.html",
     // Own server only: see apps/graphs/playwright.config.ts — a reused server
     // can be wedged (the health check never answers) or out of date.

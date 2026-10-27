@@ -20,6 +20,7 @@ import type { SessionStore } from "./sessions.js";
 import { createXtermHandle, TerminalView } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
 import type { PairSubmit } from "./ui.js";
+import { renderColophon } from "../../../../packages/look/colophon/footer.js";
 
 export interface ShellCallbacks {
   onPair: (submit: PairSubmit) => void;
@@ -72,6 +73,18 @@ export interface ShellDeps {
 }
 
 type Route = "signin" | "pair" | "hosts" | "sessions" | "session";
+
+// The UniverLab colophon, on the sign-in and pair screens only — the
+// session view keeps the whole viewport for the terminal.
+const COLOPHON = renderColophon({
+  product: "Canopy remote",
+  exp: "EXP-001",
+  links: [
+    { label: "Canopy", href: "https://univerlab.org/canopy/" },
+    { label: "univerlab.org", href: "https://univerlab.org/" },
+    { label: "Source", href: "https://github.com/UniverLab/canopy-web" },
+  ],
+});
 
 function esc(text: string): string {
   return text
@@ -134,10 +147,10 @@ export function createShell(
 
   const header = (): string => `
     <header class="topbar">
-      <span class="brand">Canopy</span>
-      ${login === null ? "" : `<span class="login">${esc(login)}</span>`}
-      ${hostLabel === "" ? "" : `<span class="host">${esc(hostLabel)}</span>`}
-      <span class="conn" role="status">${esc(connectionState)}</span>
+      <span class="brand">remote</span>
+      ${login === null ? "" : `<span class="login chip">${esc(login)}</span>`}
+      ${hostLabel === "" ? "" : `<span class="host chip">${esc(hostLabel)}</span>`}
+      <span class="conn chip" role="status">${esc(connectionState)}</span>
     </header>`;
 
   const connBanner = (): string => {
@@ -177,8 +190,9 @@ export function createShell(
     <main class="signin">
       <h1>Canopy remote</h1>
       <p>Sign in with GitHub to reach your hosts.</p>
-      <button type="button" id="signin-go">Sign in with GitHub</button>
-    </main>`;
+      <button type="button" class="primary" id="signin-go">Sign in with GitHub</button>
+    </main>
+    ${COLOPHON}`;
     root.querySelector("#signin-go")?.addEventListener("click", () => {
       globalThis.location.href = "/auth/login";
     });
@@ -206,7 +220,8 @@ export function createShell(
         <p id="pair-error" role="alert">${pairError === null ? "" : esc(pairError)}</p>
         <button type="submit"${pairBusy ? " disabled" : ""}>${pairBusy ? "Pairing…" : "Pair"}</button>
       </form>
-    </main>`;
+    </main>
+    ${COLOPHON}`;
     root.querySelector<HTMLFormElement>("#pair-form")?.addEventListener("submit", (ev) => {
       ev.preventDefault();
       snapshotDraft();
@@ -347,6 +362,9 @@ export function createShell(
   };
 
   const render = () => {
+    // The view name on <body> lets the stylesheet dim the honeycomb
+    // behind the terminal (body[data-view="session"]).
+    document.body.dataset.view = route;
     if (route === "signin") {
       renderSignIn();
     } else if (route === "pair") {

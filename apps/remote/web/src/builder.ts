@@ -197,7 +197,7 @@ export class Builder {
         <p class="sheet-error" id="builder-error" role="alert"${this.errorAttr(this.state.error)}>${esc(this.state.error ?? "")}</p>
         <pre class="builder-preview" id="builder-composed" aria-live="polite"${this.state.preview === null ? " hidden" : ""}>${esc(this.state.preview ?? "")}</pre>
         <div class="sheet-actions">
-          <button type="button" id="builder-preview">Preview</button>
+          <button type="button" class="secondary" id="builder-preview">Preview</button>
           <button type="button" class="primary" id="builder-send">Send</button>
         </div>
       </form>`;
@@ -236,9 +236,9 @@ export class Builder {
               <textarea class="section-content" data-index="${index}" rows="3">${esc(section.content)}</textarea>
             </label>
             <div class="section-actions">
-              <button type="button" class="section-up" data-index="${index}"${index === 0 ? " disabled" : ""}>Up</button>
-              <button type="button" class="section-down" data-index="${index}"${last ? " disabled" : ""}>Down</button>
-              <button type="button" class="section-remove" data-index="${index}">Remove</button>
+              <button type="button" class="secondary section-up" data-index="${index}"${index === 0 ? " disabled" : ""}>Up</button>
+              <button type="button" class="secondary section-down" data-index="${index}"${last ? " disabled" : ""}>Down</button>
+              <button type="button" class="secondary section-remove" data-index="${index}">Remove</button>
             </div>
           </li>`;
       })

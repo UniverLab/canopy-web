@@ -1,47 +1,29 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-/* Canopy remote: every color, font and spacing decision lives in these
- * custom properties so the visual identity review can retheme without
- * touching the components. Light and dark follow the OS setting. */
+/* Canopy remote: the Canopy page look. The shared kit (packages/look,
+ * copied to public/look by `npm run build:look`) owns the tokens and the
+ * three typefaces; this file maps the app's semantic variables onto them
+ * and dresses every widget. Always the dark Liquid Abyss surface — a
+ * remote session is read in a terminal, and the OS preference no longer
+ * flips the palette. */
 
 :root {
-  --bg: #ffffff;
-  --ink: #1d1510;
-  --muted: #6b6259;
-  --line: #e3ddd4;
-  --accent: #0e7c76;
-  --accent-ink: #ffffff;
-  --danger: #a4262c;
-  --dot-run: #1e9e50;
-  --dot-idle: #c77700;
-  --dot-dead: #8a8378;
-  --dot-unknown: #b3aa9d;
-  --term-bg: #101210;
-  --key-bg: #f1ede6;
-  --key-ink: #1d1510;
-  --radius: 8px;
+  color-scheme: dark;
+  --bg: var(--surface-bg);
+  --ink: var(--surface-ink);
+  --muted: var(--surface-ink-dim);
+  --line: var(--surface-line);
+  --accent: var(--teal);
+  --accent-ink: #011d1c;
+  --danger: #e08086;
+  --dot-run: #3fd07a;
+  --dot-idle: #e09a2b;
+  --dot-dead: #6f6a60;
+  --dot-unknown: #57534b;
+  --term-bg: var(--bg-deep);
+  --key-bg: var(--surface-bg-raise);
+  --key-ink: var(--surface-ink);
+  --radius: var(--radius-ctl);
   --gap: 0.5rem;
-  --font-body: system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: "Sometype Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  color-scheme: light dark;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #222928;
-    --ink: #ecebe4;
-    --muted: #a8a49a;
-    --line: #3a423f;
-    --accent: #3fb8b0;
-    --accent-ink: #10201e;
-    --danger: #e08086;
-    --dot-run: #3fd07a;
-    --dot-idle: #e09a2b;
-    --dot-dead: #6f6a60;
-    --dot-unknown: #57534b;
-    --term-bg: #0c0c0c;
-    --key-bg: #323937;
-    --key-ink: #ecebe4;
-  }
 }
 
 * {
@@ -59,11 +41,28 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-body);
+  font-size: 1.0625rem;
   line-height: 1.5;
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* The live honeycomb: a fixed canvas layer behind the whole page. The
+ * session view dims it so the terminal stays legible. */
+.fondo {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+body[data-view="session"] .fondo {
+  opacity: 0.15;
+}
+
 #app {
+  position: relative;
+  z-index: 1;
   margin: 0 auto;
   max-width: 48rem;
   min-height: 100dvh;
@@ -77,6 +76,29 @@ main {
   padding-right: max(1rem, env(safe-area-inset-right));
 }
 
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  line-height: 1.2;
+  color: var(--ink-hi);
+}
+
+h1 {
+  margin: 0 0 0.75rem;
+}
+
+h2 {
+  margin: 1.25rem 0 0.5rem;
+  font-size: 1.45rem;
+}
+
+:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
 button {
   font: inherit;
   color: var(--ink);
@@ -85,10 +107,22 @@ button {
   border-radius: var(--radius);
   padding: 0.5rem 0.9rem;
   min-height: 2.75rem;
+  cursor: pointer;
 }
 
 button:active {
   filter: brightness(0.94);
+}
+
+button.primary {
+  background: var(--cta-gradient);
+  color: #011d1c;
+  border-color: transparent;
+}
+
+button.secondary {
+  background: transparent;
+  color: var(--ink);
 }
 
 input,
@@ -96,18 +130,9 @@ select,
 textarea {
   font: inherit;
   color: var(--ink);
-  background: var(--bg);
+  background: var(--bg-deep);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-}
-
-input,
-select {
-  display: block;
-  width: 100%;
-  margin-top: 0.25rem;
-  padding: 0.5rem 0.6rem;
-  min-height: 2.75rem;
 }
 
 label {
@@ -115,13 +140,24 @@ label {
   margin: 0.75rem 0;
 }
 
+/* Every field sits below its label and spans the card's content width. */
+label > input,
+label > select,
+label > textarea {
+  display: block;
+  width: 100%;
+  margin-top: 0.25rem;
+  padding: 0.5rem 0.6rem;
+  min-height: 2.75rem;
+}
+
 .topbar {
   position: sticky;
   top: 0;
   z-index: 5;
   display: flex;
-  align-items: baseline;
-  gap: 0.75rem;
+  align-items: center;
+  gap: 0.5rem;
   padding: 0.6rem 1rem;
   padding-top: max(0.6rem, env(safe-area-inset-top));
   background: var(--bg);
@@ -130,8 +166,24 @@ label {
   white-space: nowrap;
 }
 
+/* The mono wordmark, like the catalogue's. */
 .topbar .brand {
-  font-weight: 700;
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  letter-spacing: 0.08em;
+  color: var(--ink);
+  flex-shrink: 0;
+}
+
+/* The login, host and connection state read as mono chips. */
+.topbar .chip {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--muted);
+  flex-shrink: 0;
 }
 
 .topbar .login,
@@ -140,15 +192,13 @@ label {
   text-overflow: ellipsis;
 }
 
-.topbar .login {
-  color: var(--muted);
+.topbar .host {
+  min-width: 0;
+  flex-shrink: 1;
 }
 
 .topbar .conn {
   margin-left: auto;
-  font-size: 0.85rem;
-  color: var(--muted);
-  flex-shrink: 0;
 }
 
 .conn-banner {
@@ -167,10 +217,17 @@ label {
   padding: 0.25rem 0.75rem;
 }
 
+/* The sign-in hero, in the page's display face and one line wide. */
 .signin {
   margin: auto;
   text-align: center;
   max-width: 24rem;
+  padding: 1rem;
+}
+
+.signin h1 {
+  font-size: clamp(2rem, 9vw, 2.8rem);
+  white-space: nowrap;
 }
 
 #pair-error:empty {
@@ -207,7 +264,7 @@ label {
   gap: 0.75rem;
   width: 100%;
   text-align: left;
-  background: var(--bg);
+  background: var(--surface-bg-raise);
   min-height: 3.5rem;
 }
 
@@ -282,7 +339,8 @@ label {
 }
 
 .session-title {
-  font-weight: 600;
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -298,23 +356,25 @@ label {
   display: none;
 }
 
+/* The terminal card follows the fitted terminal's height (refit writes
+ * --term-visual-h), capped at 60vh; before the snapshot arrives the
+ * placeholder holds the pane open. */
 .term-pane {
   background: var(--term-bg);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-card);
   overflow: hidden;
-  min-height: 16rem;
-  height: 46dvh;
 }
 
 .term-placeholder {
   color: var(--muted);
   padding: 1rem;
+  min-height: 46dvh;
 }
 
 .term-fit {
   width: 100%;
-  height: 100%;
+  height: min(var(--term-visual-h, 46dvh), 60vh);
   /* Auto so the zoomed terminal pans inside the pane; at zoom 1 the
    * scaled content fits exactly and no scrollbar appears. Single-finger
    * pans the xterm viewport natively; pinch reaches the zoom handler
@@ -323,7 +383,13 @@ label {
   touch-action: pan-x pan-y;
 }
 
+/* The visual box: natural size × the scale refit wrote, clipping the
+ * transformed host so the terminal scales exactly once. */
 .term-scale {
+  overflow: hidden;
+}
+
+.term-host {
   transform-origin: top left;
 }
 
@@ -344,17 +410,18 @@ label {
   display: none;
 }
 
+/* Ten keys, all visible: two rows of five equal-width touch targets. */
 .keybar {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--gap);
-  overflow-x: auto;
-  padding-bottom: 0.25rem;
 }
 
 .keybar .key {
-  flex: 1 0 auto;
-  min-width: 3rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.3rem;
   font-family: var(--font-mono);
+  font-size: 0.78rem;
 }
 
 .composer {
@@ -407,14 +474,14 @@ label {
 }
 
 .sheet {
-  background: var(--bg);
+  background: var(--surface-bg);
   color: var(--ink);
   width: 100%;
   max-width: 48rem;
   max-height: 92dvh;
   overflow-y: auto;
   border: 1px solid var(--line);
-  border-radius: var(--radius) var(--radius) 0 0;
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
   padding: 0 1rem calc(1rem + env(safe-area-inset-bottom));
 }
 
@@ -426,14 +493,14 @@ label {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  background: var(--bg);
+  background: var(--surface-bg);
   padding: 0.75rem 0;
   border-bottom: 1px solid var(--line);
 }
 
 .sheet-head h2 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1.3rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -451,12 +518,6 @@ label {
   gap: var(--gap);
   justify-content: flex-end;
   margin-top: 1rem;
-}
-
-button.primary {
-  background: var(--accent);
-  color: var(--accent-ink);
-  border-color: transparent;
 }
 
 .sheet-error {
@@ -494,7 +555,12 @@ button.primary {
 
 .builder-form h3 {
   margin: 1rem 0 0.5rem;
-  font-size: 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--surface-ink-dim);
 }
 
 .builder-section-list {
@@ -503,10 +569,13 @@ button.primary {
   padding: 0;
 }
 
+/* Each section is a raised card; the fields inside span its content
+ * width (label > input/select/textarea above). */
 .builder-section {
+  background: var(--surface-bg-raise);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-card);
+  padding: 0.6rem 0.85rem;
   margin-bottom: var(--gap);
 }
 
@@ -549,7 +618,7 @@ button.primary {
 }
 
 .builder-preview {
-  background: var(--key-bg);
+  background: var(--bg-deep);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 0.75rem;
@@ -565,17 +634,13 @@ button.primary {
 }
 
 @media (min-width: 48rem) {
-  .term-pane {
-    height: 60dvh;
-  }
-
   .sheet-overlay {
     align-items: center;
     padding: 1rem;
   }
 
   .sheet {
-    border-radius: var(--radius);
+    border-radius: var(--radius-card);
   }
 }
 

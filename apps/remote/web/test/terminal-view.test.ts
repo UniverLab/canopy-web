@@ -166,4 +166,29 @@ describe("TerminalView", () => {
     view.dispose();
     expect(parent.querySelector(".term-fit")).toBeNull();
   });
+
+  it("scales once into the visual box and reports the scale", () => {
+    const { parent, view } = setup();
+    view.mount(parent, 80, 24);
+    const fit = parent.querySelector<HTMLElement>(".term-fit");
+    const scaler = parent.querySelector<HTMLElement>(".term-scale");
+    const host = parent.querySelector<HTMLElement>(".term-host");
+    if (!fit || !scaler || !host) {
+      throw new Error("missing scaffold");
+    }
+    // happy-dom has no layout: pin the measurements refit reads.
+    Object.defineProperty(fit, "clientWidth", { value: 400, configurable: true });
+    Object.defineProperty(host, "scrollWidth", { value: 800, configurable: true });
+    Object.defineProperty(host, "scrollHeight", { value: 480, configurable: true });
+    view.refit();
+    // The scale applies once, on the host; the scaler is the visual box
+    // (natural × scale) and the pane learns the visual height.
+    expect(scaler.style.transform).toBe("");
+    expect(host.style.transform).toBe("scale(0.5)");
+    expect(scaler.style.width).toBe("400px");
+    expect(scaler.style.height).toBe("240px");
+    expect(fit.dataset.scale).toBe("0.5");
+    expect(parent.style.getPropertyValue("--term-visual-h")).toBe("240px");
+    view.dispose();
+  });
 });

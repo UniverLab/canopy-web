@@ -10,6 +10,7 @@ import { CatalogStore } from "./catalog.js";
 import { createChannelHandler } from "./channel.js";
 import { generateDeviceKey } from "./crypto.js";
 import type { DeviceKey } from "./crypto.js";
+import { mountCanopyBackground } from "../../../../packages/look/fondo/index.js";
 import { keyBytes } from "./keys.js";
 import { buildCatalog, buildCompose, buildList, buildSpawn, newReqId } from "./protocol.js";
 import { runPairing } from "./pairing.js";
@@ -65,6 +66,11 @@ async function main(): Promise<void> {
   const root = document.getElementById("app");
   if (!root) {
     throw new Error("Missing #app element");
+  }
+  // The live honeycomb behind the page, from the shared look kit.
+  const fondo = document.getElementById("fondo");
+  if (fondo) {
+    mountCanopyBackground(fondo, "/look/fondo/assets/");
   }
   const prefill = consumePairFragment();
   const login = await fetchLogin();

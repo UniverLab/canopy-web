@@ -201,6 +201,27 @@ describe("createShell", () => {
     shell.showSignIn();
     const button = query<HTMLButtonElement>("#signin-go");
     expect(button.textContent).toBe("Sign in with GitHub");
+    expect(button.classList.contains("primary")).toBe(true);
+  });
+
+  it("renders the colophon on sign-in and pair only", () => {
+    shell.showSignIn();
+    expect(root.querySelector("footer.look-colophon")?.textContent).toContain("Canopy remote");
+    shell.showPair();
+    expect(root.querySelector("footer.look-colophon")).not.toBeNull();
+    shell.showHosts();
+    expect(root.querySelector("footer.look-colophon")).toBeNull();
+    shell.showSessions();
+    expect(root.querySelector("footer.look-colophon")).toBeNull();
+    shell.showSession("s1", "build");
+    expect(root.querySelector("footer.look-colophon")).toBeNull();
+  });
+
+  it("marks the body with the current view", () => {
+    shell.showSession("s1", "build");
+    expect(document.body.dataset.view).toBe("session");
+    shell.showSessions();
+    expect(document.body.dataset.view).toBe("sessions");
   });
 
   it("shows the pair form with the header once logged in", () => {

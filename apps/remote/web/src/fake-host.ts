@@ -8,6 +8,7 @@ import { createShell } from "./app.js";
 import { CatalogStore } from "./catalog.js";
 import { createChannelHandler } from "./channel.js";
 import { b64encode } from "./crypto.js";
+import { mountCanopyBackground } from "../../../../packages/look/fondo/index.js";
 import { buildCatalog, buildList, newReqId } from "./protocol.js";
 import type { PromptDraft, SessionItem } from "./protocol.js";
 import { createFrameRouter } from "./router.js";
@@ -54,6 +55,12 @@ function main(): void {
   const root = document.getElementById("app");
   if (!root) {
     throw new Error("Missing #app element");
+  }
+  // The same honeycomb the real entry mounts, so the smoke run sees the
+  // dressed page.
+  const fondo = document.getElementById("fondo");
+  if (fondo) {
+    mountCanopyBackground(fondo, "/look/fondo/assets/");
   }
   const store = new SessionStore();
   const catalog = new CatalogStore();

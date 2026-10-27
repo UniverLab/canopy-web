@@ -25,6 +25,97 @@ test("renders the terminal and the key bar at 360x640", async ({ page }) => {
   expect(overflow).toBeLessThanOrEqual(1);
 });
 
+test("fits the whole terminal to the pane at 390x844", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  // The pane re-fits on resize: scale = pane width / terminal width.
+  await expect
+    .poll(async () => Number(await page.locator(".term-fit").getAttribute("data-scale")))
+    .toBeGreaterThan(0.5);
+  const measured = await page.evaluate(() => {
+    const pane = document.querySelector(".term-pane") as HTMLElement;
+    const term = document.querySelector(".xterm") as HTMLElement;
+    const fit = document.querySelector(".term-fit") as HTMLElement;
+    return {
+      pane: pane.getBoundingClientRect(),
+      term: term.getBoundingClientRect(),
+      scale: Number(fit.dataset.scale),
+      fontPx: parseFloat(getComputedStyle(term).fontSize),
+    };
+  });
+  // The full 80-column terminal sits inside the pane, scaled exactly once.
+  expect(measured.term.width).toBeLessThanOrEqual(measured.pane.width + 1);
+  expect(measured.term.right).toBeLessThanOrEqual(measured.pane.right + 1);
+  // And the glyphs stay readable: at least 7 CSS px on a 390 px screen.
+  expect(measured.fontPx * measured.scale).toBeGreaterThanOrEqual(7);
+  const shot = await page.screenshot({ path: testInfo.outputPath("session-390x844.png") });
+  await testInfo.attach("session-390x844", { body: shot, contentType: "image/png" });
+});
+
+test("shows all ten keys inside the viewport at 360x640", async ({ page }) => {
+  const keys = page.locator("#keybar .key");
+  await expect(keys).toHaveCount(10);
+  const boxes = await keys.evaluateAll((els) =>
+    els.map((el) => {
+      const r = el.getBoundingClientRect();
+      return { x: r.x, y: r.y, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
+    }),
+  );
+  // Two rows of five equal-width keys, every one a touch target in view.
+  const rows = new Set(boxes.map((box) => Math.round(box.y)));
+  expect(rows.size).toBe(2);
+  for (const rowY of rows) {
+    const row = boxes.filter((box) => Math.round(box.y) === rowY);
+    expect(row).toHaveLength(5);
+    for (const box of row) {
+      expect(Math.abs(box.width - row[0]!.width)).toBeLessThanOrEqual(1);
+    }
+  }
+  for (const box of boxes) {
+    expect(box.width).toBeGreaterThanOrEqual(44);
+    expect(box.height).toBeGreaterThanOrEqual(44);
+    expect(box.right).toBeLessThanOrEqual(360);
+    expect(box.bottom).toBeLessThanOrEqual(640);
+  }
+});
+
+test("dresses the page in the Canopy surface", async ({ page }) => {
+  await expect(page.locator("html")).toHaveAttribute("data-surface", "tui");
+  const look = await page.evaluate(() => ({
+    body: getComputedStyle(document.body).backgroundColor,
+    view: document.body.dataset.view ?? null,
+    fondo: (() => {
+      const host = document.getElementById("fondo");
+      return {
+        mounted: host?.querySelector("canvas") !== null,
+        opacity: host === null ? null : getComputedStyle(host).opacity,
+      };
+    })(),
+  }));
+  // #012624, the Liquid Abyss canvas of the Canopy page.
+  expect(look.body).toBe("rgb(1, 38, 36)");
+  expect(look.view).toBe("session");
+  // The honeycomb is behind the session, dimmed so the terminal stays legible.
+  expect(look.fondo.mounted).toBe(true);
+  expect(look.fondo.opacity).toBe("0.15");
+});
+
+test("puts the Content textarea full width in its card", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator(".composer-builder").click();
+  await expect(page.locator("#builder-form")).toBeVisible();
+  const measured = await page.evaluate(() => {
+    const card = document.querySelector(".builder-section") as HTMLElement;
+    const area = document.querySelector(".section-content") as HTMLTextAreaElement;
+    const style = getComputedStyle(card);
+    const contentWidth =
+      card.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    return { contentWidth, areaWidth: area.getBoundingClientRect().width };
+  });
+  expect(Math.abs(measured.areaWidth - measured.contentWidth)).toBeLessThanOrEqual(1);
+  const shot = await page.screenshot({ path: testInfo.outputPath("builder-390x844.png") });
+  await testInfo.attach("builder-390x844", { body: shot, contentType: "image/png" });
+});
+
 test("terminal pans when zoomed", async ({ page }) => {
   await page.locator("#term-zoom-in").click();
   await page.locator("#term-zoom-in").click();
