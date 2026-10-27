@@ -22,49 +22,49 @@ import { type Log, createGitHub, isApiError } from "../github.js";
 import { OFFICIAL_OWNER, OFFICIAL_REPO, OWNER_RE, REPO_RE, SLUG_RE } from "../lib.js";
 import { structureOf, type GraphDocument, type NodeDocument } from "../plate/document.js";
 import { renderNodePlate, renderPlate } from "../plate/render.js";
+import { harnessColor } from "../plate/vocabulary.js";
 import type { DocumentKind, JsonValue } from "../../../../src/schema.js";
 import type { Doc } from "../documents.js";
 import { documentDirectory, loadDocument } from "../documents.js";
-import { listOfficial, loadOfficialDocument } from "../official.js";
+import { communityRepo, listOfficial, loadOfficialDocument } from "../official.js";
 import { type SearchSort, searchCommunity } from "../search.js";
 import { isArray, isRecord, isString, stringField } from "../json.js";
 import {
-  AGENT_NODES_HEADING,
-  AGENT_NODES_NOTE,
   BUSY_BODY,
   BUSY_HEADING,
-  DOWNLOADS_LABEL,
-  DRAWING_HEADING,
   EMPTY_OFFICIAL_GRAPHS,
   EMPTY_OFFICIAL_NODES,
   GRAPHS_HEADING,
   INSTALL_HEADING,
   LLMS_HEADER,
   NEW_TAB,
-  NO_RESULTS,
   NODES_HEADING,
+  NODES_LABEL,
+  NO_RESULTS,
   NOT_FOUND_BODY,
   NOT_FOUND_HEADING,
   OFFICIAL_HEADING,
   README_HEADING,
-  REPO_LABEL,
-  REF_LABEL,
-  SEARCH_BUTTON,
-  SEARCH_LABEL,
-  SEARCH_PLACEHOLDER,
+  SHEET_AGENTS,
+  SHEET_EDGES,
+  SHEET_ENSEMBLES,
+  SHEET_KIND,
+  SHEET_NAME,
+  SHEET_NODES,
+  SHEET_REF,
+  SHEET_SOURCE,
+  SHEET_STARS,
   SITE_NAME,
   STARS_LABEL,
   STAR_BUTTON,
-  STRUCTURE_ENSEMBLES_LABEL,
-  STRUCTURE_HEADING,
-  STRUCTURE_NODES_LABEL,
-  STRUCTURE_NONE,
-  STRUCTURE_ROUTES_LABEL,
   TAGLINE,
   TOP_TAB,
   countLine,
+  edgesLine,
+  ensembleLine,
   installCommand,
   llmsLine,
+  nodesByKindLine,
   resultsFor,
 } from "./copy.js";
 import { page, type Page } from "./layout.js";
@@ -155,17 +155,6 @@ function agentNames(document: unknown): string[] {
   );
 }
 
-function searchForm(q: string): string {
-  return (
-    `<form class="search" action="/search" method="get">` +
-    `<div><label for="q">${SEARCH_LABEL}</label>` +
-    `<input id="q" name="q" type="search" value="${escapeHtml(q)}" ` +
-    `placeholder="${SEARCH_PLACEHOLDER}"></div>` +
-    `<button type="submit" class="button">${SEARCH_BUTTON}</button>` +
-    `</form>`
-  );
-}
-
 function searchHref(q: string, sort: SearchSort): string {
   const base = q === "" ? "?" : `?q=${encodeURIComponent(q)}&`;
   return `/search${base}sort=${sort}`;
@@ -177,18 +166,45 @@ function tabs(q: string, active: SearchSort | null): string {
   return `<nav class="tabs">${tab("top", TOP_TAB)}${tab("new", NEW_TAB)}</nav>`;
 }
 
+/** The harness dots of an index row: one accent dot per known harness. */
+function harnessDots(harnesses: string[]): string {
+  if (harnesses.length === 0) {
+    return "";
+  }
+  const dots = harnesses.map((stem) => {
+    const color = harnessColor(stem) ?? "var(--canopy)";
+    return `<span class="dot" style="--nc:${color}" title="${escapeHtml(stem)}"></span>`;
+  });
+  return `<span class="dots" role="img" aria-label="harnesses: ${escapeHtml(harnesses.join(", "))}">${dots.join("")}</span>`;
+}
+
+/**
+ * One index row: the name in the display face, the kind badge, the node
+ * count for graphs, harness dots, stars, last updated and the install box.
+ * One flex line on desktop, three stacked lines under 900 px; the
+ * description rides along as the row's second block.
+ */
 function docItem(doc: Doc): string {
-  const stats: string[] = [];
-  if (doc.stars !== null) {
-    stats.push(countLine(STARS_LABEL, doc.stars));
-  }
-  if (doc.downloads !== undefined) {
-    stats.push(countLine(DOWNLOADS_LABEL, doc.downloads));
-  }
-  const meta = stats.length === 0 ? "" : ` <span class="doc-stats">${escapeHtml(stats.join(" · "))}</span>`;
+  const install = installCommand(doc.kind, docRef(doc).ref);
+  const nodes = doc.kind === "graph" ? `<span class="row-meta">${countLine(NODES_LABEL, doc.nodeCount)}</span>` : "";
+  const stars = doc.stars === null ? "" : `<span class="row-meta">${escapeHtml(countLine(STARS_LABEL, doc.stars))}</span>`;
+  const updated = doc.updated === null
+    ? ""
+    : `<time class="row-meta" datetime="${escapeHtml(doc.updated)}">${escapeHtml(doc.updated)}</time>`;
+  const description = doc.description === ""
+    ? ""
+    : `<span class="row-desc">${escapeHtml(doc.description)}</span>`;
   return (
-    `<li><a class="doc-name" href="${docPath(doc)}">${escapeHtml(doc.name)}</a>${meta}` +
-    `<span class="doc-description">${escapeHtml(doc.description)}</span></li>`
+    `<li class="row">` +
+    `<a class="row-name" href="${docPath(doc)}">${escapeHtml(doc.name)}</a>` +
+    `<span class="kind">${escapeHtml(doc.kind)}</span>` +
+    nodes +
+    harnessDots(doc.harnesses) +
+    stars +
+    updated +
+    `<span class="row-install"><code>${escapeHtml(install)}</code>${copyButton(install)}</span>` +
+    description +
+    `</li>`
   );
 }
 
@@ -196,7 +212,7 @@ function docList(docs: Doc[], emptyLine: string): string {
   if (docs.length === 0) {
     return `<p>${emptyLine}</p>`;
   }
-  return `<ul class="doc-list">${docs.map(docItem).join("")}</ul>`;
+  return `<ol class="index">${docs.map(docItem).join("")}</ol>`;
 }
 
 /** Backslash the markdown punctuation one line of text may carry. */
@@ -214,70 +230,121 @@ function docListMarkdown(docs: Doc[], emptyLine: string): string {
   return `${lines.join("\n")}\n`;
 }
 
-/** The plate figure for a document page: the graph plate, or the one node. */
+/**
+ * The plate figure for a document page: the graph plate, or the one node —
+ * rendered in both orientations, with CSS showing the vertical one under
+ * 640 px and the horizontal one above. No JavaScript is involved.
+ */
 function plateFigure(document: JsonValue, kind: PageRef["kind"]): string {
   // The data layer only serves validated documents, so the cast is honest;
   // the renderers stay total and draw nothing when it is not.
-  const plate = kind === "graph"
-    ? renderPlate(document as unknown as GraphDocument)
-    : renderNodePlate(document as unknown as NodeDocument);
-  return plate === "" ? "" : `<h2>${DRAWING_HEADING}</h2><figure class="plate">${plate}</figure>`;
+  const horizontal = kind === "graph"
+    ? renderPlate(document as unknown as GraphDocument, "horizontal")
+    : renderNodePlate(document as unknown as NodeDocument, "horizontal");
+  const vertical = kind === "graph"
+    ? renderPlate(document as unknown as GraphDocument, "vertical")
+    : renderNodePlate(document as unknown as NodeDocument, "vertical");
+  return horizontal === "" && vertical === ""
+    ? ""
+    : `<figure class="plate">${horizontal}${vertical}</figure>`;
 }
 
-/** The structure section of a graph's markdown twin: nodes and routes as text. */
-function structureSection(document: JsonValue): string {
+/** One datasheet field: the label and its already-escaped HTML value. */
+function sheetField(label: string, value: string): string {
+  return `<div class="field"><dt>${escapeHtml(label)}</dt><dd>${value}</dd></div>`;
+}
+
+/** A graph's node counts by kind, in first-appearance order. */
+function nodesByKind(document: JsonValue): Array<{ kind: string; count: number }> {
   const structure = structureOf(document);
   if (structure === null) {
-    return "";
+    return [];
   }
-  const nodes = structure.nodes.length === 0
-    ? STRUCTURE_NONE
-    : structure.nodes.map((node) => `${node.name} (${node.kind})`).join(", ");
-  const lines = [`## ${STRUCTURE_HEADING}`, ``, `${STRUCTURE_NODES_LABEL}: ${nodes}.`, ``];
-  if (structure.ensembles.length > 0) {
-    const ensembles = structure.ensembles
-      .map((ensemble) => `${ensemble.name} (${ensemble.strategy}, ${ensemble.members} members)`)
-      .join(", ");
-    lines.push(`${STRUCTURE_ENSEMBLES_LABEL}: ${ensembles}.`, ``);
+  const counts = new Map<string, number>();
+  for (const node of structure.nodes) {
+    counts.set(node.kind, (counts.get(node.kind) ?? 0) + 1);
   }
-  if (structure.routes.length > 0) {
-    lines.push(
-      `${STRUCTURE_ROUTES_LABEL}:`,
-      ``,
-      ...structure.routes.map((route) => `- ${route.from} --${route.via}--> ${route.to}`),
-      ``,
-    );
-  }
-  return `${lines.join("\n")}\n`;
+  return [...counts].map(([kind, count]) => ({ kind, count }));
 }
 
-/** One document page: name, meta, star button, install, drawing, README. */
+/**
+ * The datasheet beside the plate: kind, name, source, ref and stars, then —
+ * for graphs — nodes by kind, edges with the fail count, ensembles and the
+ * agent nodes a harness must run, then install. A field with no data is
+ * omitted, never printed as a placeholder.
+ */
+function datasheet(doc: Doc, document: JsonValue, ref: PageRef): { html: string; lines: string[] } {
+  const install = installCommand(ref.kind, ref.ref);
+  const fields: string[] = [
+    sheetField(SHEET_KIND, escapeHtml(ref.kind)),
+    sheetField(SHEET_NAME, escapeHtml(doc.name)),
+    sheetField(SHEET_SOURCE, `<a href="${ref.repoUrl}">${escapeHtml(doc.repo)}</a>`),
+  ];
+  const lines = [
+    `- ${SHEET_KIND}: ${ref.kind}`,
+    `- ${SHEET_NAME}: ${mdText(doc.name)}`,
+    `- ${SHEET_SOURCE}: ${ref.repoUrl}`,
+  ];
+  if (doc.sourceRef !== null) {
+    fields.push(sheetField(SHEET_REF, escapeHtml(doc.sourceRef)));
+    lines.push(`- ${SHEET_REF}: ${doc.sourceRef}`);
+  }
+  if (doc.stars !== null) {
+    fields.push(sheetField(SHEET_STARS, escapeHtml(countLine(STARS_LABEL, doc.stars))));
+    lines.push(`- ${SHEET_STARS}: ${countLine(STARS_LABEL, doc.stars)}`);
+  }
+  if (ref.kind === "graph") {
+    const kinds = nodesByKind(document);
+    if (kinds.length > 0) {
+      fields.push(sheetField(SHEET_NODES, escapeHtml(nodesByKindLine(kinds))));
+      lines.push(`- ${SHEET_NODES}: ${nodesByKindLine(kinds)}`);
+    }
+    const structure = structureOf(document);
+    if (structure !== null) {
+      const fail = structure.routes.filter((route) => route.via === "fail").length;
+      fields.push(sheetField(SHEET_EDGES, escapeHtml(edgesLine(structure.routes.length, fail))));
+      lines.push(`- ${SHEET_EDGES}: ${edgesLine(structure.routes.length, fail)}`);
+    }
+    const ensembles = structure?.ensembles ?? [];
+    if (ensembles.length > 0) {
+      const text = ensembles
+        .map((ensemble) => ensembleLine(ensemble.name, ensemble.strategy, ensemble.members))
+        .join(", ");
+      fields.push(sheetField(SHEET_ENSEMBLES, escapeHtml(text)));
+      lines.push(`- ${SHEET_ENSEMBLES}: ${mdText(text)}`);
+    }
+    const agents = agentNames(document);
+    if (agents.length > 0) {
+      fields.push(sheetField(SHEET_AGENTS, escapeHtml(agents.join(", "))));
+      lines.push(`- ${SHEET_AGENTS}: ${agents.join(", ")}`);
+    }
+  }
+  fields.push(
+    sheetField(
+      INSTALL_HEADING,
+      `<span class="row-install"><code>${escapeHtml(install)}</code>${copyButton(install)}</span>`,
+    ),
+  );
+  return { html: `<dl class="sheet">${fields.join("")}</dl>`, lines };
+}
+
+/** One document page: title, star button, plate beside its datasheet, README. */
 function documentPage(doc: Doc, document: JsonValue, ref: PageRef): Page {
   const install = installCommand(ref.kind, ref.ref);
-  const stats: string[] = [];
-  if (doc.stars !== null) {
-    stats.push(countLine(STARS_LABEL, doc.stars));
-  }
-  if (doc.downloads !== undefined) {
-    stats.push(countLine(DOWNLOADS_LABEL, doc.downloads));
-  }
-  const meta = stats.length === 0 ? "" : ` <span class="doc-stats">${escapeHtml(stats.join(" · "))}</span>`;
-  const agents = ref.kind === "graph" ? agentNames(document) : [];
+  const sheet = datasheet(doc, document, ref);
+  const readme = doc.readme.trim() === ""
+    ? ""
+    : `<h2 class="kicker">${README_HEADING}</h2>\n<div class="readme">${renderMarkdown(doc.readme)}</div>`;
 
   const html = [
-    `<h1>${escapeHtml(doc.name)}</h1>`,
+    `<h1 class="doc-title">${escapeHtml(doc.name)}</h1>`,
     `<p class="description">${escapeHtml(doc.description)}</p>`,
-    `<p class="meta"><a href="${ref.repoUrl}">${escapeHtml(doc.repo)}</a>${meta}</p>`,
     `<p><a class="button" href="${ref.repoUrl}">${STAR_BUTTON}</a></p>`,
-    `<h2>${INSTALL_HEADING}</h2>`,
-    `<div class="install"><code>${escapeHtml(install)}</code>${copyButton(install)}</div>`,
+    `<div class="doc-cols">`,
     plateFigure(document, ref.kind),
-    agents.length === 0
-      ? ""
-      : `<h2>${AGENT_NODES_HEADING}</h2><p class="agent-nodes">${escapeHtml(agents.join(", "))}</p>` +
-        `<p>${AGENT_NODES_NOTE}</p>`,
-    `<h2>${README_HEADING}</h2>`,
-    `<div class="readme">${renderMarkdown(doc.readme)}</div>`,
+    sheet.html,
+    `</div>`,
+    readme,
   ].join("\n");
 
   const markdown = [
@@ -285,21 +352,15 @@ function documentPage(doc: Doc, document: JsonValue, ref: PageRef): Page {
     ``,
     doc.description,
     ``,
-    `- ${REPO_LABEL}: ${ref.repoUrl}`,
-    `- ${REF_LABEL}: ${ref.ref}`,
-    ...stats.map((stat) => `- ${stat}`),
+    ...sheet.lines,
     ``,
     `## ${INSTALL_HEADING}`,
     ``,
     `    ${install}`,
     ``,
-    ref.kind === "graph" ? structureSection(document) : "",
-    agents.length === 0
+    readme === ""
       ? ""
-      : `## ${AGENT_NODES_HEADING}\n\n${agents.join(", ")}\n\n${AGENT_NODES_NOTE}\n`,
-    `## ${README_HEADING}`,
-    ``,
-    doc.readme.endsWith("\n") || doc.readme === "" ? doc.readme : `${doc.readme}\n`,
+      : `## ${README_HEADING}\n\n${doc.readme.endsWith("\n") ? doc.readme : `${doc.readme}\n`}`,
   ].join("\n");
 
   return { title: doc.name, description: doc.description, html, markdown };
@@ -307,13 +368,12 @@ function documentPage(doc: Doc, document: JsonValue, ref: PageRef): Page {
 
 function homePage(graphs: Doc[], nodes: Doc[]): Page {
   const html = [
-    `<h1 class="hero-title">${escapeHtml(TAGLINE)}</h1>`,
-    searchForm(""),
+    `<h1 class="index-title">${escapeHtml(TAGLINE)}</h1>`,
     tabs("", null),
-    `<h2>${OFFICIAL_HEADING}</h2>`,
-    `<h3>${GRAPHS_HEADING}</h3>`,
+    `<h2 class="kicker">${OFFICIAL_HEADING}</h2>`,
+    `<h3 class="kicker">${GRAPHS_HEADING}</h3>`,
     docList(graphs, EMPTY_OFFICIAL_GRAPHS),
-    `<h3>${NODES_HEADING}</h3>`,
+    `<h3 class="kicker">${NODES_HEADING}</h3>`,
     docList(nodes, EMPTY_OFFICIAL_NODES),
   ].join("\n");
   const markdown = [
@@ -336,8 +396,7 @@ function homePage(graphs: Doc[], nodes: Doc[]): Page {
 function searchPage(q: string, sort: SearchSort, items: Doc[]): Page {
   const heading = resultsFor(q);
   const html = [
-    `<h1>${escapeHtml(heading)}</h1>`,
-    searchForm(q),
+    `<h1 class="index-title">${escapeHtml(heading)}</h1>`,
     tabs(q, sort),
     items.length === 0 ? `<p>${NO_RESULTS}</p>` : docList(items, NO_RESULTS),
   ].join("\n");
@@ -356,7 +415,9 @@ async function documentResponse(req: Request, env: PageEnv, deps: PageDeps, ref:
   const { github, log, volumes } = readers(env, deps);
   const loaded = ref.official
     ? await loadOfficialDocument(github, ref.kind, ref.slug, log)
-    : await loadDocument(
+    : await (async () => {
+      const info = await communityRepo(github, ref.owner, ref.repo);
+      return loadDocument(
         github,
         {
           owner: ref.owner,
@@ -364,10 +425,13 @@ async function documentResponse(req: Request, env: PageEnv, deps: PageDeps, ref:
           directory: documentDirectory(ref.owner, ref.repo, ref.kind, ref.slug),
           kind: ref.kind,
           slug: ref.slug,
-          stars: null,
+          stars: info.stars,
+          updated: info.updated,
+          ref: info.branch,
         },
         log,
       );
+    })();
   // The load result is a tagged union, not an ApiError: "doc" wins first.
   if (loaded.kind === "absent") {
     return notFound(req);

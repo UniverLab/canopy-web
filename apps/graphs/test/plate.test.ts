@@ -17,6 +17,8 @@ import {
   type NodeDocument,
 } from "../src/plate/document.js";
 import { renderNodePlate, renderPlate } from "../src/plate/render.js";
+import { PLATE_SCALE, layoutPlate } from "../src/plate/layout.js";
+import { layoutPlateVertical } from "../src/plate/vertical.js";
 import { ROUND_ROBIN_GRAPH, TUI_POLISH_GRAPH, sixtyNodeGraph } from "./plate-fixture.js";
 
 const GRAPHS: Array<[string, GraphDocument]> = [
@@ -46,7 +48,7 @@ interface Edge {
 function nodeBoxes(svg: string): Box[] {
   const boxes: Box[] = [];
   const pattern =
-    /<g class="node shape-[a-z]+" data-name="([^"]+)" data-cx="(-?[\d.]+)" data-cy="(-?[\d.]+)" data-w="(-?[\d.]+)" data-h="(-?[\d.]+)" data-rank="\d+" data-lane="(main|infra)">/g;
+    /<g class="node shape-[a-z]+" data-name="([^"]+)" data-cx="(-?[\d.]+)" data-cy="(-?[\d.]+)" data-w="(-?[\d.]+)" data-h="(-?[\d.]+)" data-rank="\d+" data-lane="(main|infra)"[^>]*>/g;
   for (const match of svg.matchAll(pattern)) {
     boxes.push({
       name: match[1] ?? "",
@@ -77,7 +79,7 @@ function drawnGroups(svg: string): string[] {
 
 /** The member-chip centres inside the group outlines. */
 function memberCentres(svg: string): number[] {
-  return [...svg.matchAll(/<g class="member" data-name="[^"]+" data-i="\d+" data-cx="(-?[\d.]+)" data-cy="(-?[\d.]+)">/g)]
+  return [...svg.matchAll(/<g class="member" data-name="[^"]+" data-i="\d+" data-cx="(-?[\d.]+)" data-cy="(-?[\d.]+)"[^>]*>/g)]
     .map((match) => Number(match[2]));
 }
 
@@ -139,7 +141,7 @@ describe("plate invariants", () => {
     });
 
     it(`${name}: the svg is labelled`, () => {
-      expect(svg).toContain(`<svg class="plate-svg" viewBox="0 0 `);
+      expect(svg).toContain(`<svg class="plate-svg plate-h" viewBox="0 0 `);
       expect(svg).toContain(`role="img"`);
       expect(svg).toContain(`<title>${name}</title>`);
       expect(svg).toMatch(/<desc>Nodes in order: [^<]+<\/desc>/);
@@ -260,5 +262,114 @@ describe("the render budget", () => {
     expect(svg.length).toBeGreaterThan(0);
     expect(nodeBoxes(svg)).toHaveLength(60);
     expect(elapsed).toBeLessThan(50);
+  });
+});
+
+describe("plate centring", () => {
+  it("centres a single node in its viewBox", () => {
+    const svg = renderNodePlate({ name: "solo", kind: "agent", config: {} });
+    const viewBox = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(svg);
+    expect(viewBox).not.toBeNull();
+    const boxes = nodeBoxes(svg);
+    expect(boxes).toHaveLength(1);
+    // Symmetric padding on a symmetric drawing: the node sits at the centre.
+    expect(boxes[0]?.cx).toBe(Number(viewBox?.[1]) / 2);
+  });
+
+  it("centres a single rank horizontally", () => {
+    const document: GraphDocument = {
+      name: "rank",
+      nodes: [
+        { name: "aaa", kind: "agent", position: 1, config: {} },
+        { name: "bbb", kind: "agent", position: 2, config: {} },
+        { name: "ccc", kind: "agent", position: 3, config: {} },
+      ],
+      edges: [],
+    };
+    const layout = layoutPlate(document);
+    expect(layout).not.toBeNull();
+    for (const node of layout?.nodes ?? []) {
+      expect(node.x).toBe((layout?.width ?? 0) / 2);
+    }
+  });
+});
+
+describe("the vertical orientation", () => {
+  it("runs ranks top to bottom with labels right of nodes", () => {
+    const document: GraphDocument = {
+      name: "chain",
+      nodes: [
+        { name: "first", kind: "agent", position: 1, config: {} },
+        { name: "second", kind: "agent", position: 2, config: {} },
+        { name: "third", kind: "agent", position: 3, config: {} },
+      ],
+      edges: [
+        { from_node: "first", to_node: "second", condition: "pass" },
+        { from_node: "second", to_node: "third", condition: "pass" },
+      ],
+    };
+    const layout = layoutPlateVertical(document);
+    expect(layout).not.toBeNull();
+    const byName = new Map((layout?.nodes ?? []).map((node) => [node.name, node]));
+    expect(byName.get("first")?.y).toBeLessThan(byName.get("second")?.y ?? 0);
+    expect(byName.get("second")?.y).toBeLessThan(byName.get("third")?.y ?? 0);
+    const svg = renderPlate(document, "vertical");
+    expect(svg).toContain(`<svg class="plate-svg plate-v"`);
+    expect(svg).toContain(`text-anchor="start"`);
+    expect(svg).not.toContain(`text-anchor="middle">first</text>`);
+  });
+
+  it("fits every plate inside 360 px wide", () => {
+    const documents: Array<[string, GraphDocument]> = [
+      ...GRAPHS,
+      ["round-robin", ROUND_ROBIN_GRAPH],
+      ["sixty", sixtyNodeGraph()],
+    ];
+    for (const [name, document] of documents) {
+      const layout = layoutPlateVertical(document);
+      expect(layout).not.toBeNull();
+      expect(Math.round((layout?.width ?? 0) * PLATE_SCALE), name).toBeLessThanOrEqual(360);
+    }
+  });
+
+  it("draws nothing readable from an unreadable document", () => {
+    expect(renderPlate("nope" as unknown as GraphDocument, "vertical")).toBe("");
+    expect(renderNodePlate({} as unknown as NodeDocument, "vertical")).toBe("");
+  });
+});
+
+describe("harness colours", () => {
+  it("paints a known harness stem and labels it", () => {
+    const svg = renderNodePlate({ name: "impl", kind: "agent", config: { platform: "claude" } });
+    expect(svg).toContain(`style="--nc:#d97757"`);
+    expect(svg).toContain(`>claude</text>`);
+    const model = renderNodePlate({ name: "impl", kind: "agent", config: { model: "deepseek-chat" } });
+    expect(model).toContain(`style="--nc:#4d6bfe"`);
+    expect(model).toContain(`>deepseek</text>`);
+  });
+
+  it("falls back to the Canopy teal with no label for an unknown harness", () => {
+    const svg = renderNodePlate({ name: "impl", kind: "agent", config: { platform: "mystery" } });
+    expect(svg).not.toContain("--nc:");
+    expect(svg).not.toContain(`class="harness"`);
+    expect(svg).toContain(`var(--nc, var(--canopy))`);
+  });
+
+  it("paints ensemble members by their platform", () => {
+    const svg = renderPlate(TUI_POLISH_GRAPH);
+    expect(svg).toContain(`style="--nc:#57c7c3"`);
+    expect(svg).toContain(`>codex</text>`);
+  });
+
+  it("fills nothing white, in either orientation", () => {
+    for (const [name, document] of GRAPHS) {
+      for (const orientation of ["horizontal", "vertical"] as const) {
+        const svg = renderPlate(document, orientation);
+        expect(svg, `${name} ${orientation}`).not.toContain("#fff");
+        expect(svg, `${name} ${orientation}`).not.toContain("#FFF");
+        expect(svg, `${name} ${orientation}`).not.toContain("var(--bg");
+        expect(svg, `${name} ${orientation}`).not.toContain('fill="#fff"');
+      }
+    }
   });
 });

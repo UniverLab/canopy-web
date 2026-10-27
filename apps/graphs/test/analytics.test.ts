@@ -22,6 +22,9 @@ function sampleDoc(slug: string, kind: "graph" | "node", repo: string): Doc {
     nodeCount: kind === "node" ? 1 : 3,
     repo,
     stars: null,
+    updated: null,
+    harnesses: [],
+    sourceRef: null,
   };
 }
 

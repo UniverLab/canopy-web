@@ -5,17 +5,25 @@
  * A route builds a `Page` — a title, a meta description, the HTML body and
  * its markdown twin — and `page()` answers the request with one or the
  * other: a request sending `Accept: text/markdown` gets the twin (content
- * type `text/markdown`), everything else the full HTML document dressed in
- * the shared look kit of the Canopy page: the deep-teal surface with the
- * live honeycomb behind a centred column, the lab's three typefaces, the
- * mono wordmark, and the UniverLab colophon as footer.
+ * type `text/markdown`), everything else the full HTML document. The shell
+ * is the technical index around the content: a header band with the mono
+ * wordmark, a full-width search form and the Publish/Source links over the
+ * live honeycomb (mounted inside the band only), a left-aligned content
+ * column below, and the UniverLab colophon as footer.
  */
 import {
   CANOPY_HREF,
   COLOPHON_EXP,
   COLOPHON_LINKS,
   COLOPHON_PRODUCT,
+  PUBLISH_HREF,
+  PUBLISH_LABEL,
+  SEARCH_BUTTON,
+  SEARCH_LABEL,
+  SEARCH_PLACEHOLDER,
   SITE_NAME,
+  SOURCE_HREF,
+  SOURCE_LABEL,
   TITLE_SEPARATOR,
   WORDMARK,
 } from "./copy.js";
@@ -37,7 +45,19 @@ export function wantsMarkdown(req: Request): boolean {
   return accept.includes("text/markdown");
 }
 
-function htmlDocument(page: Page): string {
+/** The header band's search form, holding the current query when there is one. */
+function searchForm(q: string): string {
+  return (
+    `<form class="search" action="/search" method="get" role="search">` +
+    `<label class="sr-only" for="q">${SEARCH_LABEL}</label>` +
+    `<input id="q" name="q" type="search" value="${escapeHtml(q)}" ` +
+    `placeholder="${SEARCH_PLACEHOLDER}" autocomplete="off">` +
+    `<button type="submit">${SEARCH_BUTTON}</button>` +
+    `</form>`
+  );
+}
+
+function htmlDocument(q: string, page: Page): string {
   const title = escapeHtml(`${page.title}${TITLE_SEPARATOR}${SITE_NAME}`);
   const description = escapeHtml(page.description);
   return [
@@ -54,10 +74,19 @@ function htmlDocument(page: Page): string {
     `</style>`,
     `</head>`,
     `<body>`,
-    fondoHost(),
     `<div class="look-shell">`,
     `<header class="site-header">`,
+    fondoHost(),
+    `<div class="band">`,
+    `<div class="band-top">`,
     `<a class="wordmark" href="${CANOPY_HREF}">${escapeHtml(WORDMARK)}</a>`,
+    `<nav class="site-nav" aria-label="Catalogue">`,
+    `<a href="${PUBLISH_HREF}">${PUBLISH_LABEL}</a>`,
+    `<a href="${SOURCE_HREF}">${SOURCE_LABEL}</a>`,
+    `</nav>`,
+    `</div>`,
+    searchForm(q),
+    `</div>`,
     `</header>`,
     `<main class="look-col">`,
     page.html,
@@ -92,7 +121,8 @@ export function page(req: Request, content: Page, status = 200): Response {
       },
     });
   }
-  return new Response(htmlDocument(content), {
+  const q = (new URL(req.url).searchParams.get("q") ?? "").slice(0, 256);
+  return new Response(htmlDocument(q, content), {
     status,
     headers: {
       "content-type": "text/html; charset=utf-8",

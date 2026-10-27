@@ -22,6 +22,12 @@ html[data-surface='tui'] {
   --radius-ctl: 6px;
 }
 
+/* The dim page ink, read through the surface group like univerlab's
+   html[data-surface]:root alias. The plates stroke their chips with it. */
+html[data-surface='tui'] {
+  --ink-dim: var(--surface-ink-dim, #9a9890);
+}
+
 :root {
   /* The Canopy experiment essence and the honeycomb comb teal. */
   --canopy: #00a9a0;

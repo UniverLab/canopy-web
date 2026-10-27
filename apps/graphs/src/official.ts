@@ -19,9 +19,11 @@ import { readJson } from "./json.js";
 import {
   type CatalogEntry,
   type Doc,
+  branchFromRepository,
   documentDirectory,
   loadDocument,
   starsFromRepository,
+  updatedFromRepository,
 } from "./documents.js";
 
 /** Upper bound on documents one listing will render. */
@@ -53,17 +55,32 @@ function listedDirectories(value: unknown): ListedDir[] {
   });
 }
 
-/** The repo body for stars; `null` when GitHub does not tell us. */
-async function officialStars(github: GitHub): Promise<number | null> {
+/** What one `/repos/...` call tells the catalogue: stars, updated, branch. */
+export interface RepoInfo {
+  stars: number | null;
+  updated: string | null;
+  branch: string;
+}
+
+/** The repo body for stars, updated and the default branch; blanks when GitHub stays silent. */
+async function officialRepo(github: GitHub, repository: string): Promise<RepoInfo> {
+  const blank: RepoInfo = { stars: null, updated: null, branch: "" };
   const response = await github.get(
-    `https://api.github.com/repos/${OFFICIAL_REPOSITORY}`,
+    `https://api.github.com/repos/${repository}`,
     "contents",
   );
   if (isApiError(response)) {
-    return null;
+    return blank;
   }
   const body = await readJson(response);
-  return body.ok ? starsFromRepository(body.value) : null;
+  if (!body.ok) {
+    return blank;
+  }
+  return {
+    stars: starsFromRepository(body.value),
+    updated: updatedFromRepository(body.value),
+    branch: branchFromRepository(body.value),
+  };
 }
 
 /**
@@ -105,8 +122,8 @@ export async function listOfficial(
     }
     directories[kind] = listedDirectories(body.value);
   }
-  const stars = await officialStars(github);
-  if (stars === null) {
+  const info = await officialRepo(github, OFFICIAL_REPOSITORY);
+  if (info.stars === null) {
     log("official: stars unavailable for the listing");
   }
 
@@ -125,7 +142,9 @@ export async function listOfficial(
         directory: documentDirectory(OFFICIAL_OWNER, OFFICIAL_REPO, kind, listed.directory),
         kind,
         slug: listed.directory,
-        stars,
+        stars: info.stars,
+        updated: info.updated,
+        ref: info.branch,
       };
       const loaded = await loadDocument(github, source, log);
       if (loaded.kind === "doc") {
@@ -152,19 +171,27 @@ export async function loadOfficialDocument(
   | { kind: "absent" }
   | ApiError
 > {
+  const info = await officialRepo(github, OFFICIAL_REPOSITORY);
   const source = {
     owner: OFFICIAL_OWNER,
     repo: OFFICIAL_REPO,
     directory: documentDirectory(OFFICIAL_OWNER, OFFICIAL_REPO, kind, slug),
     kind,
     slug,
-    stars: null,
+    stars: info.stars,
+    updated: info.updated,
+    ref: info.branch,
   };
-  const loaded = await loadDocument(github, source, log);
-  if (loaded.kind === "doc" && loaded.entry.doc.stars === null) {
-    loaded.entry.doc.stars = await officialStars(github);
-  }
-  return loaded;
+  return loadDocument(github, source, log);
+}
+
+/**
+ * The community repo behind one document page: stars, updated and the
+ * default branch, blanks when GitHub stays silent. The page reads the
+ * document at that branch, so the sheet's Ref names a real ref.
+ */
+export async function communityRepo(github: GitHub, owner: string, repo: string): Promise<RepoInfo> {
+  return officialRepo(github, `${owner}/${repo}`);
 }
 
 /** JSON value re-export so callers do not reach past this module. */

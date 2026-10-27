@@ -76,6 +76,7 @@ describe("the look tokens", () => {
     ],
     ["--radius-card: 16px"],
     ["--radius-ctl: 6px"],
+    ["--ink-dim: var(--surface-ink-dim, #9a9890)"],
     ["--canopy: #00a9a0"],
     ["--teal: #3fb8b0"],
     ["--font-display: 'Old Standard TT', Georgia, serif"],

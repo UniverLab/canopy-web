@@ -23,45 +23,49 @@ import {
   type EdgeClass,
   type EnsembleView,
   type NodeView,
+  type ParsedGraph,
   type Strategy,
 } from "./document.js";
 import { GEOM, TYPE, edgePath, type Kind, type Pt } from "./vocabulary.js";
+
+/** The plate's two orientations: ranks left to right, or top to bottom. */
+export type Orientation = "horizontal" | "vertical";
 
 /** Constant horizontal step between ranks (viewBox units). */
 export const RANK_DX = 26;
 /** Vertical slot one main-lane node occupies. */
 const NODE_SLOT = 16;
-/** Vertical step between member chips inside a group. */
-const MEMBER_DY = 7;
+/** Vertical step between member chips inside a group. Shared with vertical.ts. */
+export const MEMBER_DY = 7;
 /** Member chip size. */
 const MEMBER_W = 14;
 const MEMBER_H = 4;
-/** Head room (two label lines) and foot room inside a group outline. */
-const GROUP_HEAD = 9;
-const GROUP_FOOT = 4;
+/** Head room (two label lines) and foot room inside a group outline. Shared with vertical.ts. */
+export const GROUP_HEAD = 9;
+export const GROUP_FOOT = 4;
 /** Widest a group outline may grow: it must clear the neighbouring ranks. */
 const GROUP_W_MAX = 38;
-/** Gap between the main lane and the infra lane. */
-const LANE_GAP = 20;
-/** ViewBox padding. */
-const PAD_X = 10;
-const PAD_TOP = 10;
-const PAD_BOTTOM = 10;
-/** Extra arc height per same-row fail edge into one target. */
-const LIFT_STEP = 4;
+/** Gap between the main lane and the infra lane. Shared with vertical.ts. */
+export const LANE_GAP = 20;
+/** ViewBox padding. Shared with vertical.ts. */
+export const PAD_X = 10;
+export const PAD_TOP = 10;
+export const PAD_BOTTOM = 10;
+/** Extra arc height per same-row fail edge into one target. Shared with vertical.ts. */
+export const LIFT_STEP = 4;
 /** Node labels longer than this are truncated; the shape keeps the full name. */
 export const LABEL_MAX = 16;
 /** Ensemble names longer than this are truncated in the group label. */
 const GROUP_NAME_MAX = 20;
 /** Pixels per viewBox unit for the svg width/height attributes. */
 export const PLATE_SCALE = 5;
-/** Mono advance at the node-label type size, in viewBox units. */
-const LABEL_CHAR = 2.3 * 0.6;
-/** Mono advance at the group/member type size, in viewBox units. */
-const GROUP_CHAR = TYPE.harness * 0.6;
+/** Mono advance at the node-label type size, in viewBox units. Shared with vertical.ts. */
+export const LABEL_CHAR = 2.3 * 0.6;
+/** Mono advance at the group/member type size, in viewBox units. Shared with vertical.ts. */
+export const GROUP_CHAR = TYPE.harness * 0.6;
 
 /** One layout unit: a node or an ensemble, with its document order. */
-interface Unit {
+export interface Unit {
   id: string;
   order: number;
   node: NodeView | null;
@@ -72,6 +76,8 @@ export interface PlacedNode {
   name: string;
   shape: Kind;
   docKind: string;
+  /** The node's harness stem for `--nc` and the harness label, if it names one. */
+  harness: string | null;
   x: number;
   y: number;
   w: number;
@@ -82,6 +88,8 @@ export interface PlacedNode {
 
 export interface PlacedMember {
   label: string;
+  /** The member's harness stem for `--nc` and the harness label, if known. */
+  harness: string | null;
   x: number;
   y: number;
 }
@@ -107,6 +115,7 @@ export interface PlacedEdge {
 
 export interface PlateLayout {
   name: string;
+  orientation: Orientation;
   nodes: PlacedNode[];
   groups: PlacedGroup[];
   edges: PlacedEdge[];
@@ -120,16 +129,16 @@ export interface PlateLayout {
 }
 
 /** Round to two decimals so paths print stably. */
-function num(value: number): number {
+export function num(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
 /** Round every decimal in a path string: midpoints print without float noise. */
-function smooth(d: string): string {
+export function smooth(d: string): string {
   return d.replace(/-?\d+\.\d+/g, (match) => String(num(Number(match))));
 }
 
-function groupSubtitle(strategy: Strategy, minPass: number, count: number): string {
+export function groupSubtitle(strategy: Strategy, minPass: number, count: number): string {
   if (strategy === "cascade") {
     return `CASCADE · ${count}`;
   }
@@ -139,14 +148,32 @@ function groupSubtitle(strategy: Strategy, minPass: number, count: number): stri
   return `PARALLEL · ${minPass}/${count}`;
 }
 
-function groupTitle(name: string): string {
+export function groupTitle(name: string): string {
   const clipped = name.length > GROUP_NAME_MAX ? `${name.slice(0, GROUP_NAME_MAX - 1)}…` : name;
   return clipped.toUpperCase();
 }
 
-function groupWidth(title: string, subtitle: string, members: string[]): number {
+export function groupWidth(title: string, subtitle: string, members: string[]): number {
   const chars = Math.max(title.length, subtitle.length, ...members.map((m) => m.length));
   return Math.min(GROUP_W_MAX, Math.max(MEMBER_W + 4, chars * GROUP_CHAR + 6));
+}
+
+/**
+ * Half the width of a node's drawn labels: the name below the shape, or the
+ * harness line under it when that runs wider. Both centre on the node, so
+ * the viewBox padding stays symmetric and the drawing centred.
+ */
+export function labelHalfOf(name: string, harness: string | null): number {
+  const nameHalf = (Math.min(name.length, LABEL_MAX + 1) * LABEL_CHAR) / 2;
+  const harnessHalf = harness === null ? 0 : (harness.length * GROUP_CHAR) / 2;
+  return Math.max(nameHalf, harnessHalf);
+}
+
+/** The lowest point of a node: its harness line when it has one, else its label. */
+export function nodeBottom(y: number, harness: string | null): number {
+  return harness === null
+    ? y + TYPE.labelDy + TYPE.label / 2
+    : y + TYPE.harnessDy + TYPE.harness / 2;
 }
 
 /**
@@ -186,11 +213,33 @@ function ranksOf(units: Unit[], rankEdges: Array<{ from: string; to: string }>):
   return rank;
 }
 
-export function layoutPlate(document: unknown): PlateLayout | null {
-  const parsed = parseDocument(document);
-  if (parsed === null) {
-    return null;
-  }
+/** One rank edge: the forward step from one layout unit to the next. */
+export interface RankEdge {
+  from: string;
+  to: string;
+}
+
+/**
+ * A parsed graph ranked for layout: its units, the rank edges between them,
+ * each unit's rank, the barycenter-ordered units per rank, the entry node
+ * and the name-to-unit resolver. Both orientations rank identically; only
+ * the geometry after this differs.
+ */
+export interface RankedGraph {
+  units: Unit[];
+  rankEdges: RankEdge[];
+  rankOf: Map<string, number>;
+  byRank: Map<number, Unit[]>;
+  entry: NodeView | null;
+  unitId: (name: string) => string | null;
+}
+
+/**
+ * Rank a parsed graph: units in document order, longest-path ranks over the
+ * rank edges, one barycenter sweep within each rank. Deterministic and
+ * total — the same input ranks the same way for both orientations.
+ */
+export function rankUnits(parsed: ParsedGraph): RankedGraph {
   const nodeNames = new Set(parsed.nodes.map((node) => node.name));
   const ensembleNames = new Set(parsed.ensembles.map((ensemble) => ensemble.name));
   const unitId = (name: string): string | null => {
@@ -218,7 +267,7 @@ export function layoutPlate(document: unknown): PlateLayout | null {
   ];
   // Rank edges: node pass/always/route edges, ensemble entries of those
   // classes, and every ensemble on_pass_to exit. Fail and error never rank.
-  const rankEdges: Array<{ from: string; to: string }> = [];
+  const rankEdges: RankEdge[] = [];
   for (const edge of parsed.edges) {
     if (!isRankCondition(edge.condition)) {
       continue;
@@ -300,6 +349,91 @@ export function layoutPlate(document: unknown): PlateLayout | null {
     list.forEach((unit, index) => indexOf.set(unit.id, index));
     byRank.set(rank, list);
   }
+  return { units, rankEdges, rankOf, byRank, entry, unitId };
+}
+
+/**
+ * The token's chain: from the entry, the first outgoing pass edge in
+ * document order, until it dead-ends or loops back. Centres come from the
+ * placed layout, so both orientations walk the same chain.
+ */
+export function passChain(
+  parsed: ParsedGraph,
+  entry: NodeView | null,
+  centres: Map<string, Pt>,
+): Pt[] {
+  if (entry === null) {
+    return [];
+  }
+  const nodeNames = new Set(parsed.nodes.map((node) => node.name));
+  const chain: Pt[] = [];
+  const seen = new Set<string>();
+  let current: string | null = entry.name;
+  const first = centres.get(current);
+  if (first !== undefined) {
+    chain.push(first);
+    seen.add(current);
+  }
+  const passOut = new Map<string, string>();
+  for (const edge of parsed.edges) {
+    if ((edge.condition === "pass" || edge.condition === "always" || isRankCondition(edge.condition)) &&
+      !passOut.has(edge.from) && nodeNames.has(edge.from) && nodeNames.has(edge.to)) {
+      passOut.set(edge.from, edge.to);
+    }
+  }
+  for (const ensemble of parsed.ensembles) {
+    if (ensemble.entryFrom !== null && !ensemble.entryFrom.startsWith("ensemble:") &&
+      !passOut.has(ensemble.entryFrom) && isRankCondition(ensemble.entryCondition)) {
+      passOut.set(ensemble.entryFrom, ensemble.name);
+    }
+    if (ensemble.onPassTo !== null && !ensemble.onPassTo.startsWith("ensemble:") &&
+      nodeNames.has(ensemble.onPassTo)) {
+      passOut.set(ensemble.name, ensemble.onPassTo);
+    }
+  }
+  while (current !== null) {
+    const next: string | null = passOut.get(current) ?? null;
+    if (next === null || seen.has(next)) {
+      break;
+    }
+    const point = centres.get(next);
+    if (point === undefined) {
+      break;
+    }
+    chain.push(point);
+    seen.add(next);
+    current = next;
+  }
+  return chain;
+}
+
+/**
+ * The token's path along a chain: one leg per step through the
+ * orientation's own edge curve, at 0.9 seconds a step. Null when the chain
+ * is too short to walk.
+ */
+export function passWalk(
+  chain: Pt[],
+  leg: (a: Pt, b: Pt) => string,
+): { walk: string; seconds: number } | null {
+  if (chain.length < 2) {
+    return null;
+  }
+  const legs = chain.slice(1).map((point, index) =>
+    smooth(leg(chain[index] as Pt, point)).replace(/^M[^C]+/, "")
+  );
+  return {
+    walk: `M${chain[0]?.x} ${chain[0]?.y}${legs.join("")}`,
+    seconds: num((chain.length - 1) * 0.9),
+  };
+}
+
+export function layoutPlate(document: unknown): PlateLayout | null {
+  const parsed = parseDocument(document);
+  if (parsed === null) {
+    return null;
+  }
+  const { byRank, entry, rankOf, unitId } = rankUnits(parsed);
 
   // Geometry in design coordinates: constant rank spacing, stacked ranks,
   // the infra node skipped in the main lane, members stacked in the group.
@@ -330,6 +464,7 @@ export function layoutPlate(document: unknown): PlateLayout | null {
           name: unit.node.name,
           shape,
           docKind: unit.node.docKind,
+          harness: unit.node.harness,
           x,
           y,
           w: GEOM[shape].w,
@@ -337,7 +472,7 @@ export function layoutPlate(document: unknown): PlateLayout | null {
           rank,
           infra: false,
         });
-        mainBottom = Math.max(mainBottom, y + TYPE.labelDy + TYPE.label / 2);
+        mainBottom = Math.max(mainBottom, nodeBottom(y, unit.node.harness));
       } else if (unit.ensemble !== null) {
         const title = groupTitle(unit.ensemble.name);
         const subtitle = groupSubtitle(
@@ -352,6 +487,7 @@ export function layoutPlate(document: unknown): PlateLayout | null {
         atY.set(unit.id, y);
         const members = unit.ensemble.members.map((label, index) => ({
           label,
+          harness: unit.ensemble?.memberHarness[index] ?? null,
           x,
           y: num(y - h / 2 + GROUP_HEAD + index * MEMBER_DY + MEMBER_DY / 2),
         }));
@@ -373,6 +509,7 @@ export function layoutPlate(document: unknown): PlateLayout | null {
         name: node.name,
         shape,
         docKind: node.docKind,
+        harness: node.harness,
         x,
         y,
         w: GEOM[shape].w,
@@ -503,12 +640,12 @@ export function layoutPlate(document: unknown): PlateLayout | null {
     maxY = Math.max(maxY, y1);
   };
   for (const node of nodes) {
-    const labelHalf = (Math.min(node.name.length, LABEL_MAX + 1) * LABEL_CHAR) / 2;
+    const labelHalf = labelHalfOf(node.name, node.harness);
     span(
       Math.min(node.x - node.w / 2, node.x - labelHalf),
       Math.max(node.x + node.w / 2, node.x + labelHalf),
       node.y - node.h / 2,
-      node.y + TYPE.labelDy + TYPE.label / 2,
+      nodeBottom(node.y, node.harness),
     );
   }
   for (const group of groups) {
@@ -549,64 +686,18 @@ export function layoutPlate(document: unknown): PlateLayout | null {
     d: smooth(edgePath(shift(edge.a), shift(edge.b), edge.cls === "fail", lifts.get(edge) ?? 0)),
   }));
 
-  // The token walks the main pass chain: from the entry, the first outgoing
-  // pass edge in document order, until it dead-ends or loops back.
-  let walk: string | null = null;
-  let walkSeconds = 0;
-  if (entry !== null) {
-    const chain: Pt[] = [];
-    const seen = new Set<string>();
-    let current: string | null = entry.name;
-    const centres = new Map<string, Pt>();
-    for (const node of nodes) {
-      centres.set(node.name, { x: node.x, y: node.y });
-    }
-    for (const group of groups) {
-      centres.set(group.name, { x: group.x, y: group.y });
-    }
-    const first = centres.get(current);
-    if (first !== undefined) {
-      chain.push(first);
-      seen.add(current);
-    }
-    const passOut = new Map<string, string>();
-    for (const edge of parsed.edges) {
-      if ((edge.condition === "pass" || edge.condition === "always" || isRankCondition(edge.condition)) &&
-        !passOut.has(edge.from) && nodeNames.has(edge.from) && nodeNames.has(edge.to)) {
-        passOut.set(edge.from, edge.to);
-      }
-    }
-    for (const ensemble of parsed.ensembles) {
-      if (ensemble.entryFrom !== null && !ensemble.entryFrom.startsWith("ensemble:") &&
-        !passOut.has(ensemble.entryFrom) && isRankCondition(ensemble.entryCondition)) {
-        passOut.set(ensemble.entryFrom, ensemble.name);
-      }
-      if (ensemble.onPassTo !== null && !ensemble.onPassTo.startsWith("ensemble:") &&
-        nodeNames.has(ensemble.onPassTo)) {
-        passOut.set(ensemble.name, ensemble.onPassTo);
-      }
-    }
-    while (current !== null) {
-      const next: string | null = passOut.get(current) ?? null;
-      if (next === null || seen.has(next)) {
-        break;
-      }
-      const point = centres.get(next);
-      if (point === undefined) {
-        break;
-      }
-      chain.push(point);
-      seen.add(next);
-      current = next;
-    }
-    if (chain.length > 1) {
-      const legs = chain.slice(1).map((point, index) =>
-        smooth(edgePath(chain[index] as Pt, point, false)).replace(/^M[^C]+/, "")
-      );
-      walk = `M${chain[0]?.x} ${chain[0]?.y}${legs.join("")}`;
-      walkSeconds = num((chain.length - 1) * 0.9);
-    }
+  // The token walks the main pass chain through this orientation's curves.
+  const centres = new Map<string, Pt>();
+  for (const node of nodes) {
+    centres.set(node.name, { x: node.x, y: node.y });
   }
+  for (const group of groups) {
+    centres.set(group.name, { x: group.x, y: group.y });
+  }
+  const walked = passWalk(
+    passChain(parsed, entry, centres),
+    (a, b) => edgePath(a, b, false),
+  );
 
   const order = [...nodes]
     .sort((a, b) => a.rank - b.rank || a.y - b.y || (a.name < b.name ? -1 : 1))
@@ -614,13 +705,14 @@ export function layoutPlate(document: unknown): PlateLayout | null {
 
   return {
     name: parsed.name,
+    orientation: "horizontal",
     nodes,
     groups,
     edges,
     width: num(maxX - minX + PAD_X * 2),
     height: num(maxY - minY + PAD_TOP + PAD_BOTTOM),
-    walk,
-    walkSeconds,
+    walk: walked?.walk ?? null,
+    walkSeconds: walked?.seconds ?? 0,
     order,
   };
 }

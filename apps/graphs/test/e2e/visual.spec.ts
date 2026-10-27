@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * The catalogue's dress, checked in a browser against the fixture Worker:
- * the Canopy surface, the three faces loaded from the kit, the honeycomb
- * behind the content, the mono wordmark, the colophon footer, and no
- * horizontal page scroll at 390 px. Three pages (home, a graph, a node) at
- * the two reference sizes; a screenshot per page is attached to the report
- * for the operator, never compared.
+ * The catalogue as a technical index, checked in a browser against the
+ * fixture Worker: the Canopy surface, the three faces loaded from the kit,
+ * the honeycomb mounted inside the header band only, the wordmark with its
+ * Publish/Source links, dense index rows instead of cards, each document
+ * page as a plate beside its datasheet — the vertical plate under 640 px,
+ * the horizontal one above — and no horizontal page scroll at 390 px.
+ * Three pages (home, a graph, a node) at the two reference sizes; a
+ * screenshot per page is attached to the report for the operator's review,
+ * never compared.
  */
 import { expect, test } from "@playwright/test";
 
@@ -58,16 +61,19 @@ for (const viewport of VIEWPORTS) {
       // All three are registered by the kit, and each has a face actually loaded.
       expect(faces.families).toEqual(expect.arrayContaining(kit));
       expect(faces.loaded).toEqual(expect.arrayContaining(kit));
-      // And the page applies them: display to the heading, body to the text,
-      // mono to the wordmark.
-      expect(faces.heading).toContain("Old Standard TT");
-      expect(faces.body).toContain("EB Garamond");
+      // And the page applies them by role: mono to the UI and the wordmark,
+      // the display face only to document names, the body face to the text.
+      expect(faces.body).toContain("Sometype Mono");
       expect(faces.wordmark).toContain("Sometype Mono");
+      expect(faces.heading).toContain(target.label === "home" ? "Sometype Mono" : "Old Standard TT");
 
-      // The live honeycomb is mounted, hidden from assistive tech, unfocusable.
+      // The live honeycomb is mounted inside the header band only: its box
+      // lies within the band's, hidden from assistive tech, unfocusable.
+      const header = await page.locator("header.site-header").boundingBox();
       const fondo = await page.evaluate(() => {
         const host = document.getElementById("fondo");
         const canvas = host?.querySelector("canvas");
+        const box = host?.getBoundingClientRect();
         return {
           host: host !== null,
           ariaHidden: host?.getAttribute("aria-hidden") ?? null,
@@ -75,6 +81,9 @@ for (const viewport of VIEWPORTS) {
           tabIndex: canvas?.tabIndex ?? null,
           pointerEvents: canvas === null || canvas === undefined ? null : getComputedStyle(canvas).pointerEvents,
           sized: canvas === null || canvas === undefined ? false : canvas.clientWidth > 0,
+          box: box === undefined
+            ? null
+            : { x: box.x, y: box.y, width: box.width, height: box.height },
         };
       });
       expect(fondo.host).toBe(true);
@@ -83,11 +92,22 @@ for (const viewport of VIEWPORTS) {
       expect(fondo.tabIndex).toBe(-1);
       expect(fondo.pointerEvents).toBe("none");
       expect(fondo.sized).toBe(true);
+      expect(header).not.toBeNull();
+      expect(fondo.box).not.toBeNull();
+      if (header !== null && fondo.box !== null) {
+        expect(fondo.box.x).toBeGreaterThanOrEqual(header.x - 1);
+        expect(fondo.box.y).toBeGreaterThanOrEqual(header.y - 1);
+        expect(fondo.box.x + fondo.box.width).toBeLessThanOrEqual(header.x + header.width + 1);
+        expect(fondo.box.y + fondo.box.height).toBeLessThanOrEqual(header.y + header.height + 1);
+      }
 
-      // The wordmark and the UniverLab colophon.
+      // The wordmark, the Publish/Source links and the search form in the band.
       const wordmark = page.locator("header .wordmark");
       await expect(wordmark).toHaveText("graphs");
       await expect(wordmark).toHaveAttribute("href", "https://univerlab.org/canopy/");
+      await expect(page.locator("header nav.site-nav a[href='/publish']")).toHaveText("Publish");
+      await expect(page.locator("header nav.site-nav a[href='https://github.com/UniverLab/canopy-web']")).toHaveText("Source");
+      await expect(page.locator("header form.search input#q")).toBeVisible();
       const colophon = page.locator("footer.look-colophon");
       await expect(colophon).toBeVisible();
       await expect(colophon).toContainText("Canopy graphs");
@@ -98,13 +118,27 @@ for (const viewport of VIEWPORTS) {
       await expect(headings).toHaveCount(1);
       await expect(headings).toHaveText(target.heading);
 
-      // The plate scrolls inside itself; the page never scrolls sideways.
-      if (target.label !== "home") {
+      // Listing pages render dense rows; document pages a plate beside a sheet.
+      if (target.label === "home") {
+        await expect(page.locator("ol.index > li.row")).toHaveCount(2);
+      } else {
         const plate = page.locator("figure.plate");
         await expect(plate).toHaveCount(1);
-        const overflow = await plate.evaluate((el) => getComputedStyle(el).overflowX);
-        expect(overflow).toBe("auto");
+        await expect(page.locator("dl.sheet")).toHaveCount(1);
+        // One orientation is visible, chosen by CSS alone: vertical under
+        // 640 px, horizontal above.
+        const horizontal = page.locator("figure.plate svg.plate-h");
+        const vertical = page.locator("figure.plate svg.plate-v");
+        if (viewport.width < 640) {
+          await expect(vertical).toBeVisible();
+          await expect(horizontal).toBeHidden();
+        } else {
+          await expect(horizontal).toBeVisible();
+          await expect(vertical).toBeHidden();
+        }
       }
+
+      // The page never scrolls sideways, at either reference size.
       const width = await page.evaluate(() => ({
         scroll: document.documentElement.scrollWidth,
         view: window.innerWidth,

@@ -19,6 +19,7 @@ import {
   documentDirectory,
   pathsFromTree,
   sourcesFromTree,
+  toDateOnly,
 } from "./documents.js";
 import { loadDocument } from "./documents.js";
 
@@ -51,6 +52,7 @@ interface RepoHit {
   repo: string;
   defaultBranch: string;
   stars: number | null;
+  updated: string | null;
 }
 
 function hitOf(value: unknown): RepoHit | null {
@@ -68,6 +70,7 @@ function hitOf(value: unknown): RepoHit | null {
     repo,
     defaultBranch: stringField(value, "default_branch").trim() || "HEAD",
     stars,
+    updated: toDateOnly(value["updated_at"]),
   };
 }
 
@@ -118,6 +121,8 @@ async function directoriesFallback(
           kind: kind as DocumentKind,
           slug: entry["name"],
           stars: null,
+          updated: null,
+          ref: branch,
         });
       }
     }
@@ -197,6 +202,8 @@ export async function searchCommunity(
     }
     for (const source of sources) {
       source.stars = hit.stars;
+      source.updated = hit.updated;
+      source.ref = hit.defaultBranch;
       const loaded = await loadDocument(github, source, log);
       if (loaded.kind === "doc") {
         entries.push(loaded.entry);

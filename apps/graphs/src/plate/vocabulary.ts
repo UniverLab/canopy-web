@@ -36,6 +36,54 @@ export const TYPE = {
   harnessDy: 8.9,
 };
 
+/**
+ * Harness accent colours by platform stem, copied from univerlab
+ * `src/views/experiments/Canopy.astro` (the hero morph's fallback accents):
+ * agents take their harness colour, everything else the Canopy teal.
+ */
+export const HARNESS_COLORS: Record<string, string> = {
+  claude: "#d97757",
+  opencode: "#5c9cf5",
+  codex: "#57c7c3",
+  gemini: "#c09ee4",
+  copilot: "#aa00aa",
+  kiro: "#9d7cf5",
+  mimo: "#fb8147",
+  qwen: "#615ced",
+  deepseek: "#4d6bfe",
+  muse: "#e7b04b",
+};
+
+/**
+ * The canonical harness stem of a platform or model string, or null when it
+ * names nothing known. Matching is case-insensitive: an exact stem wins,
+ * then a stem prefix (`claude-opus` rides `claude`, `mimocode` rides
+ * `mimo`), then a stem named anywhere inside. Anything else is unknown.
+ */
+export function harnessStem(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const text = value.trim().toLowerCase();
+  if (text === "") {
+    return null;
+  }
+  const stems = Object.keys(HARNESS_COLORS);
+  if (text in HARNESS_COLORS) {
+    return text;
+  }
+  const prefixed = stems.find((stem) => text.startsWith(stem));
+  if (prefixed !== undefined) {
+    return prefixed;
+  }
+  return stems.find((stem) => text.includes(stem)) ?? null;
+}
+
+/** The accent colour of a harness stem, or null when it is unknown. */
+export function harnessColor(stem: string | null): string | null {
+  return stem === null ? null : (HARNESS_COLORS[stem] ?? null);
+}
+
 export interface Pt {
   x: number;
   y: number;

@@ -13,6 +13,7 @@ import type { DocumentKind, JsonValue } from "../../../src/schema.js";
 import type { ApiError, GitHub } from "./github.js";
 import { isApiError } from "./github.js";
 import { decodeBase64, isArray, isNumber, isRecord, isString, parseJson, readJson, stringField } from "./json.js";
+import { harnessOf } from "./plate/document.js";
 import { isValidDocument } from "./validate.js";
 import { isOfficialRepo } from "./lib.js";
 
@@ -28,6 +29,12 @@ export interface Doc {
   repo: string;
   /** GitHub stars, or null when nobody told us. Never zero-filled. */
   stars: number | null;
+  /** Last updated, `YYYY-MM-DD`, or null when nobody told us. */
+  updated: string | null;
+  /** The distinct harness stems the document runs on, sorted, possibly empty. */
+  harnesses: string[];
+  /** The commit or branch the page was read from, or null when unknown. */
+  sourceRef: string | null;
   /** Install counts from the Analytics Engine, present only when configured. */
   downloads?: number;
 }
@@ -48,6 +55,10 @@ export interface DocumentSource {
   slug: string;
   /** Stars when the caller already knows them (a search hit, the repo call). */
   stars: number | null;
+  /** Last updated (`YYYY-MM-DD`) when the caller already knows it. */
+  updated?: string | null;
+  /** The git ref to read at: a branch, a commit, or "" for the default. */
+  ref?: string;
 }
 
 /** The document filename, by kind, following the publish convention. */
@@ -202,6 +213,49 @@ function nodeCountOf(kind: DocumentKind, document: JsonValue): number {
 }
 
 /**
+ * The distinct harness stems a validated document runs on, sorted: every
+ * node's config plus every ensemble member's platform/model. Unknown
+ * harnesses contribute nothing — the dots only show what the map knows.
+ */
+function harnessesOf(kind: DocumentKind, document: JsonValue): string[] {
+  if (!isRecord(document)) {
+    return [];
+  }
+  const found = new Set<string>();
+  if (kind === "node") {
+    const stem = harnessOf(document["config"]);
+    if (stem !== null) {
+      found.add(stem);
+    }
+    return [...found];
+  }
+  const nodes = document["nodes"];
+  if (isArray(nodes)) {
+    for (const node of nodes) {
+      const stem = isRecord(node) ? harnessOf(node["config"]) : null;
+      if (stem !== null) {
+        found.add(stem);
+      }
+    }
+  }
+  const ensembles = document["ensembles"];
+  if (isArray(ensembles)) {
+    for (const ensemble of ensembles) {
+      const members = isRecord(ensemble) ? ensemble["members"] : undefined;
+      if (isArray(members)) {
+        for (const member of members) {
+          const stem = harnessOf(member);
+          if (stem !== null) {
+            found.add(stem);
+          }
+        }
+      }
+    }
+  }
+  return [...found].sort();
+}
+
+/**
  * Load, validate and render one document. Returns `absent` for the ordinary
  * misses (no folder, no file, README only missing), a typed error when
  * GitHub itself is the problem (rate limit, upstream), and a note in the
@@ -217,8 +271,9 @@ export async function loadDocument(
   | ApiError
 > {
   const { owner, repo, kind, slug } = source;
+  const ref = source.ref ?? "";
   const jsonPath = `${source.directory}/${documentFile(kind)}`;
-  const documentText = await readText(github, owner, repo, jsonPath, "", log);
+  const documentText = await readText(github, owner, repo, jsonPath, ref, log);
   if (documentText.kind === "absent") {
     log(`documents: dropped ${owner}/${repo} ${jsonPath}: missing document file`);
     return { kind: "absent" };
@@ -233,7 +288,7 @@ export async function loadDocument(
   }
   const document = parsed.value;
   const readmePath = `${source.directory}/README.md`;
-  const readme = await readText(github, owner, repo, readmePath, "", log);
+  const readme = await readText(github, owner, repo, readmePath, ref, log);
   const readmeText = readme.kind === "text" ? readme.text : "";
   if (readme.kind === "absent") {
     log(`documents: ${owner}/${repo} ${jsonPath} listed without a README`);
@@ -251,6 +306,9 @@ export async function loadDocument(
         nodeCount: nodeCountOf(kind, document),
         repo: `${owner}/${repo}`,
         stars: source.stars,
+        updated: source.updated ?? null,
+        harnesses: harnessesOf(kind, document),
+        sourceRef: ref === "" ? null : ref,
       },
     },
   };
@@ -263,4 +321,26 @@ export function starsFromRepository(value: unknown): number | null {
     return isNumber(stars) ? stars : null;
   }
   return null;
+}
+
+/** A GitHub timestamp as the catalogue shows it: `YYYY-MM-DD`, or null. */
+export function toDateOnly(value: unknown): string | null {
+  if (!isString(value)) {
+    return null;
+  }
+  return /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : null;
+}
+
+/** Read `updated_at` from a `/repos/...` body as `YYYY-MM-DD`, null when absent. */
+export function updatedFromRepository(value: unknown): string | null {
+  return isRecord(value) ? toDateOnly(value["updated_at"]) : null;
+}
+
+/** Read `default_branch` from a `/repos/...` body, "" when absent. */
+export function branchFromRepository(value: unknown): string {
+  if (!isRecord(value)) {
+    return "";
+  }
+  const branch = value["default_branch"];
+  return isString(branch) ? branch.trim() : "";
 }

@@ -25,6 +25,12 @@ export const WORDMARK = "graphs";
 /** The Canopy page the wordmark links back to. */
 export const CANOPY_HREF = "https://univerlab.org/canopy/";
 
+/** The header's two links: Publish (its own page, its own spec) and Source. */
+export const PUBLISH_HREF = "/publish";
+export const PUBLISH_LABEL = "Publish";
+export const SOURCE_HREF = "https://github.com/UniverLab/canopy-web";
+export const SOURCE_LABEL = "Source";
+
 /** The search field's visible label. */
 export const SEARCH_LABEL = "Search graphs and nodes";
 
@@ -64,6 +70,7 @@ export const STAR_BUTTON = "Star on GitHub";
 /** Counts, shown only when present. */
 export const STARS_LABEL = "stars";
 export const DOWNLOADS_LABEL = "downloads";
+export const NODES_LABEL = "nodes";
 
 /** The install section and the two command prefixes. */
 export const INSTALL_HEADING = "Install";
@@ -105,8 +112,19 @@ export const COLOPHON_EXP = "EXP-001";
 export const COLOPHON_LINKS: Array<{ label: string; href: string }> = [
   { label: "Canopy", href: CANOPY_HREF },
   { label: "univerlab.org", href: "https://univerlab.org/" },
-  { label: "Source", href: "https://github.com/UniverLab/canopy-web" },
+  { label: SOURCE_LABEL, href: SOURCE_HREF },
 ];
+
+/** The datasheet's field labels, in sheet order. */
+export const SHEET_KIND = "Kind";
+export const SHEET_NAME = "Name";
+export const SHEET_SOURCE = "Source";
+export const SHEET_REF = "Ref";
+export const SHEET_STARS = "Stars";
+export const SHEET_NODES = "Nodes";
+export const SHEET_EDGES = "Edges";
+export const SHEET_ENSEMBLES = "Ensembles";
+export const SHEET_AGENTS = "Agent nodes";
 
 /** The calm 503: GitHub (or its rate limit) failed the data layer. */
 export const BUSY_HEADING = "GitHub is busy";
@@ -137,4 +155,19 @@ export function llmsLine(doc: Doc, ref: string): string {
 /** How a count reads on a document page: "12 stars". */
 export function countLine(label: string, count: number): string {
   return `${count} ${label}`;
+}
+
+/** How a graph's nodes read by kind: "agent 2 · check 1 · gate 2". */
+export function nodesByKindLine(counts: Array<{ kind: string; count: number }>): string {
+  return counts.map(({ kind, count }) => `${kind} ${count}`).join(" · ");
+}
+
+/** How a graph's edges read, with the fail-edge count: "5 edges · 1 fail". */
+export function edgesLine(total: number, fail: number): string {
+  return `${total} edges · ${fail} fail`;
+}
+
+/** How one ensemble reads: "reviewers (parallel, 2 members)". */
+export function ensembleLine(name: string, strategy: string, members: number): string {
+  return `${name} (${strategy}, ${members} members)`;
 }

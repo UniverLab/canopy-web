@@ -1,14 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * The catalogue's dress: the shared look kit of the Canopy page.
+ * The catalogue's dress: the shared look kit of the Canopy page, worn as a
+ * technical index instead of an editorial page.
  *
  * The kit (packages/look, copied to public/look by `npm run build:look`)
  * owns the tokens, the three self-hosted typefaces, the colophon and the
  * honeycomb background. This module only glues them to a server-rendered
  * string page: three stylesheet links, the page stylesheet over the kit's
- * variables, the hidden canvas host, the bootstrap for `fondo.js` and the
- * two inline scripts (copy buttons, background mount). No framework and no
- * build step of its own: what this module returns is what the page ships.
+ * variables, the honeycomb host inside the header band, the bootstrap for
+ * `fondo.js` and the two inline scripts (copy buttons, background mount).
+ * No framework and no build step of its own: what this module returns is
+ * what the page ships.
+ *
+ * Type roles: Sometype Mono is the UI face (labels, meta, buttons, tabs,
+ * rows, the sheet), Old Standard TT only names documents (row titles, page
+ * title), EB Garamond only sets README prose and descriptions.
  */
 import { COPY_ARIA, COPY_BUTTON, COPY_DONE } from "./copy.js";
 import { escapeHtml } from "./md.js";
@@ -28,19 +34,21 @@ export function lookLinks(): string {
 }
 
 /**
- * The honeycomb's host: a fixed canvas layer behind the whole page. It is
- * decoration, so it is hidden from assistive tech and from the tab order;
- * the canvas `fondo.js` appends inherits both.
+ * The honeycomb's host: it lives inside the header band and the background
+ * bundle fills it. It is decoration, so it is hidden from assistive tech
+ * and from the tab order; the canvas `fondo.js` appends inherits both.
  */
 export function fondoHost(): string {
   return `<div class="fondo" id="fondo" aria-hidden="true"></div>`;
 }
 
 /**
- * The page stylesheet, inline, over the kit's tokens. Mobile first: the
- * base rules are the 390px column and the one `min-width` query widens the
- * gutters on desktop. The plate figure scrolls inside itself so the page
- * never does.
+ * The page stylesheet, inline, over the kit's tokens. The register is a
+ * parts catalogue: dense mono rows under a header band, the honeycomb only
+ * behind the band, the body flat `--surface-bg`. Nothing is centred except
+ * the plate inside its figure. Breakpoints: 640 px (band height, page
+ * gutters, plate orientation), 900 px (index rows), 1024 px (datasheet
+ * columns).
  */
 export function lookCss(): string {
   return `
@@ -54,18 +62,41 @@ body {
   min-height: 100vh;
   background: var(--surface-bg);
   color: var(--surface-ink);
-  font-family: var(--font-body);
-  font-size: 1.0625rem;
-  line-height: 1.6;
+  font-family: var(--font-mono);
+  font-size: 0.9375rem;
+  line-height: 1.55;
   -webkit-text-size-adjust: 100%;
 }
 a { color: var(--teal); text-underline-offset: 0.15em; }
 a:hover { text-decoration-thickness: 2px; }
 :focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
-.fondo { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
-.look-shell { position: relative; z-index: 1; }
+.look-shell { min-height: 100vh; }
 
-.site-header { max-width: 46rem; margin: 0 auto; padding: 1.25rem 1.25rem 0; }
+.site-header {
+  position: relative;
+  height: 120px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--surface-line);
+}
+.fondo { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.band {
+  position: relative;
+  z-index: 1;
+  max-width: 1120px;
+  height: 100%;
+  margin: 0 auto;
+  padding: 0 1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.6rem;
+}
+.band-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
 .wordmark {
   display: inline-block;
   padding-bottom: 0.15rem;
@@ -77,19 +108,59 @@ a:hover { text-decoration-thickness: 2px; }
   text-decoration: none;
 }
 .wordmark:hover { border-bottom-color: var(--teal); }
-
-main.look-col { max-width: 46rem; margin: 0 auto; padding: 1.25rem 1.25rem 3.5rem; }
-
-h1, h2, h3 {
-  font-family: var(--font-display);
-  font-weight: 400;
-  line-height: 1.2;
-  color: var(--ink-hi);
+.site-nav {
+  display: flex;
+  gap: 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
 }
-h1 { margin: 0 0 0.75rem; font-size: clamp(1.9rem, 6vw, 2.6rem); }
-h2 { margin: 2rem 0 0.65rem; font-size: 1.45rem; }
-h3 {
-  margin: 1.5rem 0 0.5rem;
+.site-nav a { color: var(--surface-ink-dim); text-decoration: none; }
+.site-nav a:hover { color: var(--surface-ink); text-decoration: underline; text-decoration-color: var(--teal); }
+
+.search { display: flex; gap: 0.5rem; margin: 0; }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.search input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  background: var(--bg-deep);
+  color: var(--surface-ink);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+}
+.search button {
+  flex: none;
+  padding: 0.55rem 1rem;
+  background: transparent;
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  color: var(--surface-ink);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.search button:hover { border-color: var(--teal); }
+
+main.look-col { max-width: 1120px; margin: 0 auto; padding: 1.5rem 1rem 3.5rem; }
+
+h1, h2, h3 { font-weight: 400; line-height: 1.25; color: var(--ink-hi); }
+h1 { margin: 0 0 1rem; font-family: var(--font-mono); font-size: 1.05rem; }
+.index-title { font-family: var(--font-mono); font-size: 1.05rem; margin: 0 0 1rem; }
+.doc-title { font-family: var(--font-display); font-size: clamp(1.7rem, 5vw, 2.3rem); margin: 0 0 0.5rem; }
+.kicker {
+  margin: 0;
   font-family: var(--font-mono);
   font-size: 0.78rem;
   font-weight: 500;
@@ -97,30 +168,11 @@ h3 {
   text-transform: uppercase;
   color: var(--surface-ink-dim);
 }
+h2.kicker { margin: 2rem 0 0.75rem; }
+h3.kicker { margin: 1.25rem 0 0.5rem; }
 p { margin: 0 0 1rem; }
-.description { margin: 0 0 1.25rem; font-size: 1.15rem; color: var(--surface-ink-dim); }
-.hero-title { max-width: 22ch; }
+.description { margin: 0 0 1rem; font-family: var(--font-body); font-size: 1.1rem; color: var(--surface-ink-dim); }
 
-.search { display: grid; gap: 0.6rem; margin: 0 0 1.5rem; }
-.search label {
-  display: block;
-  margin-bottom: 0.35rem;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--surface-ink-dim);
-}
-.search input {
-  width: 100%;
-  padding: 0.6rem 0.7rem;
-  background: var(--bg-deep);
-  color: var(--surface-ink);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-ctl);
-  font-family: var(--font-body);
-  font-size: 1rem;
-}
 .tabs {
   display: flex;
   flex-wrap: wrap;
@@ -139,29 +191,66 @@ p { margin: 0 0 1rem; }
 }
 .tabs a[aria-current="page"] { border-bottom-color: var(--teal); color: var(--surface-ink); }
 
-.doc-list { display: grid; gap: 0.75rem; list-style: none; padding: 0; margin: 0; }
-.doc-list li {
-  padding: 1rem 1.1rem;
-  background: var(--surface-bg-raise);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-card);
+ol.index {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  border-top: 1px solid var(--surface-line);
 }
-.doc-list .doc-name {
+li.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--surface-line);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+.row-name {
   font-family: var(--font-display);
-  font-size: 1.2rem;
+  font-size: 1.15rem;
   color: var(--surface-ink);
   text-decoration: none;
 }
-.doc-list .doc-name:hover { text-decoration: underline; text-decoration-color: var(--teal); }
-.doc-list .doc-description { display: block; margin-top: 0.25rem; color: var(--surface-ink-dim); }
-.doc-stats {
-  margin-left: 0.5rem;
+.row-name:hover { text-decoration: underline; text-decoration-color: var(--teal); }
+.kind {
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--surface-ink-dim);
+}
+.row-meta { color: var(--surface-ink-dim); white-space: nowrap; }
+.dots { display: inline-flex; gap: 0.3rem; align-self: center; }
+.dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--nc, var(--canopy));
+}
+.row-install { display: inline-flex; gap: 0.5rem; align-items: center; margin-left: auto; min-width: 0; }
+.row-install code {
+  padding: 0.35rem 0.6rem;
+  background: var(--bg-deep);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  color: var(--surface-ink);
   font-family: var(--font-mono);
   font-size: 0.78rem;
-  color: var(--surface-ink-faint);
+  line-height: 1.5;
   white-space: nowrap;
+  overflow-x: auto;
 }
-.meta { font-family: var(--font-mono); font-size: 0.85rem; color: var(--surface-ink-dim); }
+.row-desc {
+  flex-basis: 100%;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  color: var(--surface-ink-dim);
+}
 
 .button {
   display: inline-block;
@@ -177,36 +266,42 @@ p { margin: 0 0 1rem; }
   cursor: pointer;
 }
 .button:hover { filter: brightness(1.05); }
-
-.install { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: stretch; margin: 0 0 1.25rem; }
-.install code {
-  flex: 1 1 12rem;
-  min-width: 0;
-  padding: 0.55rem 0.7rem;
-  background: var(--surface-bg-raise);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-ctl);
-  color: var(--surface-ink);
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-  line-height: 1.5;
-  white-space: nowrap;
-  overflow-x: auto;
-}
 .copy {
-  padding: 0.5rem 0.85rem;
+  flex: none;
+  padding: 0.35rem 0.7rem;
   background: transparent;
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-ctl);
   color: var(--surface-ink);
   font-family: var(--font-mono);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   cursor: pointer;
 }
 .copy:hover { border-color: var(--teal); }
 
+.doc-cols { display: flex; flex-direction: column; gap: 1.5rem; margin: 1rem 0 1.5rem; }
+dl.sheet { margin: 0; font-family: var(--font-mono); font-size: 0.85rem; }
+.sheet .field {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--surface-line);
+}
+.sheet .field:first-child { border-top: 1px solid var(--surface-line); }
+.sheet dt {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--surface-ink-dim);
+}
+.sheet dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.sheet .row-install { margin-left: 0; width: 100%; }
+.sheet .row-install code { flex: 1; min-width: 0; }
+
 figure.plate {
-  margin: 1rem 0 1.5rem;
+  margin: 0 0 1.5rem;
   padding: 0.75rem;
   max-width: 100%;
   overflow-x: auto;
@@ -214,10 +309,21 @@ figure.plate {
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-card);
 }
-.plate svg { display: block; height: auto; max-width: none; }
+.doc-cols figure.plate { margin: 0; }
+.plate svg { display: block; height: auto; margin: 0 auto; }
+.plate .plate-v { display: none; }
 
+.readme { font-family: var(--font-body); font-size: 1.05rem; line-height: 1.6; }
+.readme h1, .readme h2, .readme h3 {
+  font-family: var(--font-body);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink-hi);
+}
 .readme h1 { font-size: 1.6rem; }
-.readme h2 { font-size: 1.25rem; }
+.readme h2 { font-size: 1.3rem; }
+.readme h3 { font-size: 1.1rem; }
 .readme pre {
   padding: 0.75rem;
   background: var(--bg-deep);
@@ -229,13 +335,26 @@ figure.plate {
 }
 .readme code { font-family: var(--font-mono); font-size: 0.9em; }
 .readme img { max-width: 100%; height: auto; }
-.agent-nodes { font-family: var(--font-mono); font-size: 0.9rem; color: var(--surface-ink-dim); }
 .busy { padding: 0.25rem 0 0.25rem 1rem; border-left: 3px solid var(--teal); }
 
-@media (min-width: 48rem) {
-  .site-header { padding: 2rem 2rem 0; }
-  main.look-col { padding: 2rem 2rem 4rem; }
-  .search { grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
+@media (max-width: 639px) {
+  .plate .plate-h { display: none; }
+  .plate .plate-v { display: block; }
+}
+@media (max-width: 899px) {
+  .row-desc { order: 1; }
+  .row-install { order: 2; flex-basis: 100%; margin-left: 0; }
+  .row-install code { flex: 1; }
+}
+@media (min-width: 640px) {
+  .site-header { height: 160px; }
+  .band { padding: 0 1.5rem; }
+  main.look-col { padding: 2rem 1.5rem 4rem; }
+}
+@media (min-width: 1024px) {
+  .doc-cols { flex-direction: row; align-items: flex-start; }
+  .doc-cols figure.plate { flex: 1; min-width: 0; }
+  dl.sheet { flex: 0 0 320px; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
@@ -245,9 +364,9 @@ figure.plate {
 
 /**
  * The background bootstrap, inline after `/look/fondo.js`: it mounts the
- * honeycomb on the hidden host with the kit's asset base. It waits for
- * DOMContentLoaded when the deferred bundle has not run yet, so the order
- * of the two script tags does not matter.
+ * honeycomb on the host inside the header band with the kit's asset base.
+ * It waits for DOMContentLoaded when the deferred bundle has not run yet,
+ * so the order of the two script tags does not matter.
  */
 export function fondoScript(): string {
   return (

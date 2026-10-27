@@ -22,18 +22,41 @@ body {
   min-height: 100vh;
   background: var(--surface-bg);
   color: var(--surface-ink);
-  font-family: var(--font-body);
-  font-size: 1.0625rem;
-  line-height: 1.6;
+  font-family: var(--font-mono);
+  font-size: 0.9375rem;
+  line-height: 1.55;
   -webkit-text-size-adjust: 100%;
 }
 a { color: var(--teal); text-underline-offset: 0.15em; }
 a:hover { text-decoration-thickness: 2px; }
 :focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
-.fondo { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
-.look-shell { position: relative; z-index: 1; }
+.look-shell { min-height: 100vh; }
 
-.site-header { max-width: 46rem; margin: 0 auto; padding: 1.25rem 1.25rem 0; }
+.site-header {
+  position: relative;
+  height: 120px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--surface-line);
+}
+.fondo { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.band {
+  position: relative;
+  z-index: 1;
+  max-width: 1120px;
+  height: 100%;
+  margin: 0 auto;
+  padding: 0 1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.6rem;
+}
+.band-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
 .wordmark {
   display: inline-block;
   padding-bottom: 0.15rem;
@@ -45,19 +68,59 @@ a:hover { text-decoration-thickness: 2px; }
   text-decoration: none;
 }
 .wordmark:hover { border-bottom-color: var(--teal); }
-
-main.look-col { max-width: 46rem; margin: 0 auto; padding: 1.25rem 1.25rem 3.5rem; }
-
-h1, h2, h3 {
-  font-family: var(--font-display);
-  font-weight: 400;
-  line-height: 1.2;
-  color: var(--ink-hi);
+.site-nav {
+  display: flex;
+  gap: 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
 }
-h1 { margin: 0 0 0.75rem; font-size: clamp(1.9rem, 6vw, 2.6rem); }
-h2 { margin: 2rem 0 0.65rem; font-size: 1.45rem; }
-h3 {
-  margin: 1.5rem 0 0.5rem;
+.site-nav a { color: var(--surface-ink-dim); text-decoration: none; }
+.site-nav a:hover { color: var(--surface-ink); text-decoration: underline; text-decoration-color: var(--teal); }
+
+.search { display: flex; gap: 0.5rem; margin: 0; }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.search input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  background: var(--bg-deep);
+  color: var(--surface-ink);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+}
+.search button {
+  flex: none;
+  padding: 0.55rem 1rem;
+  background: transparent;
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  color: var(--surface-ink);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.search button:hover { border-color: var(--teal); }
+
+main.look-col { max-width: 1120px; margin: 0 auto; padding: 1.5rem 1rem 3.5rem; }
+
+h1, h2, h3 { font-weight: 400; line-height: 1.25; color: var(--ink-hi); }
+h1 { margin: 0 0 1rem; font-family: var(--font-mono); font-size: 1.05rem; }
+.index-title { font-family: var(--font-mono); font-size: 1.05rem; margin: 0 0 1rem; }
+.doc-title { font-family: var(--font-display); font-size: clamp(1.7rem, 5vw, 2.3rem); margin: 0 0 0.5rem; }
+.kicker {
+  margin: 0;
   font-family: var(--font-mono);
   font-size: 0.78rem;
   font-weight: 500;
@@ -65,30 +128,11 @@ h3 {
   text-transform: uppercase;
   color: var(--surface-ink-dim);
 }
+h2.kicker { margin: 2rem 0 0.75rem; }
+h3.kicker { margin: 1.25rem 0 0.5rem; }
 p { margin: 0 0 1rem; }
-.description { margin: 0 0 1.25rem; font-size: 1.15rem; color: var(--surface-ink-dim); }
-.hero-title { max-width: 22ch; }
+.description { margin: 0 0 1rem; font-family: var(--font-body); font-size: 1.1rem; color: var(--surface-ink-dim); }
 
-.search { display: grid; gap: 0.6rem; margin: 0 0 1.5rem; }
-.search label {
-  display: block;
-  margin-bottom: 0.35rem;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--surface-ink-dim);
-}
-.search input {
-  width: 100%;
-  padding: 0.6rem 0.7rem;
-  background: var(--bg-deep);
-  color: var(--surface-ink);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-ctl);
-  font-family: var(--font-body);
-  font-size: 1rem;
-}
 .tabs {
   display: flex;
   flex-wrap: wrap;
@@ -107,29 +151,66 @@ p { margin: 0 0 1rem; }
 }
 .tabs a[aria-current="page"] { border-bottom-color: var(--teal); color: var(--surface-ink); }
 
-.doc-list { display: grid; gap: 0.75rem; list-style: none; padding: 0; margin: 0; }
-.doc-list li {
-  padding: 1rem 1.1rem;
-  background: var(--surface-bg-raise);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-card);
+ol.index {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  border-top: 1px solid var(--surface-line);
 }
-.doc-list .doc-name {
+li.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--surface-line);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+.row-name {
   font-family: var(--font-display);
-  font-size: 1.2rem;
+  font-size: 1.15rem;
   color: var(--surface-ink);
   text-decoration: none;
 }
-.doc-list .doc-name:hover { text-decoration: underline; text-decoration-color: var(--teal); }
-.doc-list .doc-description { display: block; margin-top: 0.25rem; color: var(--surface-ink-dim); }
-.doc-stats {
-  margin-left: 0.5rem;
+.row-name:hover { text-decoration: underline; text-decoration-color: var(--teal); }
+.kind {
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--surface-ink-dim);
+}
+.row-meta { color: var(--surface-ink-dim); white-space: nowrap; }
+.dots { display: inline-flex; gap: 0.3rem; align-self: center; }
+.dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--nc, var(--canopy));
+}
+.row-install { display: inline-flex; gap: 0.5rem; align-items: center; margin-left: auto; min-width: 0; }
+.row-install code {
+  padding: 0.35rem 0.6rem;
+  background: var(--bg-deep);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  color: var(--surface-ink);
   font-family: var(--font-mono);
   font-size: 0.78rem;
-  color: var(--surface-ink-faint);
+  line-height: 1.5;
   white-space: nowrap;
+  overflow-x: auto;
 }
-.meta { font-family: var(--font-mono); font-size: 0.85rem; color: var(--surface-ink-dim); }
+.row-desc {
+  flex-basis: 100%;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  color: var(--surface-ink-dim);
+}
 
 .button {
   display: inline-block;
@@ -145,36 +226,42 @@ p { margin: 0 0 1rem; }
   cursor: pointer;
 }
 .button:hover { filter: brightness(1.05); }
-
-.install { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: stretch; margin: 0 0 1.25rem; }
-.install code {
-  flex: 1 1 12rem;
-  min-width: 0;
-  padding: 0.55rem 0.7rem;
-  background: var(--surface-bg-raise);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-ctl);
-  color: var(--surface-ink);
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-  line-height: 1.5;
-  white-space: nowrap;
-  overflow-x: auto;
-}
 .copy {
-  padding: 0.5rem 0.85rem;
+  flex: none;
+  padding: 0.35rem 0.7rem;
   background: transparent;
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-ctl);
   color: var(--surface-ink);
   font-family: var(--font-mono);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   cursor: pointer;
 }
 .copy:hover { border-color: var(--teal); }
 
+.doc-cols { display: flex; flex-direction: column; gap: 1.5rem; margin: 1rem 0 1.5rem; }
+dl.sheet { margin: 0; font-family: var(--font-mono); font-size: 0.85rem; }
+.sheet .field {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--surface-line);
+}
+.sheet .field:first-child { border-top: 1px solid var(--surface-line); }
+.sheet dt {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--surface-ink-dim);
+}
+.sheet dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.sheet .row-install { margin-left: 0; width: 100%; }
+.sheet .row-install code { flex: 1; min-width: 0; }
+
 figure.plate {
-  margin: 1rem 0 1.5rem;
+  margin: 0 0 1.5rem;
   padding: 0.75rem;
   max-width: 100%;
   overflow-x: auto;
@@ -182,10 +269,21 @@ figure.plate {
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-card);
 }
-.plate svg { display: block; height: auto; max-width: none; }
+.doc-cols figure.plate { margin: 0; }
+.plate svg { display: block; height: auto; margin: 0 auto; }
+.plate .plate-v { display: none; }
 
+.readme { font-family: var(--font-body); font-size: 1.05rem; line-height: 1.6; }
+.readme h1, .readme h2, .readme h3 {
+  font-family: var(--font-body);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink-hi);
+}
 .readme h1 { font-size: 1.6rem; }
-.readme h2 { font-size: 1.25rem; }
+.readme h2 { font-size: 1.3rem; }
+.readme h3 { font-size: 1.1rem; }
 .readme pre {
   padding: 0.75rem;
   background: var(--bg-deep);
@@ -197,13 +295,26 @@ figure.plate {
 }
 .readme code { font-family: var(--font-mono); font-size: 0.9em; }
 .readme img { max-width: 100%; height: auto; }
-.agent-nodes { font-family: var(--font-mono); font-size: 0.9rem; color: var(--surface-ink-dim); }
 .busy { padding: 0.25rem 0 0.25rem 1rem; border-left: 3px solid var(--teal); }
 
-@media (min-width: 48rem) {
-  .site-header { padding: 2rem 2rem 0; }
-  main.look-col { padding: 2rem 2rem 4rem; }
-  .search { grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
+@media (max-width: 639px) {
+  .plate .plate-h { display: none; }
+  .plate .plate-v { display: block; }
+}
+@media (max-width: 899px) {
+  .row-desc { order: 1; }
+  .row-install { order: 2; flex-basis: 100%; margin-left: 0; }
+  .row-install code { flex: 1; }
+}
+@media (min-width: 640px) {
+  .site-header { height: 160px; }
+  .band { padding: 0 1.5rem; }
+  main.look-col { padding: 2rem 1.5rem 4rem; }
+}
+@media (min-width: 1024px) {
+  .doc-cols { flex-direction: row; align-items: flex-start; }
+  .doc-cols figure.plate { flex: 1; min-width: 0; }
+  dl.sheet { flex: 0 0 320px; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
@@ -211,20 +322,28 @@ figure.plate {
 </style>
 </head>
 <body>
-<div class="fondo" id="fondo" aria-hidden="true"></div>
 <div class="look-shell">
 <header class="site-header">
+<div class="fondo" id="fondo" aria-hidden="true"></div>
+<div class="band">
+<div class="band-top">
 <a class="wordmark" href="https://univerlab.org/canopy/">graphs</a>
+<nav class="site-nav" aria-label="Catalogue">
+<a href="/publish">Publish</a>
+<a href="https://github.com/UniverLab/canopy-web">Source</a>
+</nav>
+</div>
+<form class="search" action="/search" method="get" role="search"><label class="sr-only" for="q">Search graphs and nodes</label><input id="q" name="q" type="search" value="" placeholder="hello-graph" autocomplete="off"><button type="submit">Search</button></form>
+</div>
 </header>
 <main class="look-col">
-<h1 class="hero-title">A catalogue of Canopy graphs and nodes.</h1>
-<form class="search" action="/search" method="get"><div><label for="q">Search graphs and nodes</label><input id="q" name="q" type="search" value="" placeholder="hello-graph"></div><button type="submit" class="button">Search</button></form>
+<h1 class="index-title">A catalogue of Canopy graphs and nodes.</h1>
 <nav class="tabs"><a href="/search?sort=top">Top</a><a href="/search?sort=new">New</a></nav>
-<h2>Official</h2>
-<h3>Graphs</h3>
-<ul class="doc-list"><li><a class="doc-name" href="/g/hello-graph">hello-graph</a> <span class="doc-stats">7 stars</span><span class="doc-description">Five nodes with one fail edge, for the drawing test.</span></li></ul>
-<h3>Nodes</h3>
-<ul class="doc-list"><li><a class="doc-name" href="/n/hello-node">hello-node</a> <span class="doc-stats">7 stars</span><span class="doc-description">Example catalogue node: drafts an implementation plan.</span></li></ul>
+<h2 class="kicker">Official</h2>
+<h3 class="kicker">Graphs</h3>
+<ol class="index"><li class="row"><a class="row-name" href="/g/hello-graph">hello-graph</a><span class="kind">graph</span><span class="row-meta">5 nodes</span><span class="row-meta">7 stars</span><span class="row-install"><code>canopy graph install hello-graph</code><button type="button" class="copy" data-copy="canopy graph install hello-graph" aria-label="Copy the install command to the clipboard">Copy</button></span><span class="row-desc">Five nodes with one fail edge, for the drawing test.</span></li></ol>
+<h3 class="kicker">Nodes</h3>
+<ol class="index"><li class="row"><a class="row-name" href="/n/hello-node">hello-node</a><span class="kind">node</span><span class="row-meta">7 stars</span><span class="row-install"><code>canopy node install hello-node</code><button type="button" class="copy" data-copy="canopy node install hello-node" aria-label="Copy the install command to the clipboard">Copy</button></span><span class="row-desc">Example catalogue node: drafts an implementation plan.</span></li></ol>
 </main>
 <footer class="look-colophon">
   <picture class="colophon-band" aria-hidden="true">
@@ -284,18 +403,41 @@ body {
   min-height: 100vh;
   background: var(--surface-bg);
   color: var(--surface-ink);
-  font-family: var(--font-body);
-  font-size: 1.0625rem;
-  line-height: 1.6;
+  font-family: var(--font-mono);
+  font-size: 0.9375rem;
+  line-height: 1.55;
   -webkit-text-size-adjust: 100%;
 }
 a { color: var(--teal); text-underline-offset: 0.15em; }
 a:hover { text-decoration-thickness: 2px; }
 :focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
-.fondo { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
-.look-shell { position: relative; z-index: 1; }
+.look-shell { min-height: 100vh; }
 
-.site-header { max-width: 46rem; margin: 0 auto; padding: 1.25rem 1.25rem 0; }
+.site-header {
+  position: relative;
+  height: 120px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--surface-line);
+}
+.fondo { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.band {
+  position: relative;
+  z-index: 1;
+  max-width: 1120px;
+  height: 100%;
+  margin: 0 auto;
+  padding: 0 1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.6rem;
+}
+.band-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
 .wordmark {
   display: inline-block;
   padding-bottom: 0.15rem;
@@ -307,19 +449,59 @@ a:hover { text-decoration-thickness: 2px; }
   text-decoration: none;
 }
 .wordmark:hover { border-bottom-color: var(--teal); }
-
-main.look-col { max-width: 46rem; margin: 0 auto; padding: 1.25rem 1.25rem 3.5rem; }
-
-h1, h2, h3 {
-  font-family: var(--font-display);
-  font-weight: 400;
-  line-height: 1.2;
-  color: var(--ink-hi);
+.site-nav {
+  display: flex;
+  gap: 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
 }
-h1 { margin: 0 0 0.75rem; font-size: clamp(1.9rem, 6vw, 2.6rem); }
-h2 { margin: 2rem 0 0.65rem; font-size: 1.45rem; }
-h3 {
-  margin: 1.5rem 0 0.5rem;
+.site-nav a { color: var(--surface-ink-dim); text-decoration: none; }
+.site-nav a:hover { color: var(--surface-ink); text-decoration: underline; text-decoration-color: var(--teal); }
+
+.search { display: flex; gap: 0.5rem; margin: 0; }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.search input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  background: var(--bg-deep);
+  color: var(--surface-ink);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+}
+.search button {
+  flex: none;
+  padding: 0.55rem 1rem;
+  background: transparent;
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  color: var(--surface-ink);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.search button:hover { border-color: var(--teal); }
+
+main.look-col { max-width: 1120px; margin: 0 auto; padding: 1.5rem 1rem 3.5rem; }
+
+h1, h2, h3 { font-weight: 400; line-height: 1.25; color: var(--ink-hi); }
+h1 { margin: 0 0 1rem; font-family: var(--font-mono); font-size: 1.05rem; }
+.index-title { font-family: var(--font-mono); font-size: 1.05rem; margin: 0 0 1rem; }
+.doc-title { font-family: var(--font-display); font-size: clamp(1.7rem, 5vw, 2.3rem); margin: 0 0 0.5rem; }
+.kicker {
+  margin: 0;
   font-family: var(--font-mono);
   font-size: 0.78rem;
   font-weight: 500;
@@ -327,30 +509,11 @@ h3 {
   text-transform: uppercase;
   color: var(--surface-ink-dim);
 }
+h2.kicker { margin: 2rem 0 0.75rem; }
+h3.kicker { margin: 1.25rem 0 0.5rem; }
 p { margin: 0 0 1rem; }
-.description { margin: 0 0 1.25rem; font-size: 1.15rem; color: var(--surface-ink-dim); }
-.hero-title { max-width: 22ch; }
+.description { margin: 0 0 1rem; font-family: var(--font-body); font-size: 1.1rem; color: var(--surface-ink-dim); }
 
-.search { display: grid; gap: 0.6rem; margin: 0 0 1.5rem; }
-.search label {
-  display: block;
-  margin-bottom: 0.35rem;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--surface-ink-dim);
-}
-.search input {
-  width: 100%;
-  padding: 0.6rem 0.7rem;
-  background: var(--bg-deep);
-  color: var(--surface-ink);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-ctl);
-  font-family: var(--font-body);
-  font-size: 1rem;
-}
 .tabs {
   display: flex;
   flex-wrap: wrap;
@@ -369,29 +532,66 @@ p { margin: 0 0 1rem; }
 }
 .tabs a[aria-current="page"] { border-bottom-color: var(--teal); color: var(--surface-ink); }
 
-.doc-list { display: grid; gap: 0.75rem; list-style: none; padding: 0; margin: 0; }
-.doc-list li {
-  padding: 1rem 1.1rem;
-  background: var(--surface-bg-raise);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-card);
+ol.index {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  border-top: 1px solid var(--surface-line);
 }
-.doc-list .doc-name {
+li.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--surface-line);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+.row-name {
   font-family: var(--font-display);
-  font-size: 1.2rem;
+  font-size: 1.15rem;
   color: var(--surface-ink);
   text-decoration: none;
 }
-.doc-list .doc-name:hover { text-decoration: underline; text-decoration-color: var(--teal); }
-.doc-list .doc-description { display: block; margin-top: 0.25rem; color: var(--surface-ink-dim); }
-.doc-stats {
-  margin-left: 0.5rem;
+.row-name:hover { text-decoration: underline; text-decoration-color: var(--teal); }
+.kind {
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--surface-ink-dim);
+}
+.row-meta { color: var(--surface-ink-dim); white-space: nowrap; }
+.dots { display: inline-flex; gap: 0.3rem; align-self: center; }
+.dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--nc, var(--canopy));
+}
+.row-install { display: inline-flex; gap: 0.5rem; align-items: center; margin-left: auto; min-width: 0; }
+.row-install code {
+  padding: 0.35rem 0.6rem;
+  background: var(--bg-deep);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  color: var(--surface-ink);
   font-family: var(--font-mono);
   font-size: 0.78rem;
-  color: var(--surface-ink-faint);
+  line-height: 1.5;
   white-space: nowrap;
+  overflow-x: auto;
 }
-.meta { font-family: var(--font-mono); font-size: 0.85rem; color: var(--surface-ink-dim); }
+.row-desc {
+  flex-basis: 100%;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  color: var(--surface-ink-dim);
+}
 
 .button {
   display: inline-block;
@@ -407,36 +607,42 @@ p { margin: 0 0 1rem; }
   cursor: pointer;
 }
 .button:hover { filter: brightness(1.05); }
-
-.install { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: stretch; margin: 0 0 1.25rem; }
-.install code {
-  flex: 1 1 12rem;
-  min-width: 0;
-  padding: 0.55rem 0.7rem;
-  background: var(--surface-bg-raise);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-ctl);
-  color: var(--surface-ink);
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-  line-height: 1.5;
-  white-space: nowrap;
-  overflow-x: auto;
-}
 .copy {
-  padding: 0.5rem 0.85rem;
+  flex: none;
+  padding: 0.35rem 0.7rem;
   background: transparent;
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-ctl);
   color: var(--surface-ink);
   font-family: var(--font-mono);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   cursor: pointer;
 }
 .copy:hover { border-color: var(--teal); }
 
+.doc-cols { display: flex; flex-direction: column; gap: 1.5rem; margin: 1rem 0 1.5rem; }
+dl.sheet { margin: 0; font-family: var(--font-mono); font-size: 0.85rem; }
+.sheet .field {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--surface-line);
+}
+.sheet .field:first-child { border-top: 1px solid var(--surface-line); }
+.sheet dt {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--surface-ink-dim);
+}
+.sheet dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.sheet .row-install { margin-left: 0; width: 100%; }
+.sheet .row-install code { flex: 1; min-width: 0; }
+
 figure.plate {
-  margin: 1rem 0 1.5rem;
+  margin: 0 0 1.5rem;
   padding: 0.75rem;
   max-width: 100%;
   overflow-x: auto;
@@ -444,10 +650,21 @@ figure.plate {
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-card);
 }
-.plate svg { display: block; height: auto; max-width: none; }
+.doc-cols figure.plate { margin: 0; }
+.plate svg { display: block; height: auto; margin: 0 auto; }
+.plate .plate-v { display: none; }
 
+.readme { font-family: var(--font-body); font-size: 1.05rem; line-height: 1.6; }
+.readme h1, .readme h2, .readme h3 {
+  font-family: var(--font-body);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink-hi);
+}
 .readme h1 { font-size: 1.6rem; }
-.readme h2 { font-size: 1.25rem; }
+.readme h2 { font-size: 1.3rem; }
+.readme h3 { font-size: 1.1rem; }
 .readme pre {
   padding: 0.75rem;
   background: var(--bg-deep);
@@ -459,13 +676,26 @@ figure.plate {
 }
 .readme code { font-family: var(--font-mono); font-size: 0.9em; }
 .readme img { max-width: 100%; height: auto; }
-.agent-nodes { font-family: var(--font-mono); font-size: 0.9rem; color: var(--surface-ink-dim); }
 .busy { padding: 0.25rem 0 0.25rem 1rem; border-left: 3px solid var(--teal); }
 
-@media (min-width: 48rem) {
-  .site-header { padding: 2rem 2rem 0; }
-  main.look-col { padding: 2rem 2rem 4rem; }
-  .search { grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
+@media (max-width: 639px) {
+  .plate .plate-h { display: none; }
+  .plate .plate-v { display: block; }
+}
+@media (max-width: 899px) {
+  .row-desc { order: 1; }
+  .row-install { order: 2; flex-basis: 100%; margin-left: 0; }
+  .row-install code { flex: 1; }
+}
+@media (min-width: 640px) {
+  .site-header { height: 160px; }
+  .band { padding: 0 1.5rem; }
+  main.look-col { padding: 2rem 1.5rem 4rem; }
+}
+@media (min-width: 1024px) {
+  .doc-cols { flex-direction: row; align-items: flex-start; }
+  .doc-cols figure.plate { flex: 1; min-width: 0; }
+  dl.sheet { flex: 0 0 320px; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
@@ -473,22 +703,29 @@ figure.plate {
 </style>
 </head>
 <body>
-<div class="fondo" id="fondo" aria-hidden="true"></div>
 <div class="look-shell">
 <header class="site-header">
+<div class="fondo" id="fondo" aria-hidden="true"></div>
+<div class="band">
+<div class="band-top">
 <a class="wordmark" href="https://univerlab.org/canopy/">graphs</a>
+<nav class="site-nav" aria-label="Catalogue">
+<a href="/publish">Publish</a>
+<a href="https://github.com/UniverLab/canopy-web">Source</a>
+</nav>
+</div>
+<form class="search" action="/search" method="get" role="search"><label class="sr-only" for="q">Search graphs and nodes</label><input id="q" name="q" type="search" value="" placeholder="hello-graph" autocomplete="off"><button type="submit">Search</button></form>
+</div>
 </header>
 <main class="look-col">
-<h1>hello-graph</h1>
+<h1 class="doc-title">hello-graph</h1>
 <p class="description">Minimal example graph: implement, check, gate, and a router with two routes.</p>
-<p class="meta"><a href="https://github.com/acme/things">acme/things</a></p>
 <p><a class="button" href="https://github.com/acme/things">Star on GitHub</a></p>
-<h2>Install</h2>
-<div class="install"><code>canopy graph install acme/things/flow</code><button type="button" class="copy" data-copy="canopy graph install acme/things/flow" aria-label="Copy the install command to the clipboard">Copy</button></div>
-<h2>Drawing</h2><figure class="plate"><svg class="plate-svg" viewBox="0 0 142.57 74.55" width="713" height="373" role="img" xmlns="http://www.w3.org/2000/svg"><title>hello-graph</title><desc>Nodes in order: implementer, triage, tests, gate. Ensembles: reviewers.</desc><style>.plate-svg text{font-family:var(--font-mono,"Sometype Mono","Courier New",monospace)}.plate-svg .edge{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.45;opacity:.85}.plate-svg .edge.fail{stroke:#ff6b6b;stroke-dasharray:1.4 1.1;opacity:.7}.plate-svg .edge.error{stroke:currentColor;stroke-width:.3;stroke-dasharray:.4 .8;opacity:.45}.plate-svg .edge.order{stroke:currentColor;stroke-width:.3;stroke-dasharray:.5 1.1;stroke-linecap:round;opacity:.9}.plate-svg .node .shape{fill:var(--bg,#fff);stroke:currentColor;stroke-width:.45}.plate-svg .shape-agent .shape{stroke:var(--canopy,#00a9a0)}.plate-svg .shape-commit .shape{fill:var(--canopy,#00a9a0);stroke:var(--canopy,#00a9a0)}.plate-svg .label{font-size:2.3px;fill:currentColor;text-anchor:middle}.plate-svg .group-box{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.3;stroke-dasharray:1.2 .9;opacity:.8}.plate-svg .group-title,.plate-svg .group-subtitle{font-size:1.9px;fill:var(--canopy,#00a9a0);letter-spacing:.14em;text-transform:uppercase}.plate-svg .member-shape{fill:var(--bg,#fff);stroke:currentColor;stroke-width:.3}.plate-svg .member-label{font-size:1.9px;fill:currentColor;text-anchor:middle}.plate-svg .token{fill:var(--canopy,#00a9a0)}@media (prefers-reduced-motion:reduce){.plate-svg .token{display:none}}</style><g class="edges"><path class="edge error" d="M17.59 18 C43.59 18 43.59 57 69.59 57" data-from="implementer" data-to="tests"/><path class="edge order" d="M121.59 22.5 C121.59 22.5 121.59 29.5 121.59 29.5" data-from="reviewers" data-to="reviewers"/><path class="edge pass" d="M95.59 18 C103.1 18 103.1 23.5 110.61 23.5" data-from="gate" data-to="reviewers"/><path class="edge pass" d="M17.59 18 C30.59 18 30.59 18 43.59 18" data-from="implementer" data-to="triage"/><path class="edge pass" d="M132.57 23.5 C101.08 23.5 101.08 57 69.59 57" data-from="reviewers" data-to="tests"/><path class="edge pass" d="M69.59 57 C82.59 57 82.59 18 95.59 18" data-from="tests" data-to="gate"/><path class="edge pass" d="M43.59 18 C30.59 18 30.59 18 17.59 18" data-from="triage" data-to="implementer"/><path class="edge pass" d="M43.59 18 C56.59 18 56.59 57 69.59 57" data-from="triage" data-to="tests"/><path class="edge fail" d="M69.59 57 C43.59 57 43.59 18 17.59 18" data-from="tests" data-to="implementer"/></g><g class="groups"><g class="ensemble" data-name="reviewers"><rect class="group-box" x="110.61" y="10" width="21.96" height="27" rx="2"/><text class="group-title" x="112.61" y="13.4">REVIEWERS</text><text class="group-subtitle" x="112.61" y="15.8">PARALLEL · 1/2</text><g class="member" data-name="reviewers" data-i="1" data-cx="121.59" data-cy="22.5"><rect class="member-shape" x="114.59" y="20.5" width="14" height="4" rx="1"/><text class="member-label" x="121.59" y="22.5" dy="0.7">1</text></g><g class="member" data-name="reviewers" data-i="2" data-cx="121.59" data-cy="29.5"><rect class="member-shape" x="114.59" y="27.5" width="14" height="4" rx="1"/><text class="member-label" x="121.59" y="29.5" dy="0.7">2</text></g></g></g><g class="nodes"><g class="node shape-agent" data-name="implementer" data-cx="17.59" data-cy="18" data-w="6" data-h="6" data-rank="0" data-lane="main"><title>implementer (agent)</title><rect class="shape" x="14.59" y="15" width="6" height="6" rx="3"/><text class="label" x="17.59" y="18" dy="6.4">implementer</text></g><g class="node shape-gate" data-name="triage" data-cx="43.59" data-cy="18" data-w="5" data-h="5" data-rank="1" data-lane="main"><title>triage (router)</title><rect class="shape" x="41.09" y="15.5" width="5" height="5" rx="0.5" transform="rotate(45 43.59 18)"/><text class="label" x="43.59" y="18" dy="6.4">triage</text></g><g class="node shape-gate" data-name="gate" data-cx="95.59" data-cy="18" data-w="5" data-h="5" data-rank="3" data-lane="main"><title>gate (gate)</title><rect class="shape" x="93.09" y="15.5" width="5" height="5" rx="0.5" transform="rotate(45 95.59 18)"/><text class="label" x="95.59" y="18" dy="6.4">gate</text></g><g class="node shape-check" data-name="tests" data-cx="69.59" data-cy="57" data-w="5.6" data-h="5.6" data-rank="2" data-lane="infra"><title>tests (check)</title><rect class="shape" x="66.79" y="54.2" width="5.6" height="5.6" rx="0.7"/><text class="label" x="69.59" y="57" dy="6.4">tests</text></g></g><circle class="token" r="1.1" cx="17.59" cy="18"><animateMotion dur="3.6s" repeatCount="indefinite" path="M17.59 18C30.59 18 30.59 18 43.59 18C56.59 18 56.59 57 69.59 57C82.59 57 82.59 18 95.59 18C108.59 18 108.59 23.5 121.59 23.5"/></circle></svg></figure>
-<h2>Agent nodes</h2><p class="agent-nodes">implementer</p><p>These agent nodes need a harness to run.</p>
-<h2>README</h2>
-<div class="readme"></div>
+<div class="doc-cols">
+<figure class="plate"><svg class="plate-svg plate-h" viewBox="0 0 142.57 74.55" width="713" height="373" role="img" xmlns="http://www.w3.org/2000/svg"><title>hello-graph</title><desc>Nodes in order: implementer, triage, tests, gate. Ensembles: reviewers.</desc><style>.plate-svg text{font-family:var(--font-mono,"Sometype Mono","Courier New",monospace)}.plate-svg .edge{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.45;opacity:.85}.plate-svg .edge.fail{stroke:#ff6b6b;stroke-dasharray:1.4 1.1;opacity:.7}.plate-svg .edge.error{stroke:currentColor;stroke-width:.3;stroke-dasharray:.4 .8;opacity:.45}.plate-svg .edge.order{stroke:currentColor;stroke-width:.3;stroke-dasharray:.5 1.1;stroke-linecap:round;opacity:.9}.plate-svg .node .shape{fill:color-mix(in srgb, var(--nc, var(--canopy)) 22%, #04110f);stroke:var(--nc, var(--canopy));stroke-width:.45}.plate-svg .shape-chip .shape{fill:#0c1416;stroke:var(--ink-dim,#9a9890)}.plate-svg .shape-check .shape,.plate-svg .shape-gate .shape{fill:#0c1416;stroke:#e8f6f1}.plate-svg .shape-commit .shape{fill:color-mix(in srgb, var(--canopy) 35%, #04110f);stroke:var(--canopy)}.plate-svg .label{font-size:2.3px;fill:#e8f6f1}.plate-svg .harness{font-size:1.9px;fill:var(--nc, var(--canopy));opacity:.9}.plate-svg .group-box{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.3;stroke-dasharray:1.2 .9;opacity:.8}.plate-svg .group-title,.plate-svg .group-subtitle{font-size:1.9px;fill:var(--canopy,#00a9a0);letter-spacing:.14em;text-transform:uppercase}.plate-svg .member-shape{fill:color-mix(in srgb, var(--nc, var(--canopy)) 22%, #04110f);stroke:var(--nc, var(--canopy));stroke-width:.3}.plate-svg .member-label{font-size:1.9px;fill:#e8f6f1;text-anchor:middle}.plate-svg .token{fill:var(--canopy,#00a9a0)}@media (prefers-reduced-motion:reduce){.plate-svg .token{display:none}}</style><g class="edges"><path class="edge error" d="M17.59 18 C43.59 18 43.59 57 69.59 57" data-from="implementer" data-to="tests"/><path class="edge order" d="M121.59 22.5 C121.59 22.5 121.59 29.5 121.59 29.5" data-from="reviewers" data-to="reviewers"/><path class="edge pass" d="M95.59 18 C103.1 18 103.1 23.5 110.61 23.5" data-from="gate" data-to="reviewers"/><path class="edge pass" d="M17.59 18 C30.59 18 30.59 18 43.59 18" data-from="implementer" data-to="triage"/><path class="edge pass" d="M132.57 23.5 C101.08 23.5 101.08 57 69.59 57" data-from="reviewers" data-to="tests"/><path class="edge pass" d="M69.59 57 C82.59 57 82.59 18 95.59 18" data-from="tests" data-to="gate"/><path class="edge pass" d="M43.59 18 C30.59 18 30.59 18 17.59 18" data-from="triage" data-to="implementer"/><path class="edge pass" d="M43.59 18 C56.59 18 56.59 57 69.59 57" data-from="triage" data-to="tests"/><path class="edge fail" d="M69.59 57 C43.59 57 43.59 18 17.59 18" data-from="tests" data-to="implementer"/></g><g class="groups"><g class="ensemble" data-name="reviewers"><rect class="group-box" x="110.61" y="10" width="21.96" height="27" rx="2"/><text class="group-title" x="112.61" y="13.4">REVIEWERS</text><text class="group-subtitle" x="112.61" y="15.8">PARALLEL · 1/2</text><g class="member" data-name="reviewers" data-i="1" data-cx="121.59" data-cy="22.5"><rect class="member-shape" x="114.59" y="20.5" width="14" height="4" rx="1"/><text class="member-label" x="121.59" y="22.5" dy="0.7">1</text></g><g class="member" data-name="reviewers" data-i="2" data-cx="121.59" data-cy="29.5"><rect class="member-shape" x="114.59" y="27.5" width="14" height="4" rx="1"/><text class="member-label" x="121.59" y="29.5" dy="0.7">2</text></g></g></g><g class="nodes"><g class="node shape-agent" data-name="implementer" data-cx="17.59" data-cy="18" data-w="6" data-h="6" data-rank="0" data-lane="main"><title>implementer (agent)</title><rect class="shape" x="14.59" y="15" width="6" height="6" rx="3"/><text class="label" x="17.59" y="18" dy="6.4" text-anchor="middle">implementer</text></g><g class="node shape-gate" data-name="triage" data-cx="43.59" data-cy="18" data-w="5" data-h="5" data-rank="1" data-lane="main"><title>triage (router)</title><rect class="shape" x="41.09" y="15.5" width="5" height="5" rx="0.5" transform="rotate(45 43.59 18)"/><text class="label" x="43.59" y="18" dy="6.4" text-anchor="middle">triage</text></g><g class="node shape-gate" data-name="gate" data-cx="95.59" data-cy="18" data-w="5" data-h="5" data-rank="3" data-lane="main"><title>gate (gate)</title><rect class="shape" x="93.09" y="15.5" width="5" height="5" rx="0.5" transform="rotate(45 95.59 18)"/><text class="label" x="95.59" y="18" dy="6.4" text-anchor="middle">gate</text></g><g class="node shape-check" data-name="tests" data-cx="69.59" data-cy="57" data-w="5.6" data-h="5.6" data-rank="2" data-lane="infra"><title>tests (check)</title><rect class="shape" x="66.79" y="54.2" width="5.6" height="5.6" rx="0.7"/><text class="label" x="69.59" y="57" dy="6.4" text-anchor="middle">tests</text></g></g><circle class="token" r="1.1" cx="0" cy="0"><animateMotion dur="3.6s" repeatCount="indefinite" path="M17.59 18C30.59 18 30.59 18 43.59 18C56.59 18 56.59 57 69.59 57C82.59 57 82.59 18 95.59 18C108.59 18 108.59 23.5 121.59 23.5"/></circle></svg><svg class="plate-svg plate-v" viewBox="0 0 54.38 148.8" width="272" height="744" role="img" xmlns="http://www.w3.org/2000/svg"><title>hello-graph</title><desc>Nodes in order: implementer, triage, tests, gate. Ensembles: reviewers.</desc><style>.plate-svg text{font-family:var(--font-mono,"Sometype Mono","Courier New",monospace)}.plate-svg .edge{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.45;opacity:.85}.plate-svg .edge.fail{stroke:#ff6b6b;stroke-dasharray:1.4 1.1;opacity:.7}.plate-svg .edge.error{stroke:currentColor;stroke-width:.3;stroke-dasharray:.4 .8;opacity:.45}.plate-svg .edge.order{stroke:currentColor;stroke-width:.3;stroke-dasharray:.5 1.1;stroke-linecap:round;opacity:.9}.plate-svg .node .shape{fill:color-mix(in srgb, var(--nc, var(--canopy)) 22%, #04110f);stroke:var(--nc, var(--canopy));stroke-width:.45}.plate-svg .shape-chip .shape{fill:#0c1416;stroke:var(--ink-dim,#9a9890)}.plate-svg .shape-check .shape,.plate-svg .shape-gate .shape{fill:#0c1416;stroke:#e8f6f1}.plate-svg .shape-commit .shape{fill:color-mix(in srgb, var(--canopy) 35%, #04110f);stroke:var(--canopy)}.plate-svg .label{font-size:2.3px;fill:#e8f6f1}.plate-svg .harness{font-size:1.9px;fill:var(--nc, var(--canopy));opacity:.9}.plate-svg .group-box{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.3;stroke-dasharray:1.2 .9;opacity:.8}.plate-svg .group-title,.plate-svg .group-subtitle{font-size:1.9px;fill:var(--canopy,#00a9a0);letter-spacing:.14em;text-transform:uppercase}.plate-svg .member-shape{fill:color-mix(in srgb, var(--nc, var(--canopy)) 22%, #04110f);stroke:var(--nc, var(--canopy));stroke-width:.3}.plate-svg .member-label{font-size:1.9px;fill:#e8f6f1;text-anchor:middle}.plate-svg .token{fill:var(--canopy,#00a9a0)}@media (prefers-reduced-motion:reduce){.plate-svg .token{display:none}}</style><g class="edges"><path class="edge error" d="M24.2 13 C24.2 74.5 24 74.5 24 136" data-from="implementer" data-to="tests"/><path class="edge order" d="M32.18 95.5 C32.18 99 32.18 99 32.18 102.5" data-from="reviewers" data-to="reviewers"/><path class="edge pass" d="M23.7 67 C23.7 75 32.18 75 32.18 83" data-from="gate" data-to="reviewers"/><path class="edge pass" d="M24.2 13 C24.2 24 23.7 24 23.7 35" data-from="implementer" data-to="triage"/><path class="edge pass" d="M32.18 110 C32.18 123 24 123 24 136" data-from="reviewers" data-to="tests"/><path class="edge pass" d="M24 136 C24 101.5 23.7 101.5 23.7 67" data-from="tests" data-to="gate"/><path class="edge pass" d="M23.7 35 C23.7 24 24.2 24 24.2 13" data-from="triage" data-to="implementer"/><path class="edge pass" d="M23.7 35 C23.7 85.5 24 85.5 24 136" data-from="triage" data-to="tests"/><path class="edge fail" d="M21 136 C10 136 10 13 21.2 13" data-from="tests" data-to="implementer"/></g><g class="groups"><g class="ensemble" data-name="reviewers"><rect class="group-box" x="21.2" y="83" width="21.96" height="27" rx="2"/><text class="group-title" x="23.2" y="86.4">REVIEWERS</text><text class="group-subtitle" x="23.2" y="88.8">PARALLEL · 1/2</text><g class="member" data-name="reviewers" data-i="1" data-cx="32.18" data-cy="95.5"><rect class="member-shape" x="25.18" y="93.5" width="14" height="4" rx="1"/><text class="member-label" x="32.18" y="95.5" dy="0.7">1</text></g><g class="member" data-name="reviewers" data-i="2" data-cx="32.18" data-cy="102.5"><rect class="member-shape" x="25.18" y="100.5" width="14" height="4" rx="1"/><text class="member-label" x="32.18" y="102.5" dy="0.7">2</text></g></g></g><g class="nodes"><g class="node shape-agent" data-name="implementer" data-cx="24.2" data-cy="13" data-w="6" data-h="6" data-rank="0" data-lane="main"><title>implementer (agent)</title><rect class="shape" x="21.2" y="10" width="6" height="6" rx="3"/><text class="label" x="29.2" y="13" dy="0.8" text-anchor="start">implementer</text></g><g class="node shape-gate" data-name="triage" data-cx="23.7" data-cy="35" data-w="5" data-h="5" data-rank="1" data-lane="main"><title>triage (router)</title><rect class="shape" x="21.2" y="32.5" width="5" height="5" rx="0.5" transform="rotate(45 23.7 35)"/><text class="label" x="28.2" y="35" dy="0.8" text-anchor="start">triage</text></g><g class="node shape-gate" data-name="gate" data-cx="23.7" data-cy="67" data-w="5" data-h="5" data-rank="3" data-lane="main"><title>gate (gate)</title><rect class="shape" x="21.2" y="64.5" width="5" height="5" rx="0.5" transform="rotate(45 23.7 67)"/><text class="label" x="28.2" y="67" dy="0.8" text-anchor="start">gate</text></g><g class="node shape-check" data-name="tests" data-cx="24" data-cy="136" data-w="5.6" data-h="5.6" data-rank="2" data-lane="infra"><title>tests (check)</title><rect class="shape" x="21.2" y="133.2" width="5.6" height="5.6" rx="0.7"/><text class="label" x="28.8" y="136" dy="0.8" text-anchor="start">tests</text></g></g><circle class="token" r="1.1" cx="0" cy="0"><animateMotion dur="3.6s" repeatCount="indefinite" path="M24.2 13C24.2 24 23.7 24 23.7 35C23.7 85.5 24 85.5 24 136C24 101.5 23.7 101.5 23.7 67C23.7 81.75 32.18 81.75 32.18 96.5"/></circle></svg></figure>
+<dl class="sheet"><div class="field"><dt>Kind</dt><dd>graph</dd></div><div class="field"><dt>Name</dt><dd>hello-graph</dd></div><div class="field"><dt>Source</dt><dd><a href="https://github.com/acme/things">acme/things</a></dd></div><div class="field"><dt>Nodes</dt><dd>agent 1 · router 1 · check 1 · gate 1</dd></div><div class="field"><dt>Edges</dt><dd>8 edges · 1 fail</dd></div><div class="field"><dt>Ensembles</dt><dd>reviewers (parallel, 2 members)</dd></div><div class="field"><dt>Agent nodes</dt><dd>implementer</dd></div><div class="field"><dt>Install</dt><dd><span class="row-install"><code>canopy graph install acme/things/flow</code><button type="button" class="copy" data-copy="canopy graph install acme/things/flow" aria-label="Copy the install command to the clipboard">Copy</button></span></dd></div></dl>
+</div>
+
 </main>
 <footer class="look-colophon">
   <picture class="colophon-band" aria-hidden="true">
@@ -548,18 +785,41 @@ body {
   min-height: 100vh;
   background: var(--surface-bg);
   color: var(--surface-ink);
-  font-family: var(--font-body);
-  font-size: 1.0625rem;
-  line-height: 1.6;
+  font-family: var(--font-mono);
+  font-size: 0.9375rem;
+  line-height: 1.55;
   -webkit-text-size-adjust: 100%;
 }
 a { color: var(--teal); text-underline-offset: 0.15em; }
 a:hover { text-decoration-thickness: 2px; }
 :focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
-.fondo { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
-.look-shell { position: relative; z-index: 1; }
+.look-shell { min-height: 100vh; }
 
-.site-header { max-width: 46rem; margin: 0 auto; padding: 1.25rem 1.25rem 0; }
+.site-header {
+  position: relative;
+  height: 120px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--surface-line);
+}
+.fondo { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.band {
+  position: relative;
+  z-index: 1;
+  max-width: 1120px;
+  height: 100%;
+  margin: 0 auto;
+  padding: 0 1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.6rem;
+}
+.band-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
 .wordmark {
   display: inline-block;
   padding-bottom: 0.15rem;
@@ -571,19 +831,59 @@ a:hover { text-decoration-thickness: 2px; }
   text-decoration: none;
 }
 .wordmark:hover { border-bottom-color: var(--teal); }
-
-main.look-col { max-width: 46rem; margin: 0 auto; padding: 1.25rem 1.25rem 3.5rem; }
-
-h1, h2, h3 {
-  font-family: var(--font-display);
-  font-weight: 400;
-  line-height: 1.2;
-  color: var(--ink-hi);
+.site-nav {
+  display: flex;
+  gap: 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
 }
-h1 { margin: 0 0 0.75rem; font-size: clamp(1.9rem, 6vw, 2.6rem); }
-h2 { margin: 2rem 0 0.65rem; font-size: 1.45rem; }
-h3 {
-  margin: 1.5rem 0 0.5rem;
+.site-nav a { color: var(--surface-ink-dim); text-decoration: none; }
+.site-nav a:hover { color: var(--surface-ink); text-decoration: underline; text-decoration-color: var(--teal); }
+
+.search { display: flex; gap: 0.5rem; margin: 0; }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.search input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  background: var(--bg-deep);
+  color: var(--surface-ink);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+}
+.search button {
+  flex: none;
+  padding: 0.55rem 1rem;
+  background: transparent;
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  color: var(--surface-ink);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.search button:hover { border-color: var(--teal); }
+
+main.look-col { max-width: 1120px; margin: 0 auto; padding: 1.5rem 1rem 3.5rem; }
+
+h1, h2, h3 { font-weight: 400; line-height: 1.25; color: var(--ink-hi); }
+h1 { margin: 0 0 1rem; font-family: var(--font-mono); font-size: 1.05rem; }
+.index-title { font-family: var(--font-mono); font-size: 1.05rem; margin: 0 0 1rem; }
+.doc-title { font-family: var(--font-display); font-size: clamp(1.7rem, 5vw, 2.3rem); margin: 0 0 0.5rem; }
+.kicker {
+  margin: 0;
   font-family: var(--font-mono);
   font-size: 0.78rem;
   font-weight: 500;
@@ -591,30 +891,11 @@ h3 {
   text-transform: uppercase;
   color: var(--surface-ink-dim);
 }
+h2.kicker { margin: 2rem 0 0.75rem; }
+h3.kicker { margin: 1.25rem 0 0.5rem; }
 p { margin: 0 0 1rem; }
-.description { margin: 0 0 1.25rem; font-size: 1.15rem; color: var(--surface-ink-dim); }
-.hero-title { max-width: 22ch; }
+.description { margin: 0 0 1rem; font-family: var(--font-body); font-size: 1.1rem; color: var(--surface-ink-dim); }
 
-.search { display: grid; gap: 0.6rem; margin: 0 0 1.5rem; }
-.search label {
-  display: block;
-  margin-bottom: 0.35rem;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--surface-ink-dim);
-}
-.search input {
-  width: 100%;
-  padding: 0.6rem 0.7rem;
-  background: var(--bg-deep);
-  color: var(--surface-ink);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-ctl);
-  font-family: var(--font-body);
-  font-size: 1rem;
-}
 .tabs {
   display: flex;
   flex-wrap: wrap;
@@ -633,29 +914,66 @@ p { margin: 0 0 1rem; }
 }
 .tabs a[aria-current="page"] { border-bottom-color: var(--teal); color: var(--surface-ink); }
 
-.doc-list { display: grid; gap: 0.75rem; list-style: none; padding: 0; margin: 0; }
-.doc-list li {
-  padding: 1rem 1.1rem;
-  background: var(--surface-bg-raise);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-card);
+ol.index {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  border-top: 1px solid var(--surface-line);
 }
-.doc-list .doc-name {
+li.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--surface-line);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+.row-name {
   font-family: var(--font-display);
-  font-size: 1.2rem;
+  font-size: 1.15rem;
   color: var(--surface-ink);
   text-decoration: none;
 }
-.doc-list .doc-name:hover { text-decoration: underline; text-decoration-color: var(--teal); }
-.doc-list .doc-description { display: block; margin-top: 0.25rem; color: var(--surface-ink-dim); }
-.doc-stats {
-  margin-left: 0.5rem;
+.row-name:hover { text-decoration: underline; text-decoration-color: var(--teal); }
+.kind {
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--surface-ink-dim);
+}
+.row-meta { color: var(--surface-ink-dim); white-space: nowrap; }
+.dots { display: inline-flex; gap: 0.3rem; align-self: center; }
+.dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--nc, var(--canopy));
+}
+.row-install { display: inline-flex; gap: 0.5rem; align-items: center; margin-left: auto; min-width: 0; }
+.row-install code {
+  padding: 0.35rem 0.6rem;
+  background: var(--bg-deep);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  color: var(--surface-ink);
   font-family: var(--font-mono);
   font-size: 0.78rem;
-  color: var(--surface-ink-faint);
+  line-height: 1.5;
   white-space: nowrap;
+  overflow-x: auto;
 }
-.meta { font-family: var(--font-mono); font-size: 0.85rem; color: var(--surface-ink-dim); }
+.row-desc {
+  flex-basis: 100%;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  color: var(--surface-ink-dim);
+}
 
 .button {
   display: inline-block;
@@ -671,36 +989,42 @@ p { margin: 0 0 1rem; }
   cursor: pointer;
 }
 .button:hover { filter: brightness(1.05); }
-
-.install { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: stretch; margin: 0 0 1.25rem; }
-.install code {
-  flex: 1 1 12rem;
-  min-width: 0;
-  padding: 0.55rem 0.7rem;
-  background: var(--surface-bg-raise);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-ctl);
-  color: var(--surface-ink);
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-  line-height: 1.5;
-  white-space: nowrap;
-  overflow-x: auto;
-}
 .copy {
-  padding: 0.5rem 0.85rem;
+  flex: none;
+  padding: 0.35rem 0.7rem;
   background: transparent;
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-ctl);
   color: var(--surface-ink);
   font-family: var(--font-mono);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   cursor: pointer;
 }
 .copy:hover { border-color: var(--teal); }
 
+.doc-cols { display: flex; flex-direction: column; gap: 1.5rem; margin: 1rem 0 1.5rem; }
+dl.sheet { margin: 0; font-family: var(--font-mono); font-size: 0.85rem; }
+.sheet .field {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--surface-line);
+}
+.sheet .field:first-child { border-top: 1px solid var(--surface-line); }
+.sheet dt {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--surface-ink-dim);
+}
+.sheet dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.sheet .row-install { margin-left: 0; width: 100%; }
+.sheet .row-install code { flex: 1; min-width: 0; }
+
 figure.plate {
-  margin: 1rem 0 1.5rem;
+  margin: 0 0 1.5rem;
   padding: 0.75rem;
   max-width: 100%;
   overflow-x: auto;
@@ -708,10 +1032,21 @@ figure.plate {
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-card);
 }
-.plate svg { display: block; height: auto; max-width: none; }
+.doc-cols figure.plate { margin: 0; }
+.plate svg { display: block; height: auto; margin: 0 auto; }
+.plate .plate-v { display: none; }
 
+.readme { font-family: var(--font-body); font-size: 1.05rem; line-height: 1.6; }
+.readme h1, .readme h2, .readme h3 {
+  font-family: var(--font-body);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink-hi);
+}
 .readme h1 { font-size: 1.6rem; }
-.readme h2 { font-size: 1.25rem; }
+.readme h2 { font-size: 1.3rem; }
+.readme h3 { font-size: 1.1rem; }
 .readme pre {
   padding: 0.75rem;
   background: var(--bg-deep);
@@ -723,13 +1058,26 @@ figure.plate {
 }
 .readme code { font-family: var(--font-mono); font-size: 0.9em; }
 .readme img { max-width: 100%; height: auto; }
-.agent-nodes { font-family: var(--font-mono); font-size: 0.9rem; color: var(--surface-ink-dim); }
 .busy { padding: 0.25rem 0 0.25rem 1rem; border-left: 3px solid var(--teal); }
 
-@media (min-width: 48rem) {
-  .site-header { padding: 2rem 2rem 0; }
-  main.look-col { padding: 2rem 2rem 4rem; }
-  .search { grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
+@media (max-width: 639px) {
+  .plate .plate-h { display: none; }
+  .plate .plate-v { display: block; }
+}
+@media (max-width: 899px) {
+  .row-desc { order: 1; }
+  .row-install { order: 2; flex-basis: 100%; margin-left: 0; }
+  .row-install code { flex: 1; }
+}
+@media (min-width: 640px) {
+  .site-header { height: 160px; }
+  .band { padding: 0 1.5rem; }
+  main.look-col { padding: 2rem 1.5rem 4rem; }
+}
+@media (min-width: 1024px) {
+  .doc-cols { flex-direction: row; align-items: flex-start; }
+  .doc-cols figure.plate { flex: 1; min-width: 0; }
+  dl.sheet { flex: 0 0 320px; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
@@ -737,23 +1085,31 @@ figure.plate {
 </style>
 </head>
 <body>
-<div class="fondo" id="fondo" aria-hidden="true"></div>
 <div class="look-shell">
 <header class="site-header">
+<div class="fondo" id="fondo" aria-hidden="true"></div>
+<div class="band">
+<div class="band-top">
 <a class="wordmark" href="https://univerlab.org/canopy/">graphs</a>
+<nav class="site-nav" aria-label="Catalogue">
+<a href="/publish">Publish</a>
+<a href="https://github.com/UniverLab/canopy-web">Source</a>
+</nav>
+</div>
+<form class="search" action="/search" method="get" role="search"><label class="sr-only" for="q">Search graphs and nodes</label><input id="q" name="q" type="search" value="" placeholder="hello-graph" autocomplete="off"><button type="submit">Search</button></form>
+</div>
 </header>
 <main class="look-col">
-<h1>hello-graph</h1>
+<h1 class="doc-title">hello-graph</h1>
 <p class="description">Five nodes with one fail edge, for the drawing test.</p>
-<p class="meta"><a href="https://github.com/UniverLab/canopy-web">UniverLab/canopy-web</a> <span class="doc-stats">7 stars</span></p>
 <p><a class="button" href="https://github.com/UniverLab/canopy-web">Star on GitHub</a></p>
-<h2>Install</h2>
-<div class="install"><code>canopy graph install hello-graph</code><button type="button" class="copy" data-copy="canopy graph install hello-graph" aria-label="Copy the install command to the clipboard">Copy</button></div>
-<h2>Drawing</h2><figure class="plate"><svg class="plate-svg" viewBox="0 0 130.45 38.15" width="652" height="191" role="img" xmlns="http://www.w3.org/2000/svg"><title>hello-graph</title><desc>Nodes in order: build, test, gate, triage, docs.</desc><style>.plate-svg text{font-family:var(--font-mono,"Sometype Mono","Courier New",monospace)}.plate-svg .edge{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.45;opacity:.85}.plate-svg .edge.fail{stroke:#ff6b6b;stroke-dasharray:1.4 1.1;opacity:.7}.plate-svg .edge.error{stroke:currentColor;stroke-width:.3;stroke-dasharray:.4 .8;opacity:.45}.plate-svg .edge.order{stroke:currentColor;stroke-width:.3;stroke-dasharray:.5 1.1;stroke-linecap:round;opacity:.9}.plate-svg .node .shape{fill:var(--bg,#fff);stroke:currentColor;stroke-width:.45}.plate-svg .shape-agent .shape{stroke:var(--canopy,#00a9a0)}.plate-svg .shape-commit .shape{fill:var(--canopy,#00a9a0);stroke:var(--canopy,#00a9a0)}.plate-svg .label{font-size:2.3px;fill:currentColor;text-anchor:middle}.plate-svg .group-box{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.3;stroke-dasharray:1.2 .9;opacity:.8}.plate-svg .group-title,.plate-svg .group-subtitle{font-size:1.9px;fill:var(--canopy,#00a9a0);letter-spacing:.14em;text-transform:uppercase}.plate-svg .member-shape{fill:var(--bg,#fff);stroke:currentColor;stroke-width:.3}.plate-svg .member-label{font-size:1.9px;fill:currentColor;text-anchor:middle}.plate-svg .token{fill:var(--canopy,#00a9a0)}@media (prefers-reduced-motion:reduce){.plate-svg .token{display:none}}</style><g class="edges"><path class="edge pass" d="M13.45 20.6 C26.45 20.6 26.45 20.6 39.45 20.6" data-from="build" data-to="test"/><path class="edge pass" d="M65.45 20.6 C78.45 20.6 78.45 20.6 91.45 20.6" data-from="gate" data-to="triage"/><path class="edge pass" d="M39.45 20.6 C52.45 20.6 52.45 20.6 65.45 20.6" data-from="test" data-to="gate"/><path class="edge pass" d="M91.45 20.6 C104.45 20.6 104.45 20.6 117.45 20.6" data-from="triage" data-to="docs"/><path class="edge fail" d="M39.45 17.6 C39.45 10 13.45 10 13.45 17.6" data-from="test" data-to="build"/></g><g class="groups"></g><g class="nodes"><g class="node shape-agent" data-name="build" data-cx="13.45" data-cy="20.6" data-w="6" data-h="6" data-rank="0" data-lane="main"><title>build (agent)</title><rect class="shape" x="10.45" y="17.6" width="6" height="6" rx="3"/><text class="label" x="13.45" y="20.6" dy="6.4">build</text></g><g class="node shape-check" data-name="test" data-cx="39.45" data-cy="20.6" data-w="5.6" data-h="5.6" data-rank="1" data-lane="main"><title>test (check)</title><rect class="shape" x="36.650000000000006" y="17.8" width="5.6" height="5.6" rx="0.7"/><text class="label" x="39.45" y="20.6" dy="6.4">test</text></g><g class="node shape-gate" data-name="gate" data-cx="65.45" data-cy="20.6" data-w="5" data-h="5" data-rank="2" data-lane="main"><title>gate (gate)</title><rect class="shape" x="62.95" y="18.1" width="5" height="5" rx="0.5" transform="rotate(45 65.45 20.6)"/><text class="label" x="65.45" y="20.6" dy="6.4">gate</text></g><g class="node shape-gate" data-name="triage" data-cx="91.45" data-cy="20.6" data-w="5" data-h="5" data-rank="3" data-lane="main"><title>triage (router)</title><rect class="shape" x="88.95" y="18.1" width="5" height="5" rx="0.5" transform="rotate(45 91.45 20.6)"/><text class="label" x="91.45" y="20.6" dy="6.4">triage</text></g><g class="node shape-agent" data-name="docs" data-cx="117.45" data-cy="20.6" data-w="6" data-h="6" data-rank="4" data-lane="main"><title>docs (agent)</title><rect class="shape" x="114.45" y="17.6" width="6" height="6" rx="3"/><text class="label" x="117.45" y="20.6" dy="6.4">docs</text></g></g><circle class="token" r="1.1" cx="13.45" cy="20.6"><animateMotion dur="3.6s" repeatCount="indefinite" path="M13.45 20.6C26.45 20.6 26.45 20.6 39.45 20.6C52.45 20.6 52.45 20.6 65.45 20.6C78.45 20.6 78.45 20.6 91.45 20.6C104.45 20.6 104.45 20.6 117.45 20.6"/></circle></svg></figure>
-<h2>Agent nodes</h2><p class="agent-nodes">build, docs</p><p>These agent nodes need a harness to run.</p>
-<h2>README</h2>
+<div class="doc-cols">
+<figure class="plate"><svg class="plate-svg plate-h" viewBox="0 0 130.45 38.15" width="652" height="191" role="img" xmlns="http://www.w3.org/2000/svg"><title>hello-graph</title><desc>Nodes in order: build, test, gate, triage, docs.</desc><style>.plate-svg text{font-family:var(--font-mono,"Sometype Mono","Courier New",monospace)}.plate-svg .edge{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.45;opacity:.85}.plate-svg .edge.fail{stroke:#ff6b6b;stroke-dasharray:1.4 1.1;opacity:.7}.plate-svg .edge.error{stroke:currentColor;stroke-width:.3;stroke-dasharray:.4 .8;opacity:.45}.plate-svg .edge.order{stroke:currentColor;stroke-width:.3;stroke-dasharray:.5 1.1;stroke-linecap:round;opacity:.9}.plate-svg .node .shape{fill:color-mix(in srgb, var(--nc, var(--canopy)) 22%, #04110f);stroke:var(--nc, var(--canopy));stroke-width:.45}.plate-svg .shape-chip .shape{fill:#0c1416;stroke:var(--ink-dim,#9a9890)}.plate-svg .shape-check .shape,.plate-svg .shape-gate .shape{fill:#0c1416;stroke:#e8f6f1}.plate-svg .shape-commit .shape{fill:color-mix(in srgb, var(--canopy) 35%, #04110f);stroke:var(--canopy)}.plate-svg .label{font-size:2.3px;fill:#e8f6f1}.plate-svg .harness{font-size:1.9px;fill:var(--nc, var(--canopy));opacity:.9}.plate-svg .group-box{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.3;stroke-dasharray:1.2 .9;opacity:.8}.plate-svg .group-title,.plate-svg .group-subtitle{font-size:1.9px;fill:var(--canopy,#00a9a0);letter-spacing:.14em;text-transform:uppercase}.plate-svg .member-shape{fill:color-mix(in srgb, var(--nc, var(--canopy)) 22%, #04110f);stroke:var(--nc, var(--canopy));stroke-width:.3}.plate-svg .member-label{font-size:1.9px;fill:#e8f6f1;text-anchor:middle}.plate-svg .token{fill:var(--canopy,#00a9a0)}@media (prefers-reduced-motion:reduce){.plate-svg .token{display:none}}</style><g class="edges"><path class="edge pass" d="M13.45 20.6 C26.45 20.6 26.45 20.6 39.45 20.6" data-from="build" data-to="test"/><path class="edge pass" d="M65.45 20.6 C78.45 20.6 78.45 20.6 91.45 20.6" data-from="gate" data-to="triage"/><path class="edge pass" d="M39.45 20.6 C52.45 20.6 52.45 20.6 65.45 20.6" data-from="test" data-to="gate"/><path class="edge pass" d="M91.45 20.6 C104.45 20.6 104.45 20.6 117.45 20.6" data-from="triage" data-to="docs"/><path class="edge fail" d="M39.45 17.6 C39.45 10 13.45 10 13.45 17.6" data-from="test" data-to="build"/></g><g class="groups"></g><g class="nodes"><g class="node shape-agent" data-name="build" data-cx="13.45" data-cy="20.6" data-w="6" data-h="6" data-rank="0" data-lane="main"><title>build (agent)</title><rect class="shape" x="10.45" y="17.6" width="6" height="6" rx="3"/><text class="label" x="13.45" y="20.6" dy="6.4" text-anchor="middle">build</text></g><g class="node shape-check" data-name="test" data-cx="39.45" data-cy="20.6" data-w="5.6" data-h="5.6" data-rank="1" data-lane="main"><title>test (check)</title><rect class="shape" x="36.650000000000006" y="17.8" width="5.6" height="5.6" rx="0.7"/><text class="label" x="39.45" y="20.6" dy="6.4" text-anchor="middle">test</text></g><g class="node shape-gate" data-name="gate" data-cx="65.45" data-cy="20.6" data-w="5" data-h="5" data-rank="2" data-lane="main"><title>gate (gate)</title><rect class="shape" x="62.95" y="18.1" width="5" height="5" rx="0.5" transform="rotate(45 65.45 20.6)"/><text class="label" x="65.45" y="20.6" dy="6.4" text-anchor="middle">gate</text></g><g class="node shape-gate" data-name="triage" data-cx="91.45" data-cy="20.6" data-w="5" data-h="5" data-rank="3" data-lane="main"><title>triage (router)</title><rect class="shape" x="88.95" y="18.1" width="5" height="5" rx="0.5" transform="rotate(45 91.45 20.6)"/><text class="label" x="91.45" y="20.6" dy="6.4" text-anchor="middle">triage</text></g><g class="node shape-agent" data-name="docs" data-cx="117.45" data-cy="20.6" data-w="6" data-h="6" data-rank="4" data-lane="main"><title>docs (agent)</title><rect class="shape" x="114.45" y="17.6" width="6" height="6" rx="3"/><text class="label" x="117.45" y="20.6" dy="6.4" text-anchor="middle">docs</text></g></g><circle class="token" r="1.1" cx="0" cy="0"><animateMotion dur="3.6s" repeatCount="indefinite" path="M13.45 20.6C26.45 20.6 26.45 20.6 39.45 20.6C52.45 20.6 52.45 20.6 65.45 20.6C78.45 20.6 78.45 20.6 91.45 20.6C104.45 20.6 104.45 20.6 117.45 20.6"/></circle></svg><svg class="plate-svg plate-v" viewBox="0 0 42.68 114" width="213" height="570" role="img" xmlns="http://www.w3.org/2000/svg"><title>hello-graph</title><desc>Nodes in order: build, test, gate, triage, docs.</desc><style>.plate-svg text{font-family:var(--font-mono,"Sometype Mono","Courier New",monospace)}.plate-svg .edge{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.45;opacity:.85}.plate-svg .edge.fail{stroke:#ff6b6b;stroke-dasharray:1.4 1.1;opacity:.7}.plate-svg .edge.error{stroke:currentColor;stroke-width:.3;stroke-dasharray:.4 .8;opacity:.45}.plate-svg .edge.order{stroke:currentColor;stroke-width:.3;stroke-dasharray:.5 1.1;stroke-linecap:round;opacity:.9}.plate-svg .node .shape{fill:color-mix(in srgb, var(--nc, var(--canopy)) 22%, #04110f);stroke:var(--nc, var(--canopy));stroke-width:.45}.plate-svg .shape-chip .shape{fill:#0c1416;stroke:var(--ink-dim,#9a9890)}.plate-svg .shape-check .shape,.plate-svg .shape-gate .shape{fill:#0c1416;stroke:#e8f6f1}.plate-svg .shape-commit .shape{fill:color-mix(in srgb, var(--canopy) 35%, #04110f);stroke:var(--canopy)}.plate-svg .label{font-size:2.3px;fill:#e8f6f1}.plate-svg .harness{font-size:1.9px;fill:var(--nc, var(--canopy));opacity:.9}.plate-svg .group-box{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.3;stroke-dasharray:1.2 .9;opacity:.8}.plate-svg .group-title,.plate-svg .group-subtitle{font-size:1.9px;fill:var(--canopy,#00a9a0);letter-spacing:.14em;text-transform:uppercase}.plate-svg .member-shape{fill:color-mix(in srgb, var(--nc, var(--canopy)) 22%, #04110f);stroke:var(--nc, var(--canopy));stroke-width:.3}.plate-svg .member-label{font-size:1.9px;fill:#e8f6f1;text-anchor:middle}.plate-svg .token{fill:var(--canopy,#00a9a0)}@media (prefers-reduced-motion:reduce){.plate-svg .token{display:none}}</style><g class="edges"><path class="edge pass" d="M20.4 13 C20.4 24 20.2 24 20.2 35" data-from="build" data-to="test"/><path class="edge pass" d="M19.9 57 C19.9 68 19.9 68 19.9 79" data-from="gate" data-to="triage"/><path class="edge pass" d="M20.2 35 C20.2 46 19.9 46 19.9 57" data-from="test" data-to="gate"/><path class="edge pass" d="M19.9 79 C19.9 90 20.4 90 20.4 101" data-from="triage" data-to="docs"/><path class="edge fail" d="M17.2 35 C10 35 10 13 17.4 13" data-from="test" data-to="build"/></g><g class="groups"></g><g class="nodes"><g class="node shape-agent" data-name="build" data-cx="20.4" data-cy="13" data-w="6" data-h="6" data-rank="0" data-lane="main"><title>build (agent)</title><rect class="shape" x="17.4" y="10" width="6" height="6" rx="3"/><text class="label" x="25.4" y="13" dy="0.8" text-anchor="start">build</text></g><g class="node shape-check" data-name="test" data-cx="20.2" data-cy="35" data-w="5.6" data-h="5.6" data-rank="1" data-lane="main"><title>test (check)</title><rect class="shape" x="17.4" y="32.2" width="5.6" height="5.6" rx="0.7"/><text class="label" x="25" y="35" dy="0.8" text-anchor="start">test</text></g><g class="node shape-gate" data-name="gate" data-cx="19.9" data-cy="57" data-w="5" data-h="5" data-rank="2" data-lane="main"><title>gate (gate)</title><rect class="shape" x="17.4" y="54.5" width="5" height="5" rx="0.5" transform="rotate(45 19.9 57)"/><text class="label" x="24.4" y="57" dy="0.8" text-anchor="start">gate</text></g><g class="node shape-gate" data-name="triage" data-cx="19.9" data-cy="79" data-w="5" data-h="5" data-rank="3" data-lane="main"><title>triage (router)</title><rect class="shape" x="17.4" y="76.5" width="5" height="5" rx="0.5" transform="rotate(45 19.9 79)"/><text class="label" x="24.4" y="79" dy="0.8" text-anchor="start">triage</text></g><g class="node shape-agent" data-name="docs" data-cx="20.4" data-cy="101" data-w="6" data-h="6" data-rank="4" data-lane="main"><title>docs (agent)</title><rect class="shape" x="17.4" y="98" width="6" height="6" rx="3"/><text class="label" x="25.4" y="101" dy="0.8" text-anchor="start">docs</text></g></g><circle class="token" r="1.1" cx="0" cy="0"><animateMotion dur="3.6s" repeatCount="indefinite" path="M20.4 13C20.4 24 20.2 24 20.2 35C20.2 46 19.9 46 19.9 57C19.9 68 19.9 68 19.9 79C19.9 90 20.4 90 20.4 101"/></circle></svg></figure>
+<dl class="sheet"><div class="field"><dt>Kind</dt><dd>graph</dd></div><div class="field"><dt>Name</dt><dd>hello-graph</dd></div><div class="field"><dt>Source</dt><dd><a href="https://github.com/UniverLab/canopy-web">UniverLab/canopy-web</a></dd></div><div class="field"><dt>Stars</dt><dd>7 stars</dd></div><div class="field"><dt>Nodes</dt><dd>agent 2 · check 1 · gate 1 · router 1</dd></div><div class="field"><dt>Edges</dt><dd>5 edges · 1 fail</dd></div><div class="field"><dt>Agent nodes</dt><dd>build, docs</dd></div><div class="field"><dt>Install</dt><dd><span class="row-install"><code>canopy graph install hello-graph</code><button type="button" class="copy" data-copy="canopy graph install hello-graph" aria-label="Copy the install command to the clipboard">Copy</button></span></dd></div></dl>
+</div>
+<h2 class="kicker">README</h2>
 <div class="readme"><h1>hello-graph</h1>
-<p>A graph the page tests render, with **one fail edge**.</p>
+<p>A graph the page tests render, with <strong>one fail edge</strong>.</p>
 <h2>Install</h2>
 <pre><code>canopy graph install hello-graph</code></pre>
 <p>Read the <a href="https://univerlab.org/canopy/" rel="nofollow">docs</a> and run <code>npm test</code>.</p></div>
@@ -824,18 +1180,41 @@ body {
   min-height: 100vh;
   background: var(--surface-bg);
   color: var(--surface-ink);
-  font-family: var(--font-body);
-  font-size: 1.0625rem;
-  line-height: 1.6;
+  font-family: var(--font-mono);
+  font-size: 0.9375rem;
+  line-height: 1.55;
   -webkit-text-size-adjust: 100%;
 }
 a { color: var(--teal); text-underline-offset: 0.15em; }
 a:hover { text-decoration-thickness: 2px; }
 :focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
-.fondo { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
-.look-shell { position: relative; z-index: 1; }
+.look-shell { min-height: 100vh; }
 
-.site-header { max-width: 46rem; margin: 0 auto; padding: 1.25rem 1.25rem 0; }
+.site-header {
+  position: relative;
+  height: 120px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--surface-line);
+}
+.fondo { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.band {
+  position: relative;
+  z-index: 1;
+  max-width: 1120px;
+  height: 100%;
+  margin: 0 auto;
+  padding: 0 1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.6rem;
+}
+.band-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
 .wordmark {
   display: inline-block;
   padding-bottom: 0.15rem;
@@ -847,19 +1226,59 @@ a:hover { text-decoration-thickness: 2px; }
   text-decoration: none;
 }
 .wordmark:hover { border-bottom-color: var(--teal); }
-
-main.look-col { max-width: 46rem; margin: 0 auto; padding: 1.25rem 1.25rem 3.5rem; }
-
-h1, h2, h3 {
-  font-family: var(--font-display);
-  font-weight: 400;
-  line-height: 1.2;
-  color: var(--ink-hi);
+.site-nav {
+  display: flex;
+  gap: 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
 }
-h1 { margin: 0 0 0.75rem; font-size: clamp(1.9rem, 6vw, 2.6rem); }
-h2 { margin: 2rem 0 0.65rem; font-size: 1.45rem; }
-h3 {
-  margin: 1.5rem 0 0.5rem;
+.site-nav a { color: var(--surface-ink-dim); text-decoration: none; }
+.site-nav a:hover { color: var(--surface-ink); text-decoration: underline; text-decoration-color: var(--teal); }
+
+.search { display: flex; gap: 0.5rem; margin: 0; }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.search input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  background: var(--bg-deep);
+  color: var(--surface-ink);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+}
+.search button {
+  flex: none;
+  padding: 0.55rem 1rem;
+  background: transparent;
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  color: var(--surface-ink);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.search button:hover { border-color: var(--teal); }
+
+main.look-col { max-width: 1120px; margin: 0 auto; padding: 1.5rem 1rem 3.5rem; }
+
+h1, h2, h3 { font-weight: 400; line-height: 1.25; color: var(--ink-hi); }
+h1 { margin: 0 0 1rem; font-family: var(--font-mono); font-size: 1.05rem; }
+.index-title { font-family: var(--font-mono); font-size: 1.05rem; margin: 0 0 1rem; }
+.doc-title { font-family: var(--font-display); font-size: clamp(1.7rem, 5vw, 2.3rem); margin: 0 0 0.5rem; }
+.kicker {
+  margin: 0;
   font-family: var(--font-mono);
   font-size: 0.78rem;
   font-weight: 500;
@@ -867,30 +1286,11 @@ h3 {
   text-transform: uppercase;
   color: var(--surface-ink-dim);
 }
+h2.kicker { margin: 2rem 0 0.75rem; }
+h3.kicker { margin: 1.25rem 0 0.5rem; }
 p { margin: 0 0 1rem; }
-.description { margin: 0 0 1.25rem; font-size: 1.15rem; color: var(--surface-ink-dim); }
-.hero-title { max-width: 22ch; }
+.description { margin: 0 0 1rem; font-family: var(--font-body); font-size: 1.1rem; color: var(--surface-ink-dim); }
 
-.search { display: grid; gap: 0.6rem; margin: 0 0 1.5rem; }
-.search label {
-  display: block;
-  margin-bottom: 0.35rem;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--surface-ink-dim);
-}
-.search input {
-  width: 100%;
-  padding: 0.6rem 0.7rem;
-  background: var(--bg-deep);
-  color: var(--surface-ink);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-ctl);
-  font-family: var(--font-body);
-  font-size: 1rem;
-}
 .tabs {
   display: flex;
   flex-wrap: wrap;
@@ -909,29 +1309,66 @@ p { margin: 0 0 1rem; }
 }
 .tabs a[aria-current="page"] { border-bottom-color: var(--teal); color: var(--surface-ink); }
 
-.doc-list { display: grid; gap: 0.75rem; list-style: none; padding: 0; margin: 0; }
-.doc-list li {
-  padding: 1rem 1.1rem;
-  background: var(--surface-bg-raise);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-card);
+ol.index {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  border-top: 1px solid var(--surface-line);
 }
-.doc-list .doc-name {
+li.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--surface-line);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+.row-name {
   font-family: var(--font-display);
-  font-size: 1.2rem;
+  font-size: 1.15rem;
   color: var(--surface-ink);
   text-decoration: none;
 }
-.doc-list .doc-name:hover { text-decoration: underline; text-decoration-color: var(--teal); }
-.doc-list .doc-description { display: block; margin-top: 0.25rem; color: var(--surface-ink-dim); }
-.doc-stats {
-  margin-left: 0.5rem;
+.row-name:hover { text-decoration: underline; text-decoration-color: var(--teal); }
+.kind {
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--surface-ink-dim);
+}
+.row-meta { color: var(--surface-ink-dim); white-space: nowrap; }
+.dots { display: inline-flex; gap: 0.3rem; align-self: center; }
+.dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--nc, var(--canopy));
+}
+.row-install { display: inline-flex; gap: 0.5rem; align-items: center; margin-left: auto; min-width: 0; }
+.row-install code {
+  padding: 0.35rem 0.6rem;
+  background: var(--bg-deep);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  color: var(--surface-ink);
   font-family: var(--font-mono);
   font-size: 0.78rem;
-  color: var(--surface-ink-faint);
+  line-height: 1.5;
   white-space: nowrap;
+  overflow-x: auto;
 }
-.meta { font-family: var(--font-mono); font-size: 0.85rem; color: var(--surface-ink-dim); }
+.row-desc {
+  flex-basis: 100%;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  color: var(--surface-ink-dim);
+}
 
 .button {
   display: inline-block;
@@ -947,36 +1384,42 @@ p { margin: 0 0 1rem; }
   cursor: pointer;
 }
 .button:hover { filter: brightness(1.05); }
-
-.install { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: stretch; margin: 0 0 1.25rem; }
-.install code {
-  flex: 1 1 12rem;
-  min-width: 0;
-  padding: 0.55rem 0.7rem;
-  background: var(--surface-bg-raise);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-ctl);
-  color: var(--surface-ink);
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-  line-height: 1.5;
-  white-space: nowrap;
-  overflow-x: auto;
-}
 .copy {
-  padding: 0.5rem 0.85rem;
+  flex: none;
+  padding: 0.35rem 0.7rem;
   background: transparent;
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-ctl);
   color: var(--surface-ink);
   font-family: var(--font-mono);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   cursor: pointer;
 }
 .copy:hover { border-color: var(--teal); }
 
+.doc-cols { display: flex; flex-direction: column; gap: 1.5rem; margin: 1rem 0 1.5rem; }
+dl.sheet { margin: 0; font-family: var(--font-mono); font-size: 0.85rem; }
+.sheet .field {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--surface-line);
+}
+.sheet .field:first-child { border-top: 1px solid var(--surface-line); }
+.sheet dt {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--surface-ink-dim);
+}
+.sheet dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.sheet .row-install { margin-left: 0; width: 100%; }
+.sheet .row-install code { flex: 1; min-width: 0; }
+
 figure.plate {
-  margin: 1rem 0 1.5rem;
+  margin: 0 0 1.5rem;
   padding: 0.75rem;
   max-width: 100%;
   overflow-x: auto;
@@ -984,10 +1427,21 @@ figure.plate {
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-card);
 }
-.plate svg { display: block; height: auto; max-width: none; }
+.doc-cols figure.plate { margin: 0; }
+.plate svg { display: block; height: auto; margin: 0 auto; }
+.plate .plate-v { display: none; }
 
+.readme { font-family: var(--font-body); font-size: 1.05rem; line-height: 1.6; }
+.readme h1, .readme h2, .readme h3 {
+  font-family: var(--font-body);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink-hi);
+}
 .readme h1 { font-size: 1.6rem; }
-.readme h2 { font-size: 1.25rem; }
+.readme h2 { font-size: 1.3rem; }
+.readme h3 { font-size: 1.1rem; }
 .readme pre {
   padding: 0.75rem;
   background: var(--bg-deep);
@@ -999,13 +1453,26 @@ figure.plate {
 }
 .readme code { font-family: var(--font-mono); font-size: 0.9em; }
 .readme img { max-width: 100%; height: auto; }
-.agent-nodes { font-family: var(--font-mono); font-size: 0.9rem; color: var(--surface-ink-dim); }
 .busy { padding: 0.25rem 0 0.25rem 1rem; border-left: 3px solid var(--teal); }
 
-@media (min-width: 48rem) {
-  .site-header { padding: 2rem 2rem 0; }
-  main.look-col { padding: 2rem 2rem 4rem; }
-  .search { grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
+@media (max-width: 639px) {
+  .plate .plate-h { display: none; }
+  .plate .plate-v { display: block; }
+}
+@media (max-width: 899px) {
+  .row-desc { order: 1; }
+  .row-install { order: 2; flex-basis: 100%; margin-left: 0; }
+  .row-install code { flex: 1; }
+}
+@media (min-width: 640px) {
+  .site-header { height: 160px; }
+  .band { padding: 0 1.5rem; }
+  main.look-col { padding: 2rem 1.5rem 4rem; }
+}
+@media (min-width: 1024px) {
+  .doc-cols { flex-direction: row; align-items: flex-start; }
+  .doc-cols figure.plate { flex: 1; min-width: 0; }
+  dl.sheet { flex: 0 0 320px; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
@@ -1013,22 +1480,29 @@ figure.plate {
 </style>
 </head>
 <body>
-<div class="fondo" id="fondo" aria-hidden="true"></div>
 <div class="look-shell">
 <header class="site-header">
+<div class="fondo" id="fondo" aria-hidden="true"></div>
+<div class="band">
+<div class="band-top">
 <a class="wordmark" href="https://univerlab.org/canopy/">graphs</a>
+<nav class="site-nav" aria-label="Catalogue">
+<a href="/publish">Publish</a>
+<a href="https://github.com/UniverLab/canopy-web">Source</a>
+</nav>
+</div>
+<form class="search" action="/search" method="get" role="search"><label class="sr-only" for="q">Search graphs and nodes</label><input id="q" name="q" type="search" value="" placeholder="hello-graph" autocomplete="off"><button type="submit">Search</button></form>
+</div>
 </header>
 <main class="look-col">
-<h1>hello-node</h1>
+<h1 class="doc-title">hello-node</h1>
 <p class="description">Example catalogue node: drafts an implementation plan.</p>
-<p class="meta"><a href="https://github.com/UniverLab/canopy-web">UniverLab/canopy-web</a> <span class="doc-stats">7 stars</span></p>
 <p><a class="button" href="https://github.com/UniverLab/canopy-web">Star on GitHub</a></p>
-<h2>Install</h2>
-<div class="install"><code>canopy node install hello-node</code><button type="button" class="copy" data-copy="canopy node install hello-node" aria-label="Copy the install command to the clipboard">Copy</button></div>
-<h2>Drawing</h2><figure class="plate"><svg class="plate-svg" viewBox="0 0 33.8 30.55" width="169" height="153" role="img" xmlns="http://www.w3.org/2000/svg"><title>hello-node</title><desc>Nodes in order: hello-node.</desc><style>.plate-svg text{font-family:var(--font-mono,"Sometype Mono","Courier New",monospace)}.plate-svg .edge{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.45;opacity:.85}.plate-svg .edge.fail{stroke:#ff6b6b;stroke-dasharray:1.4 1.1;opacity:.7}.plate-svg .edge.error{stroke:currentColor;stroke-width:.3;stroke-dasharray:.4 .8;opacity:.45}.plate-svg .edge.order{stroke:currentColor;stroke-width:.3;stroke-dasharray:.5 1.1;stroke-linecap:round;opacity:.9}.plate-svg .node .shape{fill:var(--bg,#fff);stroke:currentColor;stroke-width:.45}.plate-svg .shape-agent .shape{stroke:var(--canopy,#00a9a0)}.plate-svg .shape-commit .shape{fill:var(--canopy,#00a9a0);stroke:var(--canopy,#00a9a0)}.plate-svg .label{font-size:2.3px;fill:currentColor;text-anchor:middle}.plate-svg .group-box{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.3;stroke-dasharray:1.2 .9;opacity:.8}.plate-svg .group-title,.plate-svg .group-subtitle{font-size:1.9px;fill:var(--canopy,#00a9a0);letter-spacing:.14em;text-transform:uppercase}.plate-svg .member-shape{fill:var(--bg,#fff);stroke:currentColor;stroke-width:.3}.plate-svg .member-label{font-size:1.9px;fill:currentColor;text-anchor:middle}.plate-svg .token{fill:var(--canopy,#00a9a0)}@media (prefers-reduced-motion:reduce){.plate-svg .token{display:none}}</style><g class="edges"></g><g class="groups"></g><g class="nodes"><g class="node shape-agent" data-name="hello-node" data-cx="16.9" data-cy="13" data-w="6" data-h="6" data-rank="0" data-lane="main"><title>hello-node (agent)</title><rect class="shape" x="13.899999999999999" y="10" width="6" height="6" rx="3"/><text class="label" x="16.9" y="13" dy="6.4">hello-node</text></g></g></svg></figure>
+<div class="doc-cols">
+<figure class="plate"><svg class="plate-svg plate-h" viewBox="0 0 33.8 30.55" width="169" height="153" role="img" xmlns="http://www.w3.org/2000/svg"><title>hello-node</title><desc>Nodes in order: hello-node.</desc><style>.plate-svg text{font-family:var(--font-mono,"Sometype Mono","Courier New",monospace)}.plate-svg .edge{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.45;opacity:.85}.plate-svg .edge.fail{stroke:#ff6b6b;stroke-dasharray:1.4 1.1;opacity:.7}.plate-svg .edge.error{stroke:currentColor;stroke-width:.3;stroke-dasharray:.4 .8;opacity:.45}.plate-svg .edge.order{stroke:currentColor;stroke-width:.3;stroke-dasharray:.5 1.1;stroke-linecap:round;opacity:.9}.plate-svg .node .shape{fill:color-mix(in srgb, var(--nc, var(--canopy)) 22%, #04110f);stroke:var(--nc, var(--canopy));stroke-width:.45}.plate-svg .shape-chip .shape{fill:#0c1416;stroke:var(--ink-dim,#9a9890)}.plate-svg .shape-check .shape,.plate-svg .shape-gate .shape{fill:#0c1416;stroke:#e8f6f1}.plate-svg .shape-commit .shape{fill:color-mix(in srgb, var(--canopy) 35%, #04110f);stroke:var(--canopy)}.plate-svg .label{font-size:2.3px;fill:#e8f6f1}.plate-svg .harness{font-size:1.9px;fill:var(--nc, var(--canopy));opacity:.9}.plate-svg .group-box{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.3;stroke-dasharray:1.2 .9;opacity:.8}.plate-svg .group-title,.plate-svg .group-subtitle{font-size:1.9px;fill:var(--canopy,#00a9a0);letter-spacing:.14em;text-transform:uppercase}.plate-svg .member-shape{fill:color-mix(in srgb, var(--nc, var(--canopy)) 22%, #04110f);stroke:var(--nc, var(--canopy));stroke-width:.3}.plate-svg .member-label{font-size:1.9px;fill:#e8f6f1;text-anchor:middle}.plate-svg .token{fill:var(--canopy,#00a9a0)}@media (prefers-reduced-motion:reduce){.plate-svg .token{display:none}}</style><g class="edges"></g><g class="groups"></g><g class="nodes"><g class="node shape-agent" data-name="hello-node" data-cx="16.9" data-cy="13" data-w="6" data-h="6" data-rank="0" data-lane="main"><title>hello-node (agent)</title><rect class="shape" x="13.899999999999999" y="10" width="6" height="6" rx="3"/><text class="label" x="16.9" y="13" dy="6.4" text-anchor="middle">hello-node</text></g></g></svg><svg class="plate-svg plate-v" viewBox="0 0 41.8 26" width="209" height="130" role="img" xmlns="http://www.w3.org/2000/svg"><title>hello-node</title><desc>Nodes in order: hello-node.</desc><style>.plate-svg text{font-family:var(--font-mono,"Sometype Mono","Courier New",monospace)}.plate-svg .edge{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.45;opacity:.85}.plate-svg .edge.fail{stroke:#ff6b6b;stroke-dasharray:1.4 1.1;opacity:.7}.plate-svg .edge.error{stroke:currentColor;stroke-width:.3;stroke-dasharray:.4 .8;opacity:.45}.plate-svg .edge.order{stroke:currentColor;stroke-width:.3;stroke-dasharray:.5 1.1;stroke-linecap:round;opacity:.9}.plate-svg .node .shape{fill:color-mix(in srgb, var(--nc, var(--canopy)) 22%, #04110f);stroke:var(--nc, var(--canopy));stroke-width:.45}.plate-svg .shape-chip .shape{fill:#0c1416;stroke:var(--ink-dim,#9a9890)}.plate-svg .shape-check .shape,.plate-svg .shape-gate .shape{fill:#0c1416;stroke:#e8f6f1}.plate-svg .shape-commit .shape{fill:color-mix(in srgb, var(--canopy) 35%, #04110f);stroke:var(--canopy)}.plate-svg .label{font-size:2.3px;fill:#e8f6f1}.plate-svg .harness{font-size:1.9px;fill:var(--nc, var(--canopy));opacity:.9}.plate-svg .group-box{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.3;stroke-dasharray:1.2 .9;opacity:.8}.plate-svg .group-title,.plate-svg .group-subtitle{font-size:1.9px;fill:var(--canopy,#00a9a0);letter-spacing:.14em;text-transform:uppercase}.plate-svg .member-shape{fill:color-mix(in srgb, var(--nc, var(--canopy)) 22%, #04110f);stroke:var(--nc, var(--canopy));stroke-width:.3}.plate-svg .member-label{font-size:1.9px;fill:#e8f6f1;text-anchor:middle}.plate-svg .token{fill:var(--canopy,#00a9a0)}@media (prefers-reduced-motion:reduce){.plate-svg .token{display:none}}</style><g class="edges"></g><g class="groups"></g><g class="nodes"><g class="node shape-agent" data-name="hello-node" data-cx="13" data-cy="13" data-w="6" data-h="6" data-rank="0" data-lane="main"><title>hello-node (agent)</title><rect class="shape" x="10" y="10" width="6" height="6" rx="3"/><text class="label" x="18" y="13" dy="0.8" text-anchor="start">hello-node</text></g></g></svg></figure>
+<dl class="sheet"><div class="field"><dt>Kind</dt><dd>node</dd></div><div class="field"><dt>Name</dt><dd>hello-node</dd></div><div class="field"><dt>Source</dt><dd><a href="https://github.com/UniverLab/canopy-web">UniverLab/canopy-web</a></dd></div><div class="field"><dt>Stars</dt><dd>7 stars</dd></div><div class="field"><dt>Install</dt><dd><span class="row-install"><code>canopy node install hello-node</code><button type="button" class="copy" data-copy="canopy node install hello-node" aria-label="Copy the install command to the clipboard">Copy</button></span></dd></div></dl>
+</div>
 
-<h2>README</h2>
-<div class="readme"></div>
 </main>
 <footer class="look-colophon">
   <picture class="colophon-band" aria-hidden="true">
@@ -1088,18 +1562,41 @@ body {
   min-height: 100vh;
   background: var(--surface-bg);
   color: var(--surface-ink);
-  font-family: var(--font-body);
-  font-size: 1.0625rem;
-  line-height: 1.6;
+  font-family: var(--font-mono);
+  font-size: 0.9375rem;
+  line-height: 1.55;
   -webkit-text-size-adjust: 100%;
 }
 a { color: var(--teal); text-underline-offset: 0.15em; }
 a:hover { text-decoration-thickness: 2px; }
 :focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
-.fondo { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
-.look-shell { position: relative; z-index: 1; }
+.look-shell { min-height: 100vh; }
 
-.site-header { max-width: 46rem; margin: 0 auto; padding: 1.25rem 1.25rem 0; }
+.site-header {
+  position: relative;
+  height: 120px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--surface-line);
+}
+.fondo { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.band {
+  position: relative;
+  z-index: 1;
+  max-width: 1120px;
+  height: 100%;
+  margin: 0 auto;
+  padding: 0 1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.6rem;
+}
+.band-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
 .wordmark {
   display: inline-block;
   padding-bottom: 0.15rem;
@@ -1111,19 +1608,59 @@ a:hover { text-decoration-thickness: 2px; }
   text-decoration: none;
 }
 .wordmark:hover { border-bottom-color: var(--teal); }
-
-main.look-col { max-width: 46rem; margin: 0 auto; padding: 1.25rem 1.25rem 3.5rem; }
-
-h1, h2, h3 {
-  font-family: var(--font-display);
-  font-weight: 400;
-  line-height: 1.2;
-  color: var(--ink-hi);
+.site-nav {
+  display: flex;
+  gap: 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
 }
-h1 { margin: 0 0 0.75rem; font-size: clamp(1.9rem, 6vw, 2.6rem); }
-h2 { margin: 2rem 0 0.65rem; font-size: 1.45rem; }
-h3 {
-  margin: 1.5rem 0 0.5rem;
+.site-nav a { color: var(--surface-ink-dim); text-decoration: none; }
+.site-nav a:hover { color: var(--surface-ink); text-decoration: underline; text-decoration-color: var(--teal); }
+
+.search { display: flex; gap: 0.5rem; margin: 0; }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.search input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  background: var(--bg-deep);
+  color: var(--surface-ink);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+}
+.search button {
+  flex: none;
+  padding: 0.55rem 1rem;
+  background: transparent;
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  color: var(--surface-ink);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.search button:hover { border-color: var(--teal); }
+
+main.look-col { max-width: 1120px; margin: 0 auto; padding: 1.5rem 1rem 3.5rem; }
+
+h1, h2, h3 { font-weight: 400; line-height: 1.25; color: var(--ink-hi); }
+h1 { margin: 0 0 1rem; font-family: var(--font-mono); font-size: 1.05rem; }
+.index-title { font-family: var(--font-mono); font-size: 1.05rem; margin: 0 0 1rem; }
+.doc-title { font-family: var(--font-display); font-size: clamp(1.7rem, 5vw, 2.3rem); margin: 0 0 0.5rem; }
+.kicker {
+  margin: 0;
   font-family: var(--font-mono);
   font-size: 0.78rem;
   font-weight: 500;
@@ -1131,30 +1668,11 @@ h3 {
   text-transform: uppercase;
   color: var(--surface-ink-dim);
 }
+h2.kicker { margin: 2rem 0 0.75rem; }
+h3.kicker { margin: 1.25rem 0 0.5rem; }
 p { margin: 0 0 1rem; }
-.description { margin: 0 0 1.25rem; font-size: 1.15rem; color: var(--surface-ink-dim); }
-.hero-title { max-width: 22ch; }
+.description { margin: 0 0 1rem; font-family: var(--font-body); font-size: 1.1rem; color: var(--surface-ink-dim); }
 
-.search { display: grid; gap: 0.6rem; margin: 0 0 1.5rem; }
-.search label {
-  display: block;
-  margin-bottom: 0.35rem;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--surface-ink-dim);
-}
-.search input {
-  width: 100%;
-  padding: 0.6rem 0.7rem;
-  background: var(--bg-deep);
-  color: var(--surface-ink);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-ctl);
-  font-family: var(--font-body);
-  font-size: 1rem;
-}
 .tabs {
   display: flex;
   flex-wrap: wrap;
@@ -1173,29 +1691,66 @@ p { margin: 0 0 1rem; }
 }
 .tabs a[aria-current="page"] { border-bottom-color: var(--teal); color: var(--surface-ink); }
 
-.doc-list { display: grid; gap: 0.75rem; list-style: none; padding: 0; margin: 0; }
-.doc-list li {
-  padding: 1rem 1.1rem;
-  background: var(--surface-bg-raise);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-card);
+ol.index {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  border-top: 1px solid var(--surface-line);
 }
-.doc-list .doc-name {
+li.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--surface-line);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+.row-name {
   font-family: var(--font-display);
-  font-size: 1.2rem;
+  font-size: 1.15rem;
   color: var(--surface-ink);
   text-decoration: none;
 }
-.doc-list .doc-name:hover { text-decoration: underline; text-decoration-color: var(--teal); }
-.doc-list .doc-description { display: block; margin-top: 0.25rem; color: var(--surface-ink-dim); }
-.doc-stats {
-  margin-left: 0.5rem;
+.row-name:hover { text-decoration: underline; text-decoration-color: var(--teal); }
+.kind {
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--surface-ink-dim);
+}
+.row-meta { color: var(--surface-ink-dim); white-space: nowrap; }
+.dots { display: inline-flex; gap: 0.3rem; align-self: center; }
+.dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--nc, var(--canopy));
+}
+.row-install { display: inline-flex; gap: 0.5rem; align-items: center; margin-left: auto; min-width: 0; }
+.row-install code {
+  padding: 0.35rem 0.6rem;
+  background: var(--bg-deep);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  color: var(--surface-ink);
   font-family: var(--font-mono);
   font-size: 0.78rem;
-  color: var(--surface-ink-faint);
+  line-height: 1.5;
   white-space: nowrap;
+  overflow-x: auto;
 }
-.meta { font-family: var(--font-mono); font-size: 0.85rem; color: var(--surface-ink-dim); }
+.row-desc {
+  flex-basis: 100%;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  color: var(--surface-ink-dim);
+}
 
 .button {
   display: inline-block;
@@ -1211,36 +1766,42 @@ p { margin: 0 0 1rem; }
   cursor: pointer;
 }
 .button:hover { filter: brightness(1.05); }
-
-.install { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: stretch; margin: 0 0 1.25rem; }
-.install code {
-  flex: 1 1 12rem;
-  min-width: 0;
-  padding: 0.55rem 0.7rem;
-  background: var(--surface-bg-raise);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-ctl);
-  color: var(--surface-ink);
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-  line-height: 1.5;
-  white-space: nowrap;
-  overflow-x: auto;
-}
 .copy {
-  padding: 0.5rem 0.85rem;
+  flex: none;
+  padding: 0.35rem 0.7rem;
   background: transparent;
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-ctl);
   color: var(--surface-ink);
   font-family: var(--font-mono);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   cursor: pointer;
 }
 .copy:hover { border-color: var(--teal); }
 
+.doc-cols { display: flex; flex-direction: column; gap: 1.5rem; margin: 1rem 0 1.5rem; }
+dl.sheet { margin: 0; font-family: var(--font-mono); font-size: 0.85rem; }
+.sheet .field {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--surface-line);
+}
+.sheet .field:first-child { border-top: 1px solid var(--surface-line); }
+.sheet dt {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--surface-ink-dim);
+}
+.sheet dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.sheet .row-install { margin-left: 0; width: 100%; }
+.sheet .row-install code { flex: 1; min-width: 0; }
+
 figure.plate {
-  margin: 1rem 0 1.5rem;
+  margin: 0 0 1.5rem;
   padding: 0.75rem;
   max-width: 100%;
   overflow-x: auto;
@@ -1248,10 +1809,21 @@ figure.plate {
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-card);
 }
-.plate svg { display: block; height: auto; max-width: none; }
+.doc-cols figure.plate { margin: 0; }
+.plate svg { display: block; height: auto; margin: 0 auto; }
+.plate .plate-v { display: none; }
 
+.readme { font-family: var(--font-body); font-size: 1.05rem; line-height: 1.6; }
+.readme h1, .readme h2, .readme h3 {
+  font-family: var(--font-body);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink-hi);
+}
 .readme h1 { font-size: 1.6rem; }
-.readme h2 { font-size: 1.25rem; }
+.readme h2 { font-size: 1.3rem; }
+.readme h3 { font-size: 1.1rem; }
 .readme pre {
   padding: 0.75rem;
   background: var(--bg-deep);
@@ -1263,13 +1835,26 @@ figure.plate {
 }
 .readme code { font-family: var(--font-mono); font-size: 0.9em; }
 .readme img { max-width: 100%; height: auto; }
-.agent-nodes { font-family: var(--font-mono); font-size: 0.9rem; color: var(--surface-ink-dim); }
 .busy { padding: 0.25rem 0 0.25rem 1rem; border-left: 3px solid var(--teal); }
 
-@media (min-width: 48rem) {
-  .site-header { padding: 2rem 2rem 0; }
-  main.look-col { padding: 2rem 2rem 4rem; }
-  .search { grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
+@media (max-width: 639px) {
+  .plate .plate-h { display: none; }
+  .plate .plate-v { display: block; }
+}
+@media (max-width: 899px) {
+  .row-desc { order: 1; }
+  .row-install { order: 2; flex-basis: 100%; margin-left: 0; }
+  .row-install code { flex: 1; }
+}
+@media (min-width: 640px) {
+  .site-header { height: 160px; }
+  .band { padding: 0 1.5rem; }
+  main.look-col { padding: 2rem 1.5rem 4rem; }
+}
+@media (min-width: 1024px) {
+  .doc-cols { flex-direction: row; align-items: flex-start; }
+  .doc-cols figure.plate { flex: 1; min-width: 0; }
+  dl.sheet { flex: 0 0 320px; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
@@ -1277,16 +1862,24 @@ figure.plate {
 </style>
 </head>
 <body>
-<div class="fondo" id="fondo" aria-hidden="true"></div>
 <div class="look-shell">
 <header class="site-header">
+<div class="fondo" id="fondo" aria-hidden="true"></div>
+<div class="band">
+<div class="band-top">
 <a class="wordmark" href="https://univerlab.org/canopy/">graphs</a>
+<nav class="site-nav" aria-label="Catalogue">
+<a href="/publish">Publish</a>
+<a href="https://github.com/UniverLab/canopy-web">Source</a>
+</nav>
+</div>
+<form class="search" action="/search" method="get" role="search"><label class="sr-only" for="q">Search graphs and nodes</label><input id="q" name="q" type="search" value="flow" placeholder="hello-graph" autocomplete="off"><button type="submit">Search</button></form>
+</div>
 </header>
 <main class="look-col">
-<h1>Results for “flow”</h1>
-<form class="search" action="/search" method="get"><div><label for="q">Search graphs and nodes</label><input id="q" name="q" type="search" value="flow" placeholder="hello-graph"></div><button type="submit" class="button">Search</button></form>
+<h1 class="index-title">Results for “flow”</h1>
 <nav class="tabs"><a href="/search?q=flow&sort=top" aria-current="page">Top</a><a href="/search?q=flow&sort=new">New</a></nav>
-<ul class="doc-list"><li><a class="doc-name" href="/g/acme/things/flow">hello-graph</a> <span class="doc-stats">2 stars</span><span class="doc-description">Minimal example graph: implement, check, gate, and a router with two routes.</span></li></ul>
+<ol class="index"><li class="row"><a class="row-name" href="/g/acme/things/flow">hello-graph</a><span class="kind">graph</span><span class="row-meta">4 nodes</span><span class="row-meta">2 stars</span><span class="row-install"><code>canopy graph install acme/things/flow</code><button type="button" class="copy" data-copy="canopy graph install acme/things/flow" aria-label="Copy the install command to the clipboard">Copy</button></span><span class="row-desc">Minimal example graph: implement, check, gate, and a router with two routes.</span></li></ol>
 </main>
 <footer class="look-colophon">
   <picture class="colophon-band" aria-hidden="true">
@@ -1324,7 +1917,7 @@ figure.plate {
 "
 `;
 
-exports[`the plate drawing > draws the five nodes as Canopy shapes in a scrolling figure 1`] = `
+exports[`the plate drawing > draws the five nodes as Canopy shapes in a scrolling figure, both orientations 1`] = `
 "<!doctype html>
 <html lang="en" data-surface="tui">
 <head>
@@ -1346,18 +1939,41 @@ body {
   min-height: 100vh;
   background: var(--surface-bg);
   color: var(--surface-ink);
-  font-family: var(--font-body);
-  font-size: 1.0625rem;
-  line-height: 1.6;
+  font-family: var(--font-mono);
+  font-size: 0.9375rem;
+  line-height: 1.55;
   -webkit-text-size-adjust: 100%;
 }
 a { color: var(--teal); text-underline-offset: 0.15em; }
 a:hover { text-decoration-thickness: 2px; }
 :focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
-.fondo { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
-.look-shell { position: relative; z-index: 1; }
+.look-shell { min-height: 100vh; }
 
-.site-header { max-width: 46rem; margin: 0 auto; padding: 1.25rem 1.25rem 0; }
+.site-header {
+  position: relative;
+  height: 120px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--surface-line);
+}
+.fondo { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.band {
+  position: relative;
+  z-index: 1;
+  max-width: 1120px;
+  height: 100%;
+  margin: 0 auto;
+  padding: 0 1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.6rem;
+}
+.band-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
 .wordmark {
   display: inline-block;
   padding-bottom: 0.15rem;
@@ -1369,19 +1985,59 @@ a:hover { text-decoration-thickness: 2px; }
   text-decoration: none;
 }
 .wordmark:hover { border-bottom-color: var(--teal); }
-
-main.look-col { max-width: 46rem; margin: 0 auto; padding: 1.25rem 1.25rem 3.5rem; }
-
-h1, h2, h3 {
-  font-family: var(--font-display);
-  font-weight: 400;
-  line-height: 1.2;
-  color: var(--ink-hi);
+.site-nav {
+  display: flex;
+  gap: 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
 }
-h1 { margin: 0 0 0.75rem; font-size: clamp(1.9rem, 6vw, 2.6rem); }
-h2 { margin: 2rem 0 0.65rem; font-size: 1.45rem; }
-h3 {
-  margin: 1.5rem 0 0.5rem;
+.site-nav a { color: var(--surface-ink-dim); text-decoration: none; }
+.site-nav a:hover { color: var(--surface-ink); text-decoration: underline; text-decoration-color: var(--teal); }
+
+.search { display: flex; gap: 0.5rem; margin: 0; }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.search input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  background: var(--bg-deep);
+  color: var(--surface-ink);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+}
+.search button {
+  flex: none;
+  padding: 0.55rem 1rem;
+  background: transparent;
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  color: var(--surface-ink);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.search button:hover { border-color: var(--teal); }
+
+main.look-col { max-width: 1120px; margin: 0 auto; padding: 1.5rem 1rem 3.5rem; }
+
+h1, h2, h3 { font-weight: 400; line-height: 1.25; color: var(--ink-hi); }
+h1 { margin: 0 0 1rem; font-family: var(--font-mono); font-size: 1.05rem; }
+.index-title { font-family: var(--font-mono); font-size: 1.05rem; margin: 0 0 1rem; }
+.doc-title { font-family: var(--font-display); font-size: clamp(1.7rem, 5vw, 2.3rem); margin: 0 0 0.5rem; }
+.kicker {
+  margin: 0;
   font-family: var(--font-mono);
   font-size: 0.78rem;
   font-weight: 500;
@@ -1389,30 +2045,11 @@ h3 {
   text-transform: uppercase;
   color: var(--surface-ink-dim);
 }
+h2.kicker { margin: 2rem 0 0.75rem; }
+h3.kicker { margin: 1.25rem 0 0.5rem; }
 p { margin: 0 0 1rem; }
-.description { margin: 0 0 1.25rem; font-size: 1.15rem; color: var(--surface-ink-dim); }
-.hero-title { max-width: 22ch; }
+.description { margin: 0 0 1rem; font-family: var(--font-body); font-size: 1.1rem; color: var(--surface-ink-dim); }
 
-.search { display: grid; gap: 0.6rem; margin: 0 0 1.5rem; }
-.search label {
-  display: block;
-  margin-bottom: 0.35rem;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--surface-ink-dim);
-}
-.search input {
-  width: 100%;
-  padding: 0.6rem 0.7rem;
-  background: var(--bg-deep);
-  color: var(--surface-ink);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-ctl);
-  font-family: var(--font-body);
-  font-size: 1rem;
-}
 .tabs {
   display: flex;
   flex-wrap: wrap;
@@ -1431,29 +2068,66 @@ p { margin: 0 0 1rem; }
 }
 .tabs a[aria-current="page"] { border-bottom-color: var(--teal); color: var(--surface-ink); }
 
-.doc-list { display: grid; gap: 0.75rem; list-style: none; padding: 0; margin: 0; }
-.doc-list li {
-  padding: 1rem 1.1rem;
-  background: var(--surface-bg-raise);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-card);
+ol.index {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  border-top: 1px solid var(--surface-line);
 }
-.doc-list .doc-name {
+li.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--surface-line);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+.row-name {
   font-family: var(--font-display);
-  font-size: 1.2rem;
+  font-size: 1.15rem;
   color: var(--surface-ink);
   text-decoration: none;
 }
-.doc-list .doc-name:hover { text-decoration: underline; text-decoration-color: var(--teal); }
-.doc-list .doc-description { display: block; margin-top: 0.25rem; color: var(--surface-ink-dim); }
-.doc-stats {
-  margin-left: 0.5rem;
+.row-name:hover { text-decoration: underline; text-decoration-color: var(--teal); }
+.kind {
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--surface-ink-dim);
+}
+.row-meta { color: var(--surface-ink-dim); white-space: nowrap; }
+.dots { display: inline-flex; gap: 0.3rem; align-self: center; }
+.dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--nc, var(--canopy));
+}
+.row-install { display: inline-flex; gap: 0.5rem; align-items: center; margin-left: auto; min-width: 0; }
+.row-install code {
+  padding: 0.35rem 0.6rem;
+  background: var(--bg-deep);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  color: var(--surface-ink);
   font-family: var(--font-mono);
   font-size: 0.78rem;
-  color: var(--surface-ink-faint);
+  line-height: 1.5;
   white-space: nowrap;
+  overflow-x: auto;
 }
-.meta { font-family: var(--font-mono); font-size: 0.85rem; color: var(--surface-ink-dim); }
+.row-desc {
+  flex-basis: 100%;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  color: var(--surface-ink-dim);
+}
 
 .button {
   display: inline-block;
@@ -1469,36 +2143,42 @@ p { margin: 0 0 1rem; }
   cursor: pointer;
 }
 .button:hover { filter: brightness(1.05); }
-
-.install { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: stretch; margin: 0 0 1.25rem; }
-.install code {
-  flex: 1 1 12rem;
-  min-width: 0;
-  padding: 0.55rem 0.7rem;
-  background: var(--surface-bg-raise);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-ctl);
-  color: var(--surface-ink);
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-  line-height: 1.5;
-  white-space: nowrap;
-  overflow-x: auto;
-}
 .copy {
-  padding: 0.5rem 0.85rem;
+  flex: none;
+  padding: 0.35rem 0.7rem;
   background: transparent;
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-ctl);
   color: var(--surface-ink);
   font-family: var(--font-mono);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   cursor: pointer;
 }
 .copy:hover { border-color: var(--teal); }
 
+.doc-cols { display: flex; flex-direction: column; gap: 1.5rem; margin: 1rem 0 1.5rem; }
+dl.sheet { margin: 0; font-family: var(--font-mono); font-size: 0.85rem; }
+.sheet .field {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--surface-line);
+}
+.sheet .field:first-child { border-top: 1px solid var(--surface-line); }
+.sheet dt {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--surface-ink-dim);
+}
+.sheet dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.sheet .row-install { margin-left: 0; width: 100%; }
+.sheet .row-install code { flex: 1; min-width: 0; }
+
 figure.plate {
-  margin: 1rem 0 1.5rem;
+  margin: 0 0 1.5rem;
   padding: 0.75rem;
   max-width: 100%;
   overflow-x: auto;
@@ -1506,10 +2186,21 @@ figure.plate {
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-card);
 }
-.plate svg { display: block; height: auto; max-width: none; }
+.doc-cols figure.plate { margin: 0; }
+.plate svg { display: block; height: auto; margin: 0 auto; }
+.plate .plate-v { display: none; }
 
+.readme { font-family: var(--font-body); font-size: 1.05rem; line-height: 1.6; }
+.readme h1, .readme h2, .readme h3 {
+  font-family: var(--font-body);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink-hi);
+}
 .readme h1 { font-size: 1.6rem; }
-.readme h2 { font-size: 1.25rem; }
+.readme h2 { font-size: 1.3rem; }
+.readme h3 { font-size: 1.1rem; }
 .readme pre {
   padding: 0.75rem;
   background: var(--bg-deep);
@@ -1521,13 +2212,26 @@ figure.plate {
 }
 .readme code { font-family: var(--font-mono); font-size: 0.9em; }
 .readme img { max-width: 100%; height: auto; }
-.agent-nodes { font-family: var(--font-mono); font-size: 0.9rem; color: var(--surface-ink-dim); }
 .busy { padding: 0.25rem 0 0.25rem 1rem; border-left: 3px solid var(--teal); }
 
-@media (min-width: 48rem) {
-  .site-header { padding: 2rem 2rem 0; }
-  main.look-col { padding: 2rem 2rem 4rem; }
-  .search { grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
+@media (max-width: 639px) {
+  .plate .plate-h { display: none; }
+  .plate .plate-v { display: block; }
+}
+@media (max-width: 899px) {
+  .row-desc { order: 1; }
+  .row-install { order: 2; flex-basis: 100%; margin-left: 0; }
+  .row-install code { flex: 1; }
+}
+@media (min-width: 640px) {
+  .site-header { height: 160px; }
+  .band { padding: 0 1.5rem; }
+  main.look-col { padding: 2rem 1.5rem 4rem; }
+}
+@media (min-width: 1024px) {
+  .doc-cols { flex-direction: row; align-items: flex-start; }
+  .doc-cols figure.plate { flex: 1; min-width: 0; }
+  dl.sheet { flex: 0 0 320px; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
@@ -1535,23 +2239,31 @@ figure.plate {
 </style>
 </head>
 <body>
-<div class="fondo" id="fondo" aria-hidden="true"></div>
 <div class="look-shell">
 <header class="site-header">
+<div class="fondo" id="fondo" aria-hidden="true"></div>
+<div class="band">
+<div class="band-top">
 <a class="wordmark" href="https://univerlab.org/canopy/">graphs</a>
+<nav class="site-nav" aria-label="Catalogue">
+<a href="/publish">Publish</a>
+<a href="https://github.com/UniverLab/canopy-web">Source</a>
+</nav>
+</div>
+<form class="search" action="/search" method="get" role="search"><label class="sr-only" for="q">Search graphs and nodes</label><input id="q" name="q" type="search" value="" placeholder="hello-graph" autocomplete="off"><button type="submit">Search</button></form>
+</div>
 </header>
 <main class="look-col">
-<h1>hello-graph</h1>
+<h1 class="doc-title">hello-graph</h1>
 <p class="description">Five nodes with one fail edge, for the drawing test.</p>
-<p class="meta"><a href="https://github.com/UniverLab/canopy-web">UniverLab/canopy-web</a> <span class="doc-stats">7 stars</span></p>
 <p><a class="button" href="https://github.com/UniverLab/canopy-web">Star on GitHub</a></p>
-<h2>Install</h2>
-<div class="install"><code>canopy graph install hello-graph</code><button type="button" class="copy" data-copy="canopy graph install hello-graph" aria-label="Copy the install command to the clipboard">Copy</button></div>
-<h2>Drawing</h2><figure class="plate"><svg class="plate-svg" viewBox="0 0 130.45 38.15" width="652" height="191" role="img" xmlns="http://www.w3.org/2000/svg"><title>hello-graph</title><desc>Nodes in order: build, test, gate, triage, docs.</desc><style>.plate-svg text{font-family:var(--font-mono,"Sometype Mono","Courier New",monospace)}.plate-svg .edge{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.45;opacity:.85}.plate-svg .edge.fail{stroke:#ff6b6b;stroke-dasharray:1.4 1.1;opacity:.7}.plate-svg .edge.error{stroke:currentColor;stroke-width:.3;stroke-dasharray:.4 .8;opacity:.45}.plate-svg .edge.order{stroke:currentColor;stroke-width:.3;stroke-dasharray:.5 1.1;stroke-linecap:round;opacity:.9}.plate-svg .node .shape{fill:var(--bg,#fff);stroke:currentColor;stroke-width:.45}.plate-svg .shape-agent .shape{stroke:var(--canopy,#00a9a0)}.plate-svg .shape-commit .shape{fill:var(--canopy,#00a9a0);stroke:var(--canopy,#00a9a0)}.plate-svg .label{font-size:2.3px;fill:currentColor;text-anchor:middle}.plate-svg .group-box{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.3;stroke-dasharray:1.2 .9;opacity:.8}.plate-svg .group-title,.plate-svg .group-subtitle{font-size:1.9px;fill:var(--canopy,#00a9a0);letter-spacing:.14em;text-transform:uppercase}.plate-svg .member-shape{fill:var(--bg,#fff);stroke:currentColor;stroke-width:.3}.plate-svg .member-label{font-size:1.9px;fill:currentColor;text-anchor:middle}.plate-svg .token{fill:var(--canopy,#00a9a0)}@media (prefers-reduced-motion:reduce){.plate-svg .token{display:none}}</style><g class="edges"><path class="edge pass" d="M13.45 20.6 C26.45 20.6 26.45 20.6 39.45 20.6" data-from="build" data-to="test"/><path class="edge pass" d="M65.45 20.6 C78.45 20.6 78.45 20.6 91.45 20.6" data-from="gate" data-to="triage"/><path class="edge pass" d="M39.45 20.6 C52.45 20.6 52.45 20.6 65.45 20.6" data-from="test" data-to="gate"/><path class="edge pass" d="M91.45 20.6 C104.45 20.6 104.45 20.6 117.45 20.6" data-from="triage" data-to="docs"/><path class="edge fail" d="M39.45 17.6 C39.45 10 13.45 10 13.45 17.6" data-from="test" data-to="build"/></g><g class="groups"></g><g class="nodes"><g class="node shape-agent" data-name="build" data-cx="13.45" data-cy="20.6" data-w="6" data-h="6" data-rank="0" data-lane="main"><title>build (agent)</title><rect class="shape" x="10.45" y="17.6" width="6" height="6" rx="3"/><text class="label" x="13.45" y="20.6" dy="6.4">build</text></g><g class="node shape-check" data-name="test" data-cx="39.45" data-cy="20.6" data-w="5.6" data-h="5.6" data-rank="1" data-lane="main"><title>test (check)</title><rect class="shape" x="36.650000000000006" y="17.8" width="5.6" height="5.6" rx="0.7"/><text class="label" x="39.45" y="20.6" dy="6.4">test</text></g><g class="node shape-gate" data-name="gate" data-cx="65.45" data-cy="20.6" data-w="5" data-h="5" data-rank="2" data-lane="main"><title>gate (gate)</title><rect class="shape" x="62.95" y="18.1" width="5" height="5" rx="0.5" transform="rotate(45 65.45 20.6)"/><text class="label" x="65.45" y="20.6" dy="6.4">gate</text></g><g class="node shape-gate" data-name="triage" data-cx="91.45" data-cy="20.6" data-w="5" data-h="5" data-rank="3" data-lane="main"><title>triage (router)</title><rect class="shape" x="88.95" y="18.1" width="5" height="5" rx="0.5" transform="rotate(45 91.45 20.6)"/><text class="label" x="91.45" y="20.6" dy="6.4">triage</text></g><g class="node shape-agent" data-name="docs" data-cx="117.45" data-cy="20.6" data-w="6" data-h="6" data-rank="4" data-lane="main"><title>docs (agent)</title><rect class="shape" x="114.45" y="17.6" width="6" height="6" rx="3"/><text class="label" x="117.45" y="20.6" dy="6.4">docs</text></g></g><circle class="token" r="1.1" cx="13.45" cy="20.6"><animateMotion dur="3.6s" repeatCount="indefinite" path="M13.45 20.6C26.45 20.6 26.45 20.6 39.45 20.6C52.45 20.6 52.45 20.6 65.45 20.6C78.45 20.6 78.45 20.6 91.45 20.6C104.45 20.6 104.45 20.6 117.45 20.6"/></circle></svg></figure>
-<h2>Agent nodes</h2><p class="agent-nodes">build, docs</p><p>These agent nodes need a harness to run.</p>
-<h2>README</h2>
+<div class="doc-cols">
+<figure class="plate"><svg class="plate-svg plate-h" viewBox="0 0 130.45 38.15" width="652" height="191" role="img" xmlns="http://www.w3.org/2000/svg"><title>hello-graph</title><desc>Nodes in order: build, test, gate, triage, docs.</desc><style>.plate-svg text{font-family:var(--font-mono,"Sometype Mono","Courier New",monospace)}.plate-svg .edge{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.45;opacity:.85}.plate-svg .edge.fail{stroke:#ff6b6b;stroke-dasharray:1.4 1.1;opacity:.7}.plate-svg .edge.error{stroke:currentColor;stroke-width:.3;stroke-dasharray:.4 .8;opacity:.45}.plate-svg .edge.order{stroke:currentColor;stroke-width:.3;stroke-dasharray:.5 1.1;stroke-linecap:round;opacity:.9}.plate-svg .node .shape{fill:color-mix(in srgb, var(--nc, var(--canopy)) 22%, #04110f);stroke:var(--nc, var(--canopy));stroke-width:.45}.plate-svg .shape-chip .shape{fill:#0c1416;stroke:var(--ink-dim,#9a9890)}.plate-svg .shape-check .shape,.plate-svg .shape-gate .shape{fill:#0c1416;stroke:#e8f6f1}.plate-svg .shape-commit .shape{fill:color-mix(in srgb, var(--canopy) 35%, #04110f);stroke:var(--canopy)}.plate-svg .label{font-size:2.3px;fill:#e8f6f1}.plate-svg .harness{font-size:1.9px;fill:var(--nc, var(--canopy));opacity:.9}.plate-svg .group-box{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.3;stroke-dasharray:1.2 .9;opacity:.8}.plate-svg .group-title,.plate-svg .group-subtitle{font-size:1.9px;fill:var(--canopy,#00a9a0);letter-spacing:.14em;text-transform:uppercase}.plate-svg .member-shape{fill:color-mix(in srgb, var(--nc, var(--canopy)) 22%, #04110f);stroke:var(--nc, var(--canopy));stroke-width:.3}.plate-svg .member-label{font-size:1.9px;fill:#e8f6f1;text-anchor:middle}.plate-svg .token{fill:var(--canopy,#00a9a0)}@media (prefers-reduced-motion:reduce){.plate-svg .token{display:none}}</style><g class="edges"><path class="edge pass" d="M13.45 20.6 C26.45 20.6 26.45 20.6 39.45 20.6" data-from="build" data-to="test"/><path class="edge pass" d="M65.45 20.6 C78.45 20.6 78.45 20.6 91.45 20.6" data-from="gate" data-to="triage"/><path class="edge pass" d="M39.45 20.6 C52.45 20.6 52.45 20.6 65.45 20.6" data-from="test" data-to="gate"/><path class="edge pass" d="M91.45 20.6 C104.45 20.6 104.45 20.6 117.45 20.6" data-from="triage" data-to="docs"/><path class="edge fail" d="M39.45 17.6 C39.45 10 13.45 10 13.45 17.6" data-from="test" data-to="build"/></g><g class="groups"></g><g class="nodes"><g class="node shape-agent" data-name="build" data-cx="13.45" data-cy="20.6" data-w="6" data-h="6" data-rank="0" data-lane="main"><title>build (agent)</title><rect class="shape" x="10.45" y="17.6" width="6" height="6" rx="3"/><text class="label" x="13.45" y="20.6" dy="6.4" text-anchor="middle">build</text></g><g class="node shape-check" data-name="test" data-cx="39.45" data-cy="20.6" data-w="5.6" data-h="5.6" data-rank="1" data-lane="main"><title>test (check)</title><rect class="shape" x="36.650000000000006" y="17.8" width="5.6" height="5.6" rx="0.7"/><text class="label" x="39.45" y="20.6" dy="6.4" text-anchor="middle">test</text></g><g class="node shape-gate" data-name="gate" data-cx="65.45" data-cy="20.6" data-w="5" data-h="5" data-rank="2" data-lane="main"><title>gate (gate)</title><rect class="shape" x="62.95" y="18.1" width="5" height="5" rx="0.5" transform="rotate(45 65.45 20.6)"/><text class="label" x="65.45" y="20.6" dy="6.4" text-anchor="middle">gate</text></g><g class="node shape-gate" data-name="triage" data-cx="91.45" data-cy="20.6" data-w="5" data-h="5" data-rank="3" data-lane="main"><title>triage (router)</title><rect class="shape" x="88.95" y="18.1" width="5" height="5" rx="0.5" transform="rotate(45 91.45 20.6)"/><text class="label" x="91.45" y="20.6" dy="6.4" text-anchor="middle">triage</text></g><g class="node shape-agent" data-name="docs" data-cx="117.45" data-cy="20.6" data-w="6" data-h="6" data-rank="4" data-lane="main"><title>docs (agent)</title><rect class="shape" x="114.45" y="17.6" width="6" height="6" rx="3"/><text class="label" x="117.45" y="20.6" dy="6.4" text-anchor="middle">docs</text></g></g><circle class="token" r="1.1" cx="0" cy="0"><animateMotion dur="3.6s" repeatCount="indefinite" path="M13.45 20.6C26.45 20.6 26.45 20.6 39.45 20.6C52.45 20.6 52.45 20.6 65.45 20.6C78.45 20.6 78.45 20.6 91.45 20.6C104.45 20.6 104.45 20.6 117.45 20.6"/></circle></svg><svg class="plate-svg plate-v" viewBox="0 0 42.68 114" width="213" height="570" role="img" xmlns="http://www.w3.org/2000/svg"><title>hello-graph</title><desc>Nodes in order: build, test, gate, triage, docs.</desc><style>.plate-svg text{font-family:var(--font-mono,"Sometype Mono","Courier New",monospace)}.plate-svg .edge{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.45;opacity:.85}.plate-svg .edge.fail{stroke:#ff6b6b;stroke-dasharray:1.4 1.1;opacity:.7}.plate-svg .edge.error{stroke:currentColor;stroke-width:.3;stroke-dasharray:.4 .8;opacity:.45}.plate-svg .edge.order{stroke:currentColor;stroke-width:.3;stroke-dasharray:.5 1.1;stroke-linecap:round;opacity:.9}.plate-svg .node .shape{fill:color-mix(in srgb, var(--nc, var(--canopy)) 22%, #04110f);stroke:var(--nc, var(--canopy));stroke-width:.45}.plate-svg .shape-chip .shape{fill:#0c1416;stroke:var(--ink-dim,#9a9890)}.plate-svg .shape-check .shape,.plate-svg .shape-gate .shape{fill:#0c1416;stroke:#e8f6f1}.plate-svg .shape-commit .shape{fill:color-mix(in srgb, var(--canopy) 35%, #04110f);stroke:var(--canopy)}.plate-svg .label{font-size:2.3px;fill:#e8f6f1}.plate-svg .harness{font-size:1.9px;fill:var(--nc, var(--canopy));opacity:.9}.plate-svg .group-box{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.3;stroke-dasharray:1.2 .9;opacity:.8}.plate-svg .group-title,.plate-svg .group-subtitle{font-size:1.9px;fill:var(--canopy,#00a9a0);letter-spacing:.14em;text-transform:uppercase}.plate-svg .member-shape{fill:color-mix(in srgb, var(--nc, var(--canopy)) 22%, #04110f);stroke:var(--nc, var(--canopy));stroke-width:.3}.plate-svg .member-label{font-size:1.9px;fill:#e8f6f1;text-anchor:middle}.plate-svg .token{fill:var(--canopy,#00a9a0)}@media (prefers-reduced-motion:reduce){.plate-svg .token{display:none}}</style><g class="edges"><path class="edge pass" d="M20.4 13 C20.4 24 20.2 24 20.2 35" data-from="build" data-to="test"/><path class="edge pass" d="M19.9 57 C19.9 68 19.9 68 19.9 79" data-from="gate" data-to="triage"/><path class="edge pass" d="M20.2 35 C20.2 46 19.9 46 19.9 57" data-from="test" data-to="gate"/><path class="edge pass" d="M19.9 79 C19.9 90 20.4 90 20.4 101" data-from="triage" data-to="docs"/><path class="edge fail" d="M17.2 35 C10 35 10 13 17.4 13" data-from="test" data-to="build"/></g><g class="groups"></g><g class="nodes"><g class="node shape-agent" data-name="build" data-cx="20.4" data-cy="13" data-w="6" data-h="6" data-rank="0" data-lane="main"><title>build (agent)</title><rect class="shape" x="17.4" y="10" width="6" height="6" rx="3"/><text class="label" x="25.4" y="13" dy="0.8" text-anchor="start">build</text></g><g class="node shape-check" data-name="test" data-cx="20.2" data-cy="35" data-w="5.6" data-h="5.6" data-rank="1" data-lane="main"><title>test (check)</title><rect class="shape" x="17.4" y="32.2" width="5.6" height="5.6" rx="0.7"/><text class="label" x="25" y="35" dy="0.8" text-anchor="start">test</text></g><g class="node shape-gate" data-name="gate" data-cx="19.9" data-cy="57" data-w="5" data-h="5" data-rank="2" data-lane="main"><title>gate (gate)</title><rect class="shape" x="17.4" y="54.5" width="5" height="5" rx="0.5" transform="rotate(45 19.9 57)"/><text class="label" x="24.4" y="57" dy="0.8" text-anchor="start">gate</text></g><g class="node shape-gate" data-name="triage" data-cx="19.9" data-cy="79" data-w="5" data-h="5" data-rank="3" data-lane="main"><title>triage (router)</title><rect class="shape" x="17.4" y="76.5" width="5" height="5" rx="0.5" transform="rotate(45 19.9 79)"/><text class="label" x="24.4" y="79" dy="0.8" text-anchor="start">triage</text></g><g class="node shape-agent" data-name="docs" data-cx="20.4" data-cy="101" data-w="6" data-h="6" data-rank="4" data-lane="main"><title>docs (agent)</title><rect class="shape" x="17.4" y="98" width="6" height="6" rx="3"/><text class="label" x="25.4" y="101" dy="0.8" text-anchor="start">docs</text></g></g><circle class="token" r="1.1" cx="0" cy="0"><animateMotion dur="3.6s" repeatCount="indefinite" path="M20.4 13C20.4 24 20.2 24 20.2 35C20.2 46 19.9 46 19.9 57C19.9 68 19.9 68 19.9 79C19.9 90 20.4 90 20.4 101"/></circle></svg></figure>
+<dl class="sheet"><div class="field"><dt>Kind</dt><dd>graph</dd></div><div class="field"><dt>Name</dt><dd>hello-graph</dd></div><div class="field"><dt>Source</dt><dd><a href="https://github.com/UniverLab/canopy-web">UniverLab/canopy-web</a></dd></div><div class="field"><dt>Stars</dt><dd>7 stars</dd></div><div class="field"><dt>Nodes</dt><dd>agent 2 · check 1 · gate 1 · router 1</dd></div><div class="field"><dt>Edges</dt><dd>5 edges · 1 fail</dd></div><div class="field"><dt>Agent nodes</dt><dd>build, docs</dd></div><div class="field"><dt>Install</dt><dd><span class="row-install"><code>canopy graph install hello-graph</code><button type="button" class="copy" data-copy="canopy graph install hello-graph" aria-label="Copy the install command to the clipboard">Copy</button></span></dd></div></dl>
+</div>
+<h2 class="kicker">README</h2>
 <div class="readme"><h1>hello-graph</h1>
-<p>A graph the page tests render, with **one fail edge**.</p>
+<p>A graph the page tests render, with <strong>one fail edge</strong>.</p>
 <h2>Install</h2>
 <pre><code>canopy graph install hello-graph</code></pre>
 <p>Read the <a href="https://univerlab.org/canopy/" rel="nofollow">docs</a> and run <code>npm test</code>.</p></div>

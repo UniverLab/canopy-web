@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { NOT_PAGE, handlePage } from "../src/pages/routes.js";
 import { BUSY_BODY, BUSY_HEADING, COPY_BUTTON, EMPTY_OFFICIAL_GRAPHS, EMPTY_OFFICIAL_NODES, SEARCH_BUTTON, SEARCH_LABEL } from "../src/pages/copy.js";
 import { FakeCache, dirBody, fakeFetch, fileBody, type Stub } from "./fakes.js";
-import { EVIL_README_TEXT, PAGES_README_TEXT } from "./pages-fixture.js";
+import { EVIL_README_TEXT, FIVE_NODE_GRAPH_TEXT, PAGES_README_TEXT } from "./pages-fixture.js";
 import { VALID_GRAPH_TEXT } from "./documents-fixture.js";
 import { communityStubs, officialStubs, REPO_DIR, searchStubs } from "./stubs.js";
 
@@ -41,8 +41,8 @@ describe("route snapshots", () => {
   it("renders / with the official listing first", async () => {
     const html = await (await call("/")).text();
     expect(html).toMatchSnapshot();
-    expect(html).toContain(`<label for="q">${SEARCH_LABEL}</label>`);
-    expect(html).toContain(`<button type="submit" class="button">${SEARCH_BUTTON}</button>`);
+    expect(html).toContain(`<label class="sr-only" for="q">${SEARCH_LABEL}</label>`);
+    expect(html).toContain(`<button type="submit">${SEARCH_BUTTON}</button>`);
     expect(html).toContain(`<a href="/search?sort=top">`);
     expect(html).toContain(`<a href="/search?sort=new">`);
   });
@@ -87,26 +87,35 @@ describe("the markdown twin", () => {
     }
   });
 
-  it("lists the graph's nodes and routes as text, the same structure as the plate", async () => {
+  it("lists the sheet fields as a list, in title/list/install/README order", async () => {
     const twin = await (await call("/g/hello-graph", { accept: "text/markdown" })).text();
-    expect(twin).toContain("## Structure");
-    expect(twin).toContain("Nodes: build (agent), test (check), gate (gate), triage (router), docs (agent).");
-    expect(twin).toContain("Routes:");
-    for (const route of [
-      "- build --pass--> test",
-      "- test --always--> gate",
-      "- test --fail--> build",
-      "- gate --pass--> triage",
-      "- triage --route:ship--> docs",
+    for (const line of [
+      "# hello-graph",
+      "- Kind: graph",
+      "- Name: hello-graph",
+      "- Source: https://github.com/UniverLab/canopy-web",
+      "- Stars: 7 stars",
+      "- Nodes: agent 2 · check 1 · gate 1 · router 1",
+      "- Edges: 5 edges · 1 fail",
+      "- Agent nodes: build, docs",
+      "## Install",
+      "canopy graph install hello-graph",
+      "## README",
     ]) {
-      expect(twin).toContain(route);
+      expect(twin).toContain(line);
     }
+    // Title, then the list, then install, then the README — in that order.
+    const order = ["# hello-graph", "- Kind:", "## Install", "## README"].map((part) => twin.indexOf(part));
+    expect(order).toEqual([...order].sort((a, b) => a - b));
     expect(twin).not.toContain("<");
   });
 
-  it("gives the node twin no structure section", async () => {
+  it("gives the node twin no graph sheet fields and no README when empty", async () => {
     const twin = await (await call("/n/hello-node", { accept: "text/markdown" })).text();
-    expect(twin).not.toContain("## Structure");
+    expect(twin).toContain("- Kind: node");
+    expect(twin).not.toContain("- Nodes:");
+    expect(twin).not.toContain("- Edges:");
+    expect(twin).not.toContain("## README");
   });
 });
 
@@ -130,11 +139,16 @@ describe("the sanitizer", () => {
 });
 
 describe("the plate drawing", () => {
-  it("draws the five nodes as Canopy shapes in a scrolling figure", async () => {
+  it("draws the five nodes as Canopy shapes in a scrolling figure, both orientations", async () => {
     const html = await (await call("/g/hello-graph")).text();
     expect(html).toMatchSnapshot();
-    // The figure scrolls horizontally on narrow screens; the page never overflows.
+    // The figure holds both orientations; CSS shows the vertical one under
+    // 640 px and the horizontal one above, with no JavaScript involved.
     expect(html).toContain(`<figure class="plate">`);
+    expect(html).toContain(`<svg class="plate-svg plate-h"`);
+    expect(html).toContain(`<svg class="plate-svg plate-v"`);
+    expect(html).toMatch(/\.plate \.plate-v \{ display: none; \}/);
+    expect(html).toMatch(/@media \(max-width: 639px\) \{[\s\S]*\.plate \.plate-v \{ display: block; \}/);
     // The figure scrolls horizontally inside itself; the page never overflows.
     expect(html).toMatch(/figure\.plate \{[^}]*max-width: 100%;[^}]*overflow-x: auto;/);
     // One labelled shape per node: agents are circles, checks rounded
@@ -151,12 +165,12 @@ describe("the plate drawing", () => {
     ]) {
       expect(html).toContain(shape);
     }
-    // Edges follow the conditions: one red fail arc back, four teal passes
-    // (the always and the route read as pass), no error, a labelled svg.
-    expect((html.match(/class="edge fail"/g) ?? [])).toHaveLength(1);
-    expect((html.match(/class="edge pass"/g) ?? [])).toHaveLength(4);
+    // Edges follow the conditions, in each orientation: one red fail arc
+    // back, four teal passes (the always and the route read as pass), no
+    // error, a labelled svg.
+    expect((html.match(/class="edge fail"/g) ?? [])).toHaveLength(2);
+    expect((html.match(/class="edge pass"/g) ?? [])).toHaveLength(8);
     expect(html).not.toContain(`class="edge error"`);
-    expect(html).toContain(`<svg class="plate-svg"`);
     expect(html).toContain(`role="img"`);
     expect(html).toContain(`<title>hello-graph</title>`);
     expect(html).toContain(`<desc>Nodes in order: build, test, gate, triage, docs.</desc>`);
@@ -201,7 +215,7 @@ describe("data-layer failures", () => {
     expect(html).toContain(EMPTY_OFFICIAL_NODES);
     expect(html).not.toContain(BUSY_HEADING);
     // The rest of the home keeps working: search box and the two tabs.
-    expect(html).toContain(`<label for="q">${SEARCH_LABEL}</label>`);
+    expect(html).toContain(`<label class="sr-only" for="q">${SEARCH_LABEL}</label>`);
     expect(html).toContain(`<a href="/search?sort=top">`);
   });
 
@@ -272,13 +286,13 @@ describe("the page shell", () => {
 
   it("gives every listing page one h1 hero", async () => {
     const home = await (await call("/")).text();
-    expect(home).toMatch(/<h1 class="hero-title">A catalogue of Canopy graphs and nodes\.<\/h1>/);
+    expect(home).toMatch(/<h1 class="index-title">A catalogue of Canopy graphs and nodes\.<\/h1>/);
     const search = await (await call("/search?q=flow&sort=top", { stubs: searchStubs() })).text();
-    expect(search).toContain(`<h1>Results for “flow”</h1>`);
+    expect(search).toContain(`<h1 class="index-title">Results for “flow”</h1>`);
     expect(search).not.toMatch(/<h1>.*<\/h1>[\s\S]*<h1>/);
   });
 
-  it("shows stars, downloads when configured, the repo link and the agent nodes", async () => {
+  it("shows stars, the repo link and the agent nodes in the datasheet", async () => {
     const html = await (await call("/g/hello-graph", {
       env: { CF_ACCOUNT_ID: "acct", CF_ANALYTICS_TOKEN: "tok" },
       stubs: [
@@ -286,11 +300,11 @@ describe("the page shell", () => {
         { url: "analytics_engine/sql", status: 200, body: { data: [{ index: "UniverLab/canopy-web/graph/hello-graph", count: 12 }] } },
       ],
     })).text();
-    expect(html).toContain("7 stars");
-    expect(html).toContain("12 downloads");
+    expect(html).toContain("<dt>Stars</dt><dd>7 stars</dd>");
     expect(html).toContain(`<a class="button" href="https://github.com/UniverLab/canopy-web">Star on GitHub</a>`);
-    expect(html).toContain("build, docs");
-    expect(html).toContain("need a harness");
+    expect(html).toContain("<dt>Agent nodes</dt><dd>build, docs</dd>");
+    expect(html).toContain("<dt>Nodes</dt><dd>agent 2 · check 1 · gate 1 · router 1</dd>");
+    expect(html).toContain("<dt>Edges</dt><dd>5 edges · 1 fail</dd>");
   });
 
   it("installs the node page by its node ref and draws the one node", async () => {
@@ -311,6 +325,112 @@ describe("the page shell", () => {
     const long = await call("/g/UniverLab/canopy-web/hello-graph");
     const html = await long.text();
     expect(html).toContain("canopy graph install hello-graph");
+  });
+});
+
+describe("the technical index", () => {
+  it("renders rows, not cards, with kind, node count and the install box", async () => {
+    const html = await (await call("/")).text();
+    expect(html).toContain(`<ol class="index">`);
+    expect(html).toContain(`<li class="row">`);
+    expect(html).not.toContain(`doc-list`);
+    expect(html).toContain(`<a class="row-name" href="/g/hello-graph">hello-graph</a>`);
+    expect(html).toContain(`<span class="kind">graph</span>`);
+    expect(html).toContain(`<span class="kind">node</span>`);
+    expect(html).toContain(`<span class="row-meta">5 nodes</span>`);
+    expect(html).toContain(`<span class="row-meta">7 stars</span>`);
+    expect(html).toContain(`<code>canopy graph install hello-graph</code>`);
+    expect(html).toContain(`<code>canopy node install hello-node</code>`);
+    // Rows are separated by a rule, with no card background.
+    expect(html).toMatch(/li\.row \{[^}]*border-bottom: 1px solid var\(--surface-line\);/);
+    expect(html).not.toMatch(/li\.row \{[^}]*background:/);
+  });
+
+  it("keeps the Official heading as a mono uppercase kicker", async () => {
+    const html = await (await call("/")).text();
+    expect(html).toContain(`<h2 class="kicker">Official</h2>`);
+    expect(html).toMatch(/\.kicker \{[^}]*text-transform: uppercase;/);
+  });
+
+  it("marks the active tab underlined, with aria-current", async () => {
+    const html = await (await call("/search?q=flow&sort=new", { stubs: searchStubs() })).text();
+    expect(html).toContain(`<a href="/search?q=flow&sort=new" aria-current="page">New</a>`);
+    expect(html).toContain(`<a href="/search?q=flow&sort=top">Top</a>`);
+  });
+
+  it("shows last updated and the ref the page was read from", async () => {
+    const stubs = officialStubs().map((stub) =>
+      stub.url === REPO_DIR
+        ? { ...stub, body: { stargazers_count: 7, updated_at: "2026-10-27T08:00:00Z", default_branch: "main" } }
+        : stub,
+    );
+    const home = await (await call("/", { stubs })).text();
+    expect(home).toContain(`<time class="row-meta" datetime="2026-10-27">2026-10-27</time>`);
+    const doc = await (await call("/g/hello-graph", { stubs })).text();
+    expect(doc).toContain(`<dt>Ref</dt><dd>main</dd>`);
+    const twin = await (await call("/g/hello-graph", { stubs, accept: "text/markdown" })).text();
+    expect(twin).toContain(`- Ref: main`);
+  });
+
+  it("dots the harnesses a document runs on, in rows and plates", async () => {
+    const harnessed = JSON.stringify({
+      ...JSON.parse(FIVE_NODE_GRAPH_TEXT),
+      nodes: [
+        { name: "build", kind: "agent", position: 1, config: { platform: "claude" } },
+        { name: "test", kind: "check", position: 2, config: {} },
+        { name: "gate", kind: "gate", position: 3, config: {} },
+        { name: "triage", kind: "router", position: 4, config: {} },
+        { name: "docs", kind: "agent", position: 5, config: { model: "codex-mini" } },
+      ],
+    });
+    const stubs = officialStubs().map((stub) =>
+      stub.url.endsWith("hello-graph/graph.json")
+        ? { ...stub, body: fileBody("graphs/hello-graph/graph.json", harnessed) }
+        : stub,
+    );
+    const home = await (await call("/", { stubs })).text();
+    expect(home).toContain(`aria-label="harnesses: claude, codex"`);
+    expect(home).toContain(`<span class="dot" style="--nc:#d97757" title="claude"></span>`);
+    expect(home).toContain(`<span class="dot" style="--nc:#57c7c3" title="codex"></span>`);
+    const doc = await (await call("/g/hello-graph", { stubs })).text();
+    expect(doc).toContain(`style="--nc:#d97757"`);
+    expect(doc).toContain(`>claude</text>`);
+    expect(doc).toContain(`>codex</text>`);
+  });
+});
+
+describe("the header band", () => {
+  it("holds the wordmark, the search form and Publish/Source over the honeycomb", async () => {
+    const html = await (await call("/")).text();
+    const header = html.slice(html.indexOf(`<header class="site-header">`), html.indexOf(`</header>`));
+    expect(header).toContain(`<a class="wordmark" href="https://univerlab.org/canopy/">graphs</a>`);
+    expect(header).toContain(`<form class="search"`);
+    expect(header).toContain(`<a href="/publish">Publish</a>`);
+    expect(header).toContain(`<a href="https://github.com/UniverLab/canopy-web">Source</a>`);
+    expect(header).toContain(`<div class="fondo" id="fondo" aria-hidden="true"></div>`);
+    // The band is 160 px on desktop, 120 px on mobile, clipping the honeycomb.
+    expect(html).toMatch(/\.site-header \{[^}]*height: 120px;[^}]*overflow: hidden;/);
+    expect(html).toMatch(/@media \(min-width: 640px\) \{[\s\S]*\.site-header \{ height: 160px; \}/);
+  });
+
+  it("holds the current query in the search box", async () => {
+    const html = await (await call("/search?q=flow&sort=top", { stubs: searchStubs() })).text();
+    expect(html).toContain(`<input id="q" name="q" type="search" value="flow"`);
+  });
+});
+
+describe("the README section", () => {
+  it("renders inline emphasis from the README", async () => {
+    const html = await (await call("/g/hello-graph")).text();
+    expect(html).toContain(`<strong>one fail edge</strong>`);
+  });
+
+  it("omits the README section when the README is empty, in HTML and in the twin", async () => {
+    const html = await (await call("/n/hello-node")).text();
+    expect(html).not.toContain(`>README</h2>`);
+    expect(html).not.toContain(`<div class="readme">`);
+    const twin = await (await call("/n/hello-node", { accept: "text/markdown" })).text();
+    expect(twin).not.toContain(`## README`);
   });
 });
 

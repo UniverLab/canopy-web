@@ -98,6 +98,42 @@ describe("the sanitizer inside a list", () => {
   });
 });
 
+describe("emphasis", () => {
+  it("renders **strong** and __strong__ as strong", () => {
+    expect(renderMarkdown("with **one fail edge**.")).toBe(
+      "<p>with <strong>one fail edge</strong>.</p>",
+    );
+    expect(renderMarkdown("a __strong__ word")).toBe("<p>a <strong>strong</strong> word</p>");
+  });
+
+  it("renders *em* and _em_ as em", () => {
+    expect(renderMarkdown("a *fine* day")).toBe("<p>a <em>fine</em> day</p>");
+    expect(renderMarkdown("a _fine_ day")).toBe("<p>a <em>fine</em> day</p>");
+  });
+
+  it("keeps intraword underscores literal", () => {
+    expect(renderMarkdown("snake_case_name stays")).toBe("<p>snake_case_name stays</p>");
+    expect(renderMarkdown("a_b_c")).toBe("<p>a_b_c</p>");
+  });
+
+  it("leaves code spans untouched", () => {
+    expect(renderMarkdown("run `**not bold**` here")).toBe(
+      "<p>run <code>**not bold**</code> here</p>",
+    );
+    expect(renderMarkdown("run `_not em_` here")).toBe("<p>run <code>_not em_</code> here</p>");
+  });
+
+  it("renders emphasis inside list items, headings and link labels", () => {
+    expect(renderMarkdown("- item with **bold**")).toBe(
+      "<ul><li>item with <strong>bold</strong></li></ul>",
+    );
+    expect(renderMarkdown("## A **bold** heading")).toBe("<h2>A <strong>bold</strong> heading</h2>");
+    expect(renderMarkdown("[**bold**](https://example.com)")).toBe(
+      '<p><a href="https://example.com" rel="nofollow"><strong>bold</strong></a></p>',
+    );
+  });
+});
+
 describe("a real README", () => {
   const html = renderMarkdown(QUALITY_BUBBLE_README);
 

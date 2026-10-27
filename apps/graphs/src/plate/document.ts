@@ -8,7 +8,7 @@
  */
 import { isArray, isNumber, isRecord, isString } from "../json.js";
 import type { JsonValue } from "../../../../src/schema.js";
-import type { Kind } from "./vocabulary.js";
+import { harnessStem, type Kind } from "./vocabulary.js";
 
 /** A graph document as `renderPlate` takes it: the registry's format v6. */
 export interface GraphDocument {
@@ -68,6 +68,8 @@ export interface NodeView {
   docKind: string;
   position: number;
   commitRights: boolean;
+  /** The canonical harness stem of the node's platform/model, if it names one. */
+  harness: string | null;
 }
 
 /** One parsed ensemble: its strategy, member labels and wiring. */
@@ -76,6 +78,8 @@ export interface EnsembleView {
   strategy: Strategy;
   minPass: number;
   members: string[];
+  /** Per member, the canonical harness stem — same order as `members`. */
+  memberHarness: Array<string | null>;
   entryFrom: string | null;
   entryCondition: JsonValue;
   extraEntries: Array<{ from: string; condition: JsonValue }>;
@@ -131,6 +135,18 @@ export function targetId(target: JsonValue | EnsembleTarget | undefined): string
 
 function strategyOf(kind: unknown): Strategy {
   return kind === "cascade" || kind === "round_robin" ? kind : "parallel";
+}
+
+/**
+ * The harness a node config or ensemble member runs on: the canonical stem
+ * of its `platform`, else its `model` — null when neither names a known
+ * harness. Platform wins, the same priority the member label uses.
+ */
+export function harnessOf(config: unknown): string | null {
+  if (!isRecord(config)) {
+    return null;
+  }
+  return harnessStem(config["platform"]) ?? harnessStem(config["model"]);
 }
 
 /** A member chip label: its try order, plus its platform or model when known. */
@@ -196,6 +212,7 @@ export function parseDocument(document: unknown): ParsedGraph | null {
       docKind: isString(kind) ? kind : "check",
       position: isNumber(position) ? position : 0,
       commitRights: isRecord(config) && config["commit_rights"] === true,
+      harness: harnessOf(config),
     });
   }
   const edges: EdgeView[] = [];
@@ -216,6 +233,7 @@ export function parseDocument(document: unknown): ParsedGraph | null {
       const members = isArray(rawMembers)
         ? rawMembers.map((member, index) => memberLabel(member, index))
         : [];
+      const memberHarness = isArray(rawMembers) ? rawMembers.map((member) => harnessOf(member)) : [];
       const extraEntries: Array<{ from: string; condition: JsonValue }> = [];
       const rawExtra = ensemble["extra_entry_sources"];
       if (isArray(rawExtra)) {
@@ -230,6 +248,7 @@ export function parseDocument(document: unknown): ParsedGraph | null {
         strategy: strategyOf(ensemble["kind"]),
         minPass: isNumber(ensemble["min_pass"]) ? ensemble["min_pass"] : members.length,
         members,
+        memberHarness,
         entryFrom: targetId(ensemble["entry_from_node"]),
         entryCondition: ensemble["entry_condition"] ?? null,
         extraEntries,

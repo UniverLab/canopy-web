@@ -2,8 +2,10 @@
 /**
  * A minimal markdown renderer for READMEs, safe by construction.
  *
- * Supported: headings, lists, paragraphs, fenced code blocks, links and
- * inline code — nothing else. Everything the renderer does not recognise is
+ * Supported: headings, lists, paragraphs, fenced code blocks, links,
+ * inline code and `**strong**`/`__strong__`/`*em*`/`_em_` emphasis —
+ * nothing else. Intraword underscores stay literal and code spans are never
+ * emphasized. Everything the renderer does not recognise is
  * escaped, so HTML in a README never passes through as HTML; the only tags
  * in the output are the ones this file emits. Links carry `rel="nofollow"`
  * and only http(s), relative and anchor targets survive; anything else
@@ -27,13 +29,30 @@ const SAFE_URL = /^(?:https?:\/\/|\/|#|\.\.?\/)/i;
 /** Inline pieces this renderer understands, scanned left to right. */
 const INLINE_RE = /(`[^`\n]+`|\[[^\]\n]+\]\([^)\s]+\))/g;
 
+/**
+ * Inline emphasis, applied to already-escaped text (so `*` and `_` are still
+ * literal while `<`, `>` and `&` are entities). Strong first, then emphasis;
+ * `*` pairs anywhere with a non-empty run, while `_` pairs only at word
+ * boundaries — an underscore with a word character on its outer side stays
+ * literal, so `snake_case_name` never emphasizes. Code spans never reach
+ * here: the inline scanner pulls them out before this runs.
+ */
+function renderEmphasis(escaped: string): string {
+  const strong = escaped
+    .replace(/\*\*([^*\n]+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/(?<![A-Za-z0-9_])__([^_\n]+?)__(?![A-Za-z0-9_])/g, "<strong>$1</strong>");
+  return strong
+    .replace(/\*([^*\n]+?)\*/g, "<em>$1</em>")
+    .replace(/(?<![A-Za-z0-9_])_([^_\n]+?)_(?![A-Za-z0-9_])/g, "<em>$1</em>");
+}
+
 function renderInline(raw: string): string {
   let html = "";
   let cursor = 0;
   for (const match of raw.matchAll(INLINE_RE)) {
     const piece = match[0];
     const start = match.index ?? 0;
-    html += escapeHtml(raw.slice(cursor, start));
+    html += renderEmphasis(escapeHtml(raw.slice(cursor, start)));
     cursor = start + piece.length;
     if (piece.startsWith("`")) {
       html += `<code>${escapeHtml(piece.slice(1, -1))}</code>`;
@@ -48,7 +67,7 @@ function renderInline(raw: string): string {
       html += renderInline(label);
     }
   }
-  return html + escapeHtml(raw.slice(cursor));
+  return html + renderEmphasis(escapeHtml(raw.slice(cursor)));
 }
 
 const HEADING_RE = /^(#{1,6})\s+(.*)$/;
