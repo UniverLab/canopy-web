@@ -1,0 +1,9 @@
+{
+  "format_version": 1,
+  "name": "commit-check",
+  "kind": "check",
+  "description": "Verifies a commit landed since the spec started by comparing HEAD against the spec-start marker.",
+  "config": {
+    "command": "test \"$(git rev-parse HEAD)\" != \"{{spec_start_head}}\""
+  }
+}
