@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://graphs.univerlab.org/schema/blocked.schema.json",
+  "title": "Canopy blocked documents",
+  "description": "The catalogue's removal list, registry/blocked.json. One entry with a slug blocks that document; one without a slug blocks the whole repository. A maintainer adds an entry by pull request after deciding the report issue; the indexer honours it on its next run. Structural only: the rule that a slug needs its kind is checked by the validator, because JSON Schema cannot express it over sibling fields.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["repo", "reason", "issue", "blocked_at"],
+    "properties": {
+      "kind": {
+        "description": "The document kind. Ignored when no slug is named (the whole repository is blocked).",
+        "enum": ["graph", "node"]
+      },
+      "repo": {
+        "description": "The repository that holds the document, as owner/repo.",
+        "type": "string",
+        "pattern": "^[^/\\s]+/[^/\\s]+$"
+      },
+      "slug": {
+        "description": "The document slug. Without it, the whole repository is blocked.",
+        "type": "string",
+        "pattern": "^[a-z0-9-]{1,48}$"
+      },
+      "reason": {
+        "description": "Why it left the catalogue, in the words the page shows.",
+        "type": "string",
+        "minLength": 1
+      },
+      "issue": {
+        "description": "The report issue the removal was decided on; the author can appeal there.",
+        "type": "string",
+        "pattern": "^https://github\\.com/[^/\\s]+/[^/\\s]+/issues/[0-9]+$"
+      },
+      "blocked_at": {
+        "description": "The day the removal pull request landed.",
+        "type": "string",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+      }
+    }
+  }
+}

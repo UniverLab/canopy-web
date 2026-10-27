@@ -6,6 +6,7 @@ import { createGitHub } from "../src/github.js";
 import { runIndexer } from "../src/indexer.js";
 import { INDEXING_BODY } from "../src/pages/copy.js";
 import { resetIndexMemo } from "../src/store.js";
+import { blockedDocKey, blockedRepoKey, type BlockedEntry } from "../src/blocked.js";
 import { FakeCache, FakeKV, fakeFetch, fileBody, type Stub } from "./fakes.js";
 import { VALID_GRAPH_TEXT, VALID_NODE_TEXT, INVALID_GRAPH_TEXT } from "./documents-fixture.js";
 import { SLUG_PATTERN, SLUG_RE } from "../src/lib.js";
@@ -145,6 +146,40 @@ describe("redirects", () => {
     const response = await call("/i/graph/hello-graph", { env: { INDEX: await seeded() } });
     expect(response.body).toBeNull();
     expect(response.headers.get("content-type")).toBeNull();
+  });
+
+  it("answers a blocked document's install with 410 JSON, the reason and the issue", async () => {
+    const kv = await seeded();
+    const block: BlockedEntry = {
+      kind: "graph",
+      repo: "UniverLab/canopy-web",
+      slug: "hello-graph",
+      reason: "Malicious or dangerous command",
+      issue: "https://github.com/UniverLab/canopy-web/issues/12",
+      blocked_at: "2026-10-27",
+    };
+    await kv.put(blockedDocKey("graph", "UniverLab", "canopy-web", "hello-graph"), JSON.stringify(block));
+    const response = await call("/i/graph/hello-graph", { env: { INDEX: kv } });
+    expect(response.status).toBe(410);
+    expect(await response.json()).toEqual({
+      error: "blocked",
+      reason: block.reason,
+      issue: block.issue,
+    });
+  });
+
+  it("answers an install from a blocked repository with 410 JSON", async () => {
+    const kv = await seeded();
+    const block: BlockedEntry = {
+      repo: "acme/things",
+      reason: "Prompt that steers the agent to do harm",
+      issue: "https://github.com/UniverLab/canopy-web/issues/13",
+      blocked_at: "2026-10-27",
+    };
+    await kv.put(blockedRepoKey("acme", "things"), JSON.stringify(block));
+    const response = await call("/i/acme/things/graph/flow", { env: { INDEX: kv } });
+    expect(response.status).toBe(410);
+    expect(((await response.json()) as { error: string }).error).toBe("blocked");
   });
 });
 

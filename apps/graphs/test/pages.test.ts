@@ -8,7 +8,10 @@
  */
 import { describe, expect, it } from "vitest";
 import { NOT_PAGE, handlePage } from "../src/pages/routes.js";
-import { INDEXING_BODY, INDEXING_HEADING, COPY_BUTTON, EMPTY_OFFICIAL_GRAPHS, EMPTY_OFFICIAL_NODES, SEARCH_BUTTON, SEARCH_LABEL } from "../src/pages/copy.js";
+import { BLOCKED_HEADING, INDEXING_BODY, INDEXING_HEADING, COPY_BUTTON, EMPTY_OFFICIAL_GRAPHS, EMPTY_OFFICIAL_NODES, REPORT_LABEL, REPORT_REPO_LABEL, SEARCH_BUTTON, SEARCH_LABEL } from "../src/pages/copy.js";
+import { REPORT_REPOSITORY_HREF, reportUrl } from "../src/pages/report.js";
+import { blockedKey, type BlockedEntry } from "../src/blocked.js";
+import { escapeHtml } from "../src/pages/md.js";
 import { createGitHub } from "../src/github.js";
 import { runIndexer } from "../src/indexer.js";
 import { resetIndexMemo } from "../src/store.js";
@@ -29,6 +32,8 @@ interface Options {
   requestStubs?: Stub[];
   /** Skip seeding: the cold start, before the first scheduled run. */
   cold?: boolean;
+  /** Removal-list entries to seed after the index, before the request. */
+  blocked?: BlockedEntry[];
 }
 
 /** Seed a fresh KV by running the indexer over the stub table. */
@@ -43,6 +48,12 @@ async function seeded(stubsToSeed: Stub[]): Promise<FakeKV> {
 async function call(path: string, options: Options = {}): Promise<Response> {
   resetIndexMemo();
   const kv = options.cold === true ? new FakeKV() : await seeded(options.stubs ?? officialStubs());
+  for (const entry of options.blocked ?? []) {
+    const key = blockedKey(entry);
+    if (key !== null) {
+      await kv.put(key, JSON.stringify(entry));
+    }
+  }
   const fake = fakeFetch(options.requestStubs ?? []);
   const headers = new Headers();
   if (options.accept !== undefined) {
@@ -694,6 +705,114 @@ describe("the community warning", () => {
     expect(twin).toContain(`Review "What this runs" first.`);
     const official = await (await call("/g/hello-graph", { accept: "text/markdown" })).text();
     expect(official).not.toContain(`> Community document.`);
+  });
+});
+
+describe("the report links", () => {
+  it("puts a pre-filled Report link in the sheet, opening a new tab safely", async () => {
+    const html = await (await call("/g/hello-graph")).text();
+    const report = reportUrl(
+      "graph",
+      "UniverLab",
+      "canopy-web",
+      "hello-graph",
+      "https://graphs.univerlab.org/g/hello-graph",
+    );
+    expect(html).toContain(`<dt>${REPORT_LABEL}</dt><dd><a href="${escapeHtml(report)}"`);
+    expect(html).toContain(`target="_blank" rel="noopener noreferrer">${REPORT_LABEL}</a>`);
+    // The attribute is escaped once, for HTML; the URL itself carries `&`.
+    expect(html).toContain("&amp;kind=graph&amp;source=UniverLab%2Fcanopy-web");
+    expect(report).toContain("&kind=graph&source=UniverLab%2Fcanopy-web");
+    // The sheet ends with the install box, then Report.
+    expect(html.indexOf(`<dt>${REPORT_LABEL}</dt>`)).toBeGreaterThan(
+      html.indexOf(`<dt>Install</dt>`),
+    );
+  });
+
+  it("points a community page at GitHub's repository report form too", async () => {
+    const html = await (await call("/g/acme/things/flow", { stubs: searchStubs() })).text();
+    const report = reportUrl(
+      "graph",
+      "acme",
+      "things",
+      "flow",
+      "https://graphs.univerlab.org/g/acme/things/flow",
+    );
+    expect(html).toContain(`href="${escapeHtml(report)}"`);
+    expect(html).toContain(
+      `<a href="${REPORT_REPOSITORY_HREF}" target="_blank" rel="noopener noreferrer">${REPORT_REPO_LABEL}</a>`,
+    );
+    // An official page reports the document, never its own repository.
+    const official = await (await call("/g/hello-graph")).text();
+    expect(official).not.toContain(REPORT_REPO_LABEL);
+  });
+
+  it("lists the same links in the markdown twin", async () => {
+    const official = await (await call("/g/hello-graph", { accept: "text/markdown" })).text();
+    const report = reportUrl(
+      "graph",
+      "UniverLab",
+      "canopy-web",
+      "hello-graph",
+      "https://graphs.univerlab.org/g/hello-graph",
+    );
+    expect(official).toContain(`- ${REPORT_LABEL}: [${REPORT_LABEL}](${report})`);
+    expect(official).not.toContain(REPORT_REPO_LABEL);
+
+    const community = await (await call("/g/acme/things/flow", {
+      stubs: searchStubs(),
+      accept: "text/markdown",
+    })).text();
+    expect(community).toContain(`- ${REPORT_REPO_LABEL}: ${REPORT_REPOSITORY_HREF}`);
+    expect(community).not.toContain("<a ");
+  });
+});
+
+describe("the blocked list", () => {
+  const blocked: BlockedEntry = {
+    kind: "graph",
+    repo: "UniverLab/canopy-web",
+    slug: "hello-graph",
+    reason: "Malicious or dangerous command",
+    issue: "https://github.com/UniverLab/canopy-web/issues/12",
+    blocked_at: "2026-10-27",
+  };
+
+  it("answers a blocked document's page with 410, the reason and the issue", async () => {
+    const response = await call("/g/hello-graph", { blocked: [blocked] });
+    expect(response.status).toBe(410);
+    const html = await response.text();
+    expect(html).toContain(BLOCKED_HEADING);
+    expect(html).toContain(blocked.reason);
+    expect(html).toContain(`href="${blocked.issue}"`);
+    expect(html).not.toContain("<dt>Install</dt>");
+  });
+
+  it("answers the blocked page's twin with the same three facts", async () => {
+    const response = await call("/g/hello-graph", {
+      blocked: [blocked],
+      accept: "text/markdown",
+    });
+    expect(response.status).toBe(410);
+    expect(response.headers.get("content-type")).toBe("text/markdown; charset=utf-8");
+    const twin = await response.text();
+    expect(twin).toContain(`# ${BLOCKED_HEADING}`);
+    expect(twin).toContain(blocked.reason);
+    expect(twin).toContain(blocked.issue);
+  });
+
+  it("answers a document in a blocked repository with 410 too", async () => {
+    const response = await call("/g/acme/things/flow", {
+      stubs: searchStubs(),
+      blocked: [{
+        repo: "acme/things",
+        reason: "Copyright or licence",
+        issue: "https://github.com/UniverLab/canopy-web/issues/13",
+        blocked_at: "2026-10-27",
+      }],
+    });
+    expect(response.status).toBe(410);
+    expect(await response.text()).toContain("Copyright or licence");
   });
 });
 

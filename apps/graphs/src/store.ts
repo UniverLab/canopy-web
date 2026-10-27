@@ -5,14 +5,24 @@
  * The indexer (indexer.ts) writes three shapes: `index:v1` (one JSON
  * value with every listed entry, no full documents), one `doc:v1:*` key
  * per validated document plus its README, and `index:meta` with the
- * run's accounting. Every page and API answer reads through this module.
+ * run's accounting — plus one `blocked:v1:*` key per `registry/blocked.json`
+ * entry, which the request path reads before the index. Every page and
+ * API answer reads through this module.
  * The index is memoised in the isolate for 60 seconds; documents and
  * meta are read fresh, one KV read each. Everything here is total: a
  * missing binding, a missing key or an unreadable value is `null`
  * (the cold start), never an exception.
  */
 import type { DocumentKind, JsonValue } from "../../../src/schema.js";
+import {
+  blockedDocKey,
+  blockedRepoKey,
+  parseBlockedValue,
+  type BlockedEntry,
+} from "./blocked.js";
 import { isArray, isNumber, isRecord, isString, parseJson, stringField } from "./json.js";
+
+export type { BlockedEntry } from "./blocked.js";
 
 /**
  * The smallest KV surface the catalogue needs. The production binding
@@ -94,6 +104,8 @@ export interface IndexMeta {
   calls: number;
   repos_seen: number;
   documents: number;
+  /** How many `registry/blocked.json` entries the run read. */
+  blocked: number;
   invalid: IndexInvalid[];
   truncated: boolean;
   authenticated: boolean;
@@ -232,6 +244,9 @@ export function parseMeta(text: string): IndexMeta | null {
     calls,
     repos_seen: repos,
     documents,
+    // Written since the blocked list shipped; a meta from before it reads
+    // as zero blocks instead of turning /api/index-status into a 503.
+    blocked: isNumber(value["blocked"]) ? value["blocked"] : 0,
     invalid: invalid.flatMap((entry) => {
       const parsedEntry = invalidOf(entry);
       return parsedEntry === null ? [] : [parsedEntry];
@@ -258,6 +273,17 @@ export interface IndexStore {
   getIndex(): Promise<StoredIndex | null>;
   /** One validated document plus its README, or null when not indexed. */
   getDoc(kind: DocumentKind, owner: string, repo: string, slug: string): Promise<StoredDoc | null>;
+  /**
+   * The block that covers this document, if any: its own `blocked:v1:<kind>:*`
+   * key first, then a whole-repository `blocked:v1:repo:*` block. The request
+   * path reads this before the index, so a stale index cannot serve it.
+   */
+  getBlocked(
+    kind: DocumentKind,
+    owner: string,
+    repo: string,
+    slug: string,
+  ): Promise<BlockedEntry | null>;
   /** The last run's accounting, or null when no run has written it. */
   getMeta(): Promise<IndexMeta | null>;
 }
@@ -295,6 +321,36 @@ export function createStore(kv: KV | undefined): IndexStore {
     return text === null ? null : parseStoredDoc(text);
   }
 
+  async function getBlocked(
+    kind: DocumentKind,
+    owner: string,
+    repo: string,
+    slug: string,
+  ): Promise<BlockedEntry | null> {
+    if (kv === undefined) {
+      return null;
+    }
+    for (const key of [
+      blockedDocKey(kind, owner, repo, slug),
+      blockedRepoKey(owner, repo),
+    ]) {
+      let text: string | null;
+      try {
+        text = await kv.get(key);
+      } catch {
+        continue;
+      }
+      if (text === null) {
+        continue;
+      }
+      const entry = parseBlockedValue(text);
+      if (entry !== null) {
+        return entry;
+      }
+    }
+    return null;
+  }
+
   async function getMeta(): Promise<IndexMeta | null> {
     if (kv === undefined) {
       return null;
@@ -308,5 +364,5 @@ export function createStore(kv: KV | undefined): IndexStore {
     return text === null ? null : parseMeta(text);
   }
 
-  return { getIndex, getDoc, getMeta };
+  return { getIndex, getDoc, getBlocked, getMeta };
 }

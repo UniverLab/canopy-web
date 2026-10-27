@@ -2,14 +2,17 @@
 /**
  * The scheduled catalogue index.
  *
- * A Cron Trigger runs this every 15 minutes: it discovers every
- * repository tagged `topic:canopy-graph`, lists each one's document
- * folders through the same discovery the live search uses, fetches and
- * validates every document, indexes the official registry in the same
- * run, and writes the catalogue into KV — `index:v1` (entries, no full
- * documents), one `doc:v1:*` key per document plus its README, and
- * `index:meta` with the run's accounting. The request path then serves
- * everything from KV and never spends GitHub quota on traffic.
+ * A Cron Trigger runs this every 15 minutes: it reads the community
+ * removal list (`registry/blocked.json`) first, discovers every repository
+ * tagged `topic:canopy-graph`, lists each one's document folders through
+ * the same discovery the live search uses, fetches and validates every
+ * document, indexes the official registry in the same run, and writes the
+ * catalogue into KV — `index:v1` (entries, no full documents), one
+ * `doc:v1:*` key per document plus its README, one `blocked:v1:*` key per
+ * blocked entry, and `index:meta` with the run's accounting. A blocked
+ * document or repository is never written to `doc:v1:*`, and a stale
+ * `doc:v1:*` key is deleted. The request path then serves everything from
+ * KV and never spends GitHub quota on traffic.
  *
  * The run is budgeted (1,200 GitHub calls authenticated, 50 without a
  * token). When the budget, a rate limit or a failed discovery page stops
@@ -20,9 +23,17 @@
  * deleted.
  */
 import type { DocumentKind, JsonValue } from "../../../src/schema.js";
+import {
+  BLOCKED_PREFIX,
+  blockedDocument,
+  blockedKey,
+  blockedRepository,
+  parseBlockedList,
+  type BlockedEntry,
+} from "./blocked.js";
 import type { ApiError, GitHub, Log } from "./github.js";
 import { isApiError } from "./github.js";
-import { isArray, isNumber, isRecord, readJson, stringField } from "./json.js";
+import { decodeBase64, isArray, isNumber, isRecord, readJson, stringField } from "./json.js";
 import { CATALOGUE_TOPIC, discoverSources } from "./discovery.js";
 import {
   type CatalogEntry,
@@ -82,6 +93,42 @@ export const INDEX_MAX_BYTES = 5 * 1024 * 1024;
 
 /** Descriptions are cut to this length when the index would overshoot. */
 export const DESCRIPTION_TRIM = 280;
+
+/**
+ * The removal list, read once per run from `main` before anything else:
+ * `registry/blocked.json` in the catalogue repository, through the contents
+ * API so the run spends one call and no more. A refusal to read it keeps
+ * the previous blocks (the KV keys stay); a readable list replaces them.
+ */
+export const BLOCKED_FILE_URL =
+  `https://api.github.com/repos/${OFFICIAL_REPOSITORY}/contents/registry/blocked.json?ref=main`;
+
+/** What one read of the removal list proved: the entries, and whether it read. */
+interface BlockedRead {
+  entries: BlockedEntry[];
+  /** False when the file was missing or unreadable: keep the previous keys. */
+  loaded: boolean;
+}
+
+async function readBlocked(github: GitHub, log: Log): Promise<BlockedRead> {
+  const response = await github.get(BLOCKED_FILE_URL, "contents");
+  if (isApiError(response)) {
+    if (response.kind === "rate-limit") {
+      throw new StopRun("rate-limited reading registry/blocked.json");
+    }
+    log(`indexer: registry/blocked.json ${response.kind}; keeping the previous blocks`);
+    return { entries: [], loaded: false };
+  }
+  const body = await readJson(response);
+  const content = body.ok && isRecord(body.value) ? body.value["content"] : undefined;
+  const text = decodeBase64(content);
+  const entries = text === null ? null : parseBlockedList(text);
+  if (entries === null) {
+    log("indexer: registry/blocked.json did not parse as a JSON array; keeping the previous blocks");
+    return { entries: [], loaded: false };
+  }
+  return { entries, loaded: true };
+}
 
 /** The discovery query: the catalogue topic, best starred first. */
 export function discoveryUrl(page: number): string {
@@ -261,6 +308,8 @@ interface RunState {
   entries: IndexEntry[];
   documents: Map<string, StoredDoc>;
   invalid: IndexInvalid[];
+  /** The entries `registry/blocked.json` held at the start of this run. */
+  blocked: BlockedEntry[];
   /** Repositories fully processed: their previous entries are replaced. */
   visited: Set<string>;
   /** Repositories the discovery search returned, visited or not. */
@@ -274,6 +323,19 @@ async function indexSource(
   source: DocumentSource,
   official: boolean,
 ): Promise<void> {
+  const block = blockedDocument(
+    state.blocked,
+    source.kind,
+    source.owner,
+    source.repo,
+    source.slug,
+  );
+  if (block !== null) {
+    state.log(
+      `indexer: blocked ${source.kind} ${source.owner}/${source.repo}/${source.slug}: ${block.reason}`,
+    );
+    return;
+  }
   const loaded = await loadDocumentWithReason(state.github, source, state.log);
   if (loaded.kind === "doc") {
     state.entries.push(entryFromLoaded(source, loaded.entry, official));
@@ -311,6 +373,11 @@ async function indexSource(
  * outage; anything else unreadable logs and contributes nothing.
  */
 async function indexOfficial(state: RunState): Promise<void> {
+  const repoBlock = blockedRepository(state.blocked, OFFICIAL_OWNER, OFFICIAL_REPO);
+  if (repoBlock !== null) {
+    state.log(`indexer: blocked the official registry: ${repoBlock.reason}`);
+    return;
+  }
   const slugs: Record<DocumentKind, string[]> = { graph: [], node: [] };
   for (const kind of ["graph", "node"] as const) {
     const listing = await state.github.get(
@@ -356,6 +423,14 @@ async function indexOfficial(state: RunState): Promise<void> {
 
 /** Index one community repository discovered by the topic search. */
 async function indexRepo(state: RunState, hit: RepoHit): Promise<void> {
+  const repoBlock = blockedRepository(state.blocked, hit.owner, hit.repo);
+  if (repoBlock !== null) {
+    // Skip before the tree call: a blocked repository costs one discovery
+    // hit and no contents call, and still counts as visited so its previous
+    // entries are dropped.
+    state.log(`indexer: blocked repository ${hit.owner}/${hit.repo}: ${repoBlock.reason}`);
+    return;
+  }
   const sources = await discoverSources(state.github, hit.owner, hit.repo, hit.branch, state.log);
   if (isApiError(sources)) {
     throw new StopRun(`rate-limited discovering ${hit.owner}/${hit.repo}`);
@@ -415,6 +490,7 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
     entries: [],
     documents: new Map(),
     invalid: [],
+    blocked: [],
     visited: new Set(),
     discovered: new Set(),
     truncated: false,
@@ -423,8 +499,15 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
   const previous = await readIndex(options.index).catch(() => null);
   const previousEntries = previous?.entries ?? [];
 
+  let blocksLoaded = false;
   let discoveryComplete = false;
   try {
+    // The removal list is the run's first GitHub call, so nothing is
+    // indexed before the run knows what must not be.
+    const read = await readBlocked(guarded, log);
+    state.blocked = read.entries;
+    blocksLoaded = read.loaded;
+
     const officialBefore = { entries: state.entries.length, invalid: state.invalid.length };
     const officialDocs = new Map(state.documents);
     try {
@@ -499,13 +582,19 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
 
   // Carry-over: the previous entries of repositories this run could not
   // visit stay, in their previous order, unless a completed discovery
-  // proves the repository unlisted the topic and is truly gone.
+  // proves the repository unlisted the topic and is truly gone — or the
+  // removal list now blocks them, which a short run must not resurrect.
   for (const entry of previousEntries) {
     const key = repoKey(entry.owner, entry.repo);
     if (state.visited.has(key)) {
       continue;
     }
     if (discoveryComplete && !entry.official && !state.discovered.has(key)) {
+      continue;
+    }
+    if (
+      blockedDocument(state.blocked, entry.kind, entry.owner, entry.repo, entry.slug) !== null
+    ) {
       continue;
     }
     state.entries.push(entry);
@@ -516,12 +605,39 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
     await options.index.put(key, JSON.stringify(stored));
   }
   await options.index.put(INDEX_KEY, buildIndexPayload(state.entries, builtAt));
+
+  // The removal list, one key per entry, so the request path can answer a
+  // block without reading the whole file. Only a list that was actually
+  // read replaces the keys: a failure keeps the previous blocks in force.
+  const liveBlocks = new Set<string>();
+  for (const entry of state.blocked) {
+    const key = blockedKey(entry);
+    if (key === null) {
+      continue;
+    }
+    liveBlocks.add(key);
+    await options.index.put(key, JSON.stringify(entry));
+  }
+  if (blocksLoaded) {
+    let blocksCursor: string | undefined;
+    do {
+      const listed = await options.index.list({ prefix: BLOCKED_PREFIX, cursor: blocksCursor });
+      for (const key of listed.keys) {
+        if (!liveBlocks.has(key.name)) {
+          await options.index.delete(key.name);
+        }
+      }
+      blocksCursor = listed.list_complete ? undefined : listed.cursor;
+    } while (blocksCursor !== undefined);
+  }
+
   const meta: IndexMeta = {
     built_at: builtAt,
     duration_ms: Math.max(0, now() - started),
     calls,
     repos_seen: state.visited.size,
     documents: state.entries.length,
+    blocked: state.blocked.length,
     invalid: state.invalid,
     truncated: state.truncated,
     authenticated: options.authenticated,

@@ -21,7 +21,7 @@ import { attachDownloads, createAnalytics } from "./analytics.js";
 import { type CacheLike, type Log } from "./github.js";
 import type { DocumentKind } from "../../../src/schema.js";
 import { SLUG_RE, OWNER_RE, REPO_RE } from "./lib.js";
-import { createStore, type KV } from "./store.js";
+import { createStore, type BlockedEntry, type KV } from "./store.js";
 import { documentFromStored, entryFor, officialFromIndex, searchFromIndex } from "./catalog.js";
 import { type SearchSort } from "./search.js";
 
@@ -70,6 +70,18 @@ function errorResponse(error: ApiErrorBody): Response {
   return jsonResponse(
     { kind: error.kind, message: error.message, status: error.status },
     error.status,
+    60,
+  );
+}
+
+/**
+ * A document removed after a community report: 410, with the reason and the
+ * issue the maintainer decided on. `canopy graph install` prints both.
+ */
+function blockedResponse(blocked: BlockedEntry): Response {
+  return jsonResponse(
+    { error: "blocked", reason: blocked.reason, issue: blocked.issue },
+    410,
     60,
   );
 }
@@ -226,6 +238,11 @@ export async function handleApi(
         return errorResponse(invalidPath(invalid));
       }
       const kind: DocumentKind = route.verb === "g" ? "graph" : "node";
+      // Before the index: a block outlives whatever the last run wrote.
+      const blocked = await store.getBlocked(kind, owner, repo, slug);
+      if (blocked !== null) {
+        return blockedResponse(blocked);
+      }
       const index = await store.getIndex();
       if (index === null) {
         return indexingResponse();

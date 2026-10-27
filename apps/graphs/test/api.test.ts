@@ -10,6 +10,7 @@ import { handleApi } from "../src/api.js";
 import { createGitHub } from "../src/github.js";
 import { runIndexer } from "../src/indexer.js";
 import { resetIndexMemo } from "../src/store.js";
+import { blockedDocKey, type BlockedEntry } from "../src/blocked.js";
 import { FakeCache, FakeKV, fakeFetch, fileBody, dirBody, type FakeFetch, type Stub } from "./fakes.js";
 import { INVALID_GRAPH_TEXT, VALID_GRAPH_TEXT, VALID_NODE_TEXT } from "./documents-fixture.js";
 
@@ -318,6 +319,37 @@ describe("the JSON API", () => {
     const document = await call("/api/g/UniverLab/canopy-web/hello-graph", { stubs: table });
     expect(document.response.status).toBe(404);
     expect(((await document.response.json()) as { kind: string }).kind).toBe("invalid-document");
+  });
+
+  it("answers a blocked document with a 410 JSON body naming the reason and issue", async () => {
+    resetIndexMemo();
+    const kv = await seeded(stubs());
+    const block: BlockedEntry = {
+      kind: "graph",
+      repo: "UniverLab/canopy-web",
+      slug: "hello-graph",
+      reason: "Broken or invalid",
+      issue: "https://github.com/UniverLab/canopy-web/issues/12",
+      blocked_at: "2026-10-27",
+    };
+    await kv.put(
+      blockedDocKey("graph", "UniverLab", "canopy-web", "hello-graph"),
+      JSON.stringify(block),
+    );
+    const answer = await handleApi(
+      new Request("https://graphs.univerlab.org/api/g/UniverLab/canopy-web/hello-graph"),
+      { INDEX: kv },
+      { fetchImpl: fakeFetch([]).fetchImpl, cache: new FakeCache() },
+    );
+    const response = answer as unknown as Response;
+    expect(response.status).toBe(410);
+    expect(await response.json()).toEqual({
+      error: "blocked",
+      reason: block.reason,
+      issue: block.issue,
+    });
+    // It never reaches the index, so a stale entry cannot answer instead.
+    expect(response.headers.get("access-control-allow-origin")).toBe("*");
   });
 
   it("answers a missing document with a typed 404, never a 500", async () => {

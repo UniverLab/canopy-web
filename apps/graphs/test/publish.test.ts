@@ -29,6 +29,7 @@ import {
   PUBLISH_NODE_FIELDS,
   PUBLISH_OFFICIAL_HEADING,
   PUBLISH_PLACE_HEADING,
+  PUBLISH_REPORT_HEADING,
   PUBLISH_SHARE_HEADING,
   PUBLISH_TITLE,
   PUBLISH_TOPIC_HEADING,
@@ -46,7 +47,7 @@ import { officialStubs } from "./stubs.js";
 
 const ORIGIN = "https://graphs.univerlab.org";
 
-/** The seven sections, in the order the page must carry them. */
+/** The eight sections, in the order the page must carry them. */
 const STEPS = [
   PUBLISH_SHARE_HEADING,
   PUBLISH_PLACE_HEADING,
@@ -55,6 +56,7 @@ const STEPS = [
   PUBLISH_WHEN_HEADING,
   PUBLISH_INSTALL_HEADING,
   PUBLISH_OFFICIAL_HEADING,
+  PUBLISH_REPORT_HEADING,
 ];
 
 async function call(path: string, accept?: string): Promise<Response> {
@@ -96,7 +98,7 @@ describe("the publish route", () => {
     expect(await response.text()).toContain(`<h1 class="doc-title">${PUBLISH_TITLE}</h1>`);
   });
 
-  it("carries the seven steps in order", async () => {
+  it("carries the eight steps in order", async () => {
     const html = await (await call("/publish")).text();
     for (const step of STEPS) {
       expect(html).toContain(`<h2 class="kicker">${step}</h2>`);
@@ -175,6 +177,19 @@ describe("the page states the code's own values", () => {
     expect(html).toContain(`href="${SCHEMA_NODE_URL}"`);
     expect(html).toContain(OFFICIAL_REPOSITORY);
     expect(html).toContain(documentPrefix());
+  });
+
+  it("explains reporting and removal: anyone reports, maintainers decide, authors appeal", async () => {
+    const html = await (await call("/publish")).text();
+    expect(html).toContain(`<h2 class="kicker">${PUBLISH_REPORT_HEADING}</h2>`);
+    expect(html).toContain("Anyone can report a graph or node");
+    expect(html).toContain("<code>blocked.json</code>");
+    expect(html).toContain("An author can appeal on the same issue.");
+    const twin = await (await call("/publish.md")).text();
+    expect(twin).toContain(`## ${PUBLISH_REPORT_HEADING}`);
+    expect(twin).toContain("Anyone can report a graph or node");
+    expect(twin).toContain("An author can appeal on the same issue.");
+    expect(twin).toContain("`blocked.json`");
   });
 });
 

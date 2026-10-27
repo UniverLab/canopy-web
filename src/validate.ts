@@ -2,6 +2,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { type Schema, Validator } from "@cfworker/json-schema";
+import blockedSchema from "../schema/blocked.schema.json" with { type: "json" };
 import { graphSchema, nodeSchema, type DocumentKind } from "./schema.js";
 import { folderMatchesName } from "./slug.js";
 
@@ -28,17 +29,15 @@ const validators: Record<DocumentKind, Validator> = {
   node: new Validator(nodeSchema as Schema),
 };
 
+/** The removal list's structural schema; its cross-field rule lives below. */
+const blockedValidator = new Validator(blockedSchema as Schema);
+
 function asString(value: unknown, fallback: string): string {
   return typeof value === "string" && value.length > 0 ? value : fallback;
 }
 
-/** Schema failures for one parsed document. */
-export function validateDocument(
-  file: string,
-  kind: DocumentKind,
-  doc: unknown,
-): ValidationFailure[] {
-  const result = validators[kind].validate(doc) as SchemaResult;
+/** Turn one validator result into the failures the CLI prints. */
+function schemaFailures(file: string, result: SchemaResult): ValidationFailure[] {
   if (result.valid !== false) {
     return [];
   }
@@ -48,6 +47,61 @@ export function validateDocument(
     pointer: asString(entry.instanceLocation, "#"),
     message: asString(entry.error, asString(entry.message, "does not match schema")),
   }));
+}
+
+/** Schema failures for one parsed document. */
+export function validateDocument(
+  file: string,
+  kind: DocumentKind,
+  doc: unknown,
+): ValidationFailure[] {
+  return schemaFailures(file, validators[kind].validate(doc) as SchemaResult);
+}
+
+/** The one shape rule JSON Schema cannot state across sibling fields. */
+function blockedCrossField(file: string, list: unknown): ValidationFailure[] {
+  if (!Array.isArray(list)) {
+    return [];
+  }
+  const failures: ValidationFailure[] = [];
+  list.forEach((entry, index) => {
+    if (typeof entry !== "object" || entry === null) {
+      return;
+    }
+    const slug = (entry as { slug?: unknown }).slug;
+    const kind = (entry as { kind?: unknown }).kind;
+    if (typeof slug === "string" && kind !== "graph" && kind !== "node") {
+      failures.push({
+        file,
+        pointer: `#/${index}`,
+        message: "slug requires kind (graph or node)",
+      });
+    }
+  });
+  return failures;
+}
+
+/**
+ * Schema + cross-field failures for one parsed `registry/blocked.json`: an
+ * entry may name one document only when it names its kind too.
+ */
+export function validateBlocked(file: string, list: unknown): ValidationFailure[] {
+  return [
+    ...schemaFailures(file, blockedValidator.validate(list) as SchemaResult),
+    ...blockedCrossField(file, list),
+  ];
+}
+
+/** Read and validate `registry/blocked.json`; a missing file is a failure. */
+export function validateBlockedFile(file: string): ValidationFailure[] {
+  if (!existsSync(file)) {
+    return [{ file, pointer: "#", message: "missing blocked list" }];
+  }
+  const read = readJson(file);
+  if ("failure" in read) {
+    return [read.failure];
+  }
+  return validateBlocked(file, read.doc);
 }
 
 const BANNED_CONFIG_KEYS = new Set(["platform", "model", "cli"]);
@@ -233,6 +287,11 @@ function run(argv: string[]): number {
   const cwd = process.cwd();
   const targets = argv.length > 0 ? argv : [path.join(cwd, "registry")];
   const failures = targets.flatMap((target) => validateTarget(path.resolve(cwd, target)));
+  // The default run also checks the removal list, at the registry root.
+  // Explicit targets stay document-only, so a focused check costs nothing.
+  if (argv.length === 0) {
+    failures.push(...validateBlockedFile(path.join(cwd, "registry", "blocked.json")));
+  }
   report(failures);
   if (failures.length > 0) {
     process.stderr.write(`${failures.length} failure(s)\n`);

@@ -28,6 +28,8 @@ import {
   PUBLISH_OFFICIAL_HEADING,
   PUBLISH_PLACE_HEADING,
   PUBLISH_PLACE_README,
+  PUBLISH_REPORT_BODY,
+  PUBLISH_REPORT_HEADING,
   PUBLISH_SHARE_BARE,
   PUBLISH_SHARE_HEADING,
   PUBLISH_TITLE,
@@ -230,6 +232,11 @@ export function publishPage(): Page {
           { label: OFFICIAL_REPOSITORY, href: SOURCE_HREF },
         ]).replace(documentPrefix(), `\`${documentPrefix()}\``),
       ],
+    },
+    {
+      heading: PUBLISH_REPORT_HEADING,
+      html: [para(PUBLISH_REPORT_BODY, ["blocked.json"])],
+      markdown: [mdPara(PUBLISH_REPORT_BODY, ["blocked.json"])],
     },
   ];
 

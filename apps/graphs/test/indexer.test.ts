@@ -16,6 +16,7 @@ import {
   runIndexer,
 } from "../src/indexer.js";
 import { createStore, docKey, resetIndexMemo, type IndexEntry } from "../src/store.js";
+import { blockedDocKey, blockedRepoKey, type BlockedEntry } from "../src/blocked.js";
 import { FakeCache, FakeKV, fakeFetch, fileBody, type Stub } from "./fakes.js";
 import { officialStubs } from "./stubs.js";
 import {
@@ -26,14 +27,38 @@ import {
 
 const OFFICIAL_GRAPHS = "repos/UniverLab/canopy-web/contents/registry/graphs";
 const OFFICIAL_NODES = "repos/UniverLab/canopy-web/contents/registry/nodes";
+const OFFICIAL_BLOCKED = "repos/UniverLab/canopy-web/contents/registry/blocked.json";
 const OFFICIAL_REPO = "repos/UniverLab/canopy-web";
+
+/** The issue every blocked fixture names. */
+const BLOCK_ISSUE = "https://github.com/UniverLab/canopy-web/issues/9";
 
 /** An empty official registry: both directories missing, the repo known. */
 function emptyOfficialStubs(): Stub[] {
   return [
+    { url: OFFICIAL_BLOCKED, status: 404, body: {} },
     { url: OFFICIAL_GRAPHS, status: 404, body: {} },
     { url: OFFICIAL_NODES, status: 404, body: {} },
     { url: OFFICIAL_REPO, status: 200, body: { stargazers_count: 3, default_branch: "main" } },
+  ];
+}
+
+/** The removal list as the contents API serves it: base64 JSON in a file body. */
+function blockedStubs(entries: unknown[]): Stub[] {
+  return [
+    {
+      url: OFFICIAL_BLOCKED,
+      status: 200,
+      body: fileBody("registry/blocked.json", JSON.stringify(entries)),
+    },
+  ];
+}
+
+/** The empty official stubs with the removal list replaced by these entries. */
+function withBlocks(entries: unknown[]): Stub[] {
+  return [
+    ...emptyOfficialStubs().filter((stub) => stub.url !== OFFICIAL_BLOCKED),
+    ...blockedStubs(entries),
   ];
 }
 
@@ -129,9 +154,9 @@ describe("the scheduled indexer", () => {
     expect(meta.truncated).toBe(false);
     expect(meta.authenticated).toBe(true);
     expect(meta.invalid).toEqual([]);
-    // Official (3) + two search pages (2) + one tree, document and README
-    // per repository (101 x 3): every GitHub call counted.
-    expect(meta.calls).toBe(3 + 2 + 101 * 3);
+    // Removal list (1) + official (3) + two search pages (2) + one tree,
+    // document and README per repository (101 x 3): every call counted.
+    expect(meta.calls).toBe(4 + 2 + 101 * 3);
     expect(fake.calls.length).toBe(meta.calls);
     const searches = fake.calls.filter((url) => url.includes("search/repositories"));
     expect(searches.length).toBe(2);
@@ -228,9 +253,9 @@ describe("the scheduled indexer", () => {
       JSON.stringify({ document: { name: "Old two" }, readme: "old two readme" }),
     );
 
-    // Official (3) + search (1) + one full repository (tree, document,
-    // README): the seventh call spends the budget of 7, and the second
-    // repository is never visited.
+    // Removal list (1) + official (3) + search (1) + one full repository
+    // (tree, document, README): the eighth call spends the budget of 8, and
+    // the second repository is never visited.
     const { meta, fake } = await run(
       [
         ...emptyOfficialStubs(),
@@ -242,11 +267,11 @@ describe("the scheduled indexer", () => {
         ...repoStubs("one", 4),
         ...repoStubs("two", 6),
       ],
-      { kv, budget: 7 },
+      { kv, budget: 8 },
     );
 
-    expect(meta.calls).toBe(7);
-    expect(fake.calls.length).toBe(7);
+    expect(meta.calls).toBe(8);
+    expect(fake.calls.length).toBe(8);
     expect(meta.truncated).toBe(true);
     const index = await storedIndex(kv);
     expect(index.entries.map((entry) => `${entry["repo"]}/${entry["slug"]}`).sort()).toEqual([
@@ -292,8 +317,8 @@ describe("the scheduled indexer", () => {
     }
 
     // Ten full pages: GitHub's cap, every repository with an empty tree
-    // (one call each, no documents). Official (3) + discovery (10) +
-    // trees (1,000) stays under the 1,200 budget.
+    // (one call each, no documents). Removal list (1) + official (3) +
+    // discovery (10) + trees (1,000) stays under the 1,200 budget.
     const stubs: Stub[] = [...emptyOfficialStubs()];
     for (let page = 1; page <= 10; page += 1) {
       const names = Array.from({ length: 100 }, (_, i) => `r-${String((page - 1) * 100 + i + 1).padStart(3, "0")}`);
@@ -313,7 +338,7 @@ describe("the scheduled indexer", () => {
     const { meta } = await run(stubs, { kv });
 
     expect(meta.truncated).toBe(true);
-    expect(meta.calls).toBe(3 + 10 + 1000);
+    expect(meta.calls).toBe(4 + 10 + 1000);
     const index = await storedIndex(kv);
     // The visited repository had no documents, so its previous entry is
     // gone; the repository beyond the cap was never proven gone, so its
@@ -365,6 +390,151 @@ describe("the scheduled indexer", () => {
     expect(await kv.get(docKey("graph", "acme", "one", "gone"))).toBeNull();
     expect(await kv.get(docKey("graph", "acme", "vanished", "x"))).toBeNull();
     expect(await kv.get(docKey("graph", "acme", "one", "flow"))).not.toBeNull();
+  });
+
+  it("skips a blocked document, records its key and deletes a stale one", async () => {
+    const kv = new FakeKV();
+    const staleKey = blockedRepoKey("acme", "gone");
+    const stale: BlockedEntry = {
+      repo: "acme/gone",
+      reason: "Broken or invalid",
+      issue: BLOCK_ISSUE,
+      blocked_at: "2026-10-01",
+    };
+    await kv.put(staleKey, JSON.stringify(stale));
+    const block: BlockedEntry = {
+      kind: "graph",
+      repo: "acme/things",
+      slug: "toxic",
+      reason: "Malicious or dangerous command",
+      issue: BLOCK_ISSUE,
+      blocked_at: "2026-10-27",
+    };
+    const base = "repos/acme/things";
+    const { meta, fake } = await run([
+      ...withBlocks([block]),
+      {
+        url: "search/repositories",
+        status: 200,
+        body: { total_count: 1, items: [searchHit("things", 5)] },
+      },
+      {
+        url: `${base}/git/trees/main`,
+        status: 200,
+        body: {
+          tree: [
+            { path: "graphs/flow/graph.json", type: "blob" },
+            { path: "graphs/toxic/graph.json", type: "blob" },
+          ],
+        },
+      },
+      { url: `${base}/contents/graphs/flow/graph.json`, status: 200, body: fileBody("graphs/flow/graph.json", VALID_GRAPH_TEXT) },
+      { url: `${base}/contents/graphs/flow/README.md`, status: 404, body: {} },
+      // Stubbed valid on purpose: the skip, not a missing file, drops it.
+      { url: `${base}/contents/graphs/toxic/graph.json`, status: 200, body: fileBody("graphs/toxic/graph.json", VALID_GRAPH_TEXT) },
+    ], { kv });
+
+    const index = await storedIndex(kv);
+    expect(index.entries.map((entry) => entry["slug"])).toEqual(["flow"]);
+    expect(fake.calls.some((url) => url.includes("graphs/toxic"))).toBe(false);
+    expect(meta.documents).toBe(1);
+    expect(meta.blocked).toBe(1);
+    expect(JSON.parse((await kv.get(blockedDocKey("graph", "acme", "things", "toxic"))) as string))
+      .toEqual(block);
+    expect(await kv.get(docKey("graph", "acme", "things", "toxic"))).toBeNull();
+    // The list was read and no longer names acme/gone: its key goes.
+    expect(kv.has(staleKey)).toBe(false);
+  });
+
+  it("skips a blocked repository before its tree call", async () => {
+    const block: BlockedEntry = {
+      repo: "acme/evil",
+      reason: "Prompt that steers the agent to do harm",
+      issue: BLOCK_ISSUE,
+      blocked_at: "2026-10-27",
+    };
+    const { meta, kv, fake } = await run([
+      ...withBlocks([block]),
+      {
+        url: "search/repositories",
+        status: 200,
+        body: {
+          total_count: 2,
+          items: [searchHit("evil", 9), searchHit("things", 5)],
+        },
+      },
+      ...repoStubs("things", 5),
+    ]);
+
+    const index = await storedIndex(kv);
+    expect(index.entries.map((entry) => `${entry["repo"]}/${entry["slug"]}`)).toEqual([
+      "things/flow",
+    ]);
+    expect(fake.calls.some((url) => url.includes("repos/acme/evil"))).toBe(false);
+    expect(meta.blocked).toBe(1);
+    expect(JSON.parse((await kv.get(blockedRepoKey("acme", "evil"))) as string)).toEqual(block);
+  });
+
+  it("drops a blocked document from the carried-over entries", async () => {
+    const kv = new FakeKV();
+    await kv.put("index:v1", JSON.stringify({
+      built_at: "2026-10-26T00:00:00.000Z",
+      entries: [{
+        kind: "graph",
+        owner: "acme",
+        repo: "old",
+        slug: "x",
+        name: "x",
+        description: "",
+        official: false,
+        stars: null,
+        updated: null,
+        ref: "main",
+      }],
+    }));
+    await kv.put(
+      docKey("graph", "acme", "old", "x"),
+      JSON.stringify({ document: { name: "x" }, readme: "" }),
+    );
+    const block: BlockedEntry = {
+      kind: "graph",
+      repo: "acme/old",
+      slug: "x",
+      reason: "Misleading description",
+      issue: BLOCK_ISSUE,
+      blocked_at: "2026-10-27",
+    };
+
+    // Discovery fails, so the previous entry would normally carry over.
+    const { meta } = await run(
+      [...withBlocks([block]), { url: "search/repositories", status: 500, body: {} }],
+      { kv },
+    );
+
+    const index = await storedIndex(kv);
+    expect(index.entries).toEqual([]);
+    expect(meta.documents).toBe(0);
+    expect(await kv.get(docKey("graph", "acme", "old", "x"))).toBeNull();
+  });
+
+  it("keeps the previous block keys when the list cannot be read", async () => {
+    const kv = new FakeKV();
+    const key = blockedDocKey("graph", "UniverLab", "canopy-web", "hello-graph");
+    const block: BlockedEntry = {
+      kind: "graph",
+      repo: "UniverLab/canopy-web",
+      slug: "hello-graph",
+      reason: "Copyright or licence",
+      issue: BLOCK_ISSUE,
+      blocked_at: "2026-10-27",
+    };
+    await kv.put(key, JSON.stringify(block));
+
+    // officialStubs() answers 404 for registry/blocked.json.
+    const { meta } = await run(officialStubs(), { kv });
+
+    expect(meta.blocked).toBe(0);
+    expect(kv.has(key)).toBe(true);
   });
 
   it("flags official entries and indexes the registry in the same run", async () => {

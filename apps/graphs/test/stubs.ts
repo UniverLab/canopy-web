@@ -15,6 +15,8 @@ export const REPO_DIR = "repos/UniverLab/canopy-web";
 /** Everything the official listing needs: one five-node graph, one node. */
 export function officialStubs(): Stub[] {
   return [
+    // The removal list: absent until a maintainer merges one.
+    { url: `${REPO_DIR}/contents/registry/blocked.json`, status: 404, body: {} },
     { url: `${REPO_DIR}/contents/registry/graphs`, status: 200, body: dirBody([{ name: "hello-graph", type: "dir" }]) },
     { url: `${REPO_DIR}/contents/registry/nodes`, status: 200, body: dirBody([{ name: "hello-node", type: "dir" }]) },
     { url: `${REPO_DIR}/contents/registry/graphs/hello-graph/graph.json`, status: 200, body: fileBody("graphs/hello-graph/graph.json", FIVE_NODE_GRAPH_TEXT) },

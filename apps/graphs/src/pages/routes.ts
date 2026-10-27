@@ -27,11 +27,13 @@ import { renderNodePlate, renderPlate } from "../plate/render.js";
 import { harnessColor } from "../plate/vocabulary.js";
 import type { DocumentKind, JsonValue } from "../../../../src/schema.js";
 import type { Doc } from "../documents.js";
-import { createStore } from "../store.js";
+import { createStore, type BlockedEntry } from "../store.js";
 import { documentFromStored, entryFor, officialFromIndex, searchFromIndex } from "../catalog.js";
 import { type SearchSort } from "../search.js";
 import { isArray, isRecord, isString, stringField } from "../json.js";
 import {
+  BLOCKED_HEADING,
+  BLOCKED_ISSUE_LABEL,
   EMPTY_OFFICIAL_GRAPHS,
   EMPTY_OFFICIAL_NODES,
   GRAPHS_HEADING,
@@ -51,6 +53,8 @@ import {
   PUBLISH_LABEL,
   PUBLISH_TITLE,
   README_HEADING,
+  REPORT_LABEL,
+  REPORT_REPO_LABEL,
   RUNS_HEADING,
   RUNS_REVIEW_LINE,
   RUNS_SECTION_ID,
@@ -85,7 +89,8 @@ import {
 import { page, type Page } from "./layout.js";
 import { escapeHtml, renderMarkdown } from "./md.js";
 import { publishPage } from "./publish.js";
-import { docPath, docRef, pageRef, type PageRef } from "./ref.js";
+import { docPath, docRef, pagePath, pageRef, type PageRef } from "./ref.js";
+import { REPORT_REPOSITORY_HREF, reportUrl } from "./report.js";
 import { copyButton } from "./look.js";
 import { attentionFor, runsOf, type RunCommand, type RunPrompt } from "./runs.js";
 
@@ -147,6 +152,24 @@ function indexing(req: Request): Response {
 /** The calm 404: no document at this address. */
 function notFound(req: Request): Response {
   return page(req, calmPage(NOT_FOUND_HEADING, NOT_FOUND_BODY), 404);
+}
+
+/**
+ * The 410: the document was removed after a community report. It names the
+ * reason and links the issue, so a reader can follow the decision — and an
+ * author can appeal on it.
+ */
+function blockedPage(blocked: BlockedEntry): Page {
+  return {
+    title: BLOCKED_HEADING,
+    description: BLOCKED_HEADING,
+    html:
+      `<section class="busy"><h1>${escapeHtml(BLOCKED_HEADING)}</h1>` +
+      `<p>${escapeHtml(blocked.reason)}</p>` +
+      `<p><a href="${escapeHtml(blocked.issue)}" rel="noopener noreferrer">${escapeHtml(BLOCKED_ISSUE_LABEL)}</a></p>` +
+      `</section>`,
+    markdown: `# ${BLOCKED_HEADING}\n\n${blocked.reason}\n\n${BLOCKED_ISSUE_LABEL}: ${blocked.issue}\n`,
+  };
 }
 
 function calmPage(heading: string, body: string): Page {
@@ -379,11 +402,16 @@ function runsSectionMarkdown(kind: DocumentKind, document: JsonValue): string {
   return lines.join("\n").trimEnd();
 }
 
+/** The public address of a document page: the URL a report names. */
+function pageUrlOf(ref: PageRef): string {
+  return `https://${SITE_NAME}${pagePath(ref)}`;
+}
+
 /**
  * The datasheet beside the plate: kind, name, source, ref and stars, then —
  * for graphs — nodes by kind, edges with the fail count, ensembles and the
- * agent nodes a harness must run, then install. A field with no data is
- * omitted, never printed as a placeholder.
+ * agent nodes a harness must run, then install and the report link. A field
+ * with no data is omitted, never printed as a placeholder.
  */
 function datasheet(doc: Doc, document: JsonValue, ref: PageRef): { html: string; lines: string[] } {
   const install = installCommand(ref.kind, ref.ref);
@@ -435,6 +463,27 @@ function datasheet(doc: Doc, document: JsonValue, ref: PageRef): { html: string;
     `<span class="row-install"><code>${escapeHtml(install)}</code>${copyButton(install)}</span>` +
     (doc.official ? "" : `<p class="install-review">${escapeHtml(RUNS_REVIEW_LINE)}</p>`);
   fields.push(sheetField(INSTALL_HEADING, installBox));
+
+  // Reporting is GitHub's: the link pre-fills the issue form with this
+  // page's address, kind and source. A community page also points at
+  // GitHub's own report form for the repository behind the document.
+  const report = reportUrl(ref.kind, ref.owner, ref.repo, ref.slug, pageUrlOf(ref));
+  fields.push(
+    sheetField(
+      REPORT_LABEL,
+      `<a href="${escapeHtml(report)}" target="_blank" rel="noopener noreferrer">${escapeHtml(REPORT_LABEL)}</a>`,
+    ),
+  );
+  lines.push(`- ${REPORT_LABEL}: [${REPORT_LABEL}](${report})`);
+  if (!doc.official) {
+    fields.push(
+      sheetField(
+        REPORT_REPO_LABEL,
+        `<a href="${REPORT_REPOSITORY_HREF}" target="_blank" rel="noopener noreferrer">${escapeHtml(REPORT_REPO_LABEL)}</a>`,
+      ),
+    );
+    lines.push(`- ${REPORT_REPO_LABEL}: ${REPORT_REPOSITORY_HREF}`);
+  }
   return { html: `<dl class="sheet">${fields.join("")}</dl>`, lines };
 }
 
@@ -541,6 +590,11 @@ function searchPage(q: string, sort: SearchSort, items: Doc[]): Page {
 /** The document route: join the index entry to its stored document, then render. */
 async function documentResponse(req: Request, env: PageEnv, deps: PageDeps, ref: PageRef): Promise<Response> {
   const { store, volumes } = readers(env, deps);
+  // Before the index: a block outlives whatever the last run left behind.
+  const blocked = await store.getBlocked(ref.kind, ref.owner, ref.repo, ref.slug);
+  if (blocked !== null) {
+    return page(req, blockedPage(blocked), 410);
+  }
   const index = await store.getIndex();
   if (index === null) {
     return indexing(req);

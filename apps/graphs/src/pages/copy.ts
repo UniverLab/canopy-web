@@ -184,6 +184,14 @@ export const INDEXING_BODY = "The catalogue is being indexed — back in a few m
 export const NOT_FOUND_HEADING = "Not found";
 export const NOT_FOUND_BODY = "There is no document at this address. It may have moved or never existed.";
 
+/** The report links a document page carries, and the label of its issue. */
+export const REPORT_LABEL = "Report";
+export const REPORT_REPO_LABEL = "Report the repository to GitHub";
+
+/** The 410: a document removed from the catalogue after a community report. */
+export const BLOCKED_HEADING = "Removed from the catalogue after a community report";
+export const BLOCKED_ISSUE_LABEL = "The community report";
+
 /** The llms.txt header line, above one line per document. */
 export const LLMS_HEADER = "# graphs.univerlab.org — the Canopy graph and node catalogue.";
 
@@ -227,7 +235,7 @@ export const PUBLISH_TITLE = "Publish";
 export const PUBLISH_DESCRIPTION = "How to list your graph or node in the catalogue.";
 export const PUBLISH_LEDE = "Any public repo can list its graphs and nodes here.";
 
-/** The Publish page's seven sections, in page order. */
+/** The Publish page's sections, in page order. */
 export const PUBLISH_SHARE_HEADING = "What you can share";
 export const PUBLISH_PLACE_HEADING = "Where it goes in your repo";
 export const PUBLISH_TOPIC_HEADING = "Mark the repo";
@@ -235,6 +243,19 @@ export const PUBLISH_CHECK_HEADING = "Check it before sharing";
 export const PUBLISH_WHEN_HEADING = "When it shows up";
 export const PUBLISH_INSTALL_HEADING = "How people install it";
 export const PUBLISH_OFFICIAL_HEADING = "Official documents";
+export const PUBLISH_REPORT_HEADING = "Reporting and removal";
+
+/**
+ * The Publish page's closing paragraph: reports are GitHub issues, removal
+ * is a reviewed pull request to the list the indexer reads, and an author
+ * argues on the issue that removed them. Rendered with `blocked.json` as
+ * inline code.
+ */
+export const PUBLISH_REPORT_BODY =
+  "Anyone can report a graph or node through the Report link on its page, which opens a " +
+  "pre-filled GitHub issue. Maintainers decide whether to remove it by pull request to " +
+  "blocked.json, and the indexer honours the list on its next run. An author can appeal " +
+  "on the same issue.";
 
 /** The Canopy commands the Publish page shows, beside the install prefixes above. */
 export const EXPORT_GRAPH_COMMAND = "canopy graph export";

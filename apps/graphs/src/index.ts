@@ -45,7 +45,7 @@ import { createGitHub, type CacheLike } from "./github.js";
 import { documentDirectory, loadDocument } from "./documents.js";
 import { entryFor } from "./catalog.js";
 import { runIndexer } from "./indexer.js";
-import { createStore } from "./store.js";
+import { createStore, type BlockedEntry } from "./store.js";
 import { INDEXING_BODY } from "./pages/copy.js";
 
 /** The single Analytics Engine method this Worker uses. */
@@ -75,6 +75,27 @@ function textResponse(body: string, status: number): Response {
     status,
     headers: { "content-type": "text/plain; charset=utf-8" },
   });
+}
+
+/**
+ * An install of a removed document: 410 and a JSON body naming the reason
+ * and the issue, so `canopy graph install` can print why it will not run.
+ */
+function blockedResponse(blocked: BlockedEntry): Response {
+  return new Response(
+    `${JSON.stringify(
+      { error: "blocked", reason: blocked.reason, issue: blocked.issue },
+      null,
+      2,
+    )}\n`,
+    {
+      status: 410,
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+        "cache-control": "no-store",
+      },
+    },
+  );
 }
 
 /** The cold start: the index does not exist yet, back in a few minutes. */
@@ -270,12 +291,20 @@ async function install(req: Request, env: Env, url: URL, deps: WorkerDeps): Prom
     return textResponse(body, parsed.rejection.status);
   }
 
+  const target = parsed.target;
+  const store = createStore(env.INDEX);
+  // Before the index and before a pinned ref is fetched: a removed
+  // document stays removed, whatever the last run left behind.
+  const blocked = await store.getBlocked(target.kind, target.owner, target.repo, target.slug);
+  if (blocked !== null) {
+    record(env, req, target, "bad-request");
+    return blockedResponse(blocked);
+  }
+
   if (url.searchParams.has("ref")) {
     return installAtRef(req, env, deps, parsed);
   }
 
-  const target = parsed.target;
-  const store = createStore(env.INDEX);
   const index = await store.getIndex();
   if (index === null) {
     record(env, req, target, "bad-request");
