@@ -6,7 +6,8 @@
 import { createShell } from "./app.js";
 import { createChannelHandler } from "./channel.js";
 import { b64encode } from "./crypto.js";
-import { buildList, newReqId, parseOut, parseSessions } from "./protocol.js";
+import { buildList, newReqId } from "./protocol.js";
+import { createFrameRouter } from "./router.js";
 import { SessionController } from "./session.js";
 import { SessionStore } from "./sessions.js";
 import "./styles.css";
@@ -90,31 +91,14 @@ function main(): void {
       write: (text) => shell.writeTerminal(text),
       clear: () => shell.clearTerminal(),
     }),
+    onExited: (_id, code) => shell.showSessionExited(code),
   });
 
+  // The smoke test drives the same routing the app uses.
+  const router = createFrameRouter({ store, controller, shell });
   const frames = createChannelHandler({
-    onSnapshot: (snapshot) => {
-      shell.ensureTerminal(snapshot.id, snapshot.cols, snapshot.rows);
-      controller.handleSnapshot(snapshot);
-    },
-    onFrame: (frame) => {
-      const sessions = parseSessions(frame);
-      if (sessions) {
-        store.replace(sessions);
-        return;
-      }
-      const out = parseOut(frame);
-      if (out) {
-        controller.handleOut(out);
-        return;
-      }
-      const row = frame as { t?: string; req?: string; code?: string; message?: string };
-      if (row.t === "ok" && typeof row.req === "string") {
-        shell.composerOk(row.req);
-      } else if (row.t === "error" && typeof row.message === "string") {
-        shell.composerError(row.message, typeof row.req === "string" ? row.req : null);
-      }
-    },
+    onSnapshot: router.handleSnapshot,
+    onFrame: router.handleFrame,
   });
 
   shell.setLogin("smoke");

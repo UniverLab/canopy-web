@@ -299,6 +299,25 @@ describe("createShell", () => {
     expect(query<HTMLTextAreaElement>(".composer-input").value).toBe("draft");
   });
 
+  it("disposes the terminal and composer when leaving the session route", () => {
+    const leaves: (() => void)[] = [
+      () => shell.showPair(),
+      () => shell.showHosts(),
+      () => shell.showSignIn(),
+      () => shell.showSessions(),
+    ];
+    for (const leave of leaves) {
+      shell.showSession("s1", "build");
+      shell.ensureTerminal("s1", 80, 24);
+      expect(root.querySelector(".composer")).not.toBeNull();
+      const handle = handles[handles.length - 1];
+      leave();
+      expect(handle?.disposed).toBe(true);
+      expect(root.querySelector(".term-host")).toBeNull();
+      expect(root.querySelector(".composer")).toBeNull();
+    }
+  });
+
   it("shows the ↓ latest button while scrolled up", () => {
     shell.showSession("s1", "build");
     shell.ensureTerminal("s1", 80, 24);

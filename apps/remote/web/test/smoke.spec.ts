@@ -25,6 +25,21 @@ test("renders the terminal and the key bar at 360x640", async ({ page }) => {
   expect(overflow).toBeLessThanOrEqual(1);
 });
 
+test("terminal pans when zoomed", async ({ page }) => {
+  await page.locator("#term-zoom-in").click();
+  await page.locator("#term-zoom-in").click();
+  const pan = await page.evaluate(() => {
+    const fit = document.querySelector(".term-fit") as HTMLElement;
+    return {
+      overflow: getComputedStyle(fit).overflowX,
+      larger: fit.scrollWidth > fit.clientWidth,
+    };
+  });
+  // Zoomed content exceeds the pane, and the pane lets the user pan it.
+  expect(pan.larger).toBe(true);
+  expect(["auto", "scroll"]).toContain(pan.overflow);
+});
+
 test("sends key bar bytes as input", async ({ page }) => {
   await page.evaluate(() => window.__fake.clearSent());
   await page.locator('#keybar .key[data-key="y"]').click();

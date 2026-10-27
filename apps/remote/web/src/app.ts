@@ -337,10 +337,14 @@ export function createShell(
 
   return {
     showSignIn(): void {
+      teardownSessionWidgets();
+      sessionId = null;
       route = "signin";
       render();
     },
     showPair(prefillCode?: string): void {
+      teardownSessionWidgets();
+      sessionId = null;
       route = "pair";
       pairError = null;
       pairBusy = false;
@@ -352,6 +356,8 @@ export function createShell(
       render();
     },
     showHosts(): void {
+      teardownSessionWidgets();
+      sessionId = null;
       route = "hosts";
       render();
     },

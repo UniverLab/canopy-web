@@ -315,9 +315,11 @@ label {
 .term-fit {
   width: 100%;
   height: 100%;
-  overflow: hidden;
-  /* Single-finger pans the xterm viewport natively; pinch reaches the
-   * zoom handler instead of the browser. */
+  /* Auto so the zoomed terminal pans inside the pane; at zoom 1 the
+   * scaled content fits exactly and no scrollbar appears. Single-finger
+   * pans the xterm viewport natively; pinch reaches the zoom handler
+   * instead of the browser. */
+  overflow: auto;
   touch-action: pan-x pan-y;
 }
 

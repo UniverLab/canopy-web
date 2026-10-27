@@ -8,24 +8,14 @@
 import { createShell } from "./app.js";
 import type { Shell } from "./app.js";
 import { createChannelHandler } from "./channel.js";
-import type { JoinedSnapshot } from "./channel.js";
 import { generateDeviceKey } from "./crypto.js";
 import type { DeviceKey } from "./crypto.js";
 import { keyBytes } from "./keys.js";
-import {
-  buildList,
-  newReqId,
-  parseError,
-  parseExited,
-  parseOk,
-  parseOut,
-  parseSessionAdded,
-  parseSessionRemoved,
-  parseSessions,
-} from "./protocol.js";
+import { buildList, newReqId } from "./protocol.js";
 import { runPairing } from "./pairing.js";
 import { ConnectionManager } from "./reconnect.js";
 import { RelaySocket, defaultRelayUrl, parseHostsList } from "./relay.js";
+import { createFrameRouter } from "./router.js";
 import type { OnlineHost } from "./relay.js";
 import { SessionController } from "./session.js";
 import { SessionStore } from "./sessions.js";
@@ -140,59 +130,17 @@ async function main(): Promise<void> {
     shell.setPairedHosts(await listHosts());
   };
 
-  function handleSnapshot(snapshot: JoinedSnapshot): void {
-    globalThis.dispatchEvent(new CustomEvent("canopy:snapshot", { detail: snapshot }));
-    shell.ensureTerminal(snapshot.id, snapshot.cols, snapshot.rows);
-    controller.handleSnapshot(snapshot);
-  }
-
-  function handleFrame(frame: unknown): void {
-    globalThis.dispatchEvent(new CustomEvent("canopy:frame", { detail: frame }));
-    const sessions = parseSessions(frame);
-    if (sessions) {
-      store.replace(sessions);
-      return;
-    }
-    const added = parseSessionAdded(frame);
-    if (added) {
-      store.add(added);
-      return;
-    }
-    const removed = parseSessionRemoved(frame);
-    if (removed !== null) {
-      store.remove(removed);
-      return;
-    }
-    const exited = parseExited(frame);
-    if (exited) {
-      store.markExited(exited.id);
-      controller.handleExited(exited.id, exited.code);
-      return;
-    }
-    const out = parseOut(frame);
-    if (out) {
-      controller.handleOut(out);
-      return;
-    }
-    const ok = parseOk(frame);
-    if (ok !== null) {
-      shell.composerOk(ok);
-      return;
-    }
-    const error = parseError(frame);
-    if (error) {
-      shell.composerError(error.message, error.req);
-    }
-  }
+  const router = createFrameRouter({ store, controller, shell });
 
   function startSession(host: HostRecord): void {
-    manager?.stop();
+    // Detach while the old connection is still open so the host sees it.
     controller.close();
+    manager?.stop();
     shell.setHostLabel(host.label);
     shell.showSessions();
     const frames = createChannelHandler({
-      onSnapshot: handleSnapshot,
-      onFrame: handleFrame,
+      onSnapshot: router.handleSnapshot,
+      onFrame: router.handleFrame,
     });
     const next = new ConnectionManager({ relay, host, device });
     manager = next;
@@ -254,9 +202,10 @@ async function main(): Promise<void> {
   }
 
   async function doDisconnect(): Promise<void> {
+    // Detach while the connection is still open so the host sees it.
+    controller.close();
     manager?.stop();
     manager = null;
-    controller.close();
     const stored = await listHosts();
     await refreshPaired();
     if (stored.length === 0) {
