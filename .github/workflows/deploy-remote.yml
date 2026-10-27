@@ -23,6 +23,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # The Worker serves the browser app from apps/remote/web/dist via the
+      # [assets] binding, so the web build must exist before wrangler deploy.
+      - run: npm run build:remote-web
       - name: Deploy with Wrangler
         uses: cloudflare/wrangler-action@v3
         with:

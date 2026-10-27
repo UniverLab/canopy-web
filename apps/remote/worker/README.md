@@ -64,6 +64,17 @@ globals.
    *Edit Workers*. The account id is inlined in `wrangler.toml`, so no
    second secret is needed.
 
+## Static assets
+
+The Worker serves the built browser app (`apps/remote/web/dist`) through the
+`[assets]` binding in `wrangler.toml`: `/` and any non-API path serve the app
+(`single-page-application` fallback, so `/pair` returns `index.html`), while
+`/auth/*`, `/ws/*` and `/turn` always reach the Worker code
+(`run_worker_first`). Responses built by the Worker get the security headers
+from `src/protocol.ts`; asset responses get the identical headers from the
+`_headers` file in `apps/remote/web/public/`, which the deploy workflow keeps
+in sync by running `npm run build:remote-web` before `wrangler deploy`.
+
 ## Deploy
 
 `.github/workflows/deploy-remote.yml`, **manual only**

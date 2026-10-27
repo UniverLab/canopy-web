@@ -14,6 +14,15 @@ account_id = "d7b81bdd721f503968523dd903d967be"
 
 routes = [{ pattern = "remote.univerlab.org/*", zone_name = "univerlab.org" }]
 
+# Serve the built browser app from apps/remote/web/dist on the same origin,
+# so the page and its WebSocket share remote.univerlab.org. Paths matching
+# `run_worker_first` always reach the Worker code first; everything else
+# falls back to the assets binding (SPA: unknown paths serve index.html).
+[assets]
+directory = "../web/dist"
+not_found_handling = "single-page-application"
+run_worker_first = ["/auth/*", "/ws/*", "/turn"]
+
 # One room per GitHub user id. The room uses the WebSocket hibernation API
 # with per-socket attachments only — it never touches the storage API.
 [[durable_objects.bindings]]

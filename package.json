@@ -17,7 +17,8 @@
     "test:worker": "vitest run --config apps/graphs/vitest.config.ts",
     "test:remote-worker": "vitest run --config apps/remote/worker/vitest.config.ts",
     "validate": "tsx src/validate.ts",
-    "test:remote-smoke": "playwright test --config apps/remote/web/playwright.config.ts"
+    "test:remote-smoke": "playwright test --config apps/remote/web/playwright.config.ts",
+    "test:remote-serve": "playwright test --config apps/remote/web/playwright.serve.config.ts"
   },
   "dependencies": {
     "@cfworker/json-schema": "^4.1.1",

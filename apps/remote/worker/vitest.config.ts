@@ -6,9 +6,9 @@ export default defineWorkersConfig({
     include: ["apps/remote/worker/test/**/*.test.ts"],
     poolOptions: {
       workers: {
-        // Single-file Worker: the pool loads this config, so tests speak to
-        // the same code and bindings `wrangler deploy` will ship.
-        wrangler: { configPath: "./wrangler.toml" },
+        // Test-only config without the [assets] binding: unit tests never
+        // need a built ../web/dist. See wrangler.test.toml.
+        wrangler: { configPath: "./wrangler.test.toml" },
         // The room's sqlite-backed class leaves -shm files behind that this
         // pool's isolated-storage copy chokes on; the live tests use unique
         // room names, so sharing one namespace is safe.

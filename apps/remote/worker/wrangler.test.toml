@@ -1,0 +1,15 @@
+# Test-only config for the vitest pool: a copy of wrangler.toml minus the
+# [assets] binding (no built ../web/dist needed), account_id and routes —
+# the pool binds nothing and unit tests never call the HTTP routes layer
+# that depends on assets.
+name = "canopy-remote"
+main = "src/index.ts"
+compatibility_date = "2026-10-26"
+
+[[durable_objects.bindings]]
+name = "USER_ROOM"
+class_name = "UserRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["UserRoom"]
