@@ -10,8 +10,12 @@
  * while the home index rows keep their one-line command.
  * Three pages (home, a graph, a node) at the two reference sizes, plus a
  * community page whose 300-character command proves the runs section wraps
- * inside its block at 390 px; a screenshot per page is attached to the
- * report for the operator's review, never compared.
+ * inside its block at 390 px, and a missing document; a screenshot per page
+ * is attached to the report for the operator's review, never compared.
+ * The stage and the meaning tints are asserted as computed colours: the
+ * plate on black, the datasheet in info, the community warning and runs
+ * summary in warn, the 404 block in error — and the house banner opens
+ * the home content only, ten lines with no sideways overflow.
  */
 import { expect, test } from "@playwright/test";
 
@@ -131,6 +135,19 @@ for (const viewport of VIEWPORTS) {
       await expect(headings).toHaveCount(1);
       await expect(headings).toHaveText(target.heading);
 
+      // The house banner opens the home content only: ten art lines, no
+      // sideways overflow of its own.
+      const banners = page.locator("main.look-col .look-banner");
+      await expect(banners).toHaveCount(target.label === "home" ? 1 : 0);
+      if (target.label === "home") {
+        await expect(page.locator(".look-banner-art span")).toHaveCount(10);
+        const bannerFit = await page.evaluate(() => {
+          const art = document.querySelector(".look-banner-art") as HTMLElement;
+          return art.scrollWidth - art.clientWidth;
+        });
+        expect(bannerFit).toBeLessThanOrEqual(1);
+      }
+
       // Listing pages render dense rows; document pages a plate beside a sheet.
       if (target.label === "home") {
         await expect(page.locator("ol.index > li.row")).toHaveCount(2);
@@ -140,6 +157,15 @@ for (const viewport of VIEWPORTS) {
         const whiteSpace = await indexCode.evaluate((el) => getComputedStyle(el).whiteSpace);
         expect(whiteSpace).toBe("nowrap");
       } else {
+        // The plate is the black stage; the datasheet wears the info tint.
+        const painted = await page.evaluate(() => ({
+          plate: getComputedStyle(document.querySelector("figure.plate") as HTMLElement)
+            .backgroundColor,
+          sheet: getComputedStyle(document.querySelector("dl.sheet") as HTMLElement)
+            .backgroundColor,
+        }));
+        expect(painted.plate).toBe("rgb(5, 5, 5)");
+        expect(painted.sheet).toBe("rgb(1, 29, 38)");
         const plate = page.locator("figure.plate");
         await expect(plate).toHaveCount(1);
         await expect(page.locator("dl.sheet")).toHaveCount(1);
@@ -211,6 +237,16 @@ test("community runs section at 390x844", async ({ page }, testInfo) => {
   await expect(section.locator("pre.run-command code")).toContainText("curl https://example.com/");
   await expect(page.locator("aside.community-warning")).toBeVisible();
 
+  // The warning and the runs summary share the warn tint: rgb(38, 1, 14).
+  const warned = await page.evaluate(() => ({
+    warning: getComputedStyle(document.querySelector("aside.community-warning") as HTMLElement)
+      .backgroundColor,
+    summary: getComputedStyle(document.querySelector("p.runs-summary") as HTMLElement)
+      .backgroundColor,
+  }));
+  expect(warned.warning).toBe("rgb(38, 1, 14)");
+  expect(warned.summary).toBe("rgb(38, 1, 14)");
+
   // The 300-character command wraps or scrolls inside its block: the page
   // itself never scrolls sideways.
   const width = await page.evaluate(() => ({
@@ -225,6 +261,35 @@ test("community runs section at 390x844", async ({ page }, testInfo) => {
     path: testInfo.outputPath("runs-mobile.png"),
   });
   await testInfo.attach("runs-mobile", {
+    body: shot,
+    contentType: "image/png",
+  });
+});
+
+test("missing document at 390x844", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/g/nope", { waitUntil: "load" });
+
+  // The calm 404 paints its error block in the error tint: rgb(38, 1, 3).
+  await expect(page.locator("section.busy-error h1")).toHaveText("Not found");
+  const error = await page.evaluate(
+    () =>
+      getComputedStyle(document.querySelector("section.busy-error") as HTMLElement).backgroundColor,
+  );
+  expect(error).toBe("rgb(38, 1, 3)");
+
+  const width = await page.evaluate(() => ({
+    scroll: document.documentElement.scrollWidth,
+    view: window.innerWidth,
+  }));
+  expect(width.view).toBeLessThanOrEqual(390);
+  expect(width.scroll).toBeLessThanOrEqual(width.view);
+
+  const shot = await page.screenshot({
+    fullPage: true,
+    path: testInfo.outputPath("missing-mobile.png"),
+  });
+  await testInfo.attach("missing-mobile", {
     body: shot,
     contentType: "image/png",
   });

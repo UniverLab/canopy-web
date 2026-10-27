@@ -208,6 +208,29 @@ describe("createShell", () => {
     expect(button.classList.contains("primary")).toBe(true);
   });
 
+  it("wears the house banner on sign-in and sessions, never in a session", () => {
+    shell.showSignIn();
+    const signin = query("main.signin");
+    expect(signin.firstElementChild?.classList.contains("look-banner")).toBe(true);
+    expect(signin.querySelector(".look-banner-app")?.textContent).toBe("remote");
+    shell.showSessions();
+    const sessions = query("main.sessions");
+    expect(sessions.firstElementChild?.classList.contains("look-banner")).toBe(true);
+    shell.showSession("s1", "build");
+    expect(root.querySelector(".look-banner")).toBeNull();
+  });
+
+  it("marks the topbar with the connection state for the host chip", () => {
+    shell.showSessions();
+    expect(query(".topbar").getAttribute("data-conn")).toBe("connecting");
+    shell.setHostLabel("Host one");
+    shell.setConnectionState("connected");
+    expect(query(".topbar").getAttribute("data-conn")).toBe("connected");
+    expect(query(".topbar .conn").textContent).toBe("connected");
+    shell.setConnectionState("retrying in 2s");
+    expect(query(".topbar").getAttribute("data-conn")).toBe("retrying in 2s");
+  });
+
   it("renders the colophon on sign-in and pair only", () => {
     shell.showSignIn();
     expect(root.querySelector("footer.look-colophon")?.textContent).toContain("Canopy remote");
@@ -464,6 +487,25 @@ describe("createShell", () => {
     shell.sheetSpawned(calls.spawns[0]?.req ?? "", "s9");
     expect(signal().opened).toEqual(["s9"]);
     expect(root.querySelector(".sheet-overlay")).toBeNull();
+  });
+
+  it("confirms a spawn once, at the top of the opened session", () => {
+    shell.showSessions();
+    query<HTMLButtonElement>("#session-new").click();
+    const project = query<HTMLSelectElement>("#new-project");
+    project.value = "demo";
+    project.dispatchEvent(new Event("change", { bubbles: true }));
+    query<HTMLFormElement>("#new-form").dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+    shell.sheetSpawned(calls.spawns[0]?.req ?? "", "s9");
+    shell.showSession("s9", "build");
+    const flash = query("main.session-view > .flash-ok");
+    expect(flash.textContent).toBe("Session started ✓");
+    expect(flash.getAttribute("role")).toBe("status");
+    // A later render of the same session shows no confirmation.
+    shell.showSession("s9", "build");
+    expect(root.querySelector("main.session-view > .flash-ok")).toBeNull();
   });
 
   it("keeps the New form when the spawn fails", () => {

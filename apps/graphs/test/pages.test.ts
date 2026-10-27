@@ -303,7 +303,12 @@ describe("the page shell", () => {
     expect(html).toContain("font-family: var(--font-mono)");
     expect(html).toContain("font-family: var(--font-display)");
     expect(html).toContain("var(--radius-card)");
-    expect(html).toContain("var(--cta-gradient)");
+    // The stage and the meaning tints, from the kit — and no teal fill
+    // anywhere in the catalogue (Star is an info block, not a CTA).
+    expect(html).toContain("background: var(--stage-bg)");
+    expect(html).toContain("background: var(--tint-info)");
+    expect(html).not.toContain("var(--cta-gradient)");
+    expect(html).not.toContain("var(--accent)");
     // The header wordmark and the UniverLab colophon as footer.
     expect(html).toContain(`<a class="wordmark" href="https://univerlab.org/canopy/">graphs</a>`);
     expect(html).toContain(`<footer class="look-colophon">`);
@@ -829,6 +834,77 @@ describe("the blocked list", () => {
     });
     expect(response.status).toBe(410);
     expect(await response.text()).toContain("Copyright or licence");
+  });
+});
+
+describe("the house banner", () => {
+  it("opens the home content, and no other route wears it", async () => {
+    const home = await (await call("/")).text();
+    expect(home).toContain(`<main class="look-col">\n<div class="look-banner">`);
+    expect(home).toContain(`<p class="look-banner-app" style="color:#52fff6">graphs</p>`);
+    expect(home).toContain(`<link rel="stylesheet" href="/look/banner/banner.css">`);
+    for (const path of ["/search?q=flow", "/g/hello-graph", "/n/hello-node", "/publish"]) {
+      const html = await (await call(path, { stubs: searchStubs() })).text();
+      expect(html, path).not.toContain(`<div class="look-banner">`);
+    }
+    // The twin is words, not art.
+    const twin = await (await call("/", { stubs: searchStubs(), accept: "text/markdown" })).text();
+    expect(twin).not.toContain("look-banner");
+  });
+});
+
+describe("the meaning tints", () => {
+  it("warn-tints the community runs summary, never the official one", async () => {
+    const community = await (await call("/g/acme/things/flow", { stubs: searchStubs() })).text();
+    expect(community).toContain(`<p class="runs-summary runs-community">`);
+    const official = await (await call("/g/hello-graph")).text();
+    expect(official).toContain(`<p class="runs-summary">`);
+    expect(official).not.toContain(`<p class="runs-summary runs-community">`);
+  });
+
+  it("says what the tinted blocks are, in words", async () => {
+    const community = await (await call("/g/acme/things/flow", { stubs: searchStubs() })).text();
+    expect(community).toContain(`<aside class="community-warning" role="note">`);
+    expect(community).toContain("Community document.");
+    const official = await (await call("/g/hello-graph")).text();
+    expect(official).toContain(`<span class="badge-official">Official</span>`);
+  });
+
+  it("paints the calm 404 and the indexing 503 as error blocks", async () => {
+    const missing = await (
+      await call("/g/nope", { stubs: [{ url: `${REPO_DIR}/contents/graphs/nope`, status: 404, body: {} }] })
+    ).text();
+    expect(missing).toContain(`<section class="busy-error">`);
+    const indexing = await (await call("/g/hello-graph", { cold: true })).text();
+    expect(indexing).toContain(`<section class="busy-error">`);
+    // Their twins stay plain markdown.
+    const twin = await (
+      await call("/g/nope", {
+        stubs: [{ url: `${REPO_DIR}/contents/graphs/nope`, status: 404, body: {} }],
+        accept: "text/markdown",
+      })
+    ).text();
+    expect(twin).toContain("# Not found");
+    expect(twin).not.toContain("<");
+  });
+
+  it("keeps the removed-document 410 on the plain busy block", async () => {
+    const response = await call("/g/hello-graph", {
+      blocked: [
+        {
+          kind: "graph",
+          repo: "UniverLab/canopy-graphs",
+          slug: "hello-graph",
+          reason: "Copyright or licence",
+          issue: "https://github.com/UniverLab/canopy-graphs/issues/9",
+          blocked_at: "2026-10-27",
+        },
+      ],
+    });
+    expect(response.status).toBe(410);
+    const html = await response.text();
+    expect(html).toContain(`<section class="busy">`);
+    expect(html).not.toContain(`<section class="busy-error">`);
   });
 });
 

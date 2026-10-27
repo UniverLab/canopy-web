@@ -137,6 +137,15 @@ describe("Builder", () => {
     expect(skills.map((box) => box.checked)).toEqual([true, false]);
   });
 
+  it("starts fresh with an error when the saved draft is unreadable", () => {
+    storage.setItem(DRAFT_STORAGE_KEY, "{not json");
+    open();
+    expect(titles()).toEqual([""]);
+    const error = query("#builder-error");
+    expect(error.textContent).toBe("Saved draft was unreadable; started fresh.");
+    expect((error as HTMLElement).hidden).toBe(false);
+  });
+
   it("adds, moves and removes sections", () => {
     open();
     setValue(".section-title", "A");

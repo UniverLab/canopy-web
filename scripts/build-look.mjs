@@ -3,8 +3,8 @@
  * Copy the shared look kit (packages/look) into both apps' public folders
  * and bundle the honeycomb background for the catalogue Worker's pages.
  *
- *   apps/graphs/public/look/      tokens.css, fonts/, colophon/, fondo/assets/, fondo.js
- *   apps/remote/web/public/look/  tokens.css, fonts/, colophon/, fondo/assets/
+ *   apps/graphs/public/look/      tokens.css, fonts/, colophon/, banner/, fondo/assets/, fondo.js
+ *   apps/remote/web/public/look/  tokens.css, fonts/, colophon/, banner/, fondo/assets/
  *
  * The remote web app imports the kit's TypeScript sources directly through
  * Vite, so only the catalogue — whose pages are server-rendered strings —
@@ -37,6 +37,11 @@ export function copyLook(target) {
   cpSync(path.join(KIT, "colophon"), path.join(target, "colophon"), {
     recursive: true,
     // footer.ts ships as source for the apps to import, not as a download.
+    filter: (source) => !source.endsWith(".ts"),
+  });
+  cpSync(path.join(KIT, "banner"), path.join(target, "banner"), {
+    recursive: true,
+    // banner.ts ships as source for the apps to import, not as a download.
     filter: (source) => !source.endsWith(".ts"),
   });
   cpSync(path.join(KIT, "fondo", "assets"), path.join(target, "fondo", "assets"), {

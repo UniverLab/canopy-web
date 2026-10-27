@@ -152,6 +152,53 @@ test("dresses the page in the Canopy surface", async ({ page }) => {
   expect(look.fondo.opacity).toBe("0.15");
 });
 
+for (const viewport of [
+  { label: "390x844", width: 390, height: 844 },
+  { label: "1280x900", width: 1280, height: 900 },
+] as const) {
+  test(`stages the terminal on black with one teal Send at ${viewport.label}`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    // The terminal pane is the black stage: rgb(5, 5, 5).
+    const pane = await page.evaluate(
+      () => getComputedStyle(document.querySelector(".term-pane") as HTMLElement).backgroundColor,
+    );
+    expect(pane).toBe("rgb(5, 5, 5)");
+    // Send is the only teal-filled button in the session view: rgb(63, 184, 176).
+    const teal = await page.evaluate(() =>
+      [...document.querySelectorAll("main.session-view button")]
+        .filter((button) => getComputedStyle(button).backgroundColor === "rgb(63, 184, 176)")
+        .map((button) => button.className),
+    );
+    expect(teal).toEqual(["composer-send"]);
+    const shot = await page.screenshot({ path: testInfo.outputPath(`stage-${viewport.label}.png`) });
+    await testInfo.attach(`stage-${viewport.label}`, { body: shot, contentType: "image/png" });
+  });
+
+  test(`banners the session list at ${viewport.label}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await expect(page.locator(".look-banner")).toBeHidden();
+    await page.locator("#session-back").click();
+    const banner = page.locator("main.sessions .look-banner");
+    await expect(banner).toBeVisible();
+    // Ten art lines, fitting without a sideways scroll.
+    await expect(page.locator(".look-banner-art span")).toHaveCount(10);
+    const fit = await page.evaluate(() => {
+      const art = document.querySelector(".look-banner-art") as HTMLElement;
+      const el = document.scrollingElement ?? document.documentElement;
+      return {
+        artOverflow: art.scrollWidth - art.clientWidth,
+        pageOverflow: el.scrollWidth - el.clientWidth,
+      };
+    });
+    expect(fit.artOverflow).toBeLessThanOrEqual(1);
+    expect(fit.pageOverflow).toBeLessThanOrEqual(1);
+    const shot = await page.screenshot({ path: testInfo.outputPath(`banner-${viewport.label}.png`) });
+    await testInfo.attach(`banner-${viewport.label}`, { body: shot, contentType: "image/png" });
+  });
+}
+
 test("puts the Content textarea full width in its card", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator(".composer-builder").click();

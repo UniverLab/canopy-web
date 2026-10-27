@@ -87,6 +87,7 @@ import {
   runsSummary,
 } from "./copy.js";
 import { page, type Page, withMarkdownFooter } from "./layout.js";
+import { renderBanner } from "../../../../packages/look/banner/banner.js";
 import { escapeHtml, renderMarkdown } from "./md.js";
 import { publishPage } from "./publish.js";
 import { docPath, docRef, pagePath, pageRef, type PageRef } from "./ref.js";
@@ -176,7 +177,7 @@ function calmPage(heading: string, body: string): Page {
   return {
     title: heading,
     description: body,
-    html: `<section class="busy"><h1>${escapeHtml(heading)}</h1><p>${escapeHtml(body)}</p></section>`,
+    html: `<section class="busy-error"><h1>${escapeHtml(heading)}</h1><p>${escapeHtml(body)}</p></section>`,
     markdown: `# ${heading}\n\n${body}\n`,
   };
 }
@@ -352,13 +353,15 @@ function promptBlock(prompt: RunPrompt): string {
  * The transparency section, before the README: the summary line, every
  * command verbatim, every agent instruction readable. Even an empty
  * document states its counts, so the absence of runs is visible too.
+ * On community documents the summary carries the warn tint.
  */
-function runsSectionHtml(kind: DocumentKind, document: JsonValue): string {
+function runsSectionHtml(kind: DocumentKind, document: JsonValue, community: boolean): string {
   const runs = runsOf(kind, document);
+  const summaryClass = community ? "runs-summary runs-community" : "runs-summary";
   return [
     `<section class="runs" id="${RUNS_SECTION_ID}">`,
     `<h2 class="kicker">${RUNS_HEADING}</h2>`,
-    `<p class="runs-summary">${escapeHtml(runsSummary(runs.commands.length, runs.prompts.length))}</p>`,
+    `<p class="${summaryClass}">${escapeHtml(runsSummary(runs.commands.length, runs.prompts.length))}</p>`,
     ...runs.commands.map(commandBlock),
     ...runs.prompts.map(promptBlock),
     `</section>`,
@@ -499,7 +502,7 @@ function documentPage(doc: Doc, document: JsonValue, ref: PageRef): Page {
   const warning = doc.official
     ? ""
     : `<aside class="community-warning" role="note"><p>${communityWarningHtml(`#${RUNS_SECTION_ID}`)}</p></aside>`;
-  const runs = runsSectionHtml(ref.kind, document);
+  const runs = runsSectionHtml(ref.kind, document, !doc.official);
   const readme = doc.readme.trim() === ""
     ? ""
     : `<h2 class="kicker">${README_HEADING}</h2>\n<div class="readme">${renderMarkdown(doc.readme)}</div>`;
@@ -542,6 +545,7 @@ function documentPage(doc: Doc, document: JsonValue, ref: PageRef): Page {
 
 function homePage(graphs: Doc[], nodes: Doc[]): Page {
   const html = [
+    renderBanner("graphs"),
     `<h1 class="index-title">${escapeHtml(TAGLINE)}</h1>`,
     tabs("", null),
     `<h2 class="kicker">${OFFICIAL_HEADING}</h2>`,

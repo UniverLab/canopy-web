@@ -8,6 +8,12 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { renderColophon } from "../packages/look/colophon/footer.js";
+import {
+  BANNER_GRADIENT,
+  BANNER_LINES,
+  bannerColor,
+  renderBanner,
+} from "../packages/look/banner/banner.js";
 import { mountCanopyBackground } from "../packages/look/fondo/index.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -97,6 +103,63 @@ describe("the look tokens", () => {
   ])("copies %s from univerlab", (declaration) => {
     expect(tokens).toContain(declaration);
   });
+
+  it.each([
+    ["--page: #012624"],
+    ["--stage-bg: #050505"],
+    ["--stage-line: #1f1f1f"],
+    ["--stage-ink: #e6e6e6"],
+    ["--tint-info: #011d26"],
+    ["--tint-ok: #012619"],
+    ["--tint-warn: #26010e"],
+    ["--tint-error: #260103"],
+    ["--tint-line: rgba(255,255,255,.08)"],
+    ["--err-label: #ff6b6b"],
+  ])("defines the stage-and-tint token %s", (declaration) => {
+    expect(tokens).toContain(declaration);
+  });
+});
+
+describe("the house banner", () => {
+  it("is the ten DOS Rebel art lines, byte-identical to banner.rs", () => {
+    expect(BANNER_LINES).toHaveLength(10);
+    expect(BANNER_LINES.map((line) => line.length)).toEqual([53, 60, 60, 60, 60, 60, 60, 60, 60, 60]);
+    for (const line of BANNER_LINES) {
+      expect(line).toMatch(/^[ █░]*$/);
+    }
+    // The first line is blank space; the art carries block and shade runs.
+    expect(BANNER_LINES[0]).toBe(" ".repeat(53));
+    expect(BANNER_LINES[1]).toContain("██████");
+  });
+
+  it("runs the five-stop teal gradient light to dark", () => {
+    expect(BANNER_GRADIENT).toEqual(["#52fff6", "#1ffff3", "#00e0d4", "#00a9a0", "#006661"]);
+    expect(BANNER_GRADIENT).not.toContain("#003330");
+  });
+
+  it("colours the ten lines stops [0,0,1,1,2,2,2,3,3,4], like gradient_rgb", () => {
+    const stops = [0, 0, 1, 1, 2, 2, 2, 3, 3, 4];
+    expect(BANNER_LINES.map((_, index) => bannerColor(index))).toEqual(
+      stops.map((stop) => BANNER_GRADIENT[stop]),
+    );
+  });
+
+  it("renders the art hidden from assistive tech with a reader Canopy", () => {
+    const html = renderBanner("remote");
+    expect(html).toContain(`<pre class="look-banner-art" aria-hidden="true">`);
+    expect(html).toContain(`<span class="look-banner-vh">Canopy</span>`);
+    // Ten coloured lines, joined by newlines, never trimmed.
+    const spans = html.match(/<span style="color:#[0-9a-f]{6}">/g) ?? [];
+    expect(spans).toHaveLength(10);
+  });
+
+  it("names the app under the art, and only the app differs", () => {
+    const remote = renderBanner("remote");
+    const graphs = renderBanner("graphs");
+    expect(remote).toContain(`<p class="look-banner-app" style="color:#52fff6">remote</p>`);
+    expect(graphs).toContain(`<p class="look-banner-app" style="color:#52fff6">graphs</p>`);
+    expect(graphs.replaceAll("graphs", "remote")).toBe(remote);
+  });
 });
 
 describe("the honeycomb background", () => {
@@ -136,6 +199,7 @@ describe("the look build", () => {
     "fonts/OFL-EBGaramond.txt",
     "fonts/OFL-SometypeMono.txt",
     "colophon/colophon.css",
+    "banner/banner.css",
     "colophon/frieze-960.avif",
     "colophon/frieze-960.webp",
     "colophon/frieze-1920.avif",
@@ -153,6 +217,7 @@ describe("the look build", () => {
         expect(existsSync(path.join(target, file)), `${target}/${file}`).toBe(true);
       }
       expect(existsSync(path.join(target, "colophon", "footer.ts"))).toBe(false);
+      expect(existsSync(path.join(target, "banner", "banner.ts"))).toBe(false);
     }
   });
 
@@ -161,6 +226,7 @@ describe("the look build", () => {
       ["tokens.css", "tokens.css"],
       ["fonts/fonts.css", "fonts/fonts.css"],
       ["colophon/colophon.css", "colophon/colophon.css"],
+      ["banner/banner.css", "banner/banner.css"],
       ["colophon/frieze-1920.avif", "colophon/frieze-1920.avif"],
       ["fondo/assets/celdas.json", "fondo/assets/celdas.json"],
       ["fondo/assets/panal.webp", "fondo/assets/panal.webp"],

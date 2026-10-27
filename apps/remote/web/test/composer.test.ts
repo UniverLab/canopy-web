@@ -60,6 +60,30 @@ describe("Composer", () => {
     expect(composer.awaitingReply).toBe(false);
   });
 
+  it("shows Sent on ok and hides it on the next submit or keystroke", () => {
+    query<HTMLTextAreaElement>(".composer-input").value = "hello";
+    query<HTMLButtonElement>(".composer-send").click();
+    const req = sent[0]?.req ?? "";
+    const ok = query(".composer-ok");
+    expect((ok as HTMLElement).hidden).toBe(true);
+    expect(composer.handleOk(req)).toBe(true);
+    expect(ok.textContent).toBe("Sent ✓");
+    expect((ok as HTMLElement).hidden).toBe(false);
+    // Typing hides it again.
+    query<HTMLTextAreaElement>(".composer-input").value = "more";
+    query<HTMLTextAreaElement>(".composer-input").dispatchEvent(
+      new Event("input", { bubbles: true }),
+    );
+    expect((query(".composer-ok") as HTMLElement).hidden).toBe(true);
+    // So does the next submit.
+    query<HTMLButtonElement>(".composer-send").click();
+    expect(composer.handleOk(sent[1]?.req ?? "")).toBe(true);
+    expect((query(".composer-ok") as HTMLElement).hidden).toBe(false);
+    query<HTMLTextAreaElement>(".composer-input").value = "again";
+    query<HTMLButtonElement>(".composer-send").click();
+    expect((query(".composer-ok") as HTMLElement).hidden).toBe(true);
+  });
+
   it("keeps the text and shows the message on error", () => {
     query<HTMLTextAreaElement>(".composer-input").value = "hello";
     query<HTMLButtonElement>(".composer-send").click();

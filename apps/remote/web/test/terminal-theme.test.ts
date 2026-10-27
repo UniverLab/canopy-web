@@ -53,7 +53,11 @@ describe("terminal palette", () => {
     expect(THEME.cursor).toBe("#3fb8b0");
   });
 
-  it("keeps every colour but black at 4.5:1 on the #011d1c surface", () => {
+  it("paints the #050505 stage", () => {
+    expect(TERMINAL_BACKGROUND).toBe("#050505");
+  });
+
+  it("keeps every colour but black at 4.5:1 on the #050505 stage", () => {
     for (const key of ANSI) {
       if (key === "black") {
         continue;

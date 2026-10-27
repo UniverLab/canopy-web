@@ -29,6 +29,28 @@ html[data-surface='tui'] {
 }
 
 :root {
+  /* The page both apps paint: unchanged. */
+  --page: #012624;
+
+  /* The stage: what a harness or a graph draws sits on black. */
+  --stage-bg: #050505;
+  --stage-line: #1f1f1f;
+  --stage-ink: #e6e6e6;
+
+  /* The meaning tints: every other block is tinted by what it means.
+   * All five colours share the same lightness (7.6 %) and differ only in
+   * hue — a teal family plus a complementary red pair — so every tinted
+   * block also says what it is in text or an icon; colour is never the
+   * only signal. Tinted blocks stroke with --tint-line. */
+  --tint-info: #011d26;
+  --tint-ok: #012619;
+  --tint-warn: #26010e;
+  --tint-error: #260103;
+  --tint-line: rgba(255,255,255,.08);
+
+  /* The error label ink, on the error tint. */
+  --err-label: #ff6b6b;
+
   /* The Canopy experiment essence and the honeycomb comb teal. */
   --canopy: #00a9a0;
   --teal: #3fb8b0;

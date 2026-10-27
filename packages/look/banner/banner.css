@@ -1,0 +1,40 @@
+/* The house banner's dress: centred art over the app word. The art
+ * keeps its figlet columns at any width (`white-space: pre`, never
+ * wrapped), and `font-size` shrinks it to fit 390 px without a sideways
+ * scroll. The visually hidden "Canopy" follows the catalogue's `.sr-only`
+ * pattern, owned here because the remote has no such class. */
+
+.look-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+}
+
+.look-banner-art {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: min(14px, calc((100vw - 32px) / 36));
+  line-height: 1;
+  white-space: pre;
+}
+
+.look-banner-app {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.look-banner-vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

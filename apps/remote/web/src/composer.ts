@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // The composer at the bottom of the session view: a multi-line textarea
-// and Send, which ships a prompt frame. On ok the text clears; on error
-// the text stays and the message shows. Builder opens the Prompt Builder
-// sheet, which the shell owns.
+// and Send, which ships a prompt frame. On ok the text clears and a
+// one-line confirmation shows; on error the text stays and the message
+// shows. Builder opens the Prompt Builder sheet, which the shell owns.
 
 import { newReqId } from "./protocol.js";
 
@@ -15,6 +15,7 @@ export class Composer {
   private readonly callbacks: ComposerCallbacks;
   private area: HTMLTextAreaElement | null = null;
   private errorEl: HTMLElement | null = null;
+  private okEl: HTMLElement | null = null;
   private pendingReq: string | null = null;
 
   constructor(callbacks: ComposerCallbacks) {
@@ -44,6 +45,10 @@ export class Composer {
     errorEl.className = "composer-error";
     errorEl.setAttribute("role", "alert");
     errorEl.hidden = true;
+    const okEl = document.createElement("p");
+    okEl.className = "composer-ok flash-ok";
+    okEl.setAttribute("role", "status");
+    okEl.hidden = true;
     const builder = document.createElement("button");
     builder.type = "button";
     builder.className = "composer-builder";
@@ -60,11 +65,13 @@ export class Composer {
         this.submit();
       }
     });
-    row.append(errorEl, builder, send);
+    area.addEventListener("input", () => this.hideOk());
+    row.append(errorEl, okEl, builder, send);
     wrap.append(area, row);
     parent.appendChild(wrap);
     this.area = area;
     this.errorEl = errorEl;
+    this.okEl = okEl;
   }
 
   submit(): void {
@@ -75,6 +82,7 @@ export class Composer {
     const req = newReqId();
     this.pendingReq = req;
     this.hideError();
+    this.hideOk();
     this.callbacks.onSend(text, req);
   }
 
@@ -87,6 +95,7 @@ export class Composer {
       this.area.value = "";
     }
     this.hideError();
+    this.showOk("Sent ✓");
     return true;
   }
 
@@ -98,6 +107,7 @@ export class Composer {
       return false;
     }
     this.pendingReq = null;
+    this.hideOk();
     this.showError(message);
     return true;
   }
@@ -110,6 +120,7 @@ export class Composer {
     this.area?.closest(".composer")?.remove();
     this.area = null;
     this.errorEl = null;
+    this.okEl = null;
     this.pendingReq = null;
   }
 
@@ -124,6 +135,20 @@ export class Composer {
     if (this.errorEl) {
       this.errorEl.textContent = "";
       this.errorEl.hidden = true;
+    }
+  }
+
+  private showOk(message: string): void {
+    if (this.okEl) {
+      this.okEl.textContent = message;
+      this.okEl.hidden = false;
+    }
+  }
+
+  private hideOk(): void {
+    if (this.okEl) {
+      this.okEl.textContent = "";
+      this.okEl.hidden = true;
     }
   }
 }

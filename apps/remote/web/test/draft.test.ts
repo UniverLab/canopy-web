@@ -10,6 +10,7 @@ import {
   loadDraft,
   moveSection,
   parseStoredDraft,
+  readRawDraft,
   removeSection,
   saveDraft,
   setPreset,
@@ -195,5 +196,15 @@ describe("draft persistence", () => {
     expect(loadDraft(null)).toEqual(emptyDraft());
     expect(() => saveDraft(DRAFT, null)).not.toThrow();
     expect(() => clearDraft(null)).not.toThrow();
+  });
+
+  it("reads the stored text so callers can tell missing from unreadable", () => {
+    const storage = new FakeStorage();
+    expect(readRawDraft(storage)).toBeNull();
+    storage.setItem(DRAFT_STORAGE_KEY, "{not json");
+    expect(readRawDraft(storage)).toBe("{not json");
+    expect(readRawDraft(null)).toBeNull();
+    storage.failReads = true;
+    expect(readRawDraft(storage)).toBeNull();
   });
 });

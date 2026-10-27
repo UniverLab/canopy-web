@@ -199,6 +199,20 @@ export function parseStoredDraft(raw: string | null): PromptDraft | null {
   return draft;
 }
 
+// The stored text itself, for callers that must tell "no draft" from an
+// unreadable one. Null when nothing is stored or storage is denied.
+export function readRawDraft(storage?: DraftStorage | null): string | null {
+  const store = resolveStorage(storage);
+  if (!store) {
+    return null;
+  }
+  try {
+    return store.getItem(DRAFT_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
 export function loadDraft(storage?: DraftStorage | null): PromptDraft {
   const store = resolveStorage(storage);
   if (!store) {

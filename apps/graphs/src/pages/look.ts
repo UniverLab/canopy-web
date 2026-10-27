@@ -30,6 +30,7 @@ export function lookLinks(): string {
     `<link rel="stylesheet" href="/look/tokens.css">`,
     `<link rel="stylesheet" href="/look/fonts/fonts.css">`,
     `<link rel="stylesheet" href="/look/colophon/colophon.css">`,
+    `<link rel="stylesheet" href="/look/banner/banner.css">`,
   ].join("\n");
 }
 
@@ -143,7 +144,7 @@ a:hover { text-decoration-thickness: 2px; }
 .search button {
   flex: none;
   padding: 0.55rem 1rem;
-  background: transparent;
+  background: var(--tint-info);
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-ctl);
   color: var(--surface-ink);
@@ -235,10 +236,10 @@ li.row {
 .row-install { display: inline-flex; gap: 0.5rem; align-items: center; margin-left: auto; min-width: 0; }
 .row-install code {
   padding: 0.35rem 0.6rem;
-  background: var(--bg-deep);
-  border: 1px solid var(--surface-line);
+  background: var(--stage-bg);
+  border: 1px solid var(--stage-line);
   border-radius: var(--radius-ctl);
-  color: var(--surface-ink);
+  color: var(--stage-ink);
   font-family: var(--font-mono);
   font-size: 0.78rem;
   line-height: 1.5;
@@ -255,10 +256,10 @@ li.row {
 .button {
   display: inline-block;
   padding: 0.6rem 1.1rem;
-  border: 0;
+  border: 1px solid var(--tint-line);
   border-radius: var(--radius-ctl);
-  background: var(--cta-gradient);
-  color: #012624;
+  background: var(--tint-info);
+  color: var(--surface-ink);
   font-family: var(--font-mono);
   font-size: 0.85rem;
   letter-spacing: 0.04em;
@@ -269,7 +270,7 @@ li.row {
 .copy {
   flex: none;
   padding: 0.35rem 0.7rem;
-  background: transparent;
+  background: var(--tint-info);
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-ctl);
   color: var(--surface-ink);
@@ -280,7 +281,15 @@ li.row {
 .copy:hover { border-color: var(--teal); }
 
 .doc-cols { display: flex; flex-direction: column; gap: 1.5rem; margin: 1rem 0 1.5rem; }
-dl.sheet { margin: 0; font-family: var(--font-mono); font-size: 0.85rem; }
+dl.sheet {
+  margin: 0;
+  background: var(--tint-info);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius-card);
+  padding: 0 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
 .sheet .field {
   display: grid;
   grid-template-columns: 7.5rem minmax(0, 1fr);
@@ -288,7 +297,8 @@ dl.sheet { margin: 0; font-family: var(--font-mono); font-size: 0.85rem; }
   padding: 0.5rem 0;
   border-bottom: 1px solid var(--surface-line);
 }
-.sheet .field:first-child { border-top: 1px solid var(--surface-line); }
+.sheet .field:first-child { border-top: 0; }
+.sheet .field:last-child { border-bottom: 0; }
 .sheet dt {
   margin: 0;
   font-size: 0.72rem;
@@ -305,8 +315,8 @@ figure.plate {
   padding: 0.75rem;
   max-width: 100%;
   overflow-x: auto;
-  background: var(--bg-deep);
-  border: 1px solid var(--surface-line);
+  background: var(--stage-bg);
+  border: 1px solid var(--stage-line);
   border-radius: var(--radius-card);
 }
 .doc-cols figure.plate { margin: 0; }
@@ -326,9 +336,10 @@ figure.plate {
 .readme h3 { font-size: 1.1rem; }
 .readme pre {
   padding: 0.75rem;
-  background: var(--bg-deep);
-  border: 1px solid var(--surface-line);
+  background: var(--stage-bg);
+  border: 1px solid var(--stage-line);
   border-radius: var(--radius-ctl);
+  color: var(--stage-ink);
   font-family: var(--font-mono);
   font-size: 0.82rem;
   overflow-x: auto;
@@ -336,13 +347,22 @@ figure.plate {
 .readme code { font-family: var(--font-mono); font-size: 0.9em; }
 .readme img { max-width: 100%; height: auto; }
 .busy { padding: 0.25rem 0 0.25rem 1rem; border-left: 3px solid var(--teal); }
+.busy-error {
+  background: var(--tint-error);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius-card);
+  padding: 1rem 1.25rem;
+}
+.busy-error h1 { color: var(--err-label); }
+.busy-error p { color: var(--surface-ink); }
 
 .badge-official {
   display: inline-block;
   padding: 0.05rem 0.4rem;
-  border: 1px solid var(--teal);
+  background: var(--tint-ok);
+  border: 1px solid var(--tint-line);
   border-radius: var(--radius-ctl);
-  color: var(--teal);
+  color: var(--surface-ink);
   font-family: var(--font-mono);
   font-size: 0.72rem;
   letter-spacing: 0.06em;
@@ -355,8 +375,8 @@ figure.plate {
 .community-warning {
   margin: 1rem 0 1.5rem;
   padding: 0.9rem 1rem;
-  background: var(--bg-deep);
-  border: 1px solid var(--surface-line);
+  background: var(--tint-warn);
+  border: 1px solid var(--tint-line);
   border-left: 3px solid var(--attention);
   border-radius: var(--radius-ctl);
   font-family: var(--font-body);
@@ -367,6 +387,12 @@ figure.plate {
 .install-review { margin: 0.4rem 0 0; font-family: var(--font-mono); font-size: 0.78rem; color: var(--surface-ink-dim); }
 
 .runs-summary { font-family: var(--font-mono); font-size: 0.85rem; }
+.runs-summary.runs-community {
+  background: var(--tint-warn);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius-ctl);
+  padding: 0.6rem 0.75rem;
+}
 .run { margin: 0 0 1rem; }
 .run-where { font-family: var(--font-mono); font-size: 0.82rem; }
 p.run-where { margin: 0 0 0.35rem; }
@@ -374,9 +400,10 @@ pre.run-command, pre.run-prompt-text {
   margin: 0;
   padding: 0.75rem;
   max-width: 100%;
-  background: var(--bg-deep);
-  border: 1px solid var(--surface-line);
+  background: var(--stage-bg);
+  border: 1px solid var(--stage-line);
   border-radius: var(--radius-ctl);
+  color: var(--stage-ink);
   font-family: var(--font-mono);
   font-size: 0.82rem;
   line-height: 1.5;
@@ -399,8 +426,8 @@ pre.run-command code, pre.run-prompt-text code { font-family: inherit; overflow-
 details.run-prompt {
   margin: 0 0 0.75rem;
   padding: 0.6rem 0.75rem;
-  background: var(--bg-deep);
-  border: 1px solid var(--surface-line);
+  background: var(--stage-bg);
+  border: 1px solid var(--stage-line);
   border-radius: var(--radius-ctl);
 }
 details.run-prompt summary { cursor: pointer; }

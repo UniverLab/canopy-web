@@ -22,6 +22,7 @@ import { createXtermHandle, TerminalView } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
 import { readFitOnly, writeFitOnly } from "./terminal-prefs.js";
 import type { PairSubmit } from "./ui.js";
+import { renderBanner } from "../../../../packages/look/banner/banner.js";
 import { renderColophon } from "../../../../packages/look/colophon/footer.js";
 
 export interface ShellCallbacks {
@@ -122,6 +123,9 @@ export function createShell(
   let terminalView: TerminalView | null = null;
   let composer: Composer | null = null;
   let latestButton: HTMLButtonElement | null = null;
+  // The one-shot spawn confirmation: set by sheetSpawned, consumed by the
+  // session view's first render, so it shows exactly once.
+  let spawnFlash: string | null = null;
 
   // The catalog the host sent and the two sheets that consume it. The
   // dialogs subscribe to the store themselves while they are open.
@@ -152,7 +156,7 @@ export function createShell(
   const unpaired = () => connectionState === `failed: ${connectFailMessage("unknown_device")}`;
 
   const header = (): string => `
-    <header class="topbar">
+    <header class="topbar" data-conn="${esc(connectionState)}">
       <span class="brand">remote</span>
       ${login === null ? "" : `<span class="login chip">${esc(login)}</span>`}
       ${hostLabel === "" ? "" : `<span class="host chip">${esc(hostLabel)}</span>`}
@@ -194,6 +198,7 @@ export function createShell(
   const renderSignIn = () => {
     root.innerHTML = `
     <main class="signin">
+      ${renderBanner("remote")}
       <h1>Canopy remote</h1>
       <p>Sign in with GitHub to reach your hosts.</p>
       <button type="button" class="primary" id="signin-go">Sign in with GitHub</button>
@@ -276,6 +281,7 @@ export function createShell(
     root.innerHTML = `
     ${header()}
     <main class="sessions">
+      ${renderBanner("remote")}
       ${connBanner()}
       <div id="session-list"></div>
       <p><button type="button" id="conn-disconnect">Disconnect</button></p>
@@ -359,9 +365,12 @@ export function createShell(
 
   const renderSession = () => {
     teardownSessionWidgets();
+    const flash = spawnFlash;
+    spawnFlash = null;
     root.innerHTML = `
     ${header()}
     <main class="session-view">
+      ${flash === null ? "" : `<p class="flash-ok" role="status">${esc(flash)}</p>`}
       ${connBanner()}
       <div class="session-bar">
         <button type="button" id="session-back" aria-label="Back to sessions">‹</button>
@@ -545,6 +554,10 @@ export function createShell(
         // Never a full re-render here: it would drop the terminal and
         // the composer's draft. Only the header and the banner carry the
         // state, so patch them in place.
+        const topbar = root.querySelector(".topbar");
+        if (topbar) {
+          topbar.setAttribute("data-conn", state);
+        }
         const conn = root.querySelector(".topbar .conn");
         if (conn) {
           conn.textContent = state;
@@ -642,6 +655,7 @@ export function createShell(
         return;
       }
       closeSheets();
+      spawnFlash = "Session started ✓";
       callbacks.onOpenSession(id);
     },
     sheetComposed(req: string, text: string): void {

@@ -21,8 +21,8 @@
   --dot-idle: #e09a2b;
   --dot-dead: #6f6a60;
   --dot-unknown: #57534b;
-  --term-bg: var(--bg-deep);
-  --key-bg: var(--surface-bg-raise);
+  --term-bg: var(--stage-bg);
+  --key-bg: var(--tint-info);
   --key-ink: var(--surface-ink);
   --radius: var(--radius-ctl);
   --gap: 0.5rem;
@@ -123,7 +123,7 @@ button.primary {
 }
 
 button.secondary {
-  background: transparent;
+  background: var(--tint-info);
   color: var(--ink);
 }
 
@@ -203,6 +203,13 @@ label > textarea {
   margin-left: auto;
 }
 
+/* The host chip turns ok-green only while connected; the "connected" word
+ * in the conn chip beside it is the text signal. */
+.topbar[data-conn="connected"] .host {
+  background: var(--tint-ok);
+  border-color: var(--tint-line);
+}
+
 .conn-banner {
   background: var(--key-bg);
   border: 1px solid var(--line);
@@ -237,7 +244,16 @@ label > textarea {
 }
 
 #pair-error {
-  color: var(--danger);
+  color: var(--ink);
+  background: var(--tint-error);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+}
+
+#pair-error:not(:empty)::before {
+  content: "Error: ";
+  color: var(--err-label);
 }
 
 .sessions-head {
@@ -365,7 +381,7 @@ label > textarea {
  * card (never the page), and the 8 px inset keeps text off the border. */
 .term-pane {
   background: var(--term-bg);
-  border: 1px solid var(--line);
+  border: 1px solid var(--stage-line);
   border-radius: var(--radius-card);
   padding: 8px;
   overflow: auto;
@@ -425,11 +441,16 @@ label > textarea {
   display: none;
 }
 
-/* Ten keys, all visible: two rows of five equal-width touch targets. */
+/* Ten keys, all visible: two rows of five equal-width touch targets. The
+ * bar is one info block; the keys inside stay flat so the tint reads once. */
 .keybar {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--gap);
+  background: var(--tint-info);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius-card);
+  padding: 0.5rem;
 }
 
 .keybar .key {
@@ -437,12 +458,18 @@ label > textarea {
   padding: 0.5rem 0.3rem;
   font-family: var(--font-mono);
   font-size: 0.78rem;
+  background: transparent;
+  border-color: var(--tint-line);
 }
 
 .composer {
   display: flex;
   flex-direction: column;
   gap: var(--gap);
+  background: var(--tint-info);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius-card);
+  padding: 0.5rem;
 }
 
 .composer-input {
@@ -450,6 +477,8 @@ label > textarea {
   resize: vertical;
   min-height: 3.5rem;
   padding: 0.5rem 0.6rem;
+  background: transparent;
+  border-color: var(--tint-line);
 }
 
 .composer-row {
@@ -462,7 +491,11 @@ label > textarea {
   flex: 1;
   margin: 0;
   font-size: 0.85rem;
-  color: var(--danger);
+  color: var(--ink);
+  background: var(--tint-error);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
   overflow-wrap: anywhere;
 }
 
@@ -470,11 +503,49 @@ label > textarea {
   display: none;
 }
 
+.composer-error::before {
+  content: "Error: ";
+  color: var(--err-label);
+}
+
+/* The one-line success confirmation after a spawn or a send. The "Sent" /
+ * "Session started" words carry a check, so the ok tint is never the only
+ * signal. */
+.flash-ok {
+  background: var(--tint-ok);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.flash-ok[hidden] {
+  display: none;
+}
+
+.composer-ok {
+  flex: 1;
+}
+
 .composer-send {
   background: var(--accent);
   color: var(--accent-ink);
   border-color: transparent;
   margin-left: auto;
+}
+
+/* The yolo checkbox row, when it lands: calm until checked, warn-tinted
+ * after. Dormant — no view renders `.yolo-row` yet; when one does, the
+ * label or row MUST carry this class. */
+.yolo-row {
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+}
+
+.yolo-row:has(input:checked) {
+  background: var(--tint-warn);
+  border-color: var(--tint-line);
 }
 
 /* Shared modal sheet: New dialog and Prompt Builder. */
@@ -489,13 +560,13 @@ label > textarea {
 }
 
 .sheet {
-  background: var(--surface-bg);
+  background: var(--tint-info);
   color: var(--ink);
   width: 100%;
   max-width: 48rem;
   max-height: 92dvh;
   overflow-y: auto;
-  border: 1px solid var(--line);
+  border: 1px solid var(--tint-line);
   border-radius: var(--radius-card) var(--radius-card) 0 0;
   padding: 0 1rem calc(1rem + env(safe-area-inset-bottom));
 }
@@ -508,9 +579,9 @@ label > textarea {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  background: var(--surface-bg);
+  background: var(--tint-info);
   padding: 0.75rem 0;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--tint-line);
 }
 
 .sheet-head h2 {
@@ -536,7 +607,11 @@ label > textarea {
 }
 
 .sheet-error {
-  color: var(--danger);
+  color: var(--ink);
+  background: var(--tint-error);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
   font-size: 0.85rem;
   margin: 0.5rem 0;
   overflow-wrap: anywhere;
@@ -546,8 +621,21 @@ label > textarea {
   display: none;
 }
 
+.sheet-error:empty {
+  display: none;
+}
+
+.sheet-error:not(:empty)::before {
+  content: "Error: ";
+  color: var(--err-label);
+}
+
 .field-error {
-  color: var(--danger);
+  color: var(--ink);
+  background: var(--tint-error);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
   font-size: 0.85rem;
   margin: -0.5rem 0 0.5rem;
   overflow-wrap: anywhere;
@@ -555,6 +643,11 @@ label > textarea {
 
 .field-error[hidden] {
   display: none;
+}
+
+.field-error::before {
+  content: "Error: ";
+  color: var(--err-label);
 }
 
 .preset-preview {
@@ -773,7 +866,7 @@ label > textarea {
   z-index: 30;
   display: flex;
   flex-direction: column;
-  background: rgba(1, 20, 19, 0.95);
+  background: var(--stage-bg);
 }
 
 .viewer-stage {
@@ -815,8 +908,8 @@ label > textarea {
   gap: 0.5rem;
   padding: 0.6rem 0.75rem;
   padding-bottom: max(0.6rem, env(safe-area-inset-bottom));
-  background: var(--bg);
-  border-top: 1px solid var(--line);
+  background: var(--tint-info);
+  border-top: 1px solid var(--tint-line);
 }
 
 .viewer-bar button {
@@ -849,8 +942,9 @@ label > textarea {
   min-height: 2.5rem;
   padding: 0.4rem 0.75rem;
   border-radius: var(--radius);
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: var(--tint-info);
+  color: var(--ink);
+  border: 1px solid var(--tint-line);
   font-family: var(--font-mono);
   font-size: 0.8rem;
   text-decoration: none;

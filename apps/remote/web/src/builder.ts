@@ -14,6 +14,8 @@ import {
   emptyDraft,
   loadDraft,
   moveSection,
+  parseStoredDraft,
+  readRawDraft,
   removeSection,
   saveDraft,
   setPreset,
@@ -89,6 +91,12 @@ export class Builder {
     this.unsubscribe = null;
     this.state = freshState();
     this.state.draft = this.initialized ? previous : loadDraft(this.storage);
+    if (!this.initialized) {
+      const raw = readRawDraft(this.storage);
+      if (raw !== null && parseStoredDraft(raw) === null) {
+        this.state.error = "Saved draft was unreadable; started fresh.";
+      }
+    }
     this.initialized = true;
     if (this.state.draft.sections.length === 0) {
       this.state.draft = addSection(this.state.draft);
