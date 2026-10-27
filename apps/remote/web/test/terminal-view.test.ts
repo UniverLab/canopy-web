@@ -188,6 +188,37 @@ describe("TerminalView", () => {
     expect(view.fitted).toBe(false);
   });
 
+  it("waits for the real face and keeps the writes that arrive first", async () => {
+    const { parent, view, handles } = setup();
+    let release: () => void = () => {};
+    const loaded = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    // A Font Loading API that stays pending until the test releases it: the
+    // snapshot beats the face exactly as it can on a slow network.
+    Object.defineProperty(document, "fonts", {
+      configurable: true,
+      value: { load: () => loaded, ready: Promise.resolve() },
+    });
+    try {
+      view.mount(parent, 80, 24);
+      // The cell size must be measured with the real face, so xterm is not
+      // open yet and nothing has been written to it.
+      expect(view.fitted).toBe(false);
+      expect(handles).toHaveLength(0);
+      view.write("hello from the host\r\n");
+      expect(handles).toHaveLength(0);
+      release();
+      await view.ready();
+      expect(handles).toHaveLength(1);
+      // The buffered snapshot is flushed into xterm when it opens.
+      expect(handles[0]?.written).toEqual(["hello from the host\r\n"]);
+    } finally {
+      Reflect.deleteProperty(document, "fonts");
+      view.dispose();
+    }
+  });
+
   it("tracks follow state and scrolls to latest", () => {
     const { parent, view, handles, follows } = setup();
     view.mount(parent, 80, 24);

@@ -409,6 +409,14 @@ label > textarea {
   min-width: 2.75rem;
 }
 
+/* The Fit mode is a toggle, so its state has to be visible and not only in
+ * aria-pressed: on a wide screen both modes render the same, and the button
+ * is then the only sign of what the device remembered. */
+#term-fit[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 #term-latest {
   margin-left: auto;
 }
