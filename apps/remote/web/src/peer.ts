@@ -279,6 +279,9 @@ export class HostPeer {
     if (!this.pc || !this.hostKey || this.offerSig === "") {
       return;
     }
+    if (this.pc.remoteDescription) {
+      return;
+    }
     const valid = await verifyAnswer(
       this.hostKey,
       this.device.deviceId,
@@ -343,7 +346,7 @@ export class HostPeer {
       }
       this.pc = null;
     }
-    if (sendBye && first) {
+    if (sendBye && first && this.offerSig !== "") {
       this.relay.trySend(this.target, { t: "bye" });
     }
   }

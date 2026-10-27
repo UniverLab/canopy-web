@@ -218,6 +218,16 @@ describe("ConnectionManager", () => {
     expect(offerCount(setup)).toBe(1);
   });
 
+  it("retries on ICE failed during the handshake", async () => {
+    const setup = await createManager();
+    await startAndOffer(setup);
+    setup.peerHarness.latest().setConnectionState("failed");
+    await settle(10);
+    expect(lastState(setup)).toBe("retrying in 1s");
+    await vi.advanceTimersByTimeAsync(1000);
+    await waitForOffers(setup, 2);
+  });
+
   it("retries at once on ICE failed", async () => {
     const setup = await createManager();
     await startAndOffer(setup);

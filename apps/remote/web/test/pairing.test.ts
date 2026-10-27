@@ -140,6 +140,30 @@ describe("runPairing", () => {
     await assertion;
   });
 
+  it("maps an undecodable host_spki to the identity check failure", async () => {
+    const setup = await setupPairing();
+    const key = await derivePairKey(CODE_NORMALIZED, HOST_ID);
+    const badSpki = "!!!not-base64!!!";
+    const mac = await pairOkMac(
+      key,
+      badSpki,
+      DEVICE_SPKI_B64,
+      b64encode(nonceB()),
+      b64encode(nonceH()),
+    );
+    const pending = runPairing(pairOptions(setup));
+    const assertion = expect(pending).rejects.toThrow("Host identity check failed");
+    await waitForSend(setup.ws);
+    setup.ws.receive(`h:${HOST_ID}`, {
+      t: "pair_ok",
+      host_spki: badSpki,
+      nonce_h: b64encode(nonceH()),
+      mac,
+    });
+    await assertion;
+    expect(setup.saved).toHaveLength(0);
+  });
+
   it("rejects a malformed code without sending", async () => {
     const setup = await setupPairing();
     await expect(runPairing(pairOptions(setup, { code: "bogus" }))).rejects.toThrow(

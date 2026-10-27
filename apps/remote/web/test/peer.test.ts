@@ -209,4 +209,21 @@ describe("HostPeer", () => {
     const setup = await setupPeer(false);
     await expect(setup.peer.connect()).rejects.toThrow("Could not load TURN credentials");
   });
+
+  it("sends no bye when the offer was never sent", async () => {
+    const setup = await setupPeer(false);
+    await expect(setup.peer.connect()).rejects.toThrow("Could not load TURN credentials");
+    expect(setup.ws.envelopes().filter((e) => e.body.t === "bye")).toHaveLength(0);
+  });
+
+  it("ignores a second answer after the handshake completed", async () => {
+    const setup = await setupAndOpen();
+    const offer = offerBody(setup);
+    const forged = `${offer.sig.slice(0, -4)}MA==`;
+    setup.ws.receive(`h:${setup.host.record.host_id}`, { t: "answer", sdp: ANSWER_SDP, sig: forged });
+    await flush();
+    await flush();
+    expect(setup.events).not.toContainEqual({ type: "failed", reason: "Host identity check failed" });
+    expect(setup.peerHarness.latest().closed).toBe(false);
+  });
 });

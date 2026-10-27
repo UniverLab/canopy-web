@@ -15,6 +15,12 @@ describe("consumePairFragment", () => {
     globalThis.location.hash = "";
     expect(consumePairFragment()).toBeNull();
   });
+
+  it("still strips a malformed fragment", () => {
+    globalThis.location.hash = "#%E0%A4%A";
+    expect(consumePairFragment()).toBe("%E0%A4%A");
+    expect(globalThis.location.hash).toBe("");
+  });
 });
 
 describe("createApp", () => {

@@ -176,7 +176,7 @@ export class ConnectionManager {
   }
 
   private onIceState(state: string): void {
-    if (this.phase !== "open") {
+    if (this.phase !== "open" && this.phase !== "attempting") {
       return;
     }
     if (state === "failed") {
@@ -189,7 +189,7 @@ export class ConnectionManager {
       }
       this.graceTimer = setTimeout(() => {
         this.graceTimer = null;
-        if (this.phase === "open") {
+        if (this.phase === "open" || this.phase === "attempting") {
           this.beginWait();
         }
       }, DISCONNECT_GRACE_MS);

@@ -148,7 +148,12 @@ export async function runPairing(deps: PairingDeps): Promise<HostRecord> {
   if (!macEqual(expected, reply.mac)) {
     throw new Error("Host identity check failed");
   }
-  const spkiId = await idFromSpki(b64decode(reply.host_spki));
+  let spkiId: string;
+  try {
+    spkiId = await idFromSpki(b64decode(reply.host_spki));
+  } catch {
+    throw new Error("Host identity check failed");
+  }
   if (!spkiId.startsWith(deps.hostId)) {
     throw new Error("Host identity check failed");
   }

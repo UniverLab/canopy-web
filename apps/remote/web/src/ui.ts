@@ -38,13 +38,17 @@ export function consumePairFragment(): string | null {
   if (!hash || hash.length < 2) {
     return null;
   }
-  const code = decodeURIComponent(hash.slice(1));
+  const raw = hash.slice(1);
   globalThis.history.replaceState(
     null,
     "",
     globalThis.location.pathname + globalThis.location.search,
   );
-  return code;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
 }
 
 function esc(text: string): string {
