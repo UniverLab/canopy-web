@@ -35,15 +35,18 @@ const INLINE_RE = /(`[^`\n]+`|\[[^\]\n]+\]\([^)\s]+\))/g;
  * `*` pairs anywhere with a non-empty run, while `_` pairs only at word
  * boundaries — an underscore with a word character on its outer side stays
  * literal, so `snake_case_name` never emphasizes. Code spans never reach
- * here: the inline scanner pulls them out before this runs.
+ * here: the inline scanner pulls them out before this runs. No run may
+ * contain a tag bracket, so an emphasis pair can never span the `<strong>`
+ * tags the first pass emitted (mixed markers like `**a _b** c_` stay
+ * literal instead of nesting invalidly).
  */
 function renderEmphasis(escaped: string): string {
   const strong = escaped
-    .replace(/\*\*([^*\n]+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/(?<![A-Za-z0-9_])__([^_\n]+?)__(?![A-Za-z0-9_])/g, "<strong>$1</strong>");
+    .replace(/\*\*([^*<\n]+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/(?<![A-Za-z0-9_])__([^_<\n]+?)__(?![A-Za-z0-9_])/g, "<strong>$1</strong>");
   return strong
-    .replace(/\*([^*\n]+?)\*/g, "<em>$1</em>")
-    .replace(/(?<![A-Za-z0-9_])_([^_\n]+?)_(?![A-Za-z0-9_])/g, "<em>$1</em>");
+    .replace(/\*([^*<\n]+?)\*/g, "<em>$1</em>")
+    .replace(/(?<![A-Za-z0-9_])_([^_<\n]+?)_(?![A-Za-z0-9_])/g, "<em>$1</em>");
 }
 
 function renderInline(raw: string): string {

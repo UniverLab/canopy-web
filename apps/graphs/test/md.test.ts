@@ -114,6 +114,7 @@ describe("emphasis", () => {
   it("keeps intraword underscores literal", () => {
     expect(renderMarkdown("snake_case_name stays")).toBe("<p>snake_case_name stays</p>");
     expect(renderMarkdown("a_b_c")).toBe("<p>a_b_c</p>");
+    expect(renderMarkdown("a__b__c")).toBe("<p>a__b__c</p>");
   });
 
   it("leaves code spans untouched", () => {
@@ -121,6 +122,10 @@ describe("emphasis", () => {
       "<p>run <code>**not bold**</code> here</p>",
     );
     expect(renderMarkdown("run `_not em_` here")).toBe("<p>run <code>_not em_</code> here</p>");
+  });
+
+  it("never nests emphasis across strong tags", () => {
+    expect(renderMarkdown("**a _b** c_")).toBe("<p><strong>a _b</strong> c_</p>");
   });
 
   it("renders emphasis inside list items, headings and link labels", () => {

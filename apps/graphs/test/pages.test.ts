@@ -432,6 +432,19 @@ describe("the README section", () => {
     const twin = await (await call("/n/hello-node", { accept: "text/markdown" })).text();
     expect(twin).not.toContain(`## README`);
   });
+
+  it("omits the README section when the README is whitespace-only", async () => {
+    const stubs = officialStubs().map((stub) =>
+      stub.url.endsWith("hello-graph/README.md")
+        ? { ...stub, body: fileBody("graphs/hello-graph/README.md", "   \n  \t\n") }
+        : stub,
+    );
+    const html = await (await call("/g/hello-graph", { stubs })).text();
+    expect(html).not.toContain(`>README</h2>`);
+    expect(html).not.toContain(`<div class="readme">`);
+    const twin = await (await call("/g/hello-graph", { stubs, accept: "text/markdown" })).text();
+    expect(twin).not.toContain(`## README`);
+  });
 });
 
 describe("routing", () => {
