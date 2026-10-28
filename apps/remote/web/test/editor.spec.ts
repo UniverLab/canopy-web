@@ -9,6 +9,11 @@
  * - delete a node with the key and check its edges are gone;
  * - Clear keeps spec and next.
  *
+ * Three guarantees ride beside the scenarios: wiring by touch (tap the output,
+ * then the input), the paint coming from a stylesheet rather than an inline
+ * `<style>` the remote's CSP refuses, and Export staying the simple CORS
+ * request the catalogue's preflight answer accepts.
+ *
  * The drafts POST is routed to a canned 201 — no test touches the live
  * catalogue — and the posted document is asserted where it matters.
  */
@@ -241,3 +246,124 @@ for (const viewport of VIEWPORTS) {
     await expect(page.locator("#editor-problems")).toContainText("nothing reaches next");
   });
 }
+
+/**
+ * Requirement 1's touch path: on a phone there is no drag and no Shift — a
+ * tap on an output port arms it, a tap on an input port lands the edge, and
+ * the chooser asks for the condition.
+ */
+test("wires by tapping an output port and then an input port", async ({ browser }) => {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+  });
+  const page = await context.newPage();
+  try {
+    await openEditor(page);
+    await page.locator('[data-blank="agent"]').tap();
+    await nodeBox(page, 0).locator("[data-output]").tap();
+    await nodeBox(page, 2).locator("[data-input]").tap();
+    const chooser = page.locator("#editor-chooser");
+    await expect(chooser).toBeVisible();
+    await chooser.locator('[data-cond="pass"]').tap();
+    await nodeBox(page, 2).locator("[data-output]").tap();
+    await nodeBox(page, 1).locator("[data-input]").tap();
+    await expect(chooser).toBeVisible();
+    await chooser.locator('[data-cond="pass"]').tap();
+    await expect(page.locator("#editor-canvas g.edge")).toHaveCount(2);
+    await expect(page.locator("#editor-status")).toHaveText("No problems.");
+  } finally {
+    await context.close();
+  }
+});
+
+/**
+ * The remote's CSP is `style-src 'self'`, so an inline `<style>` is refused
+ * and the graph would paint as bare black boxes — visibly fine in this dev
+ * server, unpainted in production. The paint must come from editor.css, the
+ * stylesheet the editor chunk links.
+ */
+test("paints the graph from a stylesheet, never an inline style", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openEditor(page);
+  await page.locator('[data-blank="agent"]').click();
+  await wire(page, outputOf(nodeBox(page, 0)), inputOf(nodeBox(page, 2)));
+  await expect(page.locator("#editor-canvas g.edge")).toHaveCount(1);
+
+  // No <style> in the svg, and none made by the app either: the dev server's
+  // own style tags carry its `data-vite-dev-id`, the app's would not.
+  await expect(page.locator("#editor-canvas style")).toHaveCount(0);
+  const appStyles = await page.evaluate(() =>
+    [...document.querySelectorAll("style")]
+      .filter((element) => !element.hasAttribute("data-vite-dev-id"))
+      .map((element) => element.id || element.textContent?.slice(0, 40) || "anonymous"),
+  );
+  expect(appStyles, "the app must not create inline <style> elements").toEqual([]);
+
+  // And the paint lands: the plate's teal edge over the deep stage.
+  const paint = await page.evaluate(() => {
+    const of = (selector: string, property: string): string => {
+      const element = document.querySelector(selector);
+      return element === null ? "missing" : getComputedStyle(element)[property as "stroke"];
+    };
+    return {
+      edge: of("#editor-canvas .edge-line", "stroke"),
+      box: of("#editor-canvas .node-box", "fill"),
+      stage: of("#editor-stage", "backgroundColor"),
+    };
+  });
+  expect(paint.edge).toBe("rgb(0, 169, 160)");
+  expect(paint.box).toBe("rgb(12, 20, 22)");
+  expect(paint.stage).toBe("rgb(4, 17, 15)");
+});
+
+/**
+ * Export must survive the catalogue's real CORS answer: it allows the origin
+ * and the methods but no request headers, so a `content-type: application/json`
+ * POST would be refused after a preflight the editor cannot win. A fulfilled
+ * route skips the browser's preflight (so this test cannot reproduce the
+ * refusal itself), hence the assertions pin the *request shape*: one plain
+ * POST, no preflight-triggering content type.
+ */
+test("stores the draft as the simple request the catalogue accepts", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const seen: string[] = [];
+  await page.route(DRAFTS_URL, async (route) => {
+    const request = route.request();
+    seen.push(`${request.method()} ${request.headers()["content-type"] ?? "no content-type"}`);
+    const cors = {
+      "access-control-allow-origin": "*",
+      "access-control-allow-methods": "GET, POST, OPTIONS",
+    };
+    if (request.method() === "OPTIONS") {
+      await route.fulfill({ status: 204, headers: cors });
+      return;
+    }
+    await route.fulfill({
+      status: 201,
+      headers: { ...cors, "content-type": "application/json" },
+      body: JSON.stringify({
+        id: DRAFT_ID,
+        kind: "graph",
+        name: "untitled",
+        expires_at: new Date(Date.now() + 1800_000).toISOString(),
+        install: `canopy graph install draft:${DRAFT_ID}`,
+      }),
+    });
+  });
+
+  await openEditor(page);
+  await page.locator('[data-blank="agent"]').click();
+  await wire(page, outputOf(nodeBox(page, 0)), inputOf(nodeBox(page, 2)));
+  await wire(page, outputOf(nodeBox(page, 2)), inputOf(nodeBox(page, 1)));
+  await expect(page.locator('[data-action="export"]')).toBeEnabled();
+  await page.locator('[data-action="export"]').click();
+  await expect(page.locator("#editor-share code")).toContainText(
+    `canopy graph install draft:${DRAFT_ID}`,
+  );
+  // One POST, no preflight, and the body carries no JSON content type.
+  expect(seen.filter((line) => line.startsWith("OPTIONS"))).toEqual([]);
+  const post = seen.find((line) => line.startsWith("POST")) ?? "";
+  expect(post).toContain("text/plain");
+});

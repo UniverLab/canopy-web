@@ -9,6 +9,12 @@
  * an `ApiError` carrying the API's own message (and its problem paths,
  * when it answers 400 with them), so the UI shows the text the Worker
  * wrote instead of inventing one.
+ *
+ * The request is deliberately a *simple* one — a string body, no
+ * `content-type: application/json` — because the catalogue's preflight
+ * allows the origin and the methods but no headers, so any request that
+ * needs a preflight is refused by the browser before it leaves the page.
+ * The API reads the body with `JSON.parse` and never looks at the header.
  */
 import { isRecord, isString } from "../../../../../packages/plate/guards.js";
 import type { JsonValue } from "../../../../../src/schema.js";
@@ -69,13 +75,17 @@ export async function createRemoteDraft(
 ): Promise<DraftCreated> {
   let response: Response;
   try {
+    // No content-type: a bare string body goes as `text/plain;charset=UTF-8`,
+    // which is CORS-safelisted. Setting `application/json` would force a
+    // preflight the catalogue's CORS answer does not grant (it lists the
+    // origin and the methods, not the header), and the browser would refuse
+    // the draft before sending it.
     response = await fetchImpl(url, {
       method: "POST",
-      headers: { "content-type": "application/json" },
       body: JSON.stringify({ kind: "graph", document }),
     });
   } catch {
-    throw new ApiError("the network did not answer", 0);
+    throw new ApiError("the drafts API did not answer", 0);
   }
   let body: unknown = null;
   try {

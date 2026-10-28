@@ -122,3 +122,51 @@ test("sign-in never scrolls sideways at 390x844", async ({ page }) => {
   }));
   expect(width.scroll).toBeLessThanOrEqual(width.view);
 });
+
+test("the graph editor paints under the real `style-src 'self'` on /editor", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const refused: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") {
+      refused.push(message.text());
+    }
+  });
+  const response = await page.goto("/editor");
+  expect(response?.status()).toBe(200);
+  const csp = response?.headers()["content-security-policy"] ?? "";
+  expect(csp).toContain("style-src 'self'");
+  await expect(page.locator("#editor")).toHaveAttribute("data-ready", "true", {
+    timeout: 20_000,
+  });
+
+  // Wire spec → agent by ports, the way the editor.spec.ts scenarios do.
+  await page.locator('[data-blank="agent"]').click();
+  const nodes = page.locator("#editor-canvas g.node");
+  await nodes.nth(0).locator("[data-output]").click();
+  await nodes.nth(2).locator("[data-input]").click();
+  await page.locator('#editor-chooser [data-cond="pass"]').click();
+  await expect(page.locator("#editor-canvas g.edge")).toHaveCount(1);
+
+  // The editor ships its paint in a stylesheet; an inline <style> here is
+  // exactly what this CSP refuses and would leave the graph black on black.
+  await expect(page.locator("style")).toHaveCount(0);
+  const paint = await page.evaluate(() => {
+    const of = (selector: string, property: string): string => {
+      const element = document.querySelector(selector);
+      return element === null ? "missing" : getComputedStyle(element)[property as "stroke"];
+    };
+    return {
+      edge: of("#editor-canvas .edge-line", "stroke"),
+      box: of("#editor-canvas .node-box", "fill"),
+      stage: of("#editor-stage", "backgroundColor"),
+      toolbar: of(".editor-toolbar", "display"),
+    };
+  });
+  expect(paint.edge).toBe("rgb(0, 169, 160)");
+  expect(paint.box).toBe("rgb(12, 20, 22)");
+  expect(paint.stage).toBe("rgb(4, 17, 15)");
+  expect(paint.toolbar).toBe("flex");
+  expect(refused.filter((text) => text.includes("Content Security Policy"))).toEqual([]);
+});

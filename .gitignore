@@ -101,6 +101,7 @@ dist
 *.css
 !apps/remote/web/src/styles.css
 !apps/remote/web/src/terminal-font.css
+!apps/remote/web/src/editor/editor.css
 *.htm
 *.html
 !apps/remote/web/index.html

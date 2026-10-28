@@ -19,6 +19,10 @@
  * Coordinates are world pixels at zoom 1; the view transform pans and
  * zooms under them. Shift-click toggles nodes in the multi-select the
  * inspector's Make-ensemble button reads.
+ *
+ * The paint (fills, strokes, port and edge classes) lives in editor.css:
+ * the remote's CSP is `style-src 'self'`, so an inline `<style>` in this
+ * SVG would be refused and the graph would draw as bare black boxes.
  */
 import { classOf, type EdgeClass } from "../../../../../packages/plate/document.js";
 import {
@@ -33,7 +37,7 @@ import {
   MEMBER_GEOM,
   plateLabel,
 } from "../../../../../packages/plate/layout.js";
-import { PALETTE, edgePath, type Pt } from "../../../../../packages/plate/vocabulary.js";
+import { edgePath, type Pt } from "../../../../../packages/plate/vocabulary.js";
 import {
   NEXT_ID,
   SPEC_ID,
@@ -102,42 +106,6 @@ function clampZoom(z: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
 }
 
-/** The svg's own stylesheet, built from the plate's palette so no hex is copied. */
-function canvasStyle(): string {
-  const mix = `color-mix(in srgb,var(--canopy,#00a9a0) 22%,${PALETTE.deep})`;
-  return (
-    `.editor-svg text{font-family:var(--font-mono,"Sometype Mono","Courier New",monospace)}` +
-    `.editor-svg .node{cursor:grab}` +
-    `.editor-svg .node-box{fill:#0c1416;stroke:${PALETTE.gateStroke};stroke-width:1.5}` +
-    `.editor-svg .node.kind-agent .node-box{fill:${mix};stroke:var(--canopy,#00a9a0)}` +
-    `.editor-svg .node.fixed .node-box{stroke-dasharray:6 4}` +
-    `.editor-svg .node.selected .node-box{stroke:var(--teal,#00a9a0);stroke-width:3}` +
-    `.editor-svg .node-name{fill:${PALETTE.label};font-size:13px;pointer-events:none}` +
-    `.editor-svg .kind-mark{stroke:var(--canopy,#00a9a0);fill:none;stroke-width:1.5;pointer-events:none}` +
-    `.editor-svg .kind-mark.solid{fill:var(--canopy,#00a9a0);stroke:none}` +
-    `.editor-svg .port-hit{fill:transparent;cursor:crosshair}` +
-    `.editor-svg .port-in{fill:#0c1416;stroke:var(--teal,#00a9a0);stroke-width:2;pointer-events:none}` +
-    `.editor-svg .port-out{fill:var(--teal,#00a9a0);stroke:${PALETTE.deep};stroke-width:1.5;pointer-events:none;opacity:.75}` +
-    `.editor-svg .node:hover .port-out,.editor-svg .node.selected .port-out,` +
-    `.editor-svg .ensemble:hover .port-out,.editor-svg .ensemble.selected .port-out{opacity:1}` +
-    `.editor-svg .port-out.armed{stroke:var(--teal,#00a9a0);stroke-width:2;opacity:1}` +
-    `.editor-svg .edge-line{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.14;opacity:.85}` +
-    `.editor-svg .edge.fail .edge-line{stroke:${PALETTE.red};stroke-dasharray:1 .8}` +
-    `.editor-svg .edge.error .edge-line{stroke:currentColor;stroke-width:.1;stroke-dasharray:.4 .7;opacity:.5}` +
-    `.editor-svg .edge.selected .edge-line{stroke-width:.26;opacity:1}` +
-    `.editor-svg .edge-hit{fill:none;stroke:transparent;stroke-width:1.6;pointer-events:stroke;cursor:pointer}` +
-    `.editor-svg .rubber{fill:none;stroke:var(--teal,#00a9a0);stroke-width:.12;stroke-dasharray:.6 .5;pointer-events:none}` +
-    `.editor-svg .ensemble{cursor:grab}` +
-    `.editor-svg .ensemble-hit{fill:transparent}` +
-    `.editor-svg .group-box{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.3;stroke-dasharray:1.2 .9;opacity:.85}` +
-    `.editor-svg .ensemble.selected .group-box{stroke:var(--teal,#00a9a0);stroke-width:.5;opacity:1}` +
-    `.editor-svg .group-title,.editor-svg .group-subtitle{font-size:1.9px;fill:var(--canopy,#00a9a0);letter-spacing:.14em;text-transform:uppercase;pointer-events:none}` +
-    `.editor-svg .member-shape{fill:${mix};stroke:var(--nc,var(--canopy,#00a9a0));stroke-width:.3}` +
-    `.editor-svg .member.selected .member-shape{stroke:var(--teal,#00a9a0);stroke-width:.5}` +
-    `.editor-svg .member-label{font-size:1.9px;fill:#e8f6f1;text-anchor:middle;pointer-events:none}`
-  );
-}
-
 /** One ensemble's plate geometry: title, subtitle and box, in units. */
 export interface EnsembleGeom {
   title: string;
@@ -179,7 +147,9 @@ export class Canvas {
       host.prepend(svg);
     }
     this.svg = svg;
-    svg.innerHTML = `<style>${canvasStyle()}</style><g class="world"></g>`;
+    // The paint rules live in editor.css: an inline `<style>` here would be
+    // refused by the remote's `style-src 'self'` and the graph would vanish.
+    svg.innerHTML = `<g class="world"></g>`;
     this.world = svg.querySelector("g.world") as SVGGElement;
     svg.addEventListener("pointerdown", (event) => this.down(event));
     svg.addEventListener("pointermove", (event) => this.move(event));

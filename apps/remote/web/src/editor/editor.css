@@ -1,0 +1,519 @@
+/* SPDX-License-Identifier: Apache-2.0
+ * The remote graph editor: toolbar, the three-pane body (palette, canvas,
+ * inspector), the condition chooser, the import box and the draft block —
+ * plus the canvas's own paint rules for the plate boxes, ports and edges.
+ *
+ * This file is loaded as a real stylesheet by the editor's lazy chunk
+ * (`import "./editor.css"` in editor.ts), never as an inline `<style>`:
+ * the remote's CSP is `style-src 'self'`, which refuses inline styles, so
+ * an injected `<style>` would leave the editor unpainted in production
+ * (the catalogue can inject one because its pages carry no CSP).
+ *
+ * The canvas colours are the plate's own palette literals — no hex is
+ * invented here; `web/test/editor-styles.test.ts` holds them to PALETTE.
+ * Narrow screens stack the panes — palette as a row, canvas, inspector
+ * below — so the page never scrolls sideways at 390 px.
+ */
+
+.remote-editor {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px 32px;
+  box-sizing: border-box;
+}
+/* The hidden attribute must win over every layout rule below (the notice,
+ * the problems list, the chooser and the share block all toggle it). */
+.remote-editor [hidden] {
+  display: none !important;
+}
+
+/* ── Toolbar ─────────────────────────────────────────────────────── */
+
+.remote-editor .editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.remote-editor .editor-toolbar .button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.remote-editor .editor-status {
+  margin-left: auto;
+  font-size: 13px;
+  opacity: 0.85;
+}
+.remote-editor .editor-status.has-problems {
+  color: #ff6b6b;
+}
+.remote-editor .editor-notice {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid #ff6b6b;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.remote-editor .editor-problems {
+  margin: 0;
+  padding: 8px 12px 8px 28px;
+  border: 1px solid #5a6360;
+  border-radius: 8px;
+  font-size: 13px;
+  max-height: 120px;
+  overflow: auto;
+}
+.remote-editor .editor-problems code {
+  margin-right: 8px;
+  opacity: 0.75;
+}
+
+/* ── Import box ──────────────────────────────────────────────────── */
+
+.remote-editor .editor-import {
+  border: 1px solid #5a6360;
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.remote-editor .editor-import textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--font-mono, "Sometype Mono", monospace);
+  font-size: 12px;
+}
+.remote-editor .editor-import-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.remote-editor .editor-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: 13px;
+}
+.remote-editor #editor-import-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.remote-editor .editor-import-error {
+  margin: 0;
+  color: #ff6b6b;
+  font-size: 13px;
+}
+
+/* ── Body: palette, stage, inspector ─────────────────────────────── */
+
+.remote-editor .editor-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr) 300px;
+  gap: 12px;
+  min-height: 0;
+}
+.remote-editor .editor-palette {
+  border: 1px solid #5a6360;
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-content: start;
+}
+.remote-editor .editor-palette .kicker {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+.remote-editor .editor-kind {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid #5a6360;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+}
+.remote-editor .editor-kind:hover {
+  border-color: var(--canopy, #00a9a0);
+}
+.remote-editor .editor-stage {
+  position: relative;
+  border: 1px solid #5a6360;
+  border-radius: 8px;
+  overflow: hidden;
+  min-height: 420px;
+  background: #04110f;
+}
+.remote-editor .editor-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 420px;
+  touch-action: none;
+}
+.remote-editor .editor-empty {
+  position: absolute;
+  left: 12px;
+  top: 8px;
+  right: 12px;
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.7;
+  pointer-events: none;
+}
+.remote-editor .editor-zoom {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  gap: 4px;
+}
+.remote-editor .editor-zoom button {
+  min-width: 36px;
+  min-height: 36px;
+  border: 1px solid #5a6360;
+  border-radius: 8px;
+  background: #0c1416;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+}
+.remote-editor .editor-zoom button:hover {
+  border-color: var(--canopy, #00a9a0);
+}
+.remote-editor .editor-zoom [data-action="clear"] {
+  padding: 0 10px;
+  font-size: 13px;
+}
+.remote-editor .editor-chooser {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #0c1416;
+  border: 1px solid var(--canopy, #00a9a0);
+  border-radius: 8px;
+  padding: 10px;
+  z-index: 2;
+}
+.remote-editor .editor-chooser-title {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+.remote-editor .editor-chooser-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.remote-editor .editor-chooser-row button {
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.remote-editor .editor-chooser-route {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.remote-editor .editor-chooser-cancel {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: 13px;
+}
+
+/* ── Inspector ───────────────────────────────────────────────────── */
+
+.remote-editor .editor-panel {
+  border: 1px solid #5a6360;
+  border-radius: 8px;
+  padding: 12px;
+  overflow: auto;
+  max-height: 70vh;
+}
+.remote-editor .editor-panel .kicker {
+  margin: 0 0 8px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+.remote-editor .editor-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.remote-editor .editor-field label {
+  font-size: 13px;
+}
+.remote-editor .editor-field input,
+.remote-editor .editor-field select,
+.remote-editor .editor-field textarea {
+  font-size: 13px;
+  padding: 6px 8px;
+  box-sizing: border-box;
+  width: 100%;
+}
+.remote-editor .editor-field textarea {
+  font-family: var(--font-mono, "Sometype Mono", monospace);
+}
+.remote-editor .editor-field-error {
+  margin: 2px 0 0;
+  color: #ff6b6b;
+  font-size: 12px;
+}
+.remote-editor .editor-hint {
+  font-size: 13px;
+  opacity: 0.8;
+}
+.remote-editor .editor-danger {
+  color: #ff6b6b;
+  border-color: #ff6b6b;
+}
+.remote-editor .editor-kept {
+  margin-top: 16px;
+  border-top: 1px solid #5a6360;
+  padding-top: 8px;
+}
+.remote-editor .editor-kept-note {
+  font-size: 12px;
+  opacity: 0.75;
+}
+.remote-editor .editor-kept-list {
+  margin: 0;
+  font-size: 13px;
+}
+.remote-editor .editor-kept-list .field {
+  display: flex;
+  gap: 8px;
+  margin: 2px 0;
+}
+.remote-editor .editor-kept-list dt {
+  opacity: 0.75;
+}
+.remote-editor .editor-kept-list dd {
+  margin: 0;
+}
+.remote-editor .editor-edge-endpoints {
+  font-size: 13px;
+}
+
+/* ── The stored draft ────────────────────────────────────────────── */
+
+.remote-editor .editor-share {
+  border: 1px solid var(--canopy, #00a9a0);
+  border-radius: 8px;
+  padding: 12px;
+}
+.remote-editor .editor-share .kicker {
+  margin: 0 0 8px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+.remote-editor .row-install {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.remote-editor .row-install code {
+  font-size: 13px;
+  word-break: break-all;
+}
+.remote-editor .editor-share-note {
+  margin: 8px 0 0;
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+/* ── Canvas paint (the plate's palette) ──────────────────────────── */
+
+.editor-svg text {
+  font-family: var(--font-mono, "Sometype Mono", "Courier New", monospace);
+}
+.editor-svg .node {
+  cursor: grab;
+}
+.editor-svg .node-box {
+  fill: #0c1416;
+  stroke: #e8f6f1;
+  stroke-width: 1.5;
+}
+.editor-svg .node.kind-agent .node-box {
+  fill: color-mix(in srgb, var(--canopy, #00a9a0) 22%, #04110f);
+  stroke: var(--canopy, #00a9a0);
+}
+.editor-svg .node.fixed .node-box {
+  stroke-dasharray: 6 4;
+}
+.editor-svg .node.selected .node-box {
+  stroke: var(--teal, #00a9a0);
+  stroke-width: 3;
+}
+.editor-svg .node-name {
+  fill: #e8f6f1;
+  font-size: 13px;
+  pointer-events: none;
+}
+.editor-svg .kind-mark {
+  stroke: var(--canopy, #00a9a0);
+  fill: none;
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+.editor-svg .kind-mark.solid {
+  fill: var(--canopy, #00a9a0);
+  stroke: none;
+}
+.editor-svg .port-hit {
+  fill: transparent;
+  cursor: crosshair;
+}
+.editor-svg .port-in {
+  fill: #0c1416;
+  stroke: var(--teal, #00a9a0);
+  stroke-width: 2;
+  pointer-events: none;
+}
+.editor-svg .port-out {
+  fill: var(--teal, #00a9a0);
+  stroke: #04110f;
+  stroke-width: 1.5;
+  pointer-events: none;
+  opacity: 0.75;
+}
+.editor-svg .node:hover .port-out,
+.editor-svg .node.selected .port-out,
+.editor-svg .ensemble:hover .port-out,
+.editor-svg .ensemble.selected .port-out {
+  opacity: 1;
+}
+.editor-svg .port-out.armed {
+  stroke: var(--teal, #00a9a0);
+  stroke-width: 2;
+  opacity: 1;
+}
+.editor-svg .edge-line {
+  fill: none;
+  stroke: var(--canopy, #00a9a0);
+  stroke-width: 0.14;
+  opacity: 0.85;
+}
+.editor-svg .edge.fail .edge-line {
+  stroke: #ff6b6b;
+  stroke-dasharray: 1 0.8;
+}
+.editor-svg .edge.error .edge-line {
+  stroke: currentColor;
+  stroke-width: 0.1;
+  stroke-dasharray: 0.4 0.7;
+  opacity: 0.5;
+}
+.editor-svg .edge.selected .edge-line {
+  stroke-width: 0.26;
+  opacity: 1;
+}
+.editor-svg .edge-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 1.6;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+.editor-svg .rubber {
+  fill: none;
+  stroke: var(--teal, #00a9a0);
+  stroke-width: 0.12;
+  stroke-dasharray: 0.6 0.5;
+  pointer-events: none;
+}
+.editor-svg .ensemble {
+  cursor: grab;
+}
+.editor-svg .ensemble-hit {
+  fill: transparent;
+}
+.editor-svg .group-box {
+  fill: none;
+  stroke: var(--canopy, #00a9a0);
+  stroke-width: 0.3;
+  stroke-dasharray: 1.2 0.9;
+  opacity: 0.85;
+}
+.editor-svg .ensemble.selected .group-box {
+  stroke: var(--teal, #00a9a0);
+  stroke-width: 0.5;
+  opacity: 1;
+}
+.editor-svg .group-title,
+.editor-svg .group-subtitle {
+  font-size: 1.9px;
+  fill: var(--canopy, #00a9a0);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+.editor-svg .member-shape {
+  fill: color-mix(in srgb, var(--canopy, #00a9a0) 22%, #04110f);
+  stroke: var(--nc, var(--canopy, #00a9a0));
+  stroke-width: 0.3;
+}
+.editor-svg .member.selected .member-shape {
+  stroke: var(--teal, #00a9a0);
+  stroke-width: 0.5;
+}
+.editor-svg .member-label {
+  font-size: 1.9px;
+  fill: #e8f6f1;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+/* ── Narrow screens ──────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .remote-editor .editor-body {
+    grid-template-columns: 1fr;
+  }
+  .remote-editor .editor-palette {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .remote-editor .editor-palette .kicker {
+    flex-basis: 100%;
+  }
+  .remote-editor .editor-kind {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+  .remote-editor .editor-panel {
+    max-height: none;
+  }
+}

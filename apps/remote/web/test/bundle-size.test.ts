@@ -8,7 +8,10 @@
  * The graph editor rides its own lazy chunk behind `/editor`, so it is
  * partitioned out by the one string only it ships ("spec is not
  * connected") and weighed against its own 30 KB budget instead of the
- * main bundle's. The main bundle must not grow for the editor.
+ * main bundle's. Its stylesheet is a second editor-only asset, partitioned
+ * the same way (`.remote-editor`), because the remote's CSP wants a real
+ * stylesheet rather than an inline `<style>`. The main bundle must not
+ * grow for the editor.
  *
  * The build goes to a temporary directory, never over apps/remote/web/dist.
  */
@@ -30,8 +33,12 @@ const BASELINE = 123_270;
 const BUDGET = 25_600;
 /** The budget the lazy editor chunk is allowed, gzip bytes of JS. */
 const EDITOR_BUDGET = 30_000;
+/** The budget the editor's own stylesheet is allowed, gzip bytes of CSS. */
+const EDITOR_CSS_BUDGET = 4_000;
 /** The one string only the editor chunk ships. */
 const EDITOR_MARKER = "spec is not connected";
+/** The one class only the editor's stylesheet carries. */
+const EDITOR_CSS_MARKER = ".remote-editor";
 
 function filesOf(dir: string, extension: string): string[] {
   const names = readdirSync(dir, { recursive: true }) as string[];
@@ -77,13 +84,24 @@ describe("the remote's bundle", () => {
     }
     const js = gzipOf(assets, ".js");
     const css = gzipOf(assets, ".css");
-    // The editor injects its own styles from its chunk: all CSS is main.
-    const main = js - editorJs + css;
+    // The editor's stylesheet is its own asset, linked when its chunk loads
+    // (an inline <style> would be refused by `style-src 'self'`): count it
+    // against the editor's budget, never the main bundle's.
+    const editorCssFiles = filesOf(assets, ".css").filter((name) =>
+      readFileSync(path.join(assets, name), "utf8").includes(EDITOR_CSS_MARKER),
+    );
+    expect(editorCssFiles.length, "the editor's stylesheet must be its own asset").toBeGreaterThan(0);
+    let editorCss = 0;
+    for (const name of editorCssFiles) {
+      editorCss += gzipSync(readFileSync(path.join(assets, name))).length;
+    }
+    const main = js - editorJs + css - editorCss;
     rmSync(OUT, { recursive: true, force: true });
-    const report = { baseline: BASELINE, js, editorJs, css, main, added: main - BASELINE };
+    const report = { baseline: BASELINE, js, editorJs, css, editorCss, main, added: main - BASELINE };
     // Keep the numbers in the failure message: a regression says by how much.
     expect(main, JSON.stringify(report)).toBeLessThanOrEqual(BASELINE + BUDGET);
     expect(editorJs, JSON.stringify(report)).toBeLessThanOrEqual(EDITOR_BUDGET);
+    expect(editorCss, JSON.stringify(report)).toBeLessThanOrEqual(EDITOR_CSS_BUDGET);
     // The app still ships the icons inline: no sprite chunk, no font request.
     expect(css).toBeGreaterThan(0);
   }, 120_000);
