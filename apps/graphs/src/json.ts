@@ -44,27 +44,12 @@ export async function readJson(response: Response): Promise<JsonRead> {
   return parseJson(text);
 }
 
-/** True when the value is a JSON object (and not null, not an array). */
-export function isRecord(
-  value: unknown,
-): value is { [key: string]: JsonValue } {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+// The four shape predicates moved into the shared plate package (they are
+// the plate's input guards); they are re-exported here so every existing
+// import from this module keeps its meaning.
+import { isArray, isNumber, isRecord, isString } from "../../../packages/plate/guards.js";
 
-/** True when the value is a JSON string. */
-export function isString(value: unknown): value is string {
-  return typeof value === "string";
-}
-
-/** True when the value is a JSON array. */
-export function isArray(value: unknown): value is JsonValue[] {
-  return Array.isArray(value);
-}
-
-/** True when the value is a JSON number. */
-export function isNumber(value: unknown): value is number {
-  return typeof value === "number";
-}
+export { isArray, isNumber, isRecord, isString };
 
 /** Read a string field from a JSON object, `""` when absent or not a string. */
 export function stringField(

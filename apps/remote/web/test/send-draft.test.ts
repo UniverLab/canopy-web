@@ -108,6 +108,9 @@ describe("Prompt Builder send through the shell", () => {
         onSpawn: () => true,
         onCompose: () => true,
         onSendDraft: (draft, req) => controller?.sendPromptDraft(draft, req) ?? false,
+        onGraphsRequest: () => {},
+        onWatchGraph: () => {},
+        onUnwatchGraph: () => {},
       },
       { catalog },
     );

@@ -15,10 +15,10 @@ import {
   structureOf,
   type GraphDocument,
   type NodeDocument,
-} from "../src/plate/document.js";
-import { renderNodePlate, renderPlate } from "../src/plate/render.js";
-import { PLATE_SCALE, layoutPlate } from "../src/plate/layout.js";
-import { layoutPlateVertical } from "../src/plate/vertical.js";
+} from "../../../packages/plate/document.js";
+import { renderNodePlate, renderPlate } from "../../../packages/plate/render.js";
+import { PLATE_SCALE, layoutPlate } from "../../../packages/plate/layout.js";
+import { layoutPlateVertical } from "../../../packages/plate/vertical.js";
 import { ROUND_ROBIN_GRAPH, TUI_POLISH_GRAPH, sixtyNodeGraph } from "./plate-fixture.js";
 
 const GRAPHS: Array<[string, GraphDocument]> = [

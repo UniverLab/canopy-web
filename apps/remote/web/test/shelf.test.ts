@@ -26,6 +26,9 @@ const CALLBACKS: ShellCallbacks = {
   onSpawn: () => true,
   onCompose: () => true,
   onSendDraft: () => true,
+  onGraphsRequest: () => {},
+  onWatchGraph: () => {},
+  onUnwatchGraph: () => {},
 };
 
 function shelfItem(overrides: Partial<ShelfItem> = {}): ShelfItem {

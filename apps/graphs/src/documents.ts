@@ -13,7 +13,7 @@ import type { DocumentKind, JsonValue } from "../../../src/schema.js";
 import type { ApiError, GitHub } from "./github.js";
 import { isApiError } from "./github.js";
 import { decodeBase64, isArray, isNumber, isRecord, isString, parseJson, readJson, stringField } from "./json.js";
-import { harnessOf } from "./plate/document.js";
+import { harnessOf } from "../../../packages/plate/document.js";
 import { isValidDocument } from "./validate.js";
 import { isOfficialRepo } from "./lib.js";
 

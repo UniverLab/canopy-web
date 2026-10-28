@@ -513,6 +513,193 @@ export function buildShelfGet(req: string, fileId: string): string {
   return JSON.stringify({ t: "shelf_get", req, file_id: fileId });
 }
 
+// --- Graph watching (additive to v1) --------------------------------
+// The host lets a remote client watch one graph's drawing, active node
+// and spec checklist live: ask with `graphs`, then `graph_watch {id}` —
+// the host answers one `graph` (summary plus the graph document the
+// plate draws) and pushes `graph_state` until `graph_unwatch {id}`.
+
+/** One graph as the list and the watch reply present it. */
+export interface GraphSummary {
+  id: string;
+  name: string;
+  /** draft | running | pausing | paused | completed | failed (host words). */
+  status: string;
+  workdir: string;
+  /** The current spec's name, "" when the queue is empty. */
+  current_spec: string;
+  current_node: string;
+  done: number;
+  total: number;
+  blocked: boolean;
+  updated_at: number;
+}
+
+/** One queue row of the spec checklist. */
+export interface GraphSpecRow {
+  id: string;
+  /** The spec's code, null when the host sent none. */
+  code: string | null;
+  name: string;
+  status: SpecStatus;
+  attempts: number;
+}
+
+/** The checklist's four row states, in the host's own words. */
+export type SpecStatus = "pending" | "running" | "completed" | "failed";
+
+/** The plate overlay's three node states, in the host's own words. */
+export type NodeStatus = "running" | "pass" | "fail";
+
+/** A watched graph's live state: the overlay, the blocker and the queue. */
+export interface GraphState {
+  status: string;
+  blocked: boolean;
+  blocker: string | null;
+  current_spec_id: string | null;
+  current_node: string | null;
+  nodes: Record<string, NodeStatus>;
+  specs: GraphSpecRow[];
+  updated_at: number;
+}
+
+/** The `graph` watch reply: the summary plus the document to draw. */
+export interface GraphWatchReply {
+  summary: GraphSummary;
+  /** The graph document (catalogue format) behind the plate, or null. */
+  doc: unknown;
+}
+
+// The host's GraphSpecStatus fallback is Pending for anything a newer
+// binary wrote; unknown words read as pending here for the same reason —
+// never as completed, which would tick a spec that never ran.
+const SPEC_STATUS: Record<string, SpecStatus> = {
+  pending: "pending",
+  running: "running",
+  completed: "completed",
+  failed: "failed",
+  interrupted: "pending",
+  skipped: "pending",
+};
+
+function asSpecStatus(value: unknown): SpecStatus {
+  return typeof value === "string" ? (SPEC_STATUS[value] ?? "pending") : "pending";
+}
+
+function asCount(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0;
+}
+
+export function parseGraphSummary(value: unknown): GraphSummary | null {
+  if (!isRecord(value) || typeof value.id !== "string" || value.id === "") {
+    return null;
+  }
+  if (typeof value.status !== "string" || value.status === "") {
+    return null;
+  }
+  return {
+    id: value.id,
+    name: asString(value.name),
+    status: value.status,
+    workdir: asString(value.workdir),
+    current_spec: asString(value.current_spec),
+    current_node: asString(value.current_node),
+    done: asCount(value.done),
+    total: asCount(value.total),
+    blocked: value.blocked === true,
+    updated_at: parseEpochMs(value.updated_at) ?? 0,
+  };
+}
+
+// One bad row never empties the list, exactly like the sessions frame.
+export function parseGraphs(frame: unknown): GraphSummary[] | null {
+  if (frameType(frame) !== "graphs" || !isRecord(frame) || !Array.isArray(frame.items)) {
+    return null;
+  }
+  const items: GraphSummary[] = [];
+  for (const item of frame.items) {
+    const parsed = parseGraphSummary(item);
+    if (parsed) {
+      items.push(parsed);
+    }
+  }
+  return items;
+}
+
+export function parseGraph(frame: unknown): GraphWatchReply | null {
+  if (frameType(frame) !== "graph" || !isRecord(frame)) {
+    return null;
+  }
+  const payload = isRecord(frame.item) ? frame.item : frame;
+  const summary = parseGraphSummary(payload);
+  if (summary === null) {
+    return null;
+  }
+  const raw = frame.doc ?? frame.document;
+  return { summary, doc: isRecord(raw) ? raw : null };
+}
+
+export function parseGraphState(frame: unknown): GraphState | null {
+  if (frameType(frame) !== "graph_state" || !isRecord(frame)) {
+    return null;
+  }
+  if (typeof frame.status !== "string" || frame.status === "") {
+    return null;
+  }
+  if (!isRecord(frame.nodes) || !Array.isArray(frame.specs)) {
+    return null;
+  }
+  const nodes: Record<string, NodeStatus> = {};
+  for (const [name, status] of Object.entries(frame.nodes)) {
+    if (name === "" || (status !== "running" && status !== "pass" && status !== "fail")) {
+      continue;
+    }
+    nodes[name] = status;
+  }
+  const specs: GraphSpecRow[] = [];
+  for (const row of frame.specs) {
+    if (!isRecord(row) || typeof row.id !== "string" || row.id === "") {
+      continue;
+    }
+    specs.push({
+      id: row.id,
+      code: typeof row.code === "string" && row.code !== "" ? row.code : null,
+      name: asString(row.name),
+      status: asSpecStatus(row.status),
+      attempts: asCount(row.attempts),
+    });
+  }
+  const blocker = frame.blocker;
+  return {
+    status: frame.status,
+    blocked: frame.blocked === true,
+    blocker: typeof blocker === "string" && blocker !== "" ? blocker : null,
+    current_spec_id:
+      typeof frame.current_spec_id === "string" && frame.current_spec_id !== ""
+        ? frame.current_spec_id
+        : null,
+    current_node:
+      typeof frame.current_node === "string" && frame.current_node !== ""
+        ? frame.current_node
+        : null,
+    nodes,
+    specs,
+    updated_at: parseEpochMs(frame.updated_at) ?? 0,
+  };
+}
+
+export function buildGraphs(req: string): string {
+  return JSON.stringify({ t: "graphs", req });
+}
+
+export function buildGraphWatch(id: string): string {
+  return JSON.stringify({ t: "graph_watch", id });
+}
+
+export function buildGraphUnwatch(id: string): string {
+  return JSON.stringify({ t: "graph_unwatch", id });
+}
+
 let reqCounter = 0;
 
 export function newReqId(): string {

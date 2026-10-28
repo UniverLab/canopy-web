@@ -170,6 +170,9 @@ describe("createShell", () => {
         draftSends.push({ draft, req });
         return sendable;
       },
+      onGraphsRequest: () => {},
+      onWatchGraph: () => {},
+      onUnwatchGraph: () => {},
     };
     (
       calls as unknown as {

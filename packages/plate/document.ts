@@ -6,8 +6,8 @@
  * the pages only ever pass validated documents, and anything else simply
  * draws nothing.
  */
-import { isArray, isNumber, isRecord, isString } from "../json.js";
-import type { JsonValue } from "../../../../src/schema.js";
+import { isArray, isNumber, isRecord, isString } from "./guards.js";
+import type { JsonValue } from "../../src/schema.js";
 import { harnessStem, type Kind } from "./vocabulary.js";
 
 /** A graph document as `renderPlate` takes it: the catalogue's format v6. */

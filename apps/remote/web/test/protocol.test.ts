@@ -6,6 +6,9 @@ import {
   buildCatalog,
   buildCompose,
   buildDetach,
+  buildGraphUnwatch,
+  buildGraphs,
+  buildGraphWatch,
   buildInput,
   buildInputText,
   buildList,
@@ -23,6 +26,9 @@ import {
   parseError,
   parseExited,
   parseFilePart,
+  parseGraph,
+  parseGraphState,
+  parseGraphs,
   parseHello,
   parseOk,
   parseOut,
@@ -421,5 +427,146 @@ describe("shelf frames", () => {
     expect(parseShelfRemoved(unknown)).toBeNull();
     expect(parseFilePart(unknown)).toBeNull();
     expect(parseHello(unknown)).toBeNull();
+  });
+});
+
+// The graph-watching frames: the list, the watch reply (summary plus the
+// drawing the plate draws) and the live-state pushes. Malformed frames
+// are rejected like the existing ones; one bad row never empties a reply.
+describe("graph frames", () => {
+  const summary = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
+    id: "g1",
+    name: "palette-loop",
+    status: "running",
+    workdir: "/home/u/demo",
+    current_spec: "Draw the plate",
+    current_node: "implementer",
+    done: 1,
+    total: 4,
+    blocked: false,
+    updated_at: 1793100000,
+    ...overrides,
+  });
+
+  const state = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
+    t: "graph_state",
+    status: "running",
+    blocked: false,
+    blocker: null,
+    current_spec_id: "s2",
+    current_node: "implementer",
+    nodes: { start: "pass", implementer: "running" },
+    specs: [
+      { id: "s1", code: "FIX-1", name: "Lock the palette", status: "completed", attempts: 2 },
+      { id: "s2", code: "FIX-2", name: "Draw the plate", status: "running", attempts: 1 },
+    ],
+    updated_at: 1793100000,
+    ...overrides,
+  });
+
+  it("builds the exact graph requests", () => {
+    expect(JSON.parse(buildGraphs("r1"))).toEqual({ t: "graphs", req: "r1" });
+    expect(JSON.parse(buildGraphWatch("g1"))).toEqual({ t: "graph_watch", id: "g1" });
+    expect(JSON.parse(buildGraphUnwatch("g1"))).toEqual({ t: "graph_unwatch", id: "g1" });
+  });
+
+  it("parses the graphs list and skips invalid rows", () => {
+    const parsed = parseGraphs({
+      t: "graphs",
+      req: "r1",
+      items: [summary(), summary({ id: "g2", status: "completed" }), { nope: true }],
+    });
+    expect(parsed).toEqual([
+      {
+        id: "g1",
+        name: "palette-loop",
+        status: "running",
+        workdir: "/home/u/demo",
+        current_spec: "Draw the plate",
+        current_node: "implementer",
+        done: 1,
+        total: 4,
+        blocked: false,
+        updated_at: 1793100000_000,
+      },
+      expect.objectContaining({ id: "g2", status: "completed" }),
+    ]);
+    expect(parseGraphs({ t: "graphs" })).toBeNull();
+    expect(parseGraphs({ t: "graphs", items: {} })).toBeNull();
+    expect(parseGraphs({ t: "sessions", items: [] })).toBeNull();
+    expect(parseGraphs(null)).toBeNull();
+  });
+
+  it("rejects a summary without an id or a status", () => {
+    expect(parseGraphs({ t: "graphs", items: [summary({ id: "" })] })).toEqual([]);
+    expect(parseGraphs({ t: "graphs", items: [summary({ status: "" })] })).toEqual([]);
+    expect(parseGraphs({ t: "graphs", items: [{ name: "nameless" }] })).toEqual([]);
+  });
+
+  it("parses the watch reply with its drawing", () => {
+    const doc = { name: "palette-loop", nodes: [], edges: [] };
+    const parsed = parseGraph({ t: "graph", item: summary(), doc });
+    expect(parsed?.summary.id).toBe("g1");
+    expect(parsed?.summary.current_spec).toBe("Draw the plate");
+    expect(parsed?.doc).toEqual(doc);
+    // An unreadable drawing still delivers the summary: the view holds
+    // the stage instead of the plate.
+    expect(parseGraph({ t: "graph", item: summary() })?.doc).toBeNull();
+    expect(parseGraph({ t: "graph", item: summary(), doc: "nope" })?.doc).toBeNull();
+    expect(parseGraph({ t: "graph", item: { nope: true }, doc })).toBeNull();
+    expect(parseGraph({ t: "graphs", items: [] })).toBeNull();
+  });
+
+  it("parses a live state with its overlay and checklist", () => {
+    const parsed = parseGraphState(state());
+    expect(parsed).toEqual({
+      status: "running",
+      blocked: false,
+      blocker: null,
+      current_spec_id: "s2",
+      current_node: "implementer",
+      nodes: { start: "pass", implementer: "running" },
+      specs: [
+        { id: "s1", code: "FIX-1", name: "Lock the palette", status: "completed", attempts: 2 },
+        { id: "s2", code: "FIX-2", name: "Draw the plate", status: "running", attempts: 1 },
+      ],
+      updated_at: 1793100000_000,
+    });
+  });
+
+  it("reads the blocker and tolerates thin rows", () => {
+    const parsed = parseGraphState(
+      state({
+        blocked: true,
+        blocker: "waiting on review",
+        current_spec_id: "",
+        current_node: null,
+        nodes: { start: "pass", ghost: "exploded", "": "pass" },
+        specs: [
+          { id: "s9" },
+          { id: "", status: "completed" },
+          { id: "s10", code: "", name: "Retry", status: "interrupted", attempts: -1 },
+        ],
+      }),
+    );
+    expect(parsed?.blocked).toBe(true);
+    expect(parsed?.blocker).toBe("waiting on review");
+    expect(parsed?.current_spec_id).toBeNull();
+    expect(parsed?.current_node).toBeNull();
+    // Unknown node states and empty names never reach the overlay.
+    expect(parsed?.nodes).toEqual({ start: "pass" });
+    // Unknown spec states read as pending, never as completed.
+    expect(parsed?.specs).toEqual([
+      { id: "s9", code: null, name: "", status: "pending", attempts: 0 },
+      { id: "s10", code: null, name: "Retry", status: "pending", attempts: 0 },
+    ]);
+  });
+
+  it("rejects a state without a status, an overlay or a queue", () => {
+    expect(parseGraphState(state({ status: "" }))).toBeNull();
+    expect(parseGraphState(state({ nodes: "nope" }))).toBeNull();
+    expect(parseGraphState(state({ specs: {} }))).toBeNull();
+    expect(parseGraphState(state({ t: "graph" }))).toBeNull();
+    expect(parseGraphState(null)).toBeNull();
   });
 });

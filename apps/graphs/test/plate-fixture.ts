@@ -4,7 +4,7 @@
  * back edges and an infra node — the shapes the four small official graphs
  * never show — plus a sixty-node chain for the render-time budget.
  */
-import type { GraphDocument } from "../src/plate/document.js";
+import type { GraphDocument } from "../../../packages/plate/document.js";
 
 /** One node of the polish fixture. */
 function node(name: string, kind: string, position: number): GraphDocument["nodes"][number] {

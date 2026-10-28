@@ -8,6 +8,8 @@
 import { Composer } from "./composer.js";
 import { CatalogStore } from "./catalog.js";
 import { Builder } from "./builder.js";
+import { GraphRoute } from "./graph-route.js";
+import type { GraphStore } from "./graph-store.js";
 import { icon, mountMorphSlot, type IconName, type MorphSlot } from "./icons-dom.js";
 import { renderKeyBar, updateKeyBarLatches } from "./keys.js";
 import { keyBytesWithModifiers, ModifierLatches, textBytesWithModifiers } from "./modifiers.js";
@@ -17,8 +19,7 @@ import { connectFailMessage } from "./peer.js";
 import type { PromptDraft, SpawnRequest } from "./protocol.js";
 import type { OnlineHost } from "./relay.js";
 import type { ShelfHandle } from "./shelf-controller.js";
-import { renderSessions } from "./sessions.js";
-import type { SessionListShelf, SessionStore } from "./sessions.js";
+import type { SessionStore } from "./sessions.js";
 import { createXtermHandle, TerminalView } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
 import { readFitOnly, writeFitOnly } from "./terminal-prefs.js";
@@ -43,6 +44,12 @@ export interface ShellCallbacks {
   onSpawn: (spawn: SpawnRequest, req: string) => boolean;
   onCompose: (draft: PromptDraft, req: string) => boolean;
   onSendDraft: (draft: PromptDraft, req: string) => boolean;
+  /** Ask the host for the graphs list (the Graphs tab shows and polls it). */
+  onGraphsRequest: () => void;
+  /** Start watching a graph: the host pushes graph_state until unwatched. */
+  onWatchGraph: (id: string) => void;
+  /** Stop watching: back, switching tab or hiding the page. */
+  onUnwatchGraph: () => void;
 }
 
 export interface Shell {
@@ -79,9 +86,11 @@ export interface ShellDeps {
   catalog?: CatalogStore;
   /** The session shelf; without it (or without the feature) no UI. */
   shelf?: ShelfHandle;
+  /** The watched graphs; without it the Graphs tab stays empty. */
+  graphs?: GraphStore;
 }
 
-type Route = "signin" | "pair" | "hosts" | "sessions" | "session";
+type Route = "signin" | "pair" | "hosts" | "sessions" | "session" | "graph";
 
 // The UniverLab colophon, on the sign-in and pair screens only — the
 // session view keeps the whole viewport for the terminal.
@@ -298,48 +307,6 @@ export function createShell(
     root.querySelector("#pair-new")?.addEventListener("click", () => callbacks.onPairAgain());
   };
 
-  const renderSessionsRoute = () => {
-    root.innerHTML = `
-    ${header()}
-    <main class="sessions">
-      ${renderBanner("remote")}
-      ${connBanner()}
-      <div id="session-list"></div>
-      <p><button type="button" id="conn-disconnect">Disconnect</button></p>
-    </main>`;
-    wireConnBanner();
-    root.querySelector("#conn-disconnect")?.addEventListener("click", () => callbacks.onDisconnect());
-    const slot = root.querySelector<HTMLElement>("#session-list");
-    if (slot) {
-      renderSessionsList(slot);
-    }
-  };
-
-  const shelfListArgs = (): SessionListShelf | undefined => {
-    if (!shelf) {
-      return undefined;
-    }
-    return {
-      enabled: shelf.enabled(),
-      hostCount: shelf.count(null),
-      count: (id) => shelf.count(id),
-      onOpenShelf: () => shelf.open(root, null),
-    };
-  };
-
-  const renderSessionsList = (slot: HTMLElement) => {
-    renderSessions(
-      slot,
-      store.list(),
-      Date.now(),
-      {
-        onOpen: (id) => callbacks.onOpenSession(id),
-        onNew: () => openNew(),
-      },
-      shelfListArgs(),
-    );
-  };
-
   // The Files badge lives in the session bar; every shelf change either
   // patches it (session route) or repaints the list (sessions route). The
   // folder icon opens while the sheet is up and closes when it goes.
@@ -506,6 +473,14 @@ export function createShell(
     }
   };
 
+  const openGraph = (id: string, name: string) => {
+    closeSheets();
+    teardownSessionWidgets();
+    sessionId = null;
+    route = "graph";
+    graphRoute.open(id, name);
+  };
+
   const render = () => {
     // The view name on <body> lets the stylesheet dim the honeycomb
     // behind the terminal (body[data-view="session"]).
@@ -517,28 +492,55 @@ export function createShell(
     } else if (route === "hosts") {
       renderHosts();
     } else if (route === "sessions") {
-      renderSessionsRoute();
+      graphRoute.renderSessionsRoute();
+    } else if (route === "graph") {
+      graphRoute.mountGraph();
     } else {
       renderSession();
     }
     mountHeaderIcon();
   };
 
+  // The home tabs, the graph route and the watch lifecycle live in the
+  // graph route; the shell only lends it render() and the route setters.
+  const graphRoute = new GraphRoute(
+    root,
+    deps?.graphs ?? null,
+    shelf,
+    {
+      onGraphsRequest: () => callbacks.onGraphsRequest(),
+      onWatchGraph: (id) => callbacks.onWatchGraph(id),
+      onUnwatchGraph: () => callbacks.onUnwatchGraph(),
+    },
+    {
+      listSessions: () => store.list(),
+      openSession: (id) => callbacks.onOpenSession(id),
+      newSession: () => openNew(),
+      render: () => render(),
+      openGraph: (id, name) => openGraph(id, name),
+      leaveToSessions: () => {
+        route = "sessions";
+        render();
+      },
+      header: () => header(),
+      banner: () => connBanner(),
+      wireBanner: () => wireConnBanner(),
+      onDisconnect: () => callbacks.onDisconnect(),
+      connectionState: () => connectionState,
+      route: () => route,
+    },
+  );
+  graphRoute.start();
+
   const stopStore = store.subscribe(() => {
     if (route === "sessions") {
-      const slot = root.querySelector<HTMLElement>("#session-list");
-      if (slot) {
-        renderSessionsList(slot);
-      }
+      graphRoute.paintHome();
     }
   });
 
   const stopShelf = shelf?.subscribe(() => {
     if (route === "sessions") {
-      const slot = root.querySelector<HTMLElement>("#session-list");
-      if (slot) {
-        renderSessionsList(slot);
-      }
+      graphRoute.paintHome();
     } else if (route === "session") {
       syncFilesBadge();
     }
@@ -547,25 +549,27 @@ export function createShell(
   // The "Ns ago" labels go stale; refresh them while Sessions is visible.
   const ticker = globalThis.setInterval(() => {
     if (route === "sessions") {
-      const slot = root.querySelector<HTMLElement>("#session-list");
-      if (slot) {
-        renderSessionsList(slot);
-      }
+      graphRoute.paintHome();
     }
   }, 15000);
 
+  // Leaving a route for a fresh one: the sheets close, the session
+  // widgets go, and an open graph watch drops with the view.
+  const leaveRoute = () => {
+    closeSheets();
+    teardownSessionWidgets();
+    sessionId = null;
+    graphRoute.leave();
+  };
+
   return {
     showSignIn(): void {
-      closeSheets();
-      teardownSessionWidgets();
-      sessionId = null;
+      leaveRoute();
       route = "signin";
       render();
     },
     showPair(prefillCode?: string): void {
-      closeSheets();
-      teardownSessionWidgets();
-      sessionId = null;
+      leaveRoute();
       route = "pair";
       pairError = null;
       pairBusy = false;
@@ -577,21 +581,18 @@ export function createShell(
       render();
     },
     showHosts(): void {
-      closeSheets();
-      teardownSessionWidgets();
-      sessionId = null;
+      leaveRoute();
       route = "hosts";
       render();
     },
     showSessions(): void {
-      closeSheets();
-      teardownSessionWidgets();
-      sessionId = null;
+      leaveRoute();
       route = "sessions";
       render();
     },
     showSession(id: string, name: string): void {
       closeSheets();
+      graphRoute.leave();
       sessionId = id;
       sessionName = name;
       route = "session";
@@ -621,7 +622,7 @@ export function createShell(
     },
     setConnectionState(state: string): void {
       connectionState = state;
-      if (route === "sessions" || route === "session") {
+      if (route === "sessions" || route === "session" || route === "graph") {
         // Never a full re-render here: it would drop the terminal and
         // the composer's draft. Only the header and the banner carry the
         // state, so patch them in place — the host chip's link icon too. The
@@ -645,6 +646,8 @@ export function createShell(
           main.insertAdjacentHTML("afterbegin", connBanner());
           wireConnBanner();
         }
+        // The disconnect note hangs on the connection, not the frames.
+        graphRoute.syncConnection();
       } else if (route !== "signin") {
         render();
       }
@@ -760,6 +763,7 @@ export function createShell(
     },
     dispose(): void {
       globalThis.clearInterval(ticker);
+      graphRoute.dispose();
       stopStore();
       stopShelf?.();
       closeSheets();

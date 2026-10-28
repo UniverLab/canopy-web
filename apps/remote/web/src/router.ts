@@ -8,12 +8,16 @@
 import type { Shell } from "./app.js";
 import type { CatalogStore } from "./catalog.js";
 import type { JoinedSnapshot } from "./channel.js";
+import type { GraphStore } from "./graph-store.js";
 import {
   parseCatalog,
   parseComposed,
   parseError,
   parseExited,
   parseFilePart,
+  parseGraph,
+  parseGraphState,
+  parseGraphs,
   parseHello,
   parseOk,
   parseOut,
@@ -41,10 +45,12 @@ export interface FrameRouterDeps {
   catalog: CatalogStore;
   /** The session shelf; absent in tests that do not exercise it. */
   shelf?: ShelfFrames;
+  /** The watched graphs; absent in tests that do not exercise them. */
+  graphs?: GraphStore;
 }
 
 export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
-  const { store, controller, shell, catalog, shelf } = deps;
+  const { store, controller, shell, catalog, shelf, graphs } = deps;
 
   function handleSnapshot(snapshot: JoinedSnapshot): void {
     shell.ensureTerminal(snapshot.id, snapshot.cols, snapshot.rows);
@@ -76,6 +82,24 @@ export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
     const out = parseOut(frame);
     if (out) {
       controller.handleOut(out);
+      return;
+    }
+    // Graph watching: the list, the watch reply (summary + drawing) and
+    // the live-state pushes. Each parser is additive, so a host that
+    // sends none of them changes nothing.
+    const graphsList = parseGraphs(frame);
+    if (graphsList) {
+      graphs?.handleGraphs(graphsList);
+      return;
+    }
+    const graphReply = parseGraph(frame);
+    if (graphReply) {
+      graphs?.handleGraph(graphReply);
+      return;
+    }
+    const graphState = parseGraphState(frame);
+    if (graphState) {
+      graphs?.handleGraphState(graphState);
       return;
     }
     const catalogReply = parseCatalog(frame);

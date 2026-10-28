@@ -62,6 +62,11 @@ body[data-view="session"] .fondo {
   opacity: 0.15;
 }
 
+/* The graph view stages a drawing: the honeycomb steps back the same way. */
+body[data-view="graph"] .fondo {
+  opacity: 0.15;
+}
+
 #app {
   position: relative;
   z-index: 1;
@@ -1099,5 +1104,349 @@ label > textarea {
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
+  }
+}
+
+/* --- The Graphs tab and the graph view ------------------------------- */
+
+/* The home screen's two-way switch: the selected tab carries the accent
+ * border, never a teal fill. */
+.tab-switch {
+  display: flex;
+  gap: var(--gap);
+  margin: 0.75rem 0 0.5rem;
+}
+
+.tab-switch button {
+  flex: 1;
+  min-height: 2.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tab-switch button[aria-selected="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--tint-info);
+}
+
+/* One graph row: name, current spec and workdir on the left, the status
+ * chip and the done/total fraction with its thin bar on the right. */
+.graph-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.graph-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  text-align: left;
+  background: var(--surface-bg-raise);
+  min-height: 3.5rem;
+  padding: 0.55rem 0.75rem;
+  flex-wrap: wrap;
+}
+
+.graph-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.graph-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.graph-spec {
+  font-size: 0.85rem;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.graph-workdir {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.graph-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+
+/* The status chip: icon plus word, tinted by meaning — the word is the
+ * signal, the colour only repeats it. */
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  padding: 0.12rem 0.45rem;
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  background: var(--tint-info);
+  color: var(--ink);
+  flex-shrink: 0;
+}
+
+.status-chip[data-status="running"] {
+  color: var(--accent);
+}
+
+.status-chip[data-status="completed"] {
+  color: var(--dot-run);
+}
+
+.status-chip[data-status="failed"],
+.status-chip[data-status="blocked"] {
+  color: var(--err-label);
+}
+
+.status-chip[data-status="paused"] {
+  color: var(--dot-idle);
+}
+
+.status-chip .icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* The running chip's loader spins; reduced motion leaves it static. */
+.status-chip.chip-spin .icon {
+  animation: chip-spin 1.1s linear infinite;
+}
+
+@keyframes chip-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.graph-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.2rem;
+}
+
+.graph-count {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.progress {
+  display: block;
+  width: 6.5rem;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--bg-deep);
+  border: 1px solid var(--tint-line);
+  overflow: hidden;
+}
+
+.progress-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+/* The graph view: bar, blocker, disconnect note, the black stage with
+ * the full-width plate, then the checklist. */
+.graph-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.graph-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.graph-bar #graph-back {
+  min-width: 2.75rem;
+}
+
+.graph-title {
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+#graph-chip {
+  flex-shrink: 0;
+}
+
+#graph-count {
+  margin-left: auto;
+}
+
+#graph-count[hidden] {
+  display: none;
+}
+
+.graph-blocker {
+  margin: 0;
+  background: var(--tint-warn);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+
+.graph-blocker[hidden] {
+  display: none;
+}
+
+.graph-note {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.graph-note[hidden] {
+  display: none;
+}
+
+/* The stage: black like the terminal's, the drawing full width inside. */
+.graph-stage {
+  background: var(--stage-bg);
+  border: 1px solid var(--stage-line);
+  border-radius: var(--radius-card);
+  padding: 0.75rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-x pan-y;
+}
+
+.graph-stage .plate-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.graph-wait {
+  margin: 1.5rem 0;
+  text-align: center;
+  color: var(--muted);
+}
+
+/* The checklist: queue order, the running row highlighted, its dot
+ * pulsing (static under reduced motion). */
+.spec-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.spec-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.65rem;
+  min-height: 2.75rem;
+  background: var(--surface-bg-raise);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+}
+
+.spec-row[data-status="running"] {
+  border-color: var(--accent);
+  background: var(--tint-info);
+}
+
+.spec-mark {
+  display: inline-flex;
+  flex: none;
+  color: var(--muted);
+}
+
+.spec-row[data-status="completed"] .spec-mark {
+  color: var(--dot-run);
+}
+
+.spec-row[data-status="failed"] .spec-mark {
+  color: var(--err-label);
+}
+
+.spec-row[data-status="running"] .spec-mark {
+  color: var(--accent);
+  animation: spec-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes spec-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.spec-code {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  border: 1px solid var(--tint-line);
+  border-radius: calc(var(--radius) / 2);
+  padding: 0 0.3rem;
+  flex-shrink: 0;
+}
+
+.spec-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.95rem;
+}
+
+.spec-attempts {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--dot-idle);
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-chip.chip-spin .icon,
+  .spec-row[data-status="running"] .spec-mark {
+    animation: none;
   }
 }

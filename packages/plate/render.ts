@@ -34,7 +34,57 @@ import {
 } from "./layout.js";
 import { V_HARNESS_DY, V_LABEL_DX, V_LABEL_DY, layoutPlateVertical } from "./vertical.js";
 import { GEOM, TYPE, harnessColor } from "./vocabulary.js";
-import { isArray, isNumber, isRecord, isString } from "../json.js";
+import { isArray, isNumber, isRecord, isString } from "./guards.js";
+
+/** A node or ensemble member's run state, as the live overlay carries it. */
+export type PlateNodeState = "running" | "pass" | "fail";
+
+/**
+ * The live overlay: each key is a node name, or an ensemble member's drawn
+ * label (or `<ensemble>#<i>`, i from 1) — members are keyed the same way
+ * nodes are. `current` names the unit the walking token stops on; a current
+ * with no entry of its own reads as running.
+ */
+export interface PlateState {
+  nodes: Record<string, PlateNodeState>;
+  current?: string;
+}
+
+/** The `<title>` word of each state: the palette alone is too close to tell. */
+const STATE_WORD: Record<PlateNodeState, string> = {
+  running: "running",
+  pass: "passed",
+  fail: "failed",
+};
+
+/** One drawn unit's overlay: its state, and whether it is lit right now. */
+interface Mark {
+  status: PlateNodeState;
+  lit: boolean;
+}
+
+/** The state of a key, honouring `current` as an implied running state. */
+function statusOf(state: PlateState, key: string): PlateNodeState | null {
+  const status = state.nodes[key];
+  if (status === "running" || status === "pass" || status === "fail") {
+    return status;
+  }
+  return key === state.current ? "running" : null;
+}
+
+/** The overlay of a unit keyed by the given names, or null without one. */
+function markOf(state: PlateState | undefined, keys: string[]): Mark | null {
+  if (state === undefined) {
+    return null;
+  }
+  for (const key of keys) {
+    const status = statusOf(state, key);
+    if (status !== null) {
+      return { status, lit: status === "running" };
+    }
+  }
+  return null;
+}
 
 /** Baseline of a member's harness line under its chip (viewBox units). */
 const MEMBER_HARNESS_DY = 3.4;
@@ -88,6 +138,27 @@ function plateStyle(): string {
   );
 }
 
+/**
+ * The overlay's own rules, appended to the svg's stylesheet only when a
+ * state is passed: without one the drawing stays byte-identical to the
+ * stateless plate. The ring pulses through a CSS animation, which
+ * `prefers-reduced-motion` turns into a static ring; the badges and the
+ * fail stroke carry no motion at all.
+ */
+function stateStyle(): string {
+  return (
+    `.plate-svg .state-ring{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.7;opacity:.9;` +
+    `animation:plate-ring-pulse 1.6s ease-in-out infinite}` +
+    `@keyframes plate-ring-pulse{0%,100%{opacity:1}50%{opacity:.3}}` +
+    `@media (prefers-reduced-motion:reduce){.plate-svg .state-ring{animation:none}}` +
+    `.plate-svg .state-fail .shape,.plate-svg .state-fail .member-shape{stroke:#ff6b6b}` +
+    `.plate-svg .state-badge-bg{fill:#04110f;stroke:none;opacity:.9}` +
+    `.plate-svg .state-badge-mark{fill:none;stroke-width:.9;stroke-linecap:round;stroke-linejoin:round}` +
+    `.plate-svg .state-pass .state-badge-mark{stroke:var(--canopy,#00a9a0)}` +
+    `.plate-svg .state-fail .state-badge-mark{stroke:#ff6b6b}`
+  );
+}
+
 const EDGE_ORDER = { error: 0, order: 1, pass: 2, fail: 3 } as const;
 
 function renderEdges(layout: PlateLayout): string {
@@ -111,26 +182,65 @@ function harnessStyle(harness: string | null): string {
   return color === null ? "" : ` style="--nc:${color}"`;
 }
 
-function renderMember(groupName: string, member: PlacedMember, index: number): string {
-  const harness = member.harness === null
-    ? ""
-    : `<text class="harness" x="${member.x}" y="${member.y}" dy="${MEMBER_HARNESS_DY}" text-anchor="middle">${escape(member.harness)}</text>`;
+/** The small corner badge: a dark disc under a check or a cross. */
+function renderBadge(mark: Mark, cx: number, cy: number): string {
+  const d = mark.status === "pass"
+    ? `M${num2(cx - 1.2)} ${num2(cy + 0.1)}l0.8 0.8l1.6 -1.8`
+    : `M${num2(cx - 0.9)} ${num2(cy - 0.9)}l1.8 1.8M${num2(cx + 0.9)} ${num2(cy - 0.9)}l-1.8 1.8`;
   return (
-    `<g class="member" data-name="${escape(groupName)}" data-i="${index + 1}" ` +
-    `data-cx="${member.x}" data-cy="${member.y}"${harnessStyle(member.harness)}>` +
-    `<rect class="member-shape" x="${member.x - MEMBER_GEOM.w / 2}" y="${member.y - MEMBER_GEOM.h / 2}" ` +
-    `width="${MEMBER_GEOM.w}" height="${MEMBER_GEOM.h}" rx="1"/>` +
-    `<text class="member-label" x="${member.x}" y="${member.y}" dy="0.7">${escape(member.label)}</text>` +
-    harness +
+    `<g class="state-badge">` +
+    `<circle class="state-badge-bg" cx="${num2(cx)}" cy="${num2(cy)}" r="2.2"/>` +
+    `<path class="state-badge-mark" d="${d}"/>` +
     `</g>`
   );
 }
 
-function renderGroups(layout: PlateLayout): string {
+/** The lit unit's pulsing ring; static when motion is reduced. */
+function renderRing(cx: number, cy: number, r: number): string {
+  return `<circle class="state-ring" cx="${num2(cx)}" cy="${num2(cy)}" r="${num2(r)}"/>`;
+}
+
+function renderMember(
+  groupName: string,
+  member: PlacedMember,
+  index: number,
+  mark: Mark | null,
+): string {
+  const harness = member.harness === null
+    ? ""
+    : `<text class="harness" x="${member.x}" y="${member.y}" dy="${MEMBER_HARNESS_DY}" text-anchor="middle">${escape(member.harness)}</text>`;
+  const stateCls = mark === null ? "" : ` state-${mark.status}`;
+  const stateData = mark === null ? "" : ` data-state="${mark.status}"`;
+  const title = mark === null
+    ? ""
+    : `<title>${escape(member.label)} — ${STATE_WORD[mark.status]}</title>`;
+  const ring = mark?.lit === true
+    ? renderRing(member.x, member.y, Math.max(MEMBER_GEOM.w, MEMBER_GEOM.h) / 2 + 1.7)
+    : "";
+  const badge = mark !== null && mark.status !== "running"
+    ? renderBadge(mark, member.x + MEMBER_GEOM.w / 2, member.y - MEMBER_GEOM.h / 2)
+    : "";
+  return (
+    `<g class="member${stateCls}" data-name="${escape(groupName)}" data-i="${index + 1}" ` +
+    `data-cx="${member.x}" data-cy="${member.y}"${stateData}${harnessStyle(member.harness)}>` +
+    title +
+    `<rect class="member-shape" x="${member.x - MEMBER_GEOM.w / 2}" y="${member.y - MEMBER_GEOM.h / 2}" ` +
+    `width="${MEMBER_GEOM.w}" height="${MEMBER_GEOM.h}" rx="1"/>` +
+    ring +
+    `<text class="member-label" x="${member.x}" y="${member.y}" dy="0.7">${escape(member.label)}</text>` +
+    harness +
+    badge +
+    `</g>`
+  );
+}
+
+function renderGroups(layout: PlateLayout, state: PlateState | undefined): string {
   return layout.groups
     .map((group) => {
       const members = group.members
-        .map((member, index) => renderMember(group.name, member, index))
+        .map((member, index) =>
+          renderMember(group.name, member, index, markOf(state, [member.label, `${group.name}#${index + 1}`])),
+        )
         .join("");
       return (
         `<g class="ensemble" data-name="${escape(group.name)}">` +
@@ -145,7 +255,7 @@ function renderGroups(layout: PlateLayout): string {
     .join("");
 }
 
-function renderNode(node: PlacedNode, orientation: Orientation): string {
+function renderNode(node: PlacedNode, orientation: Orientation, mark: Mark | null): string {
   const geom = GEOM[node.shape];
   const rotate = geom.rot === 0 ? "" : ` transform="rotate(${geom.rot} ${node.x} ${node.y})"`;
   const dataHarness = node.harness === null ? "" : ` data-harness="${escape(node.harness)}"`;
@@ -157,15 +267,30 @@ function renderNode(node: PlacedNode, orientation: Orientation): string {
     : orientation === "vertical"
       ? `<text class="harness" x="${num2(node.x + node.w / 2 + V_LABEL_DX)}" y="${node.y}" dy="${V_HARNESS_DY}" text-anchor="start">${escape(node.harness)}</text>`
       : `<text class="harness" x="${node.x}" y="${node.y}" dy="${TYPE.harnessDy}" text-anchor="middle">${escape(node.harness)}</text>`;
+  // With a state the title names the state — the palette alone cannot tell
+  // passed from failed — without one it keeps reading like the catalogue's.
+  const title = mark === null
+    ? `<title>${escape(node.name)} (${escape(node.docKind)})</title>`
+    : `<title>${escape(node.name)} — ${STATE_WORD[mark.status]}</title>`;
+  const stateCls = mark === null ? "" : ` state-${mark.status}`;
+  const stateData = mark === null ? "" : ` data-state="${mark.status}"`;
+  const ring = mark?.lit === true
+    ? renderRing(node.x, node.y, Math.max(geom.w, geom.h) / 2 + 2.2)
+    : "";
+  const badge = mark !== null && mark.status !== "running"
+    ? renderBadge(mark, node.x + geom.w / 2, node.y - geom.h / 2)
+    : "";
   return (
-    `<g class="node shape-${node.shape}" data-name="${escape(node.name)}" ` +
+    `<g class="node shape-${node.shape}${stateCls}" data-name="${escape(node.name)}" ` +
     `data-cx="${node.x}" data-cy="${node.y}" data-w="${node.w}" data-h="${node.h}" ` +
-    `data-rank="${node.rank}" data-lane="${node.infra ? "infra" : "main"}"${dataHarness}${harnessStyle(node.harness)}>` +
-    `<title>${escape(node.name)} (${escape(node.docKind)})</title>` +
+    `data-rank="${node.rank}" data-lane="${node.infra ? "infra" : "main"}"${stateData}${dataHarness}${harnessStyle(node.harness)}>` +
+    title +
     `<rect class="shape" x="${node.x - geom.w / 2}" y="${node.y - geom.h / 2}" ` +
     `width="${geom.w}" height="${geom.h}" rx="${geom.rx}"${rotate}/>` +
+    ring +
     label +
     harness +
+    badge +
     `</g>`
   );
 }
@@ -175,11 +300,45 @@ function num2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-function renderNodes(layout: PlateLayout): string {
-  return layout.nodes.map((node) => renderNode(node, layout.orientation)).join("");
+function renderNodes(layout: PlateLayout, state: PlateState | undefined): string {
+  return layout.nodes
+    .map((node) => renderNode(node, layout.orientation, markOf(state, [node.name])))
+    .join("");
 }
 
-function renderToken(layout: PlateLayout): string {
+/**
+ * Where the token stops under a state: `current`, else the first unit the
+ * map calls running, resolved against the drawn nodes and then the drawn
+ * ensemble members. Null when the name is not on the drawing at all.
+ */
+function litPoint(layout: PlateLayout, state: PlateState): { x: number; y: number } | null {
+  const key = state.current ?? Object.keys(state.nodes).find((name) => state.nodes[name] === "running");
+  if (key === undefined) {
+    return null;
+  }
+  const node = layout.nodes.find((placed) => placed.name === key);
+  if (node !== undefined) {
+    return { x: node.x, y: node.y };
+  }
+  for (const group of layout.groups) {
+    for (const [index, member] of group.members.entries()) {
+      if (member.label === key || `${group.name}#${index + 1}` === key) {
+        return { x: member.x, y: member.y };
+      }
+    }
+  }
+  return null;
+}
+
+function renderToken(layout: PlateLayout, state: PlateState | undefined): string {
+  // With a state the token stops on the running unit; without one it walks
+  // the whole chain like the catalogue's plate.
+  if (state !== undefined) {
+    const at = litPoint(layout, state);
+    return at === null
+      ? ""
+      : `<circle class="token" r="1.1" cx="${num2(at.x)}" cy="${num2(at.y)}"/>`;
+  }
   if (layout.walk === null) {
     return "";
   }
@@ -193,7 +352,7 @@ function renderToken(layout: PlateLayout): string {
   );
 }
 
-function renderLayout(layout: PlateLayout): string {
+function renderLayout(layout: PlateLayout, state: PlateState | undefined): string {
   const ensembles = layout.groups.map((group) => group.name);
   const parts = [
     layout.order.length === 0 ? null : `Nodes in order: ${layout.order.join(", ")}.`,
@@ -201,17 +360,20 @@ function renderLayout(layout: PlateLayout): string {
   ].filter((part) => part !== null);
   const desc = parts.join(" ");
   const cls = layout.orientation === "vertical" ? "plate-svg plate-v" : "plate-svg plate-h";
+  // The overlay's CSS rides only on a stateful render: a stateless plate
+  // stays byte-identical to the catalogue's own drawing.
+  const style = plateStyle() + (state === undefined ? "" : stateStyle());
   return (
     `<svg class="${cls}" viewBox="0 0 ${layout.width} ${layout.height}" ` +
     `width="${Math.round(layout.width * PLATE_SCALE)}" height="${Math.round(layout.height * PLATE_SCALE)}" ` +
     `role="img" xmlns="http://www.w3.org/2000/svg">` +
     `<title>${escape(layout.name)}</title>` +
     `<desc>${escape(desc)}</desc>` +
-    `<style>${plateStyle()}</style>` +
+    `<style>${style}</style>` +
     `<g class="edges">${renderEdges(layout)}</g>` +
-    `<g class="groups">${renderGroups(layout)}</g>` +
-    `<g class="nodes">${renderNodes(layout)}</g>` +
-    renderToken(layout) +
+    `<g class="groups">${renderGroups(layout, state)}</g>` +
+    `<g class="nodes">${renderNodes(layout, state)}</g>` +
+    renderToken(layout, state) +
     `</svg>`
   );
 }
@@ -220,10 +382,21 @@ function renderLayout(layout: PlateLayout): string {
  * Render a graph document as a self-contained Canopy plate, horizontal
  * (ranks left to right) or vertical (ranks top to bottom). An unreadable
  * document draws nothing: the pages only ever pass validated graphs.
+ *
+ * The optional state overlays a live run on the same drawing: running and
+ * current units get a pulsing teal ring (static under reduced motion) with
+ * the token stopped on them, passed units a check badge, failed ones a red
+ * cross badge and a red stroke, and every marked unit a `<title>` naming
+ * its state. Without the state the output is byte-identical to the plain
+ * plate.
  */
-export function renderPlate(document: GraphDocument, orientation: Orientation = "horizontal"): string {
+export function renderPlate(
+  document: GraphDocument,
+  orientation: Orientation = "horizontal",
+  state?: PlateState,
+): string {
   const layout = orientation === "vertical" ? layoutPlateVertical(document) : layoutPlate(document);
-  return layout === null ? "" : renderLayout(layout);
+  return layout === null ? "" : renderLayout(layout, state);
 }
 
 /**

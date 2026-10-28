@@ -10,6 +10,7 @@ import { CatalogStore } from "./catalog.js";
 import { createChannelHandler } from "./channel.js";
 import { generateDeviceKey } from "./crypto.js";
 import type { DeviceKey } from "./crypto.js";
+import { GraphStore } from "./graph-store.js";
 import { mountCanopyBackground } from "../../../../packages/look/fondo/index.js";
 import { buildCatalog, buildCompose, buildList, buildSpawn, newReqId } from "./protocol.js";
 import { runPairing } from "./pairing.js";
@@ -85,6 +86,9 @@ async function main(): Promise<void> {
     send: (data) => manager?.send(data) ?? false,
     sessions: store,
   });
+  // The watched graphs: the list the Graphs tab polls and the one open
+  // graph's state, through the same connection.
+  const graphs = new GraphStore({ send: (data) => manager?.send(data) ?? false });
 
   const shell: Shell = createShell(
     root,
@@ -98,6 +102,7 @@ async function main(): Promise<void> {
         catalog.clear();
         manager?.stop();
         manager = null;
+        graphs.reset();
         shell.showPair();
       },
       onOpenSession: (id) => {
@@ -122,8 +127,17 @@ async function main(): Promise<void> {
       onSpawn: (spawn, req) => manager?.send(buildSpawn(req, spawn)) ?? false,
       onCompose: (draft, req) => manager?.send(buildCompose(req, draft)) ?? false,
       onSendDraft: (draft, req) => controller.sendPromptDraft(draft, req),
+      onGraphsRequest: () => {
+        graphs.requestList();
+      },
+      onWatchGraph: (id) => {
+        graphs.watch(id);
+      },
+      onUnwatchGraph: () => {
+        graphs.unwatch();
+      },
     },
-    { catalog, shelf },
+    { catalog, shelf, graphs },
   );
 
   const controller = new SessionController({
@@ -139,7 +153,7 @@ async function main(): Promise<void> {
     shell.setPairedHosts(await listHosts());
   };
 
-  const router = createFrameRouter({ store, controller, shell, catalog, shelf });
+  const router = createFrameRouter({ store, controller, shell, catalog, shelf, graphs });
 
   function startSession(host: HostRecord): void {
     // Detach while the old connection is still open so the host sees it.
@@ -147,6 +161,7 @@ async function main(): Promise<void> {
     manager?.stop();
     catalog.clear();
     shelf.reset();
+    graphs.reset();
     shell.setHostLabel(host.label);
     shell.setHostId(host.host_id);
     shell.showSessions();
@@ -161,10 +176,12 @@ async function main(): Promise<void> {
       if (state === "connected") {
         // A fresh connect and a reconnect both land here: refresh the
         // catalog and the list, and the open session re-attaches for a
-        // fresh snapshot.
+        // fresh snapshot. An open graph watch re-sends too — the host
+        // lost the subscription with the old connection.
         next.send(buildCatalog(newReqId()));
         next.send(buildList(newReqId()));
         controller.reattach();
+        graphs.rewatch();
       }
     });
     next.onMessage((data) => frames.push(data));
@@ -222,6 +239,7 @@ async function main(): Promise<void> {
     manager = null;
     catalog.clear();
     shelf.reset();
+    graphs.reset();
     const stored = await listHosts();
     await refreshPaired();
     if (stored.length === 0) {

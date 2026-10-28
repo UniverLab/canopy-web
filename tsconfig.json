@@ -17,6 +17,7 @@
     "src/**/*.ts",
     "tests/**/*.ts",
     "packages/look/**/*.ts",
+    "packages/plate/**/*.ts",
     "vitest.config.ts",
     "apps/*/src/**/*.ts",
     "apps/*/test/**/*.ts",
