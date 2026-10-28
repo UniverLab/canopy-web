@@ -265,7 +265,8 @@ async function draftResponse(req: Request, env: PageEnv, id: string): Promise<Re
   const kv = env.DRAFTS;
   const record = kv === undefined ? null : await readDraft(kv, id);
   if (record === null) {
-    return page(req, calmPage(DRAFT_MISSING_HEADING, DRAFT_MISSING_BODY, "timer"), 404);
+    const missing = { ...calmPage(DRAFT_MISSING_HEADING, DRAFT_MISSING_BODY, "timer"), noindex: true };
+    return page(req, missing, 404);
   }
   // A draft has no repository, no star count and no ref: `standalone` drops
   // those fields, and the install command names the draft instead of a slug.

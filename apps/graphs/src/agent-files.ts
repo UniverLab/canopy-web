@@ -344,10 +344,19 @@ export function openApiDocument(): Record<string, unknown> {
               },
             },
             "400": {
-              description: "The body is malformed, or the document did not validate.",
+              // A malformed body answers the Error shape, a document that
+              // did not validate the DraftInvalid shape with problems; anyOf
+              // (not oneOf) because the latter also matches the former.
+              description:
+                "The body is malformed (Error), or the document did not validate (DraftInvalid with problems).",
               content: {
                 "application/json": {
-                  schema: { $ref: "#/components/schemas/DraftInvalid" },
+                  schema: {
+                    anyOf: [
+                      { $ref: "#/components/schemas/DraftInvalid" },
+                      { $ref: "#/components/schemas/Error" },
+                    ],
+                  },
                 },
               },
             },

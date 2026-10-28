@@ -119,7 +119,10 @@ export function parseDraft(text: string, now: number): DraftRecord | null {
   return { kind, document, expires_at: expiresAt };
 }
 
-/** Store a draft for 30 minutes and answer its id and expiry. */
+/**
+ * Store a draft for 30 minutes and answer its id and expiry. Throws when
+ * KV fails; the API maps that to 503, like a missing binding.
+ */
 export async function createDraft(
   kv: DraftKV,
   kind: DocumentKind,

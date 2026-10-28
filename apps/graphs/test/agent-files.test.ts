@@ -168,6 +168,17 @@ describe("the OpenAPI description", () => {
     }
     // The 400/404 error shape is pinned once, as a component.
     expect(body.components.schemas["Error"]).toBeDefined();
+    // POST /api/drafts answers 400 both for a malformed body (Error) and
+    // for a document that did not validate (DraftInvalid with problems).
+    const draftPosts = body.paths as unknown as Record<
+      string,
+      { post: { responses: Record<string, { content: { "application/json": { schema: { anyOf?: Array<{ $ref: string }> } } } }> } }
+    >;
+    const draft400 = draftPosts["/api/drafts"].post.responses["400"].content["application/json"].schema;
+    expect(draft400.anyOf?.map((entry) => entry.$ref).sort()).toEqual([
+      "#/components/schemas/DraftInvalid",
+      "#/components/schemas/Error",
+    ]);
   });
 
   it("never reaches the API router, which would 400 it as unknown", async () => {

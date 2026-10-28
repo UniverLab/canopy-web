@@ -283,7 +283,12 @@ async function createDraftResponse(request: Request, env: ApiEnv): Promise<Respo
       null,
     );
   }
-  const created = await createDraft(kv, parsed.kind, parsed.document);
+  let created: { id: string; expires_at: string };
+  try {
+    created = await createDraft(kv, parsed.kind, parsed.document);
+  } catch {
+    return draftError("unavailable", "drafts are unavailable", 503);
+  }
   return jsonResponse(
     {
       id: created.id,

@@ -346,6 +346,7 @@ describe("the draft page", () => {
     expect(html).toContain(DRAFT_MISSING_HEADING);
     expect(html).toContain(DRAFT_MISSING_BODY);
     expect(html).toContain("30 minutes or one install");
+    expect(html).toContain(`<meta name="robots" content="noindex">`);
 
     // A record whose expiry has passed reads as gone, even before KV collects it.
     const id = "b".repeat(26);
@@ -360,6 +361,19 @@ describe("the draft page", () => {
   it("answers 503 when draft storage is not configured", async () => {
     expect((await post({ kind: "node", document: node() }, {})).status).toBe(503);
     expect((await get(`/i/draft/${"c".repeat(26)}`, {})).status).toBe(503);
+  });
+
+  it("answers 503 when draft storage fails instead of throwing", async () => {
+    const failing = {
+      get: async (): Promise<string | null> => null,
+      put: async (): Promise<void> => {
+        throw new Error("KV is down");
+      },
+      delete: async (): Promise<void> => {},
+    };
+    const response = await post({ kind: "node", document: node() }, { DRAFTS: failing });
+    expect(response.status).toBe(503);
+    expect(((await response.json()) as { kind: string }).kind).toBe("unavailable");
   });
 });
 
