@@ -89,13 +89,15 @@ export interface RankedGraph {
 }
 
 /**
- * Lift fail-only nodes into their own rank right after the unit that fails
- * into them: a node — never the infra node — whose incoming edges are all
- * fail or error (node edges or an ensemble's `on_fail_to`), with no
- * incoming rank edge, and every outgoing edge back to an earlier unit.
- * Without the lift such a node sits at rank 0 with long fail arcs crossing
- * the whole plate; later units shift right to open its rank. Returns
- * whether any rank moved; ranks only ever rise, to a fixpoint.
+ * Lift fail-only nodes into a rank right after the unit that fails into
+ * them: a node — never the infra node — whose incoming edges are all fail or
+ * error (node edges or an ensemble's `on_fail_to`), with no incoming rank
+ * edge, and every outgoing edge back to an earlier unit. Without the lift
+ * such a node sits at rank 0 with long fail arcs crossing the whole plate;
+ * later units shift right to open the rank. Nodes failed into from the same
+ * rank share the opened rank, in document order, so their fail arcs never
+ * leap over one another. Returns whether any rank moved; ranks only ever
+ * rise, to a fixpoint, so the sweep always settles.
  */
 function rerankFailOnly(
   parsed: ParsedGraph,
@@ -173,28 +175,35 @@ function rerankFailOnly(
     return false;
   }
   let changed = false;
-  for (let pass = 0; pass <= units.length; pass += 1) {
-    let moved = false;
+  for (let pass = 0; pass <= units.length + candidates.length; pass += 1) {
+    // Every slot is read from the ranks of this pass before any rank moves:
+    // candidates failed into from the same rank therefore open one rank
+    // together, and units at or after an opened slot shift right once per
+    // opened slot. A source that is itself a candidate takes its own slot in
+    // the same sweep, so the next pass re-reads the chain; ranks only rise,
+    // which is why the sweep settles.
+    const slots = new Map<string, number>();
+    const opened = new Set<number>();
     for (const node of candidates) {
       const sources = failSources.get(node.name) ?? [];
       const slot = Math.max(...sources.map((source) => rankOf.get(source) ?? 0)) + 1;
-      if (slot === (rankOf.get(node.name) ?? 0)) {
-        continue;
+      slots.set(node.name, slot);
+      if (slot !== (rankOf.get(node.name) ?? 0)) {
+        opened.add(slot);
       }
-      // Open the candidate's own rank right after its fail sources, later
-      // units shifting right; every source ranks below the slot, so the
-      // shift never disturbs them.
-      for (const [id, rank] of rankOf) {
-        if (id !== node.name && rank >= slot) {
-          rankOf.set(id, rank + 1);
-        }
-      }
-      rankOf.set(node.name, slot);
-      moved = true;
     }
-    changed = changed || moved;
-    if (!moved) {
+    if (opened.size === 0) {
       break;
+    }
+    changed = true;
+    const shift = (rank: number): number =>
+      rank + [...opened].filter((slot) => slot <= rank).length;
+    const next = new Map<string, number>();
+    for (const [id, rank] of rankOf) {
+      next.set(id, slots.get(id) ?? shift(rank));
+    }
+    for (const [id, rank] of next) {
+      rankOf.set(id, rank);
     }
   }
   return changed;

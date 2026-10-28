@@ -453,4 +453,34 @@ describe("the pattern figures", () => {
     const rises = fails.filter((edge) => edge.to === "start").map((edge) => cubic(edge.d)[3]);
     expect(new Set(rises).size).toBe(2);
   });
+
+  it("sinks failed into from one rank share the rank after it, in document order", () => {
+    const twoSinks = {
+      name: "two-sinks",
+      nodes: [
+        { name: "start", kind: "chip", position: 1, config: {} },
+        { name: "left", kind: "agent", position: 2, config: {} },
+        { name: "right", kind: "agent", position: 3, config: {} },
+        { name: "sink-left", kind: "agent", position: 4, config: {} },
+        { name: "sink-right", kind: "agent", position: 5, config: {} },
+      ],
+      edges: [
+        { from_node: "start", to_node: "left", condition: "pass" },
+        { from_node: "start", to_node: "right", condition: "pass" },
+        { from_node: "left", to_node: "sink-left", condition: "fail" },
+        { from_node: "right", to_node: "sink-right", condition: "fail" },
+        { from_node: "sink-left", to_node: "start", condition: "pass" },
+        { from_node: "sink-right", to_node: "start", condition: "pass" },
+      ],
+    } as unknown as GraphDocument;
+    for (const layout of [layoutPlate(twoSinks), layoutPlateVertical(twoSinks)]) {
+      expect(layout).not.toBeNull();
+      const rank = new Map((layout?.nodes ?? []).map((node) => [node.name, node.rank]));
+      expect(rank.get("left")).toBe(1);
+      expect(rank.get("sink-left")).toBe(2);
+      expect(rank.get("sink-right")).toBe(2);
+      const order = layout?.order ?? [];
+      expect(order.indexOf("sink-left")).toBeLessThan(order.indexOf("sink-right"));
+    }
+  });
 });
