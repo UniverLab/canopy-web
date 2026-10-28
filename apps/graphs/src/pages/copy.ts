@@ -490,8 +490,9 @@ export const EDITOR_NAME_INVALID = "A name is 1-48 characters of a-z, 0-9 or -."
 export const EDITOR_CONFIG_INVALID =
   "That is not JSON yet — the graph still holds the last valid config.";
 export const EDITOR_DELETE_NODE = "Delete node";
-export const EDITOR_DELETE_BLOCKED =
-  "This node is wired into an ensemble, and this editor does not edit ensembles — so it cannot be deleted.";
+export const EDITOR_ENSEMBLE_LOCKED =
+  "This node is wired into an ensemble, and this editor does not edit ensembles — " +
+  "so it cannot be renamed or deleted.";
 export const EDITOR_EDGE_HEADING = "Edge";
 export function editorEdgeLabel(from: string, to: string): string {
   return `${from} → ${to}`;
@@ -537,6 +538,44 @@ export const DRAFT_EXPIRED = "expired";
 
 /** Loading a document into the canvas: the failure line over the API's text. */
 export const EDITOR_LOAD_FAILED = "Could not open that document";
+
+/* ── The editor's API failures (src/editor/api.ts) ────────────────────────
+ * The client shows the API's own words whenever it has them; these are the
+ * fallbacks for the failures that carry none — an unreachable network, a
+ * body that is not what the route promises, a ref or draft id that never
+ * parses. They live here with the rest of the editor's copy.
+ */
+
+/** The network never answered at all. */
+export const EDITOR_API_OFFLINE = "the network did not answer";
+
+/** A 404 whose body names nothing. */
+export const EDITOR_API_MISSING = "no such document";
+
+/** Any other status whose body names nothing. */
+export function editorApiStatus(status: number): string {
+  return `the server answered ${status}`;
+}
+
+/** A ref with neither one nor three segments. */
+export function editorApiRef(ref: string): string {
+  return `"${ref}" is not a document ref`;
+}
+
+/** A document route whose answer held no `document`. */
+export const EDITOR_API_NO_DOCUMENT = "the answer held no document";
+
+/** An official listing whose answer was not a listing. */
+export const EDITOR_API_NO_LISTING = "the answer was not a listing";
+
+/** A search whose answer was not a search result. */
+export const EDITOR_API_NO_SEARCH = "the answer was not a search result";
+
+/** A drafts answer missing the fields the editor reads. */
+export const EDITOR_API_DRAFT_BROKEN = "the draft answer was incomplete";
+
+/** A draft id outside the alphabet the Worker accepts. */
+export const EDITOR_API_BAD_DRAFT_ID = "that is not a draft id";
 
 /** The fallback line when a failure carries no words of its own. */
 export const EDITOR_FAILED = "Something went wrong.";

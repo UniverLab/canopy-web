@@ -160,7 +160,7 @@ export class EditorApp {
       },
       rename: (nodeId, text) => {
         const node = this.nodeOf(nodeId);
-        if (node === null) {
+        if (node === null || ensembleBound(this.state, node.name)) {
           return;
         }
         const taken = new Set(this.state.nodes.filter((entry) => entry.id !== nodeId).map((entry) => entry.name));

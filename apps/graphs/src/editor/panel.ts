@@ -19,7 +19,7 @@ import {
   EDITOR_CONDITION_LABEL,
   EDITOR_DELETE_EDGE,
   EDITOR_DELETE_NODE,
-  EDITOR_DELETE_BLOCKED,
+  EDITOR_ENSEMBLE_LOCKED,
   EDITOR_EDGE_HEADING,
   EDITOR_FIELD_COMMAND,
   EDITOR_FIELD_CONFIG,
@@ -230,7 +230,7 @@ export class Panel {
       field(
         "node-name",
         EDITOR_FIELD_NAME,
-        `<input id="node-name" type="text" value="${escapeHtml(node.name)}" spellcheck="false" autocomplete="off" aria-describedby="node-name-error">` +
+        `<input id="node-name" type="text" value="${escapeHtml(node.name)}" spellcheck="false" autocomplete="off" aria-describedby="node-name-error"${locked ? " disabled" : ""}>` +
           `<p class="editor-field-error" id="node-name-error" hidden>${escapeHtml(EDITOR_NAME_INVALID)}</p>`,
       ) +
       field(
@@ -251,7 +251,7 @@ export class Panel {
             configError === null ? " hidden" : ""
           }>${escapeHtml(configError ?? "")}</p>`,
       ) +
-      (locked ? `<p class="editor-hint editor-blocked">${escapeHtml(EDITOR_DELETE_BLOCKED)}</p>` : "") +
+      (locked ? `<p class="editor-hint editor-blocked">${escapeHtml(EDITOR_ENSEMBLE_LOCKED)}</p>` : "") +
       `<button type="button" class="button editor-danger" data-action="delete-node"${
         locked ? " disabled" : ""
       }>${iconSvg("x")}<span>${escapeHtml(EDITOR_DELETE_NODE)}</span></button>` +

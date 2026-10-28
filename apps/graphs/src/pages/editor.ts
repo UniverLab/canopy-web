@@ -133,7 +133,6 @@ function palette(): string {
     `</form>`,
     `<p class="editor-results-empty" id="editor-results-empty" hidden>${escapeHtml(NO_RESULTS)}</p>`,
     `<ul class="editor-results" id="editor-results"></ul>`,
-    `<p class="editor-palette-error" id="editor-palette-error" role="status" hidden></p>`,
     `</aside>`,
   ].join("\n");
 }

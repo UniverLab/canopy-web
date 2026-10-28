@@ -14,6 +14,8 @@
  * - no horizontal page scroll at 390 px;
  * - the plate vocabulary on the canvas (checks stroked #e8f6f1, fail
  *   edges dashed #ff6b6b) and the condition chooser's router-only route;
+ * - pasting a graph that keeps an ensemble: its wired nodes lock
+ *   against rename and delete, so the kept section never strands;
  * - choosing a `.json` file in the import box: it fills the import
  *   textarea and Apply loads the graph.
  *
@@ -272,6 +274,58 @@ test("a router offers a route condition and other kinds do not", async ({ page }
   await expect(page.locator("#edge-route")).toHaveValue("ship");
   await expect(page.locator("#editor-status")).toHaveText("No problems.");
   await expect(page.locator("#editor-canvas g.edge.pass")).toHaveCount(1);
+});
+
+test("a pasted graph with an ensemble locks its wired nodes against rename and delete", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openEditor(page);
+
+  // Paste carries the same document the file picker does; this one keeps
+  // an ensemble wiring both its nodes, so both lock.
+  await page.locator('[data-action="import"]').click();
+  await page.locator("#editor-import-text").fill(
+    JSON.stringify({
+      format_version: 6,
+      name: "locked-graph",
+      description: "",
+      nodes: [
+        { name: "build", kind: "agent", position: 1, config: { prompt_template: "Go." } },
+        { name: "gate", kind: "gate", position: 2, config: {} },
+      ],
+      edges: [{ from_node: "build", to_node: "gate", condition: "pass" }],
+      ensembles: [
+        {
+          name: "reviewers",
+          kind: "parallel",
+          commit_rights: false,
+          prompt_template: "Review.",
+          entry_from_node: "gate",
+          entry_condition: "pass",
+          on_pass_to: "build",
+          min_pass: 1,
+          timeout_minutes: 30,
+        },
+      ],
+      hooks: { on_completed: [], on_failed: [], on_blocked: [], on_spec_completed: [] },
+      infra_node: "build",
+      presets: {},
+    }),
+  );
+  await page.locator('[data-action="import-apply"]').click();
+  await expect(page.locator("#editor-import")).toBeHidden();
+  await expect(page.locator("#editor-canvas g.node")).toHaveCount(2);
+  await expect(page.locator("#editor-status")).toHaveText("No problems.");
+
+  // Renaming a wired node would strand the kept ensemble, so the name
+  // field locks exactly like the delete button does.
+  await nodeOf(page, 1).click();
+  await expect(page.locator("#node-name")).toHaveValue("gate");
+  await expect(page.locator("#node-name")).toBeDisabled();
+  await expect(page.locator('[data-action="delete-node"]')).toBeDisabled();
+  await expect(page.locator("#editor-panel")).toContainText("does not edit ensembles");
 });
 
 test("choosing a .json file in the import box loads it into the editor", async ({ page }) => {

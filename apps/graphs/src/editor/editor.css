@@ -236,13 +236,11 @@
   font-size: 0.98rem;
   overflow-wrap: anywhere;
 }
-.editor-results-empty,
-.editor-palette-error {
+.editor-results-empty {
   margin: 0.35rem 0 0;
   font-size: 0.78rem;
   color: var(--surface-ink-dim);
 }
-.editor-palette-error { color: var(--attention); }
 
 /* Stage */
 

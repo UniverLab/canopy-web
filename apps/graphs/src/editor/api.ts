@@ -16,7 +16,18 @@
  */
 import { isRecord, isString, type JsonValue } from "../json.js";
 import { OFFICIAL_OWNER, OFFICIAL_REPO } from "../lib.js";
-import { INDEXING_BODY } from "../pages/copy.js";
+import {
+  EDITOR_API_BAD_DRAFT_ID,
+  EDITOR_API_DRAFT_BROKEN,
+  EDITOR_API_MISSING,
+  EDITOR_API_NO_DOCUMENT,
+  EDITOR_API_NO_LISTING,
+  EDITOR_API_NO_SEARCH,
+  EDITOR_API_OFFLINE,
+  INDEXING_BODY,
+  editorApiRef,
+  editorApiStatus,
+} from "../pages/copy.js";
 
 /** The catalogue row the palette needs from `/api/official` and `/api/search`. */
 export interface CatalogRow {
@@ -50,9 +61,9 @@ function messageOf(body: unknown, status: number): string {
     }
   }
   if (status === 404) {
-    return "no such document";
+    return EDITOR_API_MISSING;
   }
-  return `the server answered ${status}`;
+  return editorApiStatus(status);
 }
 
 /** The `path: message` lines a typed 400 body carries, if any. */
@@ -72,7 +83,7 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
   try {
     response = await fetch(path, init);
   } catch {
-    throw new ApiError("the network did not answer", 0);
+    throw new ApiError(EDITOR_API_OFFLINE, 0);
   }
   let body: unknown = null;
   try {
@@ -106,11 +117,11 @@ export function refPath(kind: "g" | "n", ref: string): string | null {
 export async function fetchDocument(kind: "g" | "n", ref: string): Promise<Record<string, JsonValue>> {
   const path = refPath(kind, ref);
   if (path === null) {
-    throw new ApiError(`"${ref}" is not a document ref`, 400);
+    throw new ApiError(editorApiRef(ref), 400);
   }
   const body = await request(path);
   if (!isRecord(body) || !isRecord(body["document"])) {
-    throw new ApiError("the answer held no document", 502);
+    throw new ApiError(EDITOR_API_NO_DOCUMENT, 502);
   }
   return body["document"];
 }
@@ -136,7 +147,7 @@ function rowsOf(value: unknown): CatalogRow[] {
 export async function fetchOfficial(): Promise<{ graphs: CatalogRow[]; nodes: CatalogRow[] }> {
   const body = await request("/api/official");
   if (!isRecord(body)) {
-    throw new ApiError("the answer was not a listing", 502);
+    throw new ApiError(EDITOR_API_NO_LISTING, 502);
   }
   return { graphs: rowsOf(body["graphs"]), nodes: rowsOf(body["nodes"]) };
 }
@@ -145,7 +156,7 @@ export async function fetchOfficial(): Promise<{ graphs: CatalogRow[]; nodes: Ca
 export async function fetchSearch(q: string): Promise<CatalogRow[]> {
   const body = await request(`/api/search?q=${encodeURIComponent(q)}&sort=top&page=1`);
   if (!isRecord(body)) {
-    throw new ApiError("the answer was not a search result", 502);
+    throw new ApiError(EDITOR_API_NO_SEARCH, 502);
   }
   return rowsOf(body["items"]);
 }
@@ -168,7 +179,7 @@ export async function createDraft(document: JsonValue): Promise<DraftCreated> {
   });
   if (!isRecord(body) || !isString(body["id"]) || !isString(body["install"]) ||
     !isString(body["page_url"]) || !isString(body["expires_at"])) {
-    throw new ApiError("the draft answer was incomplete", 502);
+    throw new ApiError(EDITOR_API_DRAFT_BROKEN, 502);
   }
   return {
     id: body["id"],
@@ -182,11 +193,11 @@ export async function createDraft(document: JsonValue): Promise<DraftCreated> {
 /** What `GET /api/drafts/<id>` answers: the stored draft, never consumed. */
 export async function fetchDraft(id: string): Promise<{ kind: string; document: Record<string, JsonValue> }> {
   if (!/^[0-9a-hjkmnp-tv-z]{26}$/.test(id)) {
-    throw new ApiError("that is not a draft id", 400);
+    throw new ApiError(EDITOR_API_BAD_DRAFT_ID, 400);
   }
   const body = await request(`/api/drafts/${encodeURIComponent(id)}`);
   if (!isRecord(body) || !isRecord(body["document"]) || !isString(body["kind"])) {
-    throw new ApiError("the draft answer was incomplete", 502);
+    throw new ApiError(EDITOR_API_DRAFT_BROKEN, 502);
   }
   return { kind: body["kind"], document: body["document"] };
 }

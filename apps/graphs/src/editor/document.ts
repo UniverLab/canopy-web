@@ -285,8 +285,8 @@ function mergePreset(state: EditorState, node: CanvasNode, preset: JsonValue | u
 
 /**
  * True when a kept ensemble wires this node name — by entry, by exit or
- * by an extra source. Such a node cannot be deleted: the editor keeps
- * ensembles untouched, so it may not strand one either.
+ * by an extra source. Such a node cannot be renamed or deleted: the
+ * editor keeps ensembles untouched, so it may not strand one either.
  */
 export function ensembleBound(state: EditorState, name: string): boolean {
   const ensembles = state.sections["ensembles"];
