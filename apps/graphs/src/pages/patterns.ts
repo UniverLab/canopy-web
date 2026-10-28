@@ -55,11 +55,11 @@ function statusBadge(status: PatternStatus): string {
  * assistive tech; the page's own plate carries the labelled drawing.
  */
 function thumbFigure(figure: JsonValue, label: string): string {
-  // One seed per figure, shared by the H/V pair, so both orientations
-  // walk the same fail edges — a fresh one per render.
-  const random = mulberry32(Date.now() >>> 0);
-  const horizontal = renderPlate(figure as unknown as GraphDocument, "horizontal", undefined, random);
-  const vertical = renderPlate(figure as unknown as GraphDocument, "vertical", undefined, random);
+  // One seed per figure, replayed by each orientation's own generator,
+  // so both plates walk the same fail edges — a fresh one per render.
+  const seed = Date.now() >>> 0;
+  const horizontal = renderPlate(figure as unknown as GraphDocument, "horizontal", undefined, mulberry32(seed));
+  const vertical = renderPlate(figure as unknown as GraphDocument, "vertical", undefined, mulberry32(seed));
   return horizontal === "" && vertical === ""
     ? ""
     : `<figure class="plate thumb" aria-hidden="true">${horizontal}${vertical}<figcaption class="sr-only">${escapeHtml(label)}</figcaption></figure>`;
@@ -178,9 +178,9 @@ export function dropLeadingTitle(body: string, title: string): string {
  */
 export function patternPage(pattern: StoredPattern, rows: ImplementsRow[]): Page {
   // One seed for the figure's H/V pair, like the thumbnails'.
-  const random = mulberry32(Date.now() >>> 0);
-  const horizontal = renderPlate(pattern.figure as unknown as GraphDocument, "horizontal", undefined, random);
-  const vertical = renderPlate(pattern.figure as unknown as GraphDocument, "vertical", undefined, random);
+  const seed = Date.now() >>> 0;
+  const horizontal = renderPlate(pattern.figure as unknown as GraphDocument, "horizontal", undefined, mulberry32(seed));
+  const vertical = renderPlate(pattern.figure as unknown as GraphDocument, "vertical", undefined, mulberry32(seed));
   const plate = horizontal === "" && vertical === ""
     ? ""
     : `<figure class="plate">${horizontal}${vertical}</figure>`;

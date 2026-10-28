@@ -56,6 +56,26 @@ const PANEL: GraphDocument = {
   ],
 };
 
+/** A gate with two fail edges: the second draw picks which one the walk rides. */
+const FORK: GraphDocument = {
+  name: "walk-fork",
+  nodes: [
+    { name: "start", kind: "check", position: 1, config: {} },
+    { name: "gate", kind: "gate", position: 2, config: {} },
+    { name: "left", kind: "agent", position: 3, config: {} },
+    { name: "right", kind: "agent", position: 4, config: {} },
+    { name: "done", kind: "check", position: 5, config: {} },
+  ],
+  edges: [
+    { from_node: "start", to_node: "gate", condition: "pass" },
+    { from_node: "gate", to_node: "left", condition: "fail" },
+    { from_node: "gate", to_node: "right", condition: "fail" },
+    { from_node: "gate", to_node: "done", condition: "pass" },
+    { from_node: "left", to_node: "done", condition: "pass" },
+    { from_node: "right", to_node: "done", condition: "pass" },
+  ],
+};
+
 /** Walk one fixture with injected draws; the sequence repeats when spent. */
 function walkWith(draws: number[], document: GraphDocument = LOOP): WalkStep[] {
   const parsed = parseDocument(document);
@@ -127,6 +147,35 @@ describe("the walk generator", () => {
       "repair→done",
     ]);
     expect(words(walkWith([0.5], PANEL))).toEqual(["start→panel", "panel→done"]);
+  });
+
+  it("picks uniformly among several fail edges with a second draw", () => {
+    // The first draw dips below the chance, so the walk fails; the second
+    // draw indexes the two fail edges — 0.0 rides the first, 0.6 the second.
+    expect(words(walkWith([0.1, 0.0], FORK))).toEqual([
+      "start→gate",
+      "gate→left (fail)",
+      "left→done",
+    ]);
+    expect(words(walkWith([0.1, 0.6], FORK))).toEqual([
+      "start→gate",
+      "gate→right (fail)",
+      "right→done",
+    ]);
+  });
+
+  it("walks both orientations the same fail edges from one shared seed", () => {
+    // The pages replay one seed per orientation's own generator, so the
+    // H/V pair carries the same walk — same length, same lit windows.
+    const horizontal = renderPlate(LOOP, "horizontal", undefined, mulberry32(7));
+    const vertical = renderPlate(LOOP, "vertical", undefined, mulberry32(7));
+    const duration = (svg: string): string | undefined =>
+      /<animateMotion[^>]*dur="([^"]+)"/.exec(svg)?.[1];
+    const lit = (svg: string): string | undefined => /values="([^"]+)"/.exec(svg)?.[1];
+    expect(duration(horizontal)).toBe("5.4s");
+    expect(duration(vertical)).toBe(duration(horizontal));
+    expect(lit(horizontal)).toBeDefined();
+    expect(lit(vertical)).toBe(lit(horizontal));
   });
 
   it("replays the same walk from the same seed, in [0, 1)", () => {
