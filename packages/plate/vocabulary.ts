@@ -94,9 +94,11 @@ export interface Pt {
  * another row is the same curve; one that routes back along the same row arcs
  * ABOVE the pair (labels sit below nodes). `lift` raises such an arc further, so
  * two back-edges into one node stay distinct (0 = the hero's drawing).
+ * `forceArc` draws the arc whatever the row gap — a fail or error edge
+ * touching an ensemble group never S-curves through the row.
  */
-export function edgePath(a: Pt, b: Pt, fail: boolean, lift = 0): string {
-  if (!fail || Math.abs(b.y - a.y) > 6) {
+export function edgePath(a: Pt, b: Pt, fail: boolean, lift = 0, forceArc = false): string {
+  if (!forceArc && (!fail || Math.abs(b.y - a.y) > 6)) {
     const mx = (a.x + b.x) / 2;
     return `M${a.x} ${a.y} C${mx} ${a.y} ${mx} ${b.y} ${b.x} ${b.y}`;
   }

@@ -34,19 +34,20 @@ import {
   PAD_BOTTOM,
   PAD_TOP,
   PAD_X,
+  forceArcOf,
   groupSubtitle,
   groupTitle,
   groupWidth,
   num,
   passChain,
   passWalk,
-  rankUnits,
   smooth,
   type PlacedEdge,
   type PlacedGroup,
   type PlacedNode,
   type PlateLayout,
 } from "./layout.js";
+import { rankUnits } from "./rank.js";
 import { GEOM, TYPE, type Pt } from "./vocabulary.js";
 
 /** Gap between two units side by side in one rank (viewBox units). */
@@ -79,10 +80,12 @@ function arcFall(a: Pt, b: Pt, lift: number): number {
  * Edge path between two node centres, vertical: a smooth S-curve down the
  * column. A failure between units of one column arcs LEFT of the pair
  * (labels sit right of nodes). `lift` pushes such an arc further left, so
- * two back-edges into one node stay distinct.
+ * two back-edges into one node stay distinct. `forceArc` draws the arc
+ * whatever the column gap — a fail or error edge touching an ensemble
+ * group never S-curves through the column.
  */
-export function edgePathV(a: Pt, b: Pt, fail: boolean, lift = 0): string {
-  if (!fail || Math.abs(b.x - a.x) > 6) {
+export function edgePathV(a: Pt, b: Pt, fail: boolean, lift = 0, forceArc = false): string {
+  if (!forceArc && (!fail || Math.abs(b.x - a.x) > 6)) {
     const my = (a.y + b.y) / 2;
     return `M${a.x} ${a.y} C${a.x} ${my} ${b.x} ${my} ${b.x} ${b.y}`;
   }
@@ -220,6 +223,7 @@ export function layoutPlateVertical(document: unknown): PlateLayout | null {
     cls: EdgeClass;
     a: Pt;
     b: Pt;
+    forceArc: boolean;
   }
   const raw: RawEdge[] = [];
   for (const edge of parsed.edges) {
@@ -233,7 +237,15 @@ export function layoutPlateVertical(document: unknown): PlateLayout | null {
     if (a === null || b === null) {
       continue;
     }
-    raw.push({ from: displayName(fromId), to: displayName(toId), cls: classOf(edge.condition), a, b });
+    const cls = classOf(edge.condition);
+    raw.push({
+      from: displayName(fromId),
+      to: displayName(toId),
+      cls,
+      a,
+      b,
+      forceArc: forceArcOf(cls, fromId, toId),
+    });
   }
   for (const ensemble of parsed.ensembles) {
     const id = `ensemble:${ensemble.name}`;
@@ -242,12 +254,14 @@ export function layoutPlateVertical(document: unknown): PlateLayout | null {
       const a = fromId === null ? null : pointOf(fromId, "bottom");
       const b = pointOf(id, "top");
       if (fromId !== null && a !== null && b !== null) {
+        const cls = classOf(ensemble.entryCondition);
         raw.push({
           from: displayName(fromId),
           to: ensemble.name,
-          cls: classOf(ensemble.entryCondition),
+          cls,
           a,
           b,
+          forceArc: forceArcOf(cls, fromId, id),
         });
       }
     }
@@ -256,7 +270,15 @@ export function layoutPlateVertical(document: unknown): PlateLayout | null {
       const a = fromId === null ? null : pointOf(fromId, "bottom");
       const b = pointOf(id, "top");
       if (fromId !== null && a !== null && b !== null) {
-        raw.push({ from: displayName(fromId), to: ensemble.name, cls: classOf(extra.condition), a, b });
+        const cls = classOf(extra.condition);
+        raw.push({
+          from: displayName(fromId),
+          to: ensemble.name,
+          cls,
+          a,
+          b,
+          forceArc: forceArcOf(cls, fromId, id),
+        });
       }
     }
     if (ensemble.onPassTo !== null) {
@@ -264,7 +286,7 @@ export function layoutPlateVertical(document: unknown): PlateLayout | null {
       const a = pointOf(id, "bottom");
       const b = toId === null ? null : pointOf(toId, "top");
       if (toId !== null && a !== null && b !== null) {
-        raw.push({ from: ensemble.name, to: displayName(toId), cls: "pass", a, b });
+        raw.push({ from: ensemble.name, to: displayName(toId), cls: "pass", a, b, forceArc: false });
       }
     }
     if (ensemble.onFailTo !== null) {
@@ -272,7 +294,14 @@ export function layoutPlateVertical(document: unknown): PlateLayout | null {
       const a = pointOf(id, "bottom");
       const b = toId === null ? null : pointOf(toId, "top");
       if (toId !== null && a !== null && b !== null) {
-        raw.push({ from: ensemble.name, to: displayName(toId), cls: "fail", a, b });
+        raw.push({
+          from: ensemble.name,
+          to: displayName(toId),
+          cls: "fail",
+          a,
+          b,
+          forceArc: forceArcOf("fail", id, toId),
+        });
       }
     }
     const group = groupByName.get(ensemble.name);
@@ -281,16 +310,27 @@ export function layoutPlateVertical(document: unknown): PlateLayout | null {
         const a = group.members[index];
         const b = group.members[index + 1];
         if (a !== undefined && b !== undefined) {
-          raw.push({ from: ensemble.name, to: ensemble.name, cls: "order", a: { x: a.x, y: a.y }, b: { x: b.x, y: b.y } });
+          raw.push({
+            from: ensemble.name,
+            to: ensemble.name,
+            cls: "order",
+            a: { x: a.x, y: a.y },
+            b: { x: b.x, y: b.y },
+            forceArc: false,
+          });
         }
       }
     }
   }
 
+  /** Whether an edge draws as an arc left of the column: forced, or a same-column fail. */
+  const arcs = (edge: RawEdge): boolean =>
+    edge.forceArc || (edge.cls === "fail" && Math.abs(edge.b.x - edge.a.x) <= 6);
+
   // Fail arcs left of the column push further left per back edge into one target.
   const arcIndex = new Map<string, number>();
   const liftOf = (edge: RawEdge): number => {
-    if (edge.cls !== "fail" || Math.abs(edge.b.x - edge.a.x) > 6) {
+    if (!arcs(edge)) {
       return 0;
     }
     const key = edge.to;
@@ -331,7 +371,7 @@ export function layoutPlateVertical(document: unknown): PlateLayout | null {
     span(group.x - group.w / 2, group.x + group.w / 2, group.y - group.h / 2, group.y + group.h / 2);
   }
   for (const edge of raw) {
-    if (edge.cls === "fail" && Math.abs(edge.b.x - edge.a.x) <= 6) {
+    if (arcs(edge)) {
       const lift = lifts.get(edge) ?? 0;
       minX = Math.min(minX, arcFall(edge.a, edge.b, lift), edge.a.x - 3, edge.b.x - 3);
     }
@@ -361,7 +401,9 @@ export function layoutPlateVertical(document: unknown): PlateLayout | null {
     from: edge.from,
     to: edge.to,
     cls: edge.cls,
-    d: smooth(edgePathV(shift(edge.a), shift(edge.b), edge.cls === "fail", lifts.get(edge) ?? 0)),
+    d: smooth(
+      edgePathV(shift(edge.a), shift(edge.b), edge.cls === "fail", lifts.get(edge) ?? 0, edge.forceArc),
+    ),
   }));
 
   // The token walks the main pass chain through this orientation's curves.

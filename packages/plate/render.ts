@@ -118,20 +118,20 @@ function groupLabelX(group: { x: number; w: number }): number {
  */
 function plateStyle(): string {
   return (
-    `.plate-svg text{font-family:var(--font-mono,"Sometype Mono","Courier New",monospace)}` +
+    `.plate-svg text{font-family:var(--font-mono,'Sometype Mono',ui-monospace,Menlo,monospace)}` +
     `.plate-svg .edge{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.45;opacity:.85}` +
     `.plate-svg .edge.fail{stroke:#ff6b6b;stroke-dasharray:1.4 1.1;opacity:.7}` +
     `.plate-svg .edge.error{stroke:currentColor;stroke-width:.3;stroke-dasharray:.4 .8;opacity:.45}` +
     `.plate-svg .edge.order{stroke:currentColor;stroke-width:.3;stroke-dasharray:.5 1.1;stroke-linecap:round;opacity:.9}` +
-    `.plate-svg .node .shape{fill:color-mix(in srgb, var(--nc, var(--canopy)) 22%, #04110f);stroke:var(--nc, var(--canopy));stroke-width:.45}` +
+    `.plate-svg .node .shape{fill:color-mix(in srgb, var(--nc, var(--canopy, #00a9a0)) 22%, #04110f);stroke:var(--nc, var(--canopy, #00a9a0));stroke-width:.45}` +
     `.plate-svg .shape-chip .shape{fill:#0c1416;stroke:var(--ink-dim,#9a9890)}` +
     `.plate-svg .shape-check .shape,.plate-svg .shape-gate .shape{fill:#0c1416;stroke:#e8f6f1}` +
-    `.plate-svg .shape-commit .shape{fill:color-mix(in srgb, var(--canopy) 35%, #04110f);stroke:var(--canopy)}` +
+    `.plate-svg .shape-commit .shape{fill:color-mix(in srgb, var(--canopy, #00a9a0) 35%, #04110f);stroke:var(--canopy,#00a9a0)}` +
     `.plate-svg .label{font-size:2.3px;fill:#e8f6f1}` +
-    `.plate-svg .harness{font-size:1.9px;fill:var(--nc, var(--canopy));opacity:.9}` +
+    `.plate-svg .harness{font-size:1.9px;fill:var(--nc, var(--canopy, #00a9a0));opacity:.9}` +
     `.plate-svg .group-box{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.3;stroke-dasharray:1.2 .9;opacity:.8}` +
     `.plate-svg .group-title,.plate-svg .group-subtitle{font-size:1.9px;fill:var(--canopy,#00a9a0);letter-spacing:.14em;text-transform:uppercase}` +
-    `.plate-svg .member-shape{fill:color-mix(in srgb, var(--nc, var(--canopy)) 22%, #04110f);stroke:var(--nc, var(--canopy));stroke-width:.3}` +
+    `.plate-svg .member-shape{fill:color-mix(in srgb, var(--nc, var(--canopy, #00a9a0)) 22%, #04110f);stroke:var(--nc, var(--canopy, #00a9a0));stroke-width:.3}` +
     `.plate-svg .member-label{font-size:1.9px;fill:#e8f6f1;text-anchor:middle}` +
     `.plate-svg .token{fill:var(--canopy,#00a9a0)}` +
     `@media (prefers-reduced-motion:reduce){.plate-svg .token{display:none}}`

@@ -11,6 +11,8 @@ import helloGraph from "./fixtures/graphs/hello-graph/graph.json" with { type: "
 import qualityBubble from "./fixtures/graphs/quality-bubble/graph.json" with { type: "json" };
 import singleCommitter from "./fixtures/graphs/single-committer/graph.json" with { type: "json" };
 import specLoop from "./fixtures/graphs/spec-loop/graph.json" with { type: "json" };
+import reviewPanel from "./fixtures/patterns/review-panel.figure.json" with { type: "json" };
+import resilientMembers from "./fixtures/patterns/resilient-members.figure.json" with { type: "json" };
 import {
   structureOf,
   type GraphDocument,
@@ -27,6 +29,8 @@ const GRAPHS: Array<[string, GraphDocument]> = [
   ["single-committer", singleCommitter as unknown as GraphDocument],
   ["spec-loop", specLoop as unknown as GraphDocument],
   ["canopy-tui-polish", TUI_POLISH_GRAPH],
+  ["review-panel", reviewPanel as unknown as GraphDocument],
+  ["resilient-members", resilientMembers as unknown as GraphDocument],
 ];
 
 interface Box {
@@ -352,7 +356,7 @@ describe("harness colours", () => {
     const svg = renderNodePlate({ name: "impl", kind: "agent", config: { platform: "mystery" } });
     expect(svg).not.toContain("--nc:");
     expect(svg).not.toContain(`class="harness"`);
-    expect(svg).toContain(`var(--nc, var(--canopy))`);
+    expect(svg).toContain(`var(--nc, var(--canopy, #00a9a0))`);
   });
 
   it("paints ensemble members by their platform", () => {
@@ -371,5 +375,82 @@ describe("harness colours", () => {
         expect(svg, `${name} ${orientation}`).not.toContain('fill="#fff"');
       }
     }
+  });
+});
+
+describe("fallback colours", () => {
+  it("gives every look-kit token in the svg style its Canopy fallback", () => {
+    for (const [name, document] of GRAPHS) {
+      const svg = renderPlate(document);
+      const style = /<style>([\s\S]*?)<\/style>/.exec(svg)?.[1] ?? "";
+      expect(style.length, name).toBeGreaterThan(0);
+      expect(style, `${name} --canopy`).not.toMatch(/var\(--canopy(?!,)/);
+      expect(style, `${name} --ink-dim`).not.toMatch(/var\(--ink-dim(?!,)/);
+      expect(style, `${name} --font-mono`).not.toMatch(/var\(--font-mono(?!,)/);
+    }
+  });
+
+  it("fills and strokes harness-free agents and members teal without the look kit", () => {
+    const svg = renderNodePlate({ name: "impl", kind: "agent", config: {} });
+    const style = /<style>([\s\S]*?)<\/style>/.exec(svg)?.[1] ?? "";
+    expect(style).toContain(".plate-svg .node .shape{fill:color-mix(in srgb, var(--nc, var(--canopy, #00a9a0)) 22%, #04110f)");
+    expect(style).toContain(".plate-svg .member-shape{fill:color-mix(in srgb, var(--nc, var(--canopy, #00a9a0)) 22%, #04110f)");
+    expect(style).toContain(".plate-svg .shape-commit .shape{fill:color-mix(in srgb, var(--canopy, #00a9a0) 35%, #04110f)");
+  });
+});
+
+describe("the pattern figures", () => {
+  /** The eight numbers of a cubic edge path: endpoints and control points. */
+  function cubic(d: string): number[] {
+    return (d.match(/-?[\d.]+/g) ?? []).map(Number);
+  }
+
+  it("review-panel: the panel fail edge arcs above the row, never through it", () => {
+    const layout = layoutPlate(reviewPanel as unknown as GraphDocument);
+    expect(layout).not.toBeNull();
+    const fail = layout?.edges.find((edge) => edge.from === "review-panel" && edge.to === "implement");
+    expect(fail?.cls).toBe("fail");
+    // An arc: both control points share the rise, at the endpoints' own x —
+    // an S-curve through the row would share the midpoint's x instead.
+    const [ax, , c1x, c1y, c2x, c2y, bx] = cubic(fail?.d ?? "");
+    expect(c1x).toBe(ax);
+    expect(c2x).toBe(bx);
+    expect(c1y).toBe(c2y);
+    const rowTop = Math.min(
+      ...(layout?.nodes ?? []).filter((node) => !node.infra).map((node) => node.y - node.h / 2),
+    );
+    expect(c1y ?? Number.POSITIVE_INFINITY).toBeLessThan(rowTop);
+  });
+
+  it("review-panel: the panel fail edge arcs left of the column when vertical", () => {
+    const layout = layoutPlateVertical(reviewPanel as unknown as GraphDocument);
+    expect(layout).not.toBeNull();
+    const fail = layout?.edges.find((edge) => edge.from === "review-panel" && edge.to === "implement");
+    expect(fail?.cls).toBe("fail");
+    const [, ay, c1x, c1y, c2x, c2y, , by] = cubic(fail?.d ?? "");
+    expect(c1y).toBe(ay);
+    expect(c2y).toBe(by);
+    expect(c1x).toBe(c2x);
+    const columnLeft = Math.min(
+      ...(layout?.nodes ?? []).filter((node) => !node.infra).map((node) => node.x - node.w / 2),
+    );
+    expect(c1x ?? Number.POSITIVE_INFINITY).toBeLessThan(columnLeft);
+  });
+
+  it("resilient-members: resilience ranks after start, the fail arcs parted", () => {
+    const layout = layoutPlate(resilientMembers as unknown as GraphDocument);
+    expect(layout).not.toBeNull();
+    const rank = new Map((layout?.nodes ?? []).map((node) => [node.name, node.rank]));
+    expect(rank.get("resilience") ?? -1).toBeGreaterThan(rank.get("start") ?? Number.MAX_SAFE_INTEGER);
+    expect(layout?.order).toEqual(["start", "resilience", "gate", "review"]);
+    // All three fail edges draw as arcs, and the two into start part lifts.
+    const fails = (layout?.edges ?? []).filter((edge) => edge.cls === "fail");
+    expect(fails).toHaveLength(3);
+    for (const edge of fails) {
+      const [ax, , c1x, c1y, c2x, c2y, bx] = cubic(edge.d);
+      expect([c1x, c2x, c1y, c2y], `${edge.from}→${edge.to}`).toEqual([ax, bx, c1y, c1y]);
+    }
+    const rises = fails.filter((edge) => edge.to === "start").map((edge) => cubic(edge.d)[3]);
+    expect(new Set(rises).size).toBe(2);
   });
 });
