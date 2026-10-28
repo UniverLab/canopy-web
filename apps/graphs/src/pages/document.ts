@@ -11,6 +11,7 @@
  */
 import { type GraphDocument, type NodeDocument, structureOf } from "../../../../packages/plate/document.js";
 import { renderNodePlate, renderPlate } from "../../../../packages/plate/render.js";
+import { mulberry32 } from "../../../../packages/plate/walk.js";
 import { iconSvg } from "../../../../packages/look/icon-svg.js";
 import type { DocumentKind, JsonValue } from "../../../../src/schema.js";
 import type { Doc } from "../documents.js";
@@ -87,11 +88,15 @@ function agentNames(document: unknown): string[] {
 function plateFigure(document: JsonValue, kind: PageRef["kind"]): string {
   // The data layer only serves validated documents, so the cast is honest;
   // the renderers stay total and draw nothing when it is not.
+  // One seed per figure, shared by the horizontal and vertical plate, so
+  // both orientations walk the same fail edges — and a fresh one every
+  // render, so the walk looks alive across reloads.
+  const random = mulberry32(Date.now() >>> 0);
   const horizontal = kind === "graph"
-    ? renderPlate(document as unknown as GraphDocument, "horizontal")
+    ? renderPlate(document as unknown as GraphDocument, "horizontal", undefined, random)
     : renderNodePlate(document as unknown as NodeDocument, "horizontal");
   const vertical = kind === "graph"
-    ? renderPlate(document as unknown as GraphDocument, "vertical")
+    ? renderPlate(document as unknown as GraphDocument, "vertical", undefined, random)
     : renderNodePlate(document as unknown as NodeDocument, "vertical");
   return horizontal === "" && vertical === ""
     ? ""

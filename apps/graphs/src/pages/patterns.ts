@@ -12,6 +12,7 @@
  */
 import { type GraphDocument } from "../../../../packages/plate/document.js";
 import { renderPlate } from "../../../../packages/plate/render.js";
+import { mulberry32 } from "../../../../packages/plate/walk.js";
 import { iconSvg } from "../../../../packages/look/icon-svg.js";
 import type { JsonValue } from "../../../../src/schema.js";
 import type { Doc } from "../documents.js";
@@ -54,8 +55,11 @@ function statusBadge(status: PatternStatus): string {
  * assistive tech; the page's own plate carries the labelled drawing.
  */
 function thumbFigure(figure: JsonValue, label: string): string {
-  const horizontal = renderPlate(figure as unknown as GraphDocument, "horizontal");
-  const vertical = renderPlate(figure as unknown as GraphDocument, "vertical");
+  // One seed per figure, shared by the H/V pair, so both orientations
+  // walk the same fail edges — a fresh one per render.
+  const random = mulberry32(Date.now() >>> 0);
+  const horizontal = renderPlate(figure as unknown as GraphDocument, "horizontal", undefined, random);
+  const vertical = renderPlate(figure as unknown as GraphDocument, "vertical", undefined, random);
   return horizontal === "" && vertical === ""
     ? ""
     : `<figure class="plate thumb" aria-hidden="true">${horizontal}${vertical}<figcaption class="sr-only">${escapeHtml(label)}</figcaption></figure>`;
@@ -173,8 +177,10 @@ export function dropLeadingTitle(body: string, title: string): string {
  * with the figure as a fenced JSON block.
  */
 export function patternPage(pattern: StoredPattern, rows: ImplementsRow[]): Page {
-  const horizontal = renderPlate(pattern.figure as unknown as GraphDocument, "horizontal");
-  const vertical = renderPlate(pattern.figure as unknown as GraphDocument, "vertical");
+  // One seed for the figure's H/V pair, like the thumbnails'.
+  const random = mulberry32(Date.now() >>> 0);
+  const horizontal = renderPlate(pattern.figure as unknown as GraphDocument, "horizontal", undefined, random);
+  const vertical = renderPlate(pattern.figure as unknown as GraphDocument, "vertical", undefined, random);
   const plate = horizontal === "" && vertical === ""
     ? ""
     : `<figure class="plate">${horizontal}${vertical}</figure>`;

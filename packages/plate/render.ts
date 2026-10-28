@@ -4,7 +4,8 @@
  * in the Canopy vocabulary — node kinds as shapes, pass edges as teal
  * S-curves, fail edges as red dashed arcs above the row (left of the column
  * in the vertical orientation), ensembles as dashed group outlines, the
- * infra node in a lower lane, and a walking token along the main pass chain.
+ * infra node in a lower lane, and a walking token along the main pass
+ * chain that may ride a red fail edge back before getting through.
  *
  * Node colours follow univerlab's GraphMorph: the shape fills with its
  * harness colour at 22% over the deep (`--nc`, the Canopy teal when the
@@ -28,12 +29,14 @@ import {
   layoutPlate,
   plateLabel,
   type Orientation,
+  type PlacedEdge,
   type PlacedMember,
   type PlacedNode,
   type PlateLayout,
 } from "./layout.js";
 import { V_HARNESS_DY, V_LABEL_DX, V_LABEL_DY, layoutPlateVertical } from "./vertical.js";
 import { GEOM, TYPE, harnessColor } from "./vocabulary.js";
+import { happyRandom, STEP_SECONDS } from "./walk.js";
 import { isArray, isNumber, isRecord, isString } from "./guards.js";
 
 /** A node or ensemble member's run state, as the live overlay carries it. */
@@ -159,20 +162,64 @@ function stateStyle(): string {
   );
 }
 
+/**
+ * The walk's lighting rules, appended only when the walk actually rode a
+ * fail edge: the lit twin copies the fail edge's red dash at a thicker
+ * stroke, and `prefers-reduced-motion` hides it whole — SMIL ignores
+ * media queries, so hiding the twin is what keeps the resting plate
+ * exactly like today's under reduce. Without a ridden fail edge the
+ * stylesheet stays byte-identical to the plain plate's.
+ */
+function litStyle(): string {
+  return (
+    `.plate-svg .edge-lit{fill:none;stroke:#ff6b6b;stroke-width:.8;stroke-dasharray:1.4 1.1}` +
+    `@media (prefers-reduced-motion:reduce){.plate-svg .edge-lit{display:none}}`
+  );
+}
+
 const EDGE_ORDER = { error: 0, order: 1, pass: 2, fail: 3 } as const;
 
+/**
+ * The lit twin of a fail edge the walk rode: the same dashed curve a
+ * touch brighter and thicker, carrying a discrete SMIL opacity animation
+ * that lights it exactly while the walker rides its legs — one window
+ * per leg, as many as the walk crossed the edge. The twin rides beside
+ * the base edge, never in its place, so the static drawing stays whole.
+ */
+function renderLitEdge(edge: PlacedEdge, legs: number[], total: number, seconds: number): string {
+  const values: string[] = [];
+  const keyTimes: string[] = [];
+  for (let index = 0; index <= total; index += 1) {
+    keyTimes.push(String(Math.round((index / total) * 10000) / 10000));
+    values.push(index < total && legs.includes(index) ? "1" : "0");
+  }
+  return (
+    `<path class="edge-lit" d="${edge.d}" ` +
+    `data-from="${escape(edge.from)}" data-to="${escape(edge.to)}" data-lit>` +
+    `<animate attributeName="opacity" calcMode="discrete" values="${values.join(";")}" ` +
+    `keyTimes="${keyTimes.join(";")}" dur="${seconds}s" repeatCount="indefinite"/>` +
+    `</path>`
+  );
+}
+
 function renderEdges(layout: PlateLayout): string {
+  const litOf = new Map(layout.walkFails.map((lit) => [`${lit.from}→${lit.to}`, lit.legs]));
+  const total = Math.round(layout.walkSeconds / STEP_SECONDS);
   const edges = [...layout.edges].sort(
     (a, b) =>
       EDGE_ORDER[a.cls] - EDGE_ORDER[b.cls] ||
       (a.from < b.from ? -1 : a.from > b.from ? 1 : a.to < b.to ? -1 : a.to > b.to ? 1 : 0),
   );
   return edges
-    .map(
-      (edge) =>
+    .map((edge) => {
+      const base =
         `<path class="edge ${edge.cls}" d="${edge.d}" ` +
-        `data-from="${escape(edge.from)}" data-to="${escape(edge.to)}"/>`,
-    )
+        `data-from="${escape(edge.from)}" data-to="${escape(edge.to)}"/>`;
+      const legs = edge.cls === "fail" ? litOf.get(`${edge.from}→${edge.to}`) : undefined;
+      return legs === undefined || legs.length === 0 || total <= 0
+        ? base
+        : base + renderLitEdge(edge, legs, total, layout.walkSeconds);
+    })
     .join("");
 }
 
@@ -360,9 +407,12 @@ function renderLayout(layout: PlateLayout, state: PlateState | undefined): strin
   ].filter((part) => part !== null);
   const desc = parts.join(" ");
   const cls = layout.orientation === "vertical" ? "plate-svg plate-v" : "plate-svg plate-h";
-  // The overlay's CSS rides only on a stateful render: a stateless plate
-  // stays byte-identical to the catalogue's own drawing.
-  const style = plateStyle() + (state === undefined ? "" : stateStyle());
+  // The overlays' CSS rides only on a stateful or a fail-lit render: a
+  // plain plate stays byte-identical to the catalogue's own drawing.
+  const style =
+    plateStyle() +
+    (state === undefined ? "" : stateStyle()) +
+    (layout.walkFails.length === 0 ? "" : litStyle());
   return (
     `<svg class="${cls}" viewBox="0 0 ${layout.width} ${layout.height}" ` +
     `width="${Math.round(layout.width * PLATE_SCALE)}" height="${Math.round(layout.height * PLATE_SCALE)}" ` +
@@ -389,13 +439,23 @@ function renderLayout(layout: PlateLayout, state: PlateState | undefined): strin
  * cross badge and a red stroke, and every marked unit a `<title>` naming
  * its state. Without the state the output is byte-identical to the plain
  * plate.
+ *
+ * The optional `random` decides the animated walk's fail edges: at a unit
+ * carrying one, a draw below FAIL_CHANCE rides it, at most FAIL_CAP per
+ * walk, and the ridden edge lights while the walker is on it. The default
+ * draw never fails a unit — the pure happy path — so a caller that passes
+ * none keeps the old walk, byte for byte.
  */
 export function renderPlate(
   document: GraphDocument,
   orientation: Orientation = "horizontal",
   state?: PlateState,
+  random: () => number = happyRandom,
 ): string {
-  const layout = orientation === "vertical" ? layoutPlateVertical(document) : layoutPlate(document);
+  const layout =
+    orientation === "vertical"
+      ? layoutPlateVertical(document, random)
+      : layoutPlate(document, random);
   return layout === null ? "" : renderLayout(layout, state);
 }
 

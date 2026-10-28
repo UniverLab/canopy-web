@@ -39,8 +39,7 @@ import {
   groupTitle,
   groupWidth,
   num,
-  passChain,
-  passWalk,
+  plateWalk,
   smooth,
   type PlacedEdge,
   type PlacedGroup,
@@ -48,6 +47,7 @@ import {
   type PlateLayout,
 } from "./layout.js";
 import { rankUnits } from "./rank.js";
+import { generateWalk, happyRandom } from "./walk.js";
 import { GEOM, TYPE, type Pt } from "./vocabulary.js";
 
 /** Gap between two units side by side in one rank (viewBox units). */
@@ -100,7 +100,10 @@ function labelsWidth(name: string, w: number, harness: string | null): number {
   return w / 2 + V_LABEL_DX + Math.max(nameWidth, harnessWidth);
 }
 
-export function layoutPlateVertical(document: unknown): PlateLayout | null {
+export function layoutPlateVertical(
+  document: unknown,
+  random: () => number = happyRandom,
+): PlateLayout | null {
   const parsed = parseDocument(document);
   if (parsed === null) {
     return null;
@@ -406,7 +409,9 @@ export function layoutPlateVertical(document: unknown): PlateLayout | null {
     ),
   }));
 
-  // The token walks the main pass chain through this orientation's curves.
+  // The token walks the walk — the pass chain with its fail detours —
+  // through this orientation's curves. A fail leg rides the arc of the
+  // drawn fail edge it took, at the same curve reach, centre to centre.
   const centres = new Map<string, Pt>();
   for (const node of nodes) {
     centres.set(node.name, { x: node.x, y: node.y });
@@ -414,10 +419,21 @@ export function layoutPlateVertical(document: unknown): PlateLayout | null {
   for (const group of groups) {
     centres.set(group.name, { x: group.x, y: group.y });
   }
-  const walked = passWalk(
-    passChain(parsed, entry, centres),
-    (a, b) => edgePathV(a, b, false),
-  );
+  const steps = generateWalk(parsed, entry === null ? null : entry.name, new Set(centres.keys()), random);
+  const failStyle = new Map<string, { lift: number; forceArc: boolean }>();
+  for (const edge of raw) {
+    if (edge.cls !== "fail") {
+      continue;
+    }
+    const key = `${edge.from}→${edge.to}`;
+    if (!failStyle.has(key)) {
+      failStyle.set(key, { lift: lifts.get(edge) ?? 0, forceArc: edge.forceArc });
+    }
+  }
+  const walked = plateWalk(steps, centres, (a, b, step) => {
+    const style = step.fail === true ? failStyle.get(`${step.from}→${step.to}`) : undefined;
+    return edgePathV(a, b, step.fail, style?.lift ?? 0, style?.forceArc ?? false);
+  });
 
   const order = [...nodes]
     .sort((a, b) => a.rank - b.rank || a.x - b.x || (a.name < b.name ? -1 : 1))
@@ -431,8 +447,9 @@ export function layoutPlateVertical(document: unknown): PlateLayout | null {
     edges,
     width: num(maxX - minX + PAD_X * 2),
     height: num(maxY - minY + PAD_TOP + PAD_BOTTOM),
-    walk: walked?.walk ?? null,
-    walkSeconds: walked?.seconds ?? 0,
+    walk: walked.walk,
+    walkSeconds: walked.seconds,
+    walkFails: walked.fails,
     order,
   };
 }

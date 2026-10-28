@@ -11,20 +11,13 @@
  * lower lane.
  *
  * Everything here is total and deterministic: unknown shapes are skipped,
- * every sort has a full tiebreak, and there is no randomness — so plates
- * and their snapshots are stable byte for byte.
+ * every sort has a full tiebreak, and the only randomness is the walk's
+ * own injected `random()` — whose default never fails a unit — so plates
+ * and their snapshots stay stable byte for byte.
  */
-import {
-  classOf,
-  isRankCondition,
-  parseDocument,
-  shapeOf,
-  type EdgeClass,
-  type NodeView,
-  type ParsedGraph,
-  type Strategy,
-} from "./document.js";
+import { classOf, parseDocument, shapeOf, type EdgeClass, type Strategy } from "./document.js";
 import { rankUnits } from "./rank.js";
+import { generateWalk, happyRandom, STEP_SECONDS, type WalkStep } from "./walk.js";
 import { GEOM, TYPE, edgePath, type Kind, type Pt } from "./vocabulary.js";
 
 /** The plate's two orientations: ranks left to right, or top to bottom. */
@@ -112,9 +105,11 @@ export interface PlateLayout {
   edges: PlacedEdge[];
   width: number;
   height: number;
-  /** The token's path along the main pass chain, null when there is none. */
+  /** The token's path along the walk, null when there is none. */
   walk: string | null;
   walkSeconds: number;
+  /** The walk's fail legs, by the drawn edge they rode — the renderer lights these. */
+  walkFails: WalkFail[];
   /** Node names in drawn order, for the svg `<desc>`. */
   order: string[];
 }
@@ -168,78 +163,55 @@ export function nodeBottom(y: number, harness: string | null): number {
 }
 
 /**
- * The token's chain: from the entry, the first outgoing pass edge in
- * document order, until it dead-ends or loops back. Centres come from the
- * placed layout, so both orientations walk the same chain.
+ * One drawn fail edge the walk rode, and the legs — zero-based indices
+ * into the walk — it rode them on: the renderer lights exactly these.
  */
-export function passChain(
-  parsed: ParsedGraph,
-  entry: NodeView | null,
-  centres: Map<string, Pt>,
-): Pt[] {
-  if (entry === null) {
-    return [];
-  }
-  const nodeNames = new Set(parsed.nodes.map((node) => node.name));
-  const chain: Pt[] = [];
-  const seen = new Set<string>();
-  let current: string | null = entry.name;
-  const first = centres.get(current);
-  if (first !== undefined) {
-    chain.push(first);
-    seen.add(current);
-  }
-  const passOut = new Map<string, string>();
-  for (const edge of parsed.edges) {
-    if ((edge.condition === "pass" || edge.condition === "always" || isRankCondition(edge.condition)) &&
-      !passOut.has(edge.from) && nodeNames.has(edge.from) && nodeNames.has(edge.to)) {
-      passOut.set(edge.from, edge.to);
-    }
-  }
-  for (const ensemble of parsed.ensembles) {
-    if (ensemble.entryFrom !== null && !ensemble.entryFrom.startsWith("ensemble:") &&
-      !passOut.has(ensemble.entryFrom) && isRankCondition(ensemble.entryCondition)) {
-      passOut.set(ensemble.entryFrom, ensemble.name);
-    }
-    if (ensemble.onPassTo !== null && !ensemble.onPassTo.startsWith("ensemble:") &&
-      nodeNames.has(ensemble.onPassTo)) {
-      passOut.set(ensemble.name, ensemble.onPassTo);
-    }
-  }
-  while (current !== null) {
-    const next: string | null = passOut.get(current) ?? null;
-    if (next === null || seen.has(next)) {
-      break;
-    }
-    const point = centres.get(next);
-    if (point === undefined) {
-      break;
-    }
-    chain.push(point);
-    seen.add(next);
-    current = next;
-  }
-  return chain;
+export interface WalkFail {
+  from: string;
+  to: string;
+  legs: number[];
 }
 
 /**
- * The token's path along a chain: one leg per step through the
- * orientation's own edge curve, at 0.9 seconds a step. Null when the chain
- * is too short to walk.
+ * The token's path over the walk's steps: one leg per step through the
+ * orientation's own edge curve, at STEP_SECONDS a leg — fail legs alike,
+ * at the same speed as pass ones. Each ridden fail edge is reported back
+ * with the legs it carried, so the renderer can light it. Null when the
+ * walk has no legs.
  */
-export function passWalk(
-  chain: Pt[],
-  leg: (a: Pt, b: Pt) => string,
-): { walk: string; seconds: number } | null {
-  if (chain.length < 2) {
-    return null;
+export function plateWalk(
+  steps: WalkStep[],
+  centres: Map<string, Pt>,
+  curve: (a: Pt, b: Pt, step: WalkStep) => string,
+): { walk: string | null; seconds: number; fails: WalkFail[] } {
+  const first = steps[0];
+  const start = first === undefined ? undefined : centres.get(first.from);
+  const legs: string[] = [];
+  const fails = new Map<string, WalkFail>();
+  if (start === undefined) {
+    return { walk: null, seconds: 0, fails: [] };
   }
-  const legs = chain.slice(1).map((point, index) =>
-    smooth(leg(chain[index] as Pt, point)).replace(/^M[^C]+/, "")
-  );
+  for (const [index, step] of steps.entries()) {
+    const a = centres.get(step.from);
+    const b = centres.get(step.to);
+    if (a === undefined || b === undefined) {
+      break;
+    }
+    legs.push(smooth(curve(a, b, step)).replace(/^M[^C]+/, ""));
+    if (step.fail) {
+      const key = `${step.from}→${step.to}`;
+      const ridden = fails.get(key) ?? { from: step.from, to: step.to, legs: [] };
+      ridden.legs.push(index);
+      fails.set(key, ridden);
+    }
+  }
+  if (legs.length === 0) {
+    return { walk: null, seconds: 0, fails: [] };
+  }
   return {
-    walk: `M${chain[0]?.x} ${chain[0]?.y}${legs.join("")}`,
-    seconds: num((chain.length - 1) * 0.9),
+    walk: `M${start.x} ${start.y}${legs.join("")}`,
+    seconds: num(legs.length * STEP_SECONDS),
+    fails: [...fails.values()],
   };
 }
 
@@ -255,7 +227,7 @@ export function forceArcOf(cls: EdgeClass, fromId: string, toId: string): boolea
   );
 }
 
-export function layoutPlate(document: unknown): PlateLayout | null {
+export function layoutPlate(document: unknown, random: () => number = happyRandom): PlateLayout | null {
   const parsed = parseDocument(document);
   if (parsed === null) {
     return null;
@@ -552,7 +524,9 @@ export function layoutPlate(document: unknown): PlateLayout | null {
     ),
   }));
 
-  // The token walks the main pass chain through this orientation's curves.
+  // The token walks the walk — the pass chain with its fail detours —
+  // through this orientation's curves. A fail leg rides the arc of the
+  // drawn fail edge it took, at the same curve lift, centre to centre.
   const centres = new Map<string, Pt>();
   for (const node of nodes) {
     centres.set(node.name, { x: node.x, y: node.y });
@@ -560,10 +534,21 @@ export function layoutPlate(document: unknown): PlateLayout | null {
   for (const group of groups) {
     centres.set(group.name, { x: group.x, y: group.y });
   }
-  const walked = passWalk(
-    passChain(parsed, entry, centres),
-    (a, b) => edgePath(a, b, false),
-  );
+  const steps = generateWalk(parsed, entry === null ? null : entry.name, new Set(centres.keys()), random);
+  const failStyle = new Map<string, { lift: number; forceArc: boolean }>();
+  for (const edge of raw) {
+    if (edge.cls !== "fail") {
+      continue;
+    }
+    const key = `${edge.from}→${edge.to}`;
+    if (!failStyle.has(key)) {
+      failStyle.set(key, { lift: lifts.get(edge) ?? 0, forceArc: edge.forceArc });
+    }
+  }
+  const walked = plateWalk(steps, centres, (a, b, step) => {
+    const style = step.fail === true ? failStyle.get(`${step.from}→${step.to}`) : undefined;
+    return edgePath(a, b, step.fail, style?.lift ?? 0, style?.forceArc ?? false);
+  });
 
   const order = [...nodes]
     .sort((a, b) => a.rank - b.rank || a.y - b.y || (a.name < b.name ? -1 : 1))
@@ -577,8 +562,9 @@ export function layoutPlate(document: unknown): PlateLayout | null {
     edges,
     width: num(maxX - minX + PAD_X * 2),
     height: num(maxY - minY + PAD_TOP + PAD_BOTTOM),
-    walk: walked?.walk ?? null,
-    walkSeconds: walked?.seconds ?? 0,
+    walk: walked.walk,
+    walkSeconds: walked.seconds,
+    walkFails: walked.fails,
     order,
   };
 }

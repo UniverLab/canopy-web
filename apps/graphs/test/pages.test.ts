@@ -6,7 +6,7 @@
  * fresh in-memory KV, then renders with an empty upstream — no page may
  * reach GitHub.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { NOT_PAGE, handlePage } from "../src/pages/routes.js";
 import { linkAttrs } from "../src/pages/layout.js";
 import { BLOCKED_HEADING, INDEXING_BODY, INDEXING_HEADING, COMMUNITY_GRAPHS_HEADING, COMMUNITY_NODES_HEADING, COPY_BUTTON, EMPTY_OFFICIAL_GRAPHS, EMPTY_OFFICIAL_NODES, OFFICIAL_GRAPHS_HEADING, OFFICIAL_NODES_HEADING, REPORT_LABEL, REPORT_REPO_LABEL, SEARCH_BUTTON, SEARCH_LABEL } from "../src/pages/copy.js";
@@ -23,6 +23,11 @@ import { communityStubs, flowSearchStubs, officialStubs, REPO_DIR, searchStubs }
 
 const ORIGIN = "https://graphs.univerlab.org";
 const HTML = { "content-type": "text/html" };
+
+// The plates seed their animated walk's fail edges from the clock, so a
+// page's drawing varies per render — pin the clock once for this file and
+// every route snapshot carries the same walk, fail detours and all.
+vi.spyOn(Date, "now").mockReturnValue(1_700_000_000_000);
 
 interface Options {
   stubs?: Stub[];
