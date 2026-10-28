@@ -538,6 +538,15 @@ describe("the body sanitizer", () => {
     expect(html).toContain(`<a href="https://example.com/good" rel="nofollow">Good</a>`);
     expect(html).not.toContain(`href="javascript:`);
     expect(html).toContain(`<li>Bad</li>`);
+    // The twin degrades the same URL to text: it generates this link
+    // itself, so it never hands agents a target the page would refuse.
+    const twin = await (await call("/patterns/linked", {
+      stubs: [...officialStubs(), ...patternStubs([page])],
+      accept: "text/markdown",
+    })).text();
+    expect(twin).toContain(`- [Good](https://example.com/good)`);
+    expect(twin).not.toContain(`javascript:`);
+    expect(twin.split("\n")).toContain(`- Bad`);
   });
 });
 

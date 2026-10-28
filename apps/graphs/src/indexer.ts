@@ -543,8 +543,9 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
 
     // The pattern pages, from the official repository's `main` only. A halt
     // (a rate limit mid-read) or a spent budget stops the run like any other
-    // stop, with nothing committed; an unreadable directory keeps the
-    // previous patterns instead of emptying them.
+    // stop — truncated with carry-over, the catalogue still committed — and
+    // the previous patterns stay because this run never read them end to
+    // end; an unreadable directory keeps them too instead of emptying them.
     const patternsInvalid = state.invalid.length;
     try {
       const read = await fetchOfficialPatterns(state.github, state.log);

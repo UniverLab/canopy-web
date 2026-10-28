@@ -194,7 +194,11 @@ export function patternPage(pattern: StoredPattern, rows: ImplementsRow[]): Page
     pattern.body.endsWith("\n") || pattern.body === "" ? pattern.body : `${pattern.body}\n`,
     `## ${PATTERN_SOURCES_HEADING}`,
     ``,
-    ...pattern.sources.map((source) => `- [${mdText(source.title)}](${source.url})`),
+    // The twin degrades an unsafe URL to text like the page does: it
+    // generates this link itself, so it never hands agents a target the
+    // HTML side would have refused.
+    ...pattern.sources.map((source) =>
+      isSafeUrl(source.url) ? `- [${mdText(source.title)}](${source.url})` : `- ${mdText(source.title)}`),
     ``,
     `## ${IMPLEMENTED_BY_HEADING}`,
     ``,
