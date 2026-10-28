@@ -167,6 +167,32 @@ export function communityWarningMarkdown(href: string): string {
   return `> ${COMMUNITY_WARNING.replace(COMMUNITY_WARNING_LINK, `[${COMMUNITY_WARNING_LINK}](${href})`)}`;
 }
 
+/** The draft banner: unreviewed, expiring, and gone after one install. */
+export const DRAFT_BANNER_LEAD = "Unreviewed draft. It expires at";
+export const DRAFT_BANNER_TAIL = "and disappears after its first install.";
+
+/** The draft banner as a twin blockquote line, with the time as text. */
+export function draftBannerMarkdown(when: string): string {
+  return `> ${DRAFT_BANNER_LEAD} ${when} ${DRAFT_BANNER_TAIL}`;
+}
+
+/** A draft's expiry as `YYYY-MM-DD HH:MM UTC`; the raw value when unreadable. */
+export function draftTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return iso;
+  }
+  const pad = (value: number): string => String(value).padStart(2, "0");
+  return (
+    `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ` +
+    `${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())} UTC`
+  );
+}
+
+/** The 404 a draft page answers once the draft is unknown or expired. */
+export const DRAFT_MISSING_HEADING = "Draft not found";
+export const DRAFT_MISSING_BODY = "A draft lasts 30 minutes or one install. This one is gone.";
+
 /** The UniverLab colophon: the product line, its experiment and its links. */
 export const COLOPHON_PRODUCT = "Canopy graphs";
 export const COLOPHON_EXP = "EXP-001";

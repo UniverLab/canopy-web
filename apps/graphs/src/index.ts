@@ -13,10 +13,12 @@
  * either a 302 to the document on GitHub or a 400/404 explaining why
  * not. The Worker never fetches or proxies the document: GitHub stays
  * the download origin and the trust anchor, so this adds no
- * supply-chain surface beyond a redirect. The one exception is an
- * explicit `?ref=`: a pinned ref is not in the index, so the Worker
- * fetches that ref live through the cached client and validates it
- * before redirecting.
+ * supply-chain surface beyond a redirect. There are two deliberate
+ * exceptions. An explicit `?ref=`: a pinned ref is not in the index, so
+ * the Worker fetches that ref live through the cached client and
+ * validates it before redirecting. And `GET /i/draft/<id>`: a draft the
+ * Worker itself stored for 30 minutes (drafts.ts) is served once and
+ * deleted, because a draft has no repository to redirect to.
  *
  * A Cron Trigger also wakes the Worker every 15 minutes to rebuild the
  * index into KV (indexer.ts). Until the first run lands, data routes
@@ -43,6 +45,7 @@ import { handleAgentFiles, NOT_AGENT_FILE } from "./agent-files.js";
 import { handleApi, type ApiEnv } from "./api.js";
 import { handlePage, NOT_PAGE } from "./pages/routes.js";
 import { createGitHub, type CacheLike } from "./github.js";
+import { consumeDraft } from "./drafts.js";
 import { documentDirectory, loadDocument } from "./documents.js";
 import { entryFor } from "./catalog.js";
 import { runIndexer } from "./indexer.js";
@@ -150,7 +153,7 @@ function firstSegment(pathname: string): string {
 function isPagePath(pathname: string): boolean {
   const first = firstSegment(pathname);
   return first === "" || first === "search" || first === "llms.txt" || first === "g" || first === "n" ||
-    first === "publish" || first === "publish.md";
+    first === "d" || first === "publish" || first === "publish.md";
 }
 
 /** The injected transport and cache: production defaults, test overrides. */
@@ -285,11 +288,58 @@ async function installAtRef(
 }
 
 /**
+ * The countable parts of a draft install. A draft has no owner, repository or
+ * slug, so it uses the same `?` placeholders a rejected request carries; the
+ * kind is the one fact the analytics needs: `draft`.
+ */
+function draftParts(id: string): Parts {
+  return { kind: "draft", owner: "?", repo: "?", slug: id };
+}
+
+/**
+ * `/i/draft/<id>`: the one-use download. Claimed at the top of `install()`
+ * because `parseTarget` would read `draft` as a kind and answer 400. The
+ * draft is read, deleted (best effort — KV deletes are eventually
+ * consistent) and answered as the document JSON, `no-store`.
+ */
+async function installDraft(req: Request, env: Env, url: URL): Promise<Response | null> {
+  const segments = url.pathname.replace(/^\/+/, "").split("/");
+  if (segments[0] !== "i" || segments[1] !== "draft") {
+    return null;
+  }
+  const id = segments.length === 3 ? segments[2] ?? "" : "";
+  const kv = env.DRAFTS;
+  if (kv === undefined) {
+    return textResponse("drafts are unavailable\n", 503);
+  }
+  if (segments.length !== 3) {
+    return textResponse("no draft; a draft lasts 30 minutes or one install\n", 404);
+  }
+  const draft = await consumeDraft(kv, id);
+  if (draft === null) {
+    record(env, req, draftParts(id), "bad-request");
+    return textResponse(`no draft named ${id}; a draft lasts 30 minutes or one install\n`, 404);
+  }
+  record(env, req, draftParts(id), "redirect");
+  return new Response(`${JSON.stringify(draft.document, null, 2)}\n`, {
+    status: 200,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+    },
+  });
+}
+
+/**
  * The install redirector: the index verifies the document exists, then a
  * 302 to the document on GitHub, or a 400/404 explaining why not. An
  * explicit `?ref=` is not in the index, so it is fetched live instead.
  */
 async function install(req: Request, env: Env, url: URL, deps: WorkerDeps): Promise<Response> {
+  const draft = await installDraft(req, env, url);
+  if (draft !== null) {
+    return draft;
+  }
   const parsed = parseTarget(url.pathname, url.searchParams.get("ref"));
 
   if (!parsed.ok) {

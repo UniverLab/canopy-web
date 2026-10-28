@@ -14,6 +14,12 @@ compatibility_date = "2026-10-26"
 binding = "INDEX"
 id = "e2e-index"
 
+# The draft namespace, in memory: the e2e fixture serves drafts created
+# during the run and loses them with the process.
+[[kv_namespaces]]
+binding = "DRAFTS"
+id = "e2e-drafts"
+
 # The generated look kit, exactly as the deploy serves it. The pages are
 # rendered, so an asset miss must fall through to this fixture Worker.
 [assets]

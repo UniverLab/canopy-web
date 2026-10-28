@@ -103,12 +103,24 @@ export function fakeFetch(stubs: Stub[]): FakeFetch {
 export class FakeKV implements KV {
   private entries = new Map<string, string>();
 
+  /** Every `put` the code made, with the TTL it asked for. */
+  putOptions: Array<{ key: string; expirationTtl?: number }> = [];
+
   get(key: string): Promise<string | null> {
     return Promise.resolve(this.entries.get(key) ?? null);
   }
 
-  put(key: string, value: string): Promise<void> {
+  put(
+    key: string,
+    value: string,
+    options?: { expirationTtl?: number },
+  ): Promise<void> {
     this.entries.set(key, value);
+    this.putOptions.push(
+      options?.expirationTtl === undefined
+        ? { key }
+        : { key, expirationTtl: options.expirationTtl },
+    );
     return Promise.resolve();
   }
 
@@ -141,8 +153,30 @@ export class FakeKV implements KV {
   }
 }
 
-/** Standard base64 of a text, the contents-API encoding. */
-export function encoded(text: string): string {
+/**
+ * A rate-limiting binding stand-in: the same `{ success }` answer the
+ * Workers binding gives, and every key it was asked about. `allowed` is how
+ * many calls succeed; the rest are refused, which is the 429 path.
+ */
+export class FakeRateLimit {
+  readonly keys: string[] = [];
+  private remaining: number;
+
+  constructor(allowed: number = Number.POSITIVE_INFINITY) {
+    this.remaining = allowed;
+  }
+
+  limit(options: { key: string }): Promise<{ success: boolean }> {
+    this.keys.push(options.key);
+    const success = this.remaining > 0;
+    if (success) {
+      this.remaining -= 1;
+    }
+    return Promise.resolve({ success });
+  }
+}
+
+/** Standard base64 of a text, the contents-API encoding. */export function encoded(text: string): string {
   return btoa(text);
 }
 

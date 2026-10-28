@@ -136,7 +136,7 @@ describe("the API catalogue", () => {
 });
 
 describe("the OpenAPI description", () => {
-  it("answers /api/openapi.json with an OpenAPI 3.1 document for the five routes", async () => {
+  it("answers /api/openapi.json with an OpenAPI 3.1 document for the seven routes", async () => {
     const response = await call("/api/openapi.json");
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("application/json; charset=utf-8");
@@ -147,6 +147,8 @@ describe("the OpenAPI description", () => {
     };
     expect(body.openapi).toBe("3.1.0");
     expect(Object.keys(body.paths).sort()).toEqual([
+      "/api/drafts",
+      "/api/drafts/{id}",
       "/api/g/{owner}/{repo}/{slug}",
       "/api/index-status",
       "/api/n/{owner}/{repo}/{slug}",

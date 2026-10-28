@@ -169,9 +169,10 @@ function indexingRef(): Record<string, unknown> {
 /**
  * The OpenAPI 3.1 description of exactly the routes `api.ts` documents in
  * its header — `/api/official`, `/api/search`, `/api/g/{owner}/{repo}/{slug}`,
- * `/api/n/{owner}/{repo}/{slug}` and `/api/index-status` — with their
- * response shapes and the 400/404 error shape. A test pins every route
- * `api.ts` parses to a path here, so the two cannot drift.
+ * `/api/n/{owner}/{repo}/{slug}`, `/api/index-status`, `POST /api/drafts` and
+ * `GET /api/drafts/{id}` — with their response shapes and the 400/404 error
+ * shape. A test pins every route `api.ts` parses to a path here, so the two
+ * cannot drift.
  */
 export function openApiDocument(): Record<string, unknown> {
   const ownerParam = (name: string, description: string): Record<string, unknown> => ({
@@ -316,6 +317,67 @@ export function openApiDocument(): Record<string, unknown> {
           },
         },
       },
+      "/api/drafts": {
+        post: {
+          operationId: "createDraft",
+          summary: "Store a validated, harness-free graph or node draft for 30 minutes.",
+          description:
+            "The one write surface of the catalogue. Drafts are the deliberate exception to " +
+            "the redirect-only contract: they live in KV for at most 30 minutes, the first " +
+            "install deletes one, and the page carries noindex. At most 10 per minute per " +
+            "client IP when the rate-limiting binding is present.",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/DraftRequest" },
+              },
+            },
+          },
+          responses: {
+            "201": {
+              description: "The draft was stored; install it once before it expires.",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/DraftCreated" },
+                },
+              },
+            },
+            "400": {
+              description: "The body is malformed, or the document did not validate.",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/DraftInvalid" },
+                },
+              },
+            },
+            "413": errorRef("The body is larger than 256 KiB."),
+            "429": errorRef("More than 10 drafts were created from this client in one minute."),
+            "503": errorRef("Draft storage is not configured on this deployment."),
+          },
+        },
+      },
+      "/api/drafts/{id}": {
+        get: {
+          operationId: "readDraft",
+          summary: "One stored draft, without consuming it.",
+          parameters: [
+            ownerParam("id", "The draft id: 26 characters of lowercase Crockford base32."),
+          ],
+          responses: {
+            "200": {
+              description: "The stored draft; reading it never deletes it.",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Draft" },
+                },
+              },
+            },
+            "404": errorRef("No draft by that id: it expired, was installed, or never existed."),
+            "503": errorRef("Draft storage is not configured on this deployment."),
+          },
+        },
+      },
     },
     components: {
       schemas: {
@@ -413,17 +475,82 @@ export function openApiDocument(): Record<string, unknown> {
             authenticated: { type: "boolean" },
           },
         },
+        DraftRequest: {
+          type: "object",
+          required: ["kind", "document"],
+          properties: {
+            kind: { type: "string", enum: ["graph", "node"] },
+            document: {
+              description: "The graph or node document; validated against schema/<kind> and harness-free.",
+              type: "object",
+            },
+          },
+        },
+        DraftCreated: {
+          type: "object",
+          required: ["id", "kind", "name", "expires_at", "page_url", "install"],
+          properties: {
+            id: { type: "string", pattern: "^[0-9a-hjkmnp-tv-z]{26}$" },
+            kind: { type: "string", enum: ["graph", "node"] },
+            name: { type: "string", description: "The document's own name." },
+            expires_at: { type: "string", format: "date-time" },
+            page_url: { type: "string", format: "uri", description: "The /d/<id> page." },
+            install: {
+              type: "string",
+              description: "The exact command: canopy graph install draft:<id> or canopy node install draft:<id>.",
+            },
+          },
+        },
+        Draft: {
+          type: "object",
+          required: ["kind", "document", "expires_at"],
+          properties: {
+            kind: { type: "string", enum: ["graph", "node"] },
+            document: { type: "object" },
+            expires_at: { type: "string", format: "date-time" },
+          },
+        },
+        DraftInvalid: {
+          type: "object",
+          required: ["kind", "message", "status", "problems", "total"],
+          properties: {
+            kind: { type: "string", enum: ["invalid-document"] },
+            message: { type: "string" },
+            status: { type: "integer", enum: [400] },
+            problems: {
+              type: "array",
+              description: "The first 20 problems, each with a JSON pointer.",
+              items: {
+                type: "object",
+                required: ["path", "message"],
+                properties: {
+                  path: { type: "string", description: "A JSON pointer, e.g. #/nodes/0/config/platform." },
+                  message: { type: "string" },
+                },
+              },
+            },
+            total: { type: "integer", description: "How many problems the document had, across all of them." },
+          },
+        },
         Error: {
           type: "object",
           required: ["kind", "message", "status"],
           properties: {
             kind: {
               type: "string",
-              enum: ["invalid-query", "invalid-path", "invalid-document"],
-              description: "invalid-query and invalid-path answer 400; invalid-document answers 404.",
+              enum: [
+                "invalid-query",
+                "invalid-path",
+                "invalid-document",
+                "invalid-body",
+                "too-large",
+                "rate-limited",
+                "unavailable",
+              ],
+              description: "invalid-document answers 404 for a missing document; the rest name their status.",
             },
             message: { type: "string" },
-            status: { type: "integer", enum: [400, 404] },
+            status: { type: "integer", enum: [400, 404, 413, 429, 503] },
           },
         },
         Indexing: {

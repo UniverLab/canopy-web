@@ -56,7 +56,9 @@ The write is fire-and-forget inside a `try/catch`: if the binding is missing
 ## JSON API (the catalogue's read surface)
 
 Pages and agents read a JSON view of the catalogue; GitHub is still the
-database, the Cache API is still the only state:
+database for published documents and the Cache API is still the read cache.
+The only values the Worker itself writes are drafts (below), in their own
+namespace and for 30 minutes:
 
 | Route | Answer |
 |---|---|
@@ -65,17 +67,21 @@ database, the Cache API is still the only state:
 | `GET /api/g/<owner>/<repo>/<slug>` | one graph document, validated JSON attached |
 | `GET /api/n/<owner>/<repo>/<slug>` | one node document, validated JSON attached |
 | `GET /api/index-status` | the last index run's accounting (invalid trimmed to 20) |
-| `GET /api/openapi.json` | OpenAPI 3.1 description of the five routes above |
+| `GET /api/openapi.json` | OpenAPI 3.1 description of every route in this table |
+| `POST /api/drafts` | `{id, kind, name, expires_at, page_url, install}` — store a draft for 30 minutes |
+| `GET /api/drafts/<id>` | `{kind, document, expires_at}` — the stored draft, never consumed |
 
 The `g`/`n` in a single-document route is the kind asked for: a slug that only
 exists under the other kind is a typed `404`, never a document of the wrong
 kind.
 
-Every answer carries `access-control-allow-origin: *` (GET only, OPTIONS →
-204) and short cache-control (60 s for search, 300 s otherwise). Errors are
-typed JSON bodies — `{kind, message, status, retryAfter?}` with kinds
-`rate-limit` (429), `not-found`/`invalid-document` (404), `upstream` (502),
-`invalid-path`/`invalid-query` (400) — so nothing the Worker fails at can
+Every answer carries `access-control-allow-origin: *` (GET and POST only, OPTIONS →
+204) and short cache-control (60 s for search, 300 s otherwise; `no-store`
+for drafts and errors). Errors are typed JSON bodies —
+`{kind, message, status, retryAfter?}` with kinds `rate-limit` (429),
+`not-found`/`invalid-document` (404), `upstream` (502),
+`invalid-path`/`invalid-query`/`invalid-body` (400), drafts' `too-large`
+(413), `rate-limited` (429) and `unavailable` (503) — so nothing the Worker fails at can
 turn into a 500 for an agent to choke on. `downloads` (90-day install
 counts) is attached when `CF_ACCOUNT_ID` + `CF_ANALYTICS_TOKEN` are set, and
 absent when not: counts are never zero-filled.
@@ -96,6 +102,41 @@ Every HTML page carries
 and every other `/.well-known/*` path answers `404`. The four files live in
 `src/agent-files.ts`, checked before the API router.
 
+## Drafts (share without a repository)
+
+A graph or node can be shared without creating a repo: `POST /api/drafts`
+stores a validated, harness-free document for **30 minutes** and answers what
+the other machine needs.
+
+| Route | Answer |
+|---|---|
+| `POST /api/drafts` | `{id, kind, name, expires_at, page_url, install}` (201); body `{kind, document}`, at most 256 KiB |
+| `GET /d/<id>` | the same document page as `/g` and `/n`, with an **unreviewed draft** banner; never consumes |
+| `GET /api/drafts/<id>` | `{kind, document, expires_at}`; never consumes, so the editor can reopen it |
+| `GET /i/draft/<id>` | the document JSON, `Cache-Control: no-store`, and then the draft is deleted |
+
+The id is 128 random bits from `crypto.getRandomValues`, lowercase Crockford
+base32 (26 characters, no padding). The document goes through the same
+validator `npm run validate` uses, plus the harness-free rule: `platform`,
+`model` and `cli` are refused (in a node's config, in a graph node's config and
+in an ensemble member). A body over 256 KiB is a 413; an invalid document is a
+400 whose `problems[]` carries each JSON pointer. `POST /api/drafts` is limited
+to 10 per minute per client IP by a Workers rate-limiting binding, and answers
+429 with `Retry-After` beyond that. Draft pages carry `noindex` and never appear
+in search, `/llms.txt` or `/sitemap.xml`.
+
+Drafts are the one deliberate exception to "the Worker never serves
+documents": they are short-lived, labelled unreviewed, and validated before
+they are stored, so GitHub stays the download origin for everything published.
+**KV deletes are eventually consistent**, so "one use" is best effort: the
+install deletes the key, but a second install within about a minute can still
+read it, and the key expires on its own at 30 minutes regardless.
+
+A draft with an unknown, spent or expired id answers 404 with a page that says
+drafts last 30 minutes or one install. Storage lives in `src/drafts.ts`; the
+`/d` page renders through the document page renderer in `src/pages/routes.ts`
+rather than a second template.
+
 ## Tests
 
 ```sh
@@ -109,7 +150,11 @@ listing, search with text and both orderings, invalid documents dropped, a
 cache hit on a second call, rate limits surfaced as typed errors, and counts
 present and absent. `npm test` runs it together with the document validator
 suite. The API tests use injected fakes (`apps/graphs/test/fakes.ts`),
-never stubbed globals.
+never stubbed globals. `drafts.test.ts` covers the whole draft path: create,
+read, install, gone; the 1800-second TTL; invalid documents with their paths;
+harness bindings; the 413 and the 429; the page banner, `noindex` and the
+promise that viewing never consumes; and that no draft reaches search,
+`llms.txt` or the sitemap.
 
 ## One-time setup (before the first deploy)
 

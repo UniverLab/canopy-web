@@ -47,6 +47,21 @@ dataset = "canopy_graph_installs"
 binding = "INDEX"
 id = "14f08f7af605474585288b2169d80d9b"
 
+# The drafts namespace: short-lived documents somebody shared without a
+# repository. TTL 1800 (drafts.ts) and the first install deletes the key.
+# Namespace canopy-graphs-drafts.
+[[kv_namespaces]]
+binding = "DRAFTS"
+id = "e2fde572c17a4abba6b55645f7fc969a"
+
+# The draft limiter: at most 10 drafts per minute per client IP, keyed on
+# CF-Connecting-IP. Optional in code — `wrangler dev` without it serves
+# unlimited drafts, like the tests do.
+[[ratelimits]]
+name = "DRAFT_LIMIT"
+namespace_id = "1001"
+simple = { limit = 10, period = 60 }
+
 # The index build, every 15 minutes. The schedule is mirrored by
 # INDEX_CRON in src/indexer.ts, which tells the pages what to promise.
 [triggers]
@@ -57,7 +72,7 @@ crons = ["*/15 * * * *"]
 # only the kit lives on disk. `run_worker_first` keeps the JSON API and the
 # install redirector in the Worker; every other request tries the assets
 # first and an asset miss falls through to the Worker, which is exactly the
-# catalogue's route table (/, /search, /g, /n, /llms.txt, /publish,
+# catalogue's route table (/, /search, /g, /n, /d, /llms.txt, /publish,
 # /robots.txt, /sitemap.xml, /.well-known/api-catalog, /api/openapi.json).
 [assets]
 directory = "public"

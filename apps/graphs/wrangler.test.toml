@@ -23,3 +23,10 @@ dataset = "canopy_graph_installs"
 [[kv_namespaces]]
 binding = "INDEX"
 id = "test-index"
+
+# The draft namespace, in memory like the index. No [[ratelimits]] here:
+# the tests run unlimited drafts by design, and cover the limiter with an
+# injected fake instead.
+[[kv_namespaces]]
+binding = "DRAFTS"
+id = "test-drafts"

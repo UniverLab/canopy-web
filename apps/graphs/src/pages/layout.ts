@@ -40,6 +40,12 @@ export interface Page {
   description: string;
   html: string;
   markdown: string;
+  /**
+   * True only for pages that must never be crawled: a draft, which is
+   * ephemeral and personal, emits the robots meta and is absent from the
+   * sitemap and llms.txt. Absent keeps the existing pages byte-identical.
+   */
+  noindex?: boolean;
 }
 
 /** True when the request prefers the markdown twin over HTML. */
@@ -71,6 +77,7 @@ function htmlDocument(q: string, page: Page): string {
     `<meta name="viewport" content="width=device-width, initial-scale=1">`,
     `<title>${title}</title>`,
     `<meta name="description" content="${description}">`,
+    ...(page.noindex === true ? [`<meta name="robots" content="noindex">`] : []),
     lookLinks(),
     `<style>`,
     lookCss(),
@@ -120,18 +127,24 @@ export function withMarkdownFooter(markdown: string): string {
 
 /**
  * Answer a page request: the markdown twin when asked for, the HTML shell
- * otherwise. Both carry a short public cache, like the JSON API's. The
- * HTML branch also carries the agent Link header (llms.txt and the API
- * catalogue), in univerlab.org's shape; the twin needs none.
+ * otherwise. Both carry a short public cache, like the JSON API's, unless the
+ * route names its own (a draft is `no-store`). The HTML branch also carries
+ * the agent Link header (llms.txt and the API catalogue), in univerlab.org's
+ * shape; the twin needs none.
  */
-export function page(req: Request, content: Page, status = 200): Response {
-  const cacheControl = status === 200 ? "public, max-age=300" : "no-store";
+export function page(
+  req: Request,
+  content: Page,
+  status = 200,
+  cacheControl?: string,
+): Response {
+  const cache = cacheControl ?? (status === 200 ? "public, max-age=300" : "no-store");
   if (wantsMarkdown(req)) {
     return new Response(withMarkdownFooter(content.markdown), {
       status,
       headers: {
         "content-type": "text/markdown; charset=utf-8",
-        "cache-control": cacheControl,
+        "cache-control": cache,
       },
     });
   }
@@ -140,7 +153,7 @@ export function page(req: Request, content: Page, status = 200): Response {
     status,
     headers: {
       "content-type": "text/html; charset=utf-8",
-      "cache-control": cacheControl,
+      "cache-control": cache,
       link: AGENT_LINK_HEADER,
     },
   });
