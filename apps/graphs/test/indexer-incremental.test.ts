@@ -6,8 +6,10 @@
  * pushed spends the official read plus discovery and writes only its meta,
  * a moved `pushed_at` revisits exactly that repository, a moved star count
  * refreshes the entry without a visit, a foreign ledger version rereads
- * everything, an unavailable repository stays pending with its entries, and
- * a repository a completed discovery drops loses its entries and its state.
+ * everything, an unavailable repository stays pending with its entries,
+ * a repository a completed discovery drops loses its entries and its state,
+ * an unreadable ledger rereads everything, changed repositories visit oldest
+ * visit first, and a failed discovery keeps every visit and entry.
  */
 import { describe, expect, it } from "vitest";
 import { createGitHub } from "../src/github.js";
@@ -342,5 +344,76 @@ describe("the incremental visit", () => {
       pushed_at: PUSHED,
       visited_at: ISO1,
     });
+  });
+
+  it("rereads every repository when the ledger does not parse", async () => {
+    const { kv, table, names } = await settled();
+    await kv.put(REPOS_KEY, "not json{");
+
+    const next = await run(table, { kv, budget: 42, now: () => T3 });
+
+    expect(next.meta.repos_visited).toBe(40);
+    expect(next.meta.repos_pending).toBe(20);
+    expect(next.meta.repos_unchanged).toBe(0);
+    expect(next.meta.truncated).toBe(true);
+    expect(visitedCommunityRepos(next.fake)).toEqual(names.slice(0, 40));
+    const repos = await storedRepos(kv);
+    expect(repos.version).toBe(INDEXER_VERSION);
+    expect(repos.repos["acme/r-001"]).toEqual({ pushed_at: PUSHED, visited_at: ISO3 });
+  });
+
+  it("visits the oldest visit first when several repositories changed", async () => {
+    const kv = new FakeKV();
+    const names = repoNames(60);
+    const table = [officialSnapshotStub(), searchStub(names), ...names.map(repoSnapshot)];
+    await run(table, { kv, budget: 42, now: () => T1 });
+    await run(table, { kv, now: () => T2 });
+
+    // r-001 was visited at T1, r-050 at T2, but discovery now lists r-050
+    // first: the resume order follows the oldest visit, not the listing.
+    const reordered = names.filter((name) => name !== "r-001" && name !== "r-050");
+    reordered.unshift("r-050", "r-001");
+    const bumped = new Set(["r-001", "r-050"]);
+    const third = await run(
+      [
+        officialSnapshotStub(),
+        searchStub(reordered, { pushedAt: (name) => (bumped.has(name) ? PUSHED_NEW : PUSHED) }),
+        ...names.map(repoSnapshot),
+      ],
+      { kv, budget: 3, now: () => T3 },
+    );
+
+    expect(third.meta.repos_visited).toBe(1);
+    expect(third.meta.repos_pending).toBe(1);
+    expect(third.meta.repos_unchanged).toBe(58);
+    expect(third.meta.truncated).toBe(true);
+    expect(third.meta.stopped).toBe("budget of 3 subrequests reached");
+    expect(visitedCommunityRepos(third.fake)).toEqual(["r-001"]);
+    const repos = await storedRepos(kv);
+    expect(repos.repos["acme/r-001"]).toEqual({ pushed_at: PUSHED_NEW, visited_at: ISO3 });
+    expect(repos.repos["acme/r-050"]).toEqual({ pushed_at: PUSHED, visited_at: ISO2 });
+  });
+
+  it("keeps the visits and entries of a discovery it could not read", async () => {
+    const { kv } = await settled();
+    const beforeRepos = await kv.get(REPOS_KEY);
+    const beforeIndex = await kv.get("index:v1");
+
+    kv.putOptions.length = 0;
+    const next = await run(
+      [officialSnapshotStub(), { url: "search/repositories", status: 500, body: {} }],
+      { kv, now: () => T3 },
+    );
+
+    // A failed page proves nothing gone: no visit, no prune, no deletion.
+    expect(next.meta.repos_visited).toBe(0);
+    expect(next.meta.repos_pending).toBe(0);
+    expect(next.meta.repos_unchanged).toBe(0);
+    expect(next.meta.truncated).toBe(false);
+    expect(next.meta.documents).toBe(72);
+    expect(kv.putOptions.map((option) => option.key)).toEqual(["index:meta"]);
+    expect(await kv.get(REPOS_KEY)).toBe(beforeRepos);
+    expect(await kv.get("index:v1")).toBe(beforeIndex);
+    expect(Object.keys((await storedRepos(kv)).repos)).toHaveLength(60);
   });
 });

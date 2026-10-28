@@ -91,8 +91,13 @@ export async function connectRelay(harness: RelayHarness): Promise<FakeWebSocket
 
 export const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
-export async function waitForSend(ws: FakeWebSocket): Promise<void> {
-  for (let i = 0; i < 200 && ws.sent.length === 0; i += 1) {
+// Waits for the socket's first send. The budget is wall-clock, not a tick
+// count: the pairing handshake derives K_pair (600k-iteration PBKDF2) before
+// it can send anything, and a loaded machine makes that slow enough to outlast
+// a fixed number of timer ticks.
+export async function waitForSend(ws: FakeWebSocket, timeoutMs = 5000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (ws.sent.length === 0 && Date.now() < deadline) {
     await flush();
   }
   if (ws.sent.length === 0) {
