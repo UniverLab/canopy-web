@@ -6,6 +6,11 @@
  * at the bottom. The ten art lines are byte-identical to the `BANNER`
  * block `banner.rs` prints — trailing spaces included, never retyped.
  * Pair with banner.css; `npm run build:look` copies both into the apps.
+ *
+ * The header banners below are the same font rendered once with
+ * figlet@1.5.0 (`textSync(word, { font: "DOS Rebel" })`), proven against
+ * the canopy block (lines 1-9 reproduce byte-identical) and committed as
+ * static art — no runtime figlet.
  */
 
 /** The ten DOS Rebel art lines, exactly as `banner.rs` prints them. */
@@ -23,6 +28,40 @@ export const BANNER_LINES: readonly string[] = [
 ];
 
 /**
+ * The two header banners: "graphs" and "remote" in DOS Rebel, eleven
+ * lines each, byte-identical to the generator — trailing spaces
+ * included. Every graphs line carries ink; the remote's three trailing
+ * blanks keep both headers on the one scale in banner.css.
+ */
+export const GRAPHS_BANNER_LINES: readonly string[] = [
+  "                                        █████             ",
+  "                                       ░░███              ",
+  "  ███████ ████████   ██████   ████████  ░███████    █████ ",
+  " ███░░███░░███░░███ ░░░░░███ ░░███░░███ ░███░░███  ███░░  ",
+  "░███ ░███ ░███ ░░░   ███████  ░███ ░███ ░███ ░███ ░░█████ ",
+  "░███ ░███ ░███      ███░░███  ░███ ░███ ░███ ░███  ░░░░███",
+  "░░███████ █████    ░░████████ ░███████  ████ █████ ██████ ",
+  " ░░░░░███░░░░░      ░░░░░░░░  ░███░░░  ░░░░ ░░░░░ ░░░░░░  ",
+  " ███ ░███                     ░███                        ",
+  "░░██████                      █████                       ",
+  " ░░░░░░                      ░░░░░                        ",
+];
+
+export const REMOTE_BANNER_LINES: readonly string[] = [
+  "                                              █████            ",
+  "                                             ░░███             ",
+  " ████████   ██████  █████████████    ██████  ███████    ██████ ",
+  "░░███░░███ ███░░███░░███░░███░░███  ███░░███░░░███░    ███░░███",
+  " ░███ ░░░ ░███████  ░███ ░███ ░███ ░███ ░███  ░███    ░███████ ",
+  " ░███     ░███░░░   ░███ ░███ ░███ ░███ ░███  ░███ ███░███░░░  ",
+  " █████    ░░██████  █████░███ █████░░██████   ░░█████ ░░██████ ",
+  "░░░░░      ░░░░░░  ░░░░░ ░░░ ░░░░░  ░░░░░░     ░░░░░   ░░░░░░  ",
+  "                                                               ",
+  "                                                               ",
+  "                                                               ",
+];
+
+/**
  * The five legible Canopy scale stops, light at the top of the banner
  * to dark at the bottom. `#003330` (the darkest stop) is excluded: it
  * is a background tone only, never banner ink.
@@ -36,12 +75,13 @@ export const BANNER_GRADIENT: readonly string[] = [
 ];
 
 /**
- * The colour of art line `index`: an exact port of `gradient_rgb` —
- * `round(index / count * 4)` over the five stops, so the sequence for
- * the ten-line banner is stops [0,0,1,1,2,2,2,3,3,4].
+ * The colour of art line `index` in a `count`-line banner: an exact port
+ * of `gradient_rgb` — `round(index / count * 4)` over the five stops, so
+ * the ten-line canopy banner runs stops [0,0,1,1,2,2,2,3,3,4] and the
+ * eleven-line headers [0,0,1,1,1,2,2,3,3,3,4].
  */
-export function bannerColor(index: number): string {
-  const stop = Math.min(4, Math.round((index / BANNER_LINES.length) * 4));
+export function bannerColor(index: number, count: number = BANNER_LINES.length): string {
+  const stop = Math.min(4, Math.round((index / count) * 4));
   return BANNER_GRADIENT[stop] ?? "#52fff6";
 }
 
@@ -74,4 +114,20 @@ export function renderBanner(app: BannerApp): string {
     `</div>`,
     ``,
   ].join("\n");
+}
+
+/**
+ * Render the header banner: the app's own DOS Rebel art in a `pre`
+ * hidden from assistive tech, one colour per line over the same teal
+ * gradient. The header link around it carries the app's accessible name.
+ */
+export function renderHeaderBanner(app: BannerApp): string {
+  const lines = app === "graphs" ? GRAPHS_BANNER_LINES : REMOTE_BANNER_LINES;
+  const art = lines
+    .map(
+      (line, index) =>
+        `<span style="color:${bannerColor(index, lines.length)}">${escapeHtml(line)}</span>`,
+    )
+    .join("\n");
+  return `<pre class="look-banner-header" aria-hidden="true">${art}</pre>`;
 }

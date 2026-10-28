@@ -17,7 +17,6 @@ import type { SessionItem } from "./protocol.js";
 import { renderSessions } from "./sessions.js";
 import type { SessionListShelf } from "./sessions.js";
 import type { ShelfHandle } from "./shelf-controller.js";
-import { renderBanner } from "../../../../packages/look/banner/banner.js";
 
 /** The home screen's two tabs: the session list or the graphs list. */
 export type HomeTab = "sessions" | "graphs";
@@ -108,7 +107,6 @@ export class GraphRoute {
     this.root.innerHTML = `
     ${this.hooks.header()}
     <main class="sessions">
-      ${renderBanner("remote")}
       ${this.hooks.banner()}
       ${this.tabSwitchHtml()}
       <div id="session-list"></div>

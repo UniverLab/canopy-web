@@ -206,13 +206,20 @@ label > textarea {
   white-space: nowrap;
 }
 
-/* The mono wordmark, like the catalogue's. */
-.topbar .brand {
-  font-family: var(--font-mono);
-  font-size: 1rem;
-  letter-spacing: 0.08em;
-  color: var(--ink);
+/* The header banner home control: the remote art at the header's scale.
+ * A button, not a link — the app has no URL routing, so it goes home in
+ * place through the session-leave path. */
+.topbar .brand-home {
+  display: inline-flex;
+  align-items: center;
   flex-shrink: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+}
+
+.topbar .brand-home:hover {
+  filter: brightness(1.12);
 }
 
 /* The login, host and connection state read as mono chips. */

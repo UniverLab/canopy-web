@@ -211,16 +211,42 @@ describe("createShell", () => {
     expect(button.classList.contains("primary")).toBe(true);
   });
 
-  it("wears the house banner on sign-in and sessions, never in a session", () => {
+  it("wears the header banner home link on every route, never a body banner", () => {
+    const routes: Array<() => void> = [
+      () => shell.showSignIn(),
+      () => shell.showPair(),
+      () => shell.showHosts(),
+      () => shell.showSessions(),
+      () => shell.showSession("s1", "build"),
+    ];
+    for (const show of routes) {
+      show();
+      const home = root.querySelector("#brand-home");
+      expect(home?.getAttribute("aria-label")).toBe("Canopy remote, home");
+      expect(home?.querySelectorAll(".look-banner-header span")).toHaveLength(11);
+      expect(root.querySelector(".look-banner")).toBeNull();
+    }
+    // The sign-in screen carries the header too, above its heading.
     shell.showSignIn();
-    const signin = query("main.signin");
-    expect(signin.firstElementChild?.classList.contains("look-banner")).toBe(true);
-    expect(signin.querySelector(".look-banner-app")?.textContent).toBe("remote");
-    shell.showSessions();
-    const sessions = query("main.sessions");
-    expect(sessions.firstElementChild?.classList.contains("look-banner")).toBe(true);
+    expect(root.querySelector(".topbar")).not.toBeNull();
+    expect(query("main.signin").firstElementChild?.tagName).toBe("H1");
+  });
+
+  it("goes home through onLeaveSession, never before pairing", () => {
     shell.showSession("s1", "build");
-    expect(root.querySelector(".look-banner")).toBeNull();
+    query<HTMLButtonElement>("#brand-home").click();
+    expect(signal().left).toBe(1);
+    shell.showSessions();
+    query<HTMLButtonElement>("#brand-home").click();
+    expect(signal().left).toBe(2);
+    // Before pairing there is no home to show: the banner stays put.
+    shell.showSignIn();
+    query<HTMLButtonElement>("#brand-home").click();
+    shell.showPair();
+    query<HTMLButtonElement>("#brand-home").click();
+    shell.showHosts();
+    query<HTMLButtonElement>("#brand-home").click();
+    expect(signal().left).toBe(2);
   });
 
   it("marks the topbar with the connection state for the host chip", () => {

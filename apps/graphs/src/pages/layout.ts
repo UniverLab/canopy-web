@@ -6,13 +6,12 @@
  * its markdown twin — and `page()` answers the request with one or the
  * other: a request sending `Accept: text/markdown` gets the twin (content
  * type `text/markdown`), everything else the full HTML document. The shell
- * is the technical index around the content: a header band with the mono
- * wordmark, a full-width search form and the Publish/Source links over the
- * live honeycomb (mounted inside the band only), a left-aligned content
- * column below, and the UniverLab colophon as footer.
+ * is the technical index around the content: a header band with the
+ * banner home link, a full-width search form and the Publish/Source links
+ * over the live honeycomb (mounted inside the band only), a left-aligned
+ * content column below, and the UniverLab colophon as footer.
  */
 import {
-  CANOPY_HREF,
   COLOPHON_EXP,
   COLOPHON_LINKS,
   COLOPHON_PRODUCT,
@@ -30,9 +29,9 @@ import {
   SOURCE_HREF,
   SOURCE_LABEL,
   TITLE_SEPARATOR,
-  WORDMARK,
 } from "./copy.js";
 import { AGENT_LINK_HEADER } from "../agent-files.js";
+import { renderHeaderBanner } from "../../../../packages/look/banner/banner.js";
 import { renderColophon } from "../../../../packages/look/colophon/footer.js";
 import { iconSvg } from "../../../../packages/look/icon-svg.js";
 import { escapeHtml } from "./md.js";
@@ -102,7 +101,7 @@ function htmlDocument(q: string, page: Page): string {
     fondoHost(),
     `<div class="band">`,
     `<div class="band-top">`,
-    `<a class="wordmark" href="${CANOPY_HREF}">${escapeHtml(WORDMARK)}</a>`,
+    `<a class="banner-home" href="/" aria-label="Canopy graphs, home">${renderHeaderBanner("graphs")}</a>`,
     `<nav class="site-nav" aria-label="Catalogue">`,
     `<a href="${EDITOR_HREF}" aria-label="${EDITOR_LABEL}" title="${EDITOR_LABEL}">${iconSvg("pencilRuler")}<span>${EDITOR_LABEL}</span></a>`,
     `<a href="${PUBLISH_HREF}" aria-label="${PUBLISH_LABEL}" title="${PUBLISH_LABEL}">${iconSvg("upload")}<span>${PUBLISH_LABEL}</span></a>`,

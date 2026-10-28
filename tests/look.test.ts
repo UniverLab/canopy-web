@@ -11,8 +11,11 @@ import { renderColophon } from "../packages/look/colophon/footer.js";
 import {
   BANNER_GRADIENT,
   BANNER_LINES,
+  GRAPHS_BANNER_LINES,
+  REMOTE_BANNER_LINES,
   bannerColor,
   renderBanner,
+  renderHeaderBanner,
 } from "../packages/look/banner/banner.js";
 import { mountCanopyBackground } from "../packages/look/fondo/index.js";
 
@@ -159,6 +162,41 @@ describe("the house banner", () => {
     expect(remote).toContain(`<p class="look-banner-app" style="color:#52fff6">remote</p>`);
     expect(graphs).toContain(`<p class="look-banner-app" style="color:#52fff6">graphs</p>`);
     expect(graphs.replaceAll("graphs", "remote")).toBe(remote);
+  });
+});
+
+describe("the header banners", () => {
+  it("is eleven DOS Rebel art lines per app, one width each", () => {
+    expect(GRAPHS_BANNER_LINES).toHaveLength(11);
+    expect(REMOTE_BANNER_LINES).toHaveLength(11);
+    expect(GRAPHS_BANNER_LINES.map((line) => line.length)).toEqual(new Array(11).fill(58));
+    expect(REMOTE_BANNER_LINES.map((line) => line.length)).toEqual(new Array(11).fill(63));
+    for (const line of [...GRAPHS_BANNER_LINES, ...REMOTE_BANNER_LINES]) {
+      expect(line).toMatch(/^[ █░]*$/);
+    }
+    // Both carry block runs; the graphs ascender opens the first line.
+    expect(GRAPHS_BANNER_LINES[0]).toContain("█████");
+    expect(GRAPHS_BANNER_LINES[2]).toContain("███████");
+    expect(REMOTE_BANNER_LINES[2]).toContain("████████");
+  });
+
+  it("colours the eleven lines light to dark, like gradient_rgb", () => {
+    const stops = [0, 0, 1, 1, 1, 2, 2, 3, 3, 3, 4];
+    for (const lines of [GRAPHS_BANNER_LINES, REMOTE_BANNER_LINES]) {
+      expect(lines.map((_, index) => bannerColor(index, lines.length))).toEqual(
+        stops.map((stop) => BANNER_GRADIENT[stop]),
+      );
+    }
+  });
+
+  it("renders one hidden pre per app with eleven coloured lines", () => {
+    for (const app of ["graphs", "remote"] as const) {
+      const html = renderHeaderBanner(app);
+      expect(html).toContain(`<pre class="look-banner-header" aria-hidden="true">`);
+      const spans = html.match(/<span style="color:#[0-9a-f]{6}">/g) ?? [];
+      expect(spans).toHaveLength(11);
+    }
+    expect(renderHeaderBanner("graphs")).not.toBe(renderHeaderBanner("remote"));
   });
 });
 

@@ -73,7 +73,6 @@ import {
   resultsFor,
 } from "./copy.js";
 import { page, type Page, withMarkdownFooter } from "./layout.js";
-import { renderBanner } from "../../../../packages/look/banner/banner.js";
 import { iconSvg, type IconName } from "../../../../packages/look/icon-svg.js";
 import { escapeHtml } from "./md.js";
 import { publishPage } from "./publish.js";
@@ -239,7 +238,6 @@ async function draftResponse(req: Request, env: PageEnv, id: string): Promise<Re
 
 function homePage(graphs: Doc[], nodes: Doc[]): Page {
   const html = [
-    renderBanner("graphs"),
     `<h1 class="index-title">${escapeHtml(TAGLINE)}</h1>`,
     tabs("", null),
     `<h2 class="kicker">${OFFICIAL_HEADING}</h2>`,

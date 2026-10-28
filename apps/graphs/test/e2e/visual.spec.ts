@@ -2,10 +2,11 @@
 /**
  * The catalogue as a technical index, checked in a browser against the
  * fixture Worker: the Canopy surface, the three faces loaded from the kit,
- * the honeycomb mounted inside the header band only, the wordmark with its
- * Publish/Source links, dense index rows instead of cards, each document
- * page as a plate beside its datasheet — the vertical plate under 640 px,
- * the horizontal one above — and no horizontal page scroll at 390 px.
+ * the honeycomb mounted inside the header band only, the header banner
+ * home link with its Publish/Source links, dense index rows instead of
+ * cards, each document page as a plate beside its datasheet — the vertical
+ * plate under 640 px, the horizontal one above — and no horizontal page
+ * scroll at 390 px.
  * The datasheet INSTALL row shows its whole command wrapped in its box
  * while the home index rows keep their one-line command.
  * Three pages (home, a graph, a node) at the two reference sizes, plus a
@@ -14,8 +15,8 @@
  * is attached to the report for the operator's review, never compared.
  * The stage and the meaning tints are asserted as computed colours: the
  * plate on black, the datasheet in info, the community warning and runs
- * summary in warn, the 404 block in error — and the house banner opens
- * the home content only, ten lines with no sideways overflow.
+ * summary in warn, the 404 block in error — no body banner anywhere, and
+ * the colophon links share one row at desktop width.
  */
 import { expect, test } from "@playwright/test";
 
@@ -70,7 +71,7 @@ for (const viewport of VIEWPORTS) {
           loaded: [...new Set(registered.filter((face) => face.status === "loaded").map((face) => face.family))].sort(),
           heading: getComputedStyle(document.querySelector("h1") ?? document.body).fontFamily,
           body: getComputedStyle(document.body).fontFamily,
-          wordmark: getComputedStyle(document.querySelector(".wordmark") ?? document.body).fontFamily,
+          banner: getComputedStyle(document.querySelector(".banner-home pre") ?? document.body).fontFamily,
         };
       });
       expect(faces.status).toBe("loaded");
@@ -78,10 +79,11 @@ for (const viewport of VIEWPORTS) {
       // All three are registered by the kit, and each has a face actually loaded.
       expect(faces.families).toEqual(expect.arrayContaining(kit));
       expect(faces.loaded).toEqual(expect.arrayContaining(kit));
-      // And the page applies them by role: mono to the UI and the wordmark,
-      // the display face only to document names, the body face to the text.
+      // And the page applies them by role: mono to the UI and the header
+      // banner, the display face only to document names, the body face to
+      // the text.
       expect(faces.body).toContain("Sometype Mono");
-      expect(faces.wordmark).toContain("Sometype Mono");
+      expect(faces.banner).toContain("Sometype Mono");
       expect(faces.heading).toContain(target.label === "home" ? "Sometype Mono" : "Old Standard TT");
 
       // The live honeycomb is mounted inside the header band only: its box
@@ -118,10 +120,18 @@ for (const viewport of VIEWPORTS) {
         expect(fondo.box.y + fondo.box.height).toBeLessThanOrEqual(header.y + header.height + 1);
       }
 
-      // The wordmark, the Publish/Source links and the search form in the band.
-      const wordmark = page.locator("header .wordmark");
-      await expect(wordmark).toHaveText("graphs");
-      await expect(wordmark).toHaveAttribute("href", "https://univerlab.org/canopy/");
+      // The header banner links home: the graphs art, eleven lines, and
+      // no header link points at the Canopy landing any more.
+      const home = page.locator("header .banner-home");
+      await expect(home).toHaveAttribute("href", "/");
+      await expect(home).toHaveAttribute("aria-label", "Canopy graphs, home");
+      await expect(home.locator("pre.look-banner-header")).toBeVisible();
+      await expect(home.locator(".look-banner-header span")).toHaveCount(11);
+      await expect(page.locator("header a[href*='univerlab.org/canopy']")).toHaveCount(0);
+      // About 40 px tall on desktop, 28 px on the phone.
+      const art = await page.locator("header .look-banner-header").boundingBox();
+      expect(art).not.toBeNull();
+      expect(Math.abs((art?.height ?? 0) - (viewport.width < 640 ? 28 : 40))).toBeLessThanOrEqual(5);
       await expect(page.locator("header nav.site-nav a[href='/editor']")).toHaveText("Editor");
       await expect(page.locator("header nav.site-nav a[href='/publish']")).toHaveText("Publish");
       await expect(page.locator("header nav.site-nav a[href='/patterns']")).toHaveText("Patterns");
@@ -156,18 +166,8 @@ for (const viewport of VIEWPORTS) {
       await expect(headings).toHaveCount(1);
       await expect(headings).toHaveText(target.heading);
 
-      // The house banner opens the home content only: ten art lines, no
-      // sideways overflow of its own.
-      const banners = page.locator("main.look-col .look-banner");
-      await expect(banners).toHaveCount(target.label === "home" ? 1 : 0);
-      if (target.label === "home") {
-        await expect(page.locator(".look-banner-art span")).toHaveCount(10);
-        const bannerFit = await page.evaluate(() => {
-          const art = document.querySelector(".look-banner-art") as HTMLElement;
-          return art.scrollWidth - art.clientWidth;
-        });
-        expect(bannerFit).toBeLessThanOrEqual(1);
-      }
+      // No body banner anywhere: the page starts directly under the header.
+      await expect(page.locator("main.look-col .look-banner")).toHaveCount(0);
 
       // Listing pages render dense rows; document pages a plate beside a sheet.
       if (target.label === "home") {
@@ -231,14 +231,17 @@ for (const viewport of VIEWPORTS) {
         contentType: "image/png",
       });
 
-      // A visible focus outline on the first tabbable element.
+      // A visible focus outline on the first tabbable element: the home link.
       await page.keyboard.press("Tab");
       const focus = await page.evaluate(() => {
         const active = document.activeElement;
         const style = active === null ? null : getComputedStyle(active);
-        return { label: active?.textContent ?? "", outline: style?.outlineStyle ?? "none" };
+        return {
+          name: (active as HTMLElement | null)?.getAttribute?.("aria-label") ?? "",
+          outline: style?.outlineStyle ?? "none",
+        };
       });
-      expect(focus.label).toContain("graphs");
+      expect(focus.name).toBe("Canopy graphs, home");
       expect(focus.outline).not.toBe("none");
     });
   }
@@ -375,6 +378,49 @@ test("community runs section at 390x844", async ({ page }, testInfo) => {
     body: shot,
     contentType: "image/png",
   });
+});
+
+test("the header banner resolves to the app home", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/g/hello-graph", { waitUntil: "load" });
+  await page.locator("header .banner-home").click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.locator("main.look-col > h1")).toHaveText(
+    "A catalogue of Canopy graphs and nodes.",
+  );
+});
+
+test("the colophon links share one row at 1280x900", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/", { waitUntil: "load" });
+  const tops = await page
+    .locator("footer.look-colophon nav a")
+    .evaluateAll((links) => links.map((link) => (link as HTMLElement).offsetTop));
+  expect(tops).toHaveLength(5);
+  expect(new Set(tops).size).toBe(1);
+});
+
+test("the colophon wraps without sideways scroll at 390x844", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/", { waitUntil: "load" });
+  const boxes = await page
+    .locator("footer.look-colophon nav a")
+    .evaluateAll((links) =>
+      links.map((link) => {
+        const box = link.getBoundingClientRect();
+        return { left: box.left, right: box.right };
+      }),
+    );
+  expect(boxes).toHaveLength(5);
+  for (const box of boxes) {
+    expect(box.left).toBeGreaterThanOrEqual(-1);
+    expect(box.right).toBeLessThanOrEqual(391);
+  }
+  const width = await page.evaluate(() => ({
+    scroll: document.documentElement.scrollWidth,
+    view: window.innerWidth,
+  }));
+  expect(width.scroll).toBeLessThanOrEqual(width.view);
 });
 
 test("missing document at 390x844", async ({ page }, testInfo) => {

@@ -207,24 +207,29 @@ for (const viewport of [
     await testInfo.attach(`stage-${viewport.label}`, { body: shot, contentType: "image/png" });
   });
 
-  test(`banners the session list at ${viewport.label}`, async ({ page }, testInfo) => {
+  test(`links home from the header banner at ${viewport.label}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    await expect(page.locator(".look-banner")).toBeHidden();
-    await page.locator("#session-back").click();
-    const banner = page.locator("main.sessions .look-banner");
-    await expect(banner).toBeVisible();
-    // Ten art lines, fitting without a sideways scroll.
-    await expect(page.locator(".look-banner-art span")).toHaveCount(10);
+    // The header banner: eleven art lines, named for assistive tech, and
+    // no header link points at the Canopy landing.
+    const home = page.locator(".topbar #brand-home");
+    await expect(home).toHaveAttribute("aria-label", "Canopy remote, home");
+    await expect(home.locator(".look-banner-header span")).toHaveCount(11);
+    await expect(page.locator(".topbar a[href*='univerlab.org/canopy']")).toHaveCount(0);
+    // About 40 px tall on desktop, 28 px on the phone.
+    const art = await page.locator(".topbar .look-banner-header").boundingBox();
+    expect(art).not.toBeNull();
+    expect(Math.abs((art?.height ?? 0) - (viewport.width < 640 ? 28 : 40))).toBeLessThanOrEqual(5);
+    // No body banner anywhere; the sessions start under the header.
+    await expect(page.locator("main .look-banner")).toHaveCount(0);
+    // From the session, the banner goes home to the sessions list.
+    await home.click();
+    await expect(page.locator("main.sessions")).toBeVisible();
+    await expect(page.locator("main .look-banner")).toHaveCount(0);
     const fit = await page.evaluate(() => {
-      const art = document.querySelector(".look-banner-art") as HTMLElement;
       const el = document.scrollingElement ?? document.documentElement;
-      return {
-        artOverflow: art.scrollWidth - art.clientWidth,
-        pageOverflow: el.scrollWidth - el.clientWidth,
-      };
+      return el.scrollWidth - el.clientWidth;
     });
-    expect(fit.artOverflow).toBeLessThanOrEqual(1);
-    expect(fit.pageOverflow).toBeLessThanOrEqual(1);
+    expect(fit).toBeLessThanOrEqual(1);
     const shot = await page.screenshot({ path: testInfo.outputPath(`banner-${viewport.label}.png`) });
     await testInfo.attach(`banner-${viewport.label}`, { body: shot, contentType: "image/png" });
   });

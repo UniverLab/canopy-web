@@ -74,14 +74,24 @@
   font-size: 0.68rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  flex-basis: 100%;
 }
 
-/* Nav links in the colophon face (Quorum's rule: serif links, mono labels);
-   every target keeps a 32px tap reach on touch screens. */
+/* The links in one wrapping row across the full width, a middot between
+ * neighbours; the label holds its own row above. The links stay the
+ * colophon face (Quorum's rule: serif links, mono labels) and every
+ * target keeps a 32px tap reach on touch screens. */
 .look-colophon .colophon-col {
-  display: grid;
-  gap: 0.35rem;
-  align-content: start;
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0;
+}
+.look-colophon .colophon-col a + a::before {
+  content: "·";
+  margin: 0 0.75em;
+  color: var(--f-ink-faint);
 }
 .look-colophon .colophon-col a,
 .look-colophon .colophon-credits a {

@@ -310,8 +310,12 @@ describe("the page shell", () => {
     expect(html).toContain("background: var(--tint-info)");
     expect(html).not.toContain("var(--cta-gradient)");
     expect(html).not.toContain("var(--accent)");
-    // The header wordmark and the UniverLab colophon as footer.
-    expect(html).toContain(`<a class="wordmark" href="https://univerlab.org/canopy/">graphs</a>`);
+    // The header banner links home, and nothing in the header points at
+    // the Canopy landing any more — that link lives in the colophon only.
+    expect(html).toContain(`<a class="banner-home" href="/" aria-label="Canopy graphs, home">`);
+    expect(html).toContain(`<pre class="look-banner-header" aria-hidden="true">`);
+    const header = html.slice(html.indexOf(`<header class="site-header">`), html.indexOf(`</header>`));
+    expect(header).not.toContain("univerlab.org/canopy");
     expect(html).toContain(`<footer class="look-colophon">`);
     expect(html).toContain("Part of UniverLab · EXP-001 Canopy graphs");
     expect(html).toContain(`/look/colophon/frieze-1920.avif`);
@@ -452,10 +456,10 @@ describe("the technical index", () => {
 });
 
 describe("the header band", () => {
-  it("holds the wordmark, the search form and Editor/Publish/Source over the honeycomb", async () => {
+  it("holds the banner home link, the search form and Editor/Publish/Source over the honeycomb", async () => {
     const html = await (await call("/")).text();
     const header = html.slice(html.indexOf(`<header class="site-header">`), html.indexOf(`</header>`));
-    expect(header).toContain(`<a class="wordmark" href="https://univerlab.org/canopy/">graphs</a>`);
+    expect(header).toContain(`<a class="banner-home" href="/" aria-label="Canopy graphs, home">`);
     expect(header).toContain(`<form class="search"`);
     // Editor wears the pencil ruler, Publish the upload arrow, Source the
     // GitHub mark — Editor sits beside Publish, per the editor spec. Each
@@ -884,15 +888,16 @@ describe("the blocked list", () => {
   });
 });
 
-describe("the house banner", () => {
-  it("opens the home content, and no other route wears it", async () => {
-    const home = await (await call("/")).text();
-    expect(home).toContain(`<main class="look-col">\n<div class="look-banner">`);
-    expect(home).toContain(`<p class="look-banner-app" style="color:#52fff6">graphs</p>`);
-    expect(home).toContain(`<link rel="stylesheet" href="/look/banner/banner.css">`);
-    for (const path of ["/search?q=flow", "/g/hello-graph", "/n/hello-node", "/publish"]) {
+describe("the header banner", () => {
+  it("links home from the header, and no route wears a body banner", async () => {
+    for (const path of ["/", "/search?q=flow", "/g/hello-graph", "/n/hello-node", "/publish"]) {
       const html = await (await call(path, { stubs: searchStubs() })).text();
+      expect(html, path).toContain(`<a class="banner-home" href="/" aria-label="Canopy graphs, home">`);
+      expect(html, path).toContain(`<link rel="stylesheet" href="/look/banner/banner.css">`);
+      // The page starts directly under the header: no body banner, no
+      // subtitle, on any route.
       expect(html, path).not.toContain(`<div class="look-banner">`);
+      expect(html, path).not.toContain(`look-banner-app`);
     }
     // The twin is words, not art.
     const twin = await (await call("/", { stubs: searchStubs(), accept: "text/markdown" })).text();

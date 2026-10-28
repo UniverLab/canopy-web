@@ -24,7 +24,7 @@ import { createXtermHandle, TerminalView } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
 import { readFitOnly, writeFitOnly } from "./terminal-prefs.js";
 import type { PairSubmit } from "./ui.js";
-import { renderBanner } from "../../../../packages/look/banner/banner.js";
+import { renderHeaderBanner } from "../../../../packages/look/banner/banner.js";
 import { renderColophon } from "../../../../packages/look/colophon/footer.js";
 
 export interface ShellCallbacks {
@@ -185,7 +185,7 @@ export function createShell(
 
   const header = (): string => `
     <header class="topbar" data-conn="${esc(connectionState)}">
-      <span class="brand">remote</span>
+      <button type="button" id="brand-home" class="brand-home" aria-label="Canopy remote, home">${renderHeaderBanner("remote")}</button>
       ${login === null ? "" : `<span class="login chip">${esc(login)}</span>`}
       ${hostLabel === "" ? "" : `<span class="host chip">` +
         `<span class="icon-slot" id="conn-icon" data-morph="host" aria-hidden="true">${icon(linkIcon())}</span>` +
@@ -227,8 +227,8 @@ export function createShell(
 
   const renderSignIn = () => {
     root.innerHTML = `
+    ${header()}
     <main class="signin">
-      ${renderBanner("remote")}
       <h1>Canopy remote</h1>
       <p>Sign in with GitHub to reach your hosts.</p>
       <button type="button" class="primary" id="signin-go">Sign in with GitHub</button>
@@ -481,6 +481,14 @@ export function createShell(
     graphRoute.open(id, name);
   };
 
+  // The header banner goes home through the session-leave path; before
+  // pairing there is no home to show, so it stays put.
+  const goHome = (): void => {
+    if (route === "session" || route === "graph" || route === "sessions") {
+      callbacks.onLeaveSession();
+    }
+  };
+
   const render = () => {
     // The view name on <body> lets the stylesheet dim the honeycomb
     // behind the terminal (body[data-view="session"]).
@@ -499,6 +507,7 @@ export function createShell(
       renderSession();
     }
     mountHeaderIcon();
+    root.querySelector("#brand-home")?.addEventListener("click", () => goHome());
   };
 
   // The home tabs, the graph route and the watch lifecycle live in the

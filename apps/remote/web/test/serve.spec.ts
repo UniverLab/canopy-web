@@ -71,3 +71,46 @@ test("answers a missing built asset with 404, not index.html", async ({
     expect(response.status(), path).toBe(404);
   }
 });
+
+test("sign-in wears the header banner and a one-row colophon at 1280x900", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/");
+  // Unauthenticated, so the sign-in screen — with the header above it.
+  await expect(page.locator("main.signin")).toBeVisible();
+  const home = page.locator(".topbar #brand-home");
+  await expect(home).toHaveAttribute("aria-label", "Canopy remote, home");
+  await expect(home.locator(".look-banner-header span")).toHaveCount(11);
+  await expect(page.locator(".topbar a[href*='univerlab.org/canopy']")).toHaveCount(0);
+  await expect(page.locator("main.signin .look-banner")).toHaveCount(0);
+  const tops = await page
+    .locator("footer.look-colophon nav a")
+    .evaluateAll((links) => links.map((link) => (link as HTMLElement).offsetTop));
+  expect(tops).toHaveLength(5);
+  expect(new Set(tops).size).toBe(1);
+});
+
+test("sign-in never scrolls sideways at 390x844", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await expect(page.locator("main.signin")).toBeVisible();
+  const boxes = await page
+    .locator("footer.look-colophon nav a")
+    .evaluateAll((links) =>
+      links.map((link) => {
+        const box = link.getBoundingClientRect();
+        return { left: box.left, right: box.right };
+      }),
+    );
+  expect(boxes).toHaveLength(5);
+  for (const box of boxes) {
+    expect(box.left).toBeGreaterThanOrEqual(-1);
+    expect(box.right).toBeLessThanOrEqual(391);
+  }
+  const width = await page.evaluate(() => ({
+    scroll: document.documentElement.scrollWidth,
+    view: window.innerWidth,
+  }));
+  expect(width.scroll).toBeLessThanOrEqual(width.view);
+});

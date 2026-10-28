@@ -31,10 +31,7 @@ export const TITLE_SEPARATOR = " · ";
 /** The catalogue in one line: the home's hero, and the meta description. */
 export const TAGLINE = "A catalogue of Canopy graphs and nodes.";
 
-/** The header's wordmark, set in the mono face. */
-export const WORDMARK = "graphs";
-
-/** The Canopy page the wordmark links back to. */
+/** The Canopy page the colophon links back to. */
 export const CANOPY_HREF = "https://univerlab.org/canopy/";
 
 /** The header's two links: Publish (its own page, its own spec) and Source. */

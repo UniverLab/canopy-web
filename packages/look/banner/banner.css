@@ -38,3 +38,27 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* The header banner: the app's own art at the header's scale — eleven
+ * lines at 4 px (about 40 px tall) on desktop, 2.8 px (about 28 px) on
+ * a phone, and a smaller step under 360 px so the row never overflows.
+ * Same art as the generator's, scaled by CSS only. */
+.look-banner-header {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 4px;
+  line-height: 1;
+  white-space: pre;
+}
+
+@media (max-width: 639px) {
+  .look-banner-header {
+    font-size: 2.8px;
+  }
+}
+
+@media (max-width: 359px) {
+  .look-banner-header {
+    font-size: 2.2px;
+  }
+}

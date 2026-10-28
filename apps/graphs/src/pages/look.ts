@@ -105,21 +105,15 @@ a:hover { text-decoration-thickness: 2px; }
 }
 .band-top {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
 }
-.wordmark {
-  display: inline-block;
-  padding-bottom: 0.15rem;
-  border-bottom: 1px solid var(--surface-line);
-  font-family: var(--font-mono);
-  font-size: 1rem;
-  letter-spacing: 0.08em;
-  color: var(--surface-ink);
-  text-decoration: none;
+.banner-home {
+  display: inline-flex;
+  flex: none;
 }
-.wordmark:hover { border-bottom-color: var(--teal); }
+.banner-home:hover { filter: brightness(1.12); }
 .site-nav {
   display: flex;
   gap: 1rem;
