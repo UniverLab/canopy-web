@@ -9,7 +9,7 @@ import { FakeAssets, FakeRoomState } from "./fakes.js";
 const ORIGIN = "https://remote.univerlab.org";
 
 const EXPECTED_CSP =
-  "default-src 'self'; connect-src 'self' wss://remote.univerlab.org; " +
+  "default-src 'self'; connect-src 'self' wss://remote.univerlab.org https://graphs.univerlab.org; " +
   "img-src 'self' data: blob:; style-src 'self'; script-src 'self'; frame-ancestors 'none'";
 
 class FakeNamespace implements RoomNamespace {

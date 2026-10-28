@@ -68,6 +68,13 @@ async function main(): Promise<void> {
   if (!root) {
     throw new Error("Missing #app element");
   }
+  // The graph editor rides its own lazy chunk: no relay, no pairing, no
+  // login — the drafts API it posts to is public and CORS-open.
+  if (globalThis.location?.pathname.startsWith("/editor") === true) {
+    const { mountEditor } = await import("./editor/editor.js");
+    mountEditor(root);
+    return;
+  }
   // The live honeycomb behind the page, from the shared look kit.
   const fondo = document.getElementById("fondo");
   if (fondo) {

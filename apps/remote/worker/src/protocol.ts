@@ -63,7 +63,7 @@ export interface HostItem {
 /** The security headers every response carries. */
 export const SECURITY_HEADERS: Record<string, string> = {
   "content-security-policy":
-    "default-src 'self'; connect-src 'self' wss://remote.univerlab.org; " +
+    "default-src 'self'; connect-src 'self' wss://remote.univerlab.org https://graphs.univerlab.org; " +
     "img-src 'self' data: blob:; style-src 'self'; script-src 'self'; frame-ancestors 'none'",
   "referrer-policy": "no-referrer",
   "x-content-type-options": "nosniff",

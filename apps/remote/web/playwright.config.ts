@@ -3,7 +3,7 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./test",
-  testMatch: ["smoke.spec.ts", "graphs.spec.ts"],
+  testMatch: ["smoke.spec.ts", "graphs.spec.ts", "editor.spec.ts"],
   timeout: 60_000,
   use: {
     baseURL: "http://127.0.0.1:5199",
