@@ -109,6 +109,7 @@ describe("the look tokens", () => {
 
   it.each([
     ["--page: #012624"],
+    ["--surface-panel: #050505"],
     ["--stage-bg: #050505"],
     ["--stage-line: #1f1f1f"],
     ["--stage-ink: #e6e6e6"],

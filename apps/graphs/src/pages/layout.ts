@@ -7,9 +7,13 @@
  * other: a request sending `Accept: text/markdown` gets the twin (content
  * type `text/markdown`), everything else the full HTML document. The shell
  * is the technical index around the content: a header band with the
- * banner home link, a full-width search form and the Publish/Source links
- * over the live honeycomb (mounted inside the band only), a left-aligned
- * content column below, and the UniverLab colophon as footer.
+ * banner home link and the site navigation over the live honeycomb
+ * (mounted inside the band only), a left-aligned content column below —
+ * the search form first, on the home and search pages only — and the
+ * UniverLab colophon as footer.
+ *
+ * Every anchor the pages render goes through `linkAttrs`: a link whose
+ * host is not this site opens in a new tab, safely.
  */
 import {
   COLOPHON_EXP,
@@ -57,6 +61,12 @@ export interface Page {
    */
   styles?: string[];
   scripts?: string[];
+  /**
+   * The search form's current query. Only the home and search pages pass
+   * it, so only they render the form — at the top of `<main>`, above the
+   * lists. Every other page shows no search box.
+   */
+  search?: string;
 }
 
 /** True when the request prefers the markdown twin over HTML. */
@@ -65,7 +75,33 @@ export function wantsMarkdown(req: Request): boolean {
   return accept.includes("text/markdown");
 }
 
-/** The header band's search form, holding the current query when there is one. */
+/**
+ * The anchor attributes for one link, the only place that decides where a
+ * link opens. An absolute link whose host is not this site opens in a new
+ * tab (`target="_blank"`, with `noopener noreferrer` so the new page gets
+ * no handle on this one); every same-site link — relative, fragment, or
+ * our own host — keeps the current tab. An extra `rel` (a `nofollow`)
+ * rides along in front. The caller escapes the href itself.
+ */
+export function linkAttrs(href: string, rel?: string): string {
+  const kept = rel === undefined ? "" : ` rel="${rel}"`;
+  if (!/^https?:\/\//i.test(href)) {
+    return kept;
+  }
+  let outside: boolean;
+  try {
+    outside = new URL(href).hostname.toLowerCase() !== SITE_NAME.toLowerCase();
+  } catch {
+    outside = true;
+  }
+  if (!outside) {
+    return kept;
+  }
+  const extra = rel === undefined ? "" : `${rel} `;
+  return ` target="_blank" rel="${extra}noopener noreferrer"`;
+}
+
+/** The search form, holding the current query when there is one. */
 function searchForm(q: string): string {
   return (
     `<form class="search" action="/search" method="get" role="search">` +
@@ -77,9 +113,10 @@ function searchForm(q: string): string {
   );
 }
 
-function htmlDocument(q: string, page: Page): string {
+function htmlDocument(page: Page): string {
   const title = escapeHtml(`${page.title}${TITLE_SEPARATOR}${SITE_NAME}`);
   const description = escapeHtml(page.description);
+  const search = page.search === undefined ? [] : [searchForm(page.search)];
   return [
     `<!doctype html>`,
     `<html lang="en" data-surface="tui">`,
@@ -106,13 +143,13 @@ function htmlDocument(q: string, page: Page): string {
     `<a href="${EDITOR_HREF}" aria-label="${EDITOR_LABEL}" title="${EDITOR_LABEL}">${iconSvg("pencilRuler")}<span>${EDITOR_LABEL}</span></a>`,
     `<a href="${PUBLISH_HREF}" aria-label="${PUBLISH_LABEL}" title="${PUBLISH_LABEL}">${iconSvg("upload")}<span>${PUBLISH_LABEL}</span></a>`,
     `<a href="${PATTERNS_HREF}" aria-label="${PATTERNS_LABEL}" title="${PATTERNS_LABEL}">${iconSvg("workflow")}<span>${PATTERNS_LABEL}</span></a>`,
-    `<a href="${SOURCE_HREF}" aria-label="${SOURCE_LABEL}" title="${SOURCE_LABEL}">${iconSvg("github")}<span>${SOURCE_LABEL}</span></a>`,
+    `<a href="${SOURCE_HREF}"${linkAttrs(SOURCE_HREF)} aria-label="${SOURCE_LABEL}" title="${SOURCE_LABEL}">${iconSvg("github")}<span>${SOURCE_LABEL}</span></a>`,
     `</nav>`,
     `</div>`,
-    searchForm(q),
     `</div>`,
     `</header>`,
     `<main class="look-col">`,
+    ...search,
     page.html,
     `</main>`,
     renderColophon({ product: COLOPHON_PRODUCT, exp: COLOPHON_EXP, links: COLOPHON_LINKS }),
@@ -163,8 +200,7 @@ export function page(
       },
     });
   }
-  const q = (new URL(req.url).searchParams.get("q") ?? "").slice(0, 256);
-  return new Response(htmlDocument(q, content), {
+  return new Response(htmlDocument(content), {
     status,
     headers: {
       "content-type": "text/html; charset=utf-8",

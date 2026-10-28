@@ -46,6 +46,19 @@ export function officialFromIndex(index: StoredIndex): { graphs: Doc[]; nodes: D
   return { graphs, nodes };
 }
 
+/** The community listing: the same split over the non-official entries. */
+export function communityFromIndex(index: StoredIndex): { graphs: Doc[]; nodes: Doc[] } {
+  const graphs: Doc[] = [];
+  const nodes: Doc[] = [];
+  for (const entry of index.entries) {
+    if (entry.official) {
+      continue;
+    }
+    (entry.kind === "graph" ? graphs : nodes).push(rowFromEntry(entry));
+  }
+  return { graphs, nodes };
+}
+
 /** True when the entry matches the free text, case-insensitively. */
 function matches(entry: IndexEntry, query: string): boolean {
   const text = query.trim().toLowerCase();

@@ -536,7 +536,9 @@ describe("the body sanitizer", () => {
       stubs: [...officialStubs(), ...patternStubs([page])],
     })).text();
     expect(html).toContain(`${PATTERN_SOURCES_HEADING}</span>`);
-    expect(html).toContain(`<a href="https://example.com/good" rel="nofollow">Good</a>`);
+    expect(html).toContain(
+      `<a href="https://example.com/good" target="_blank" rel="nofollow noopener noreferrer">Good</a>`,
+    );
     expect(html).not.toContain(`href="javascript:`);
     expect(html).toContain(`<li>Bad</li>`);
     // The twin degrades the same URL to text: it generates this link

@@ -19,7 +19,7 @@ import type { PatternEntry, PatternRef, PatternStatus, StoredPattern } from "../
 import { comparePatterns } from "../patterns.js";
 import { escapeHtml, isSafeUrl, renderMarkdown } from "./md.js";
 import { fencedBlock, mdText } from "./document.js";
-import type { Page } from "./layout.js";
+import { linkAttrs, type Page } from "./layout.js";
 import { docRowInner } from "./rows.js";
 import { docPath, docRef } from "./ref.js";
 import {
@@ -142,7 +142,7 @@ function missingMarkdown(ref: PatternRef): string {
 /** One source: its title linked, or bare text when the URL is unsafe. */
 function sourceItem(source: { title: string; url: string }): string {
   return isSafeUrl(source.url)
-    ? `<li><a href="${escapeHtml(source.url)}" rel="nofollow">${escapeHtml(source.title)}</a></li>`
+    ? `<li><a href="${escapeHtml(source.url)}"${linkAttrs(source.url, "nofollow")}>${escapeHtml(source.title)}</a></li>`
     : `<li>${escapeHtml(source.title)}</li>`;
 }
 

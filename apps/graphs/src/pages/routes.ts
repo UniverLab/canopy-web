@@ -2,7 +2,7 @@
 /**
  * The HTML pages of graphs.univerlab.org, and their markdown twins.
  *
- *   GET /                                     search box, Official first, Top and New tabs
+ *   GET /                                     search box, Official and Community lists, Top and New tabs
  *   GET /search?q=&sort=top|new               community results
  *   GET /g/<slug>                             official graph page
  *   GET /g/<owner>/<repo>/<slug>              community graph page
@@ -31,29 +31,30 @@ import type { Doc } from "../documents.js";
 import { docFromDocument } from "../documents.js";
 import { readDraft } from "../drafts.js";
 import { createStore, type BlockedEntry } from "../store.js";
-import { documentFromStored, entryFor, officialFromIndex, rowFromEntry, searchFromIndex } from "../catalog.js";
+import { communityFromIndex, documentFromStored, entryFor, officialFromIndex, rowFromEntry, searchFromIndex } from "../catalog.js";
 import { type SearchSort } from "../search.js";
 import { comparePatterns, implementingPatterns } from "../patterns.js";
 import {
   BLOCKED_HEADING,
   BLOCKED_ISSUE_LABEL,
+  COMMUNITY_GRAPHS_HEADING,
+  COMMUNITY_NODES_HEADING,
   DRAFT_BANNER_LEAD,
   DRAFT_BANNER_TAIL,
   DRAFT_MISSING_BODY,
   DRAFT_MISSING_HEADING,
   EMPTY_OFFICIAL_GRAPHS,
   EMPTY_OFFICIAL_NODES,
-  GRAPHS_HEADING,
   INDEXING_BODY,
   INDEXING_HEADING,
   LLMS_HEADER,
   LLMS_PATTERNS_HEADING,
   NEW_TAB,
-  NODES_HEADING,
   NO_RESULTS,
   NOT_FOUND_BODY,
   NOT_FOUND_HEADING,
-  OFFICIAL_HEADING,
+  OFFICIAL_GRAPHS_HEADING,
+  OFFICIAL_NODES_HEADING,
   PATTERNS_HOME_LEAD,
   PATTERNS_HREF,
   PATTERNS_LABEL,
@@ -72,7 +73,7 @@ import {
   llmsPatternLine,
   resultsFor,
 } from "./copy.js";
-import { page, type Page, withMarkdownFooter } from "./layout.js";
+import { linkAttrs, page, type Page, withMarkdownFooter } from "./layout.js";
 import { iconSvg, type IconName } from "../../../../packages/look/icon-svg.js";
 import { escapeHtml } from "./md.js";
 import { publishPage } from "./publish.js";
@@ -154,7 +155,7 @@ function blockedPage(blocked: BlockedEntry): Page {
     html:
       `<section class="busy"><h1>${escapeHtml(BLOCKED_HEADING)}</h1>` +
       `<p>${escapeHtml(blocked.reason)}</p>` +
-      `<p><a href="${escapeHtml(blocked.issue)}" rel="noopener noreferrer">${escapeHtml(BLOCKED_ISSUE_LABEL)}</a></p>` +
+      `<p><a href="${escapeHtml(blocked.issue)}"${linkAttrs(blocked.issue)}>${escapeHtml(BLOCKED_ISSUE_LABEL)}</a></p>` +
       `</section>`,
     markdown: `# ${BLOCKED_HEADING}\n\n${blocked.reason}\n\n${BLOCKED_ISSUE_LABEL}: ${blocked.issue}\n`,
   };
@@ -236,31 +237,66 @@ async function draftResponse(req: Request, env: PageEnv, id: string): Promise<Re
   );
 }
 
-function homePage(graphs: Doc[], nodes: Doc[]): Page {
+function homePage(graphs: Doc[], nodes: Doc[], communityGraphs: Doc[], communityNodes: Doc[]): Page {
+  const communityHtml =
+    communityGraphs.length === 0 && communityNodes.length === 0
+      ? []
+      : [
+        ...(communityGraphs.length === 0
+          ? []
+          : [
+            `<h2 class="kicker">${COMMUNITY_GRAPHS_HEADING}</h2>`,
+            docList(communityGraphs, ""),
+          ]),
+        ...(communityNodes.length === 0
+          ? []
+          : [
+            `<h2 class="kicker">${COMMUNITY_NODES_HEADING}</h2>`,
+            docList(communityNodes, ""),
+          ]),
+      ];
   const html = [
     `<h1 class="index-title">${escapeHtml(TAGLINE)}</h1>`,
     tabs("", null),
-    `<h2 class="kicker">${OFFICIAL_HEADING}</h2>`,
-    `<h3 class="kicker">${GRAPHS_HEADING}</h3>`,
+    `<h2 class="kicker">${OFFICIAL_GRAPHS_HEADING}</h2>`,
     docList(graphs, EMPTY_OFFICIAL_GRAPHS),
-    `<h3 class="kicker">${NODES_HEADING}</h3>`,
+    `<h2 class="kicker">${OFFICIAL_NODES_HEADING}</h2>`,
     docList(nodes, EMPTY_OFFICIAL_NODES),
+    ...communityHtml,
     `<h2 class="kicker">${PATTERNS_LABEL}</h2>`,
     `<p>${escapeHtml(PATTERNS_HOME_LEAD)} <a href="${PATTERNS_HREF}">${escapeHtml(PATTERNS_LABEL)}</a></p>`,
   ].join("\n");
+  const communityMarkdown =
+    communityGraphs.length === 0 && communityNodes.length === 0
+      ? []
+      : [
+        ...(communityGraphs.length === 0
+          ? []
+          : [
+            `## ${COMMUNITY_GRAPHS_HEADING}`,
+            ``,
+            docListMarkdown(communityGraphs, ""),
+          ]),
+        ...(communityNodes.length === 0
+          ? []
+          : [
+            `## ${COMMUNITY_NODES_HEADING}`,
+            ``,
+            docListMarkdown(communityNodes, ""),
+          ]),
+      ];
   const markdown = [
     `# ${SITE_NAME}`,
     ``,
     TAGLINE,
     ``,
-    `## ${OFFICIAL_HEADING}`,
-    ``,
-    `### ${GRAPHS_HEADING}`,
+    `## ${OFFICIAL_GRAPHS_HEADING}`,
     ``,
     docListMarkdown(graphs, EMPTY_OFFICIAL_GRAPHS),
-    `### ${NODES_HEADING}`,
+    `## ${OFFICIAL_NODES_HEADING}`,
     ``,
     docListMarkdown(nodes, EMPTY_OFFICIAL_NODES),
+    ...communityMarkdown,
     `## ${PATTERNS_LABEL}`,
     ``,
     `${homePatternsLine(PATTERNS_LABEL, PATTERNS_HREF)}\n`,
@@ -383,8 +419,18 @@ async function homeResponse(req: Request, env: PageEnv, deps: PageDeps): Promise
     return indexing(req);
   }
   const listing = officialFromIndex(index);
+  const community = communityFromIndex(index);
   const counts = await volumes();
-  return page(req, homePage(attachDownloads(listing.graphs, counts), attachDownloads(listing.nodes, counts)));
+  const q = (new URL(req.url).searchParams.get("q") ?? "").slice(0, 256);
+  return page(req, {
+    ...homePage(
+      attachDownloads(listing.graphs, counts),
+      attachDownloads(listing.nodes, counts),
+      attachDownloads(community.graphs, counts),
+      attachDownloads(community.nodes, counts),
+    ),
+    search: q,
+  });
 }
 
 async function searchResponse(req: Request, url: URL, env: PageEnv, deps: PageDeps): Promise<Response> {
@@ -396,7 +442,7 @@ async function searchResponse(req: Request, url: URL, env: PageEnv, deps: PageDe
     return indexing(req);
   }
   const outcome = searchFromIndex(index, { q, sort, page: 1 });
-  return page(req, searchPage(q, sort, attachDownloads(outcome.items, await volumes())));
+  return page(req, { ...searchPage(q, sort, attachDownloads(outcome.items, await volumes())), search: q });
 }
 
 /** llms.txt: plain text, one tab-separated line per official document. */

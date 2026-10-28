@@ -124,6 +124,7 @@ a:hover { text-decoration-thickness: 2px; }
 .site-nav a:hover { color: var(--surface-ink); text-decoration: underline; text-decoration-color: var(--teal); }
 
 .search { display: flex; gap: 0.5rem; margin: 0; }
+main .search { margin: 0 0 1.5rem; }
 .sr-only {
   position: absolute;
   width: 1px;
@@ -212,8 +213,10 @@ p { margin: 0 0 1rem; }
 ol.index {
   list-style: none;
   margin: 0 0 1.5rem;
-  padding: 0;
-  border-top: 1px solid var(--surface-line);
+  padding: 0 1rem;
+  background: var(--surface-panel);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-card);
 }
 li.row {
   display: flex;
@@ -225,6 +228,7 @@ li.row {
   font-family: var(--font-mono);
   font-size: 0.85rem;
 }
+li.row:last-child { border-bottom: 0; }
 .row-name {
   font-family: var(--font-display);
   font-size: 1.15rem;
@@ -287,7 +291,7 @@ li.card {
   align-items: flex-start;
   gap: 0.5rem;
   padding: 0.9rem 1rem 1rem;
-  background: var(--tint-info);
+  background: var(--surface-panel);
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-card);
   font-family: var(--font-mono);
@@ -364,8 +368,8 @@ ul.sources li { margin: 0 0 0.35rem; }
 .doc-cols { display: flex; flex-direction: column; gap: 1.5rem; margin: 1rem 0 1.5rem; }
 dl.sheet {
   margin: 0;
-  background: var(--tint-info);
-  border: 1px solid var(--tint-line);
+  background: var(--surface-panel);
+  border: 1px solid var(--surface-line);
   border-radius: var(--radius-card);
   padding: 0 1rem;
   font-family: var(--font-mono);

@@ -49,16 +49,15 @@ export const SEARCH_PLACEHOLDER = "hello-graph";
 /** The search form's submit button. */
 export const SEARCH_BUTTON = "Search";
 
-/** Heading of the official listing. */
-export const OFFICIAL_HEADING = "Official";
-
 /** The two tabs over community results. */
 export const TOP_TAB = "Top";
 export const NEW_TAB = "New";
 
-/** Section headings for document lists. */
-export const GRAPHS_HEADING = "Graphs";
-export const NODES_HEADING = "Nodes";
+/** Home section headings: official lists always, community lists when indexed. */
+export const OFFICIAL_GRAPHS_HEADING = "Official graphs";
+export const OFFICIAL_NODES_HEADING = "Official nodes";
+export const COMMUNITY_GRAPHS_HEADING = "Community graphs";
+export const COMMUNITY_NODES_HEADING = "Community nodes";
 
 /** Heading over the search results list. */
 export const RESULTS_HEADING = "Results";

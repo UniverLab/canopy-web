@@ -19,7 +19,7 @@ import { escapeHtml, renderMarkdown } from "./md.js";
 import { copyButton } from "./look.js";
 import { editorQuery, pagePath, type PageRef } from "./ref.js";
 import { reportUrl, REPORT_REPOSITORY_HREF } from "./report.js";
-import type { Page } from "./layout.js";
+import { linkAttrs, type Page } from "./layout.js";
 import { attentionFor, type RunCommand, type RunPrompt, runsOf } from "./runs.js";
 import {
   EDITOR_ADD_TO_GRAPH,
@@ -63,9 +63,8 @@ export function mdText(text: string): string {
 }
 
 /** An external link: its words, then the arrow that says it leaves the site. */
-function externalLink(href: string, label: string, newTab = false): string {
-  const tab = newTab ? ` target="_blank" rel="noopener noreferrer"` : "";
-  return `<a href="${escapeHtml(href)}"${tab}>${escapeHtml(label)}${iconSvg("arrowUpRight")}</a>`;
+function externalLink(href: string, label: string): string {
+  return `<a href="${escapeHtml(href)}"${linkAttrs(href)}>${escapeHtml(label)}${iconSvg("arrowUpRight")}</a>`;
 }
 
 /** The agent nodes a harness will have to run; empty for node documents. */
@@ -317,11 +316,11 @@ function datasheet(
   // page's address, kind and source. A community page also points at
   // GitHub's own report form for the repository behind the document.
   const report = reportUrl(ref.kind, ref.owner, ref.repo, ref.slug, pageUrlOf(ref));
-  fields.push(sheetField(REPORT_LABEL, `${iconSvg("flag")} ${externalLink(report, REPORT_LABEL, true)}`));
+  fields.push(sheetField(REPORT_LABEL, `${iconSvg("flag")} ${externalLink(report, REPORT_LABEL)}`));
   lines.push(`- ${REPORT_LABEL}: [${REPORT_LABEL}](${report})`);
   if (!doc.official) {
     fields.push(
-      sheetField(REPORT_REPO_LABEL, externalLink(REPORT_REPOSITORY_HREF, REPORT_REPO_LABEL, true)),
+      sheetField(REPORT_REPO_LABEL, externalLink(REPORT_REPOSITORY_HREF, REPORT_REPO_LABEL)),
     );
     lines.push(`- ${REPORT_REPO_LABEL}: ${REPORT_REPOSITORY_HREF}`);
   }
@@ -366,7 +365,7 @@ export function documentPage(
   // copy of the graph, "Add to a graph" starts one with this node on it.
   const star = standalone
     ? ""
-    : `<a class="button" href="${ref.repoUrl}">${iconSvg("star")}<span>${STAR_BUTTON}</span></a>`;
+    : `<a class="button" href="${ref.repoUrl}"${linkAttrs(ref.repoUrl)}>${iconSvg("star")}<span>${STAR_BUTTON}</span></a>`;
   const edit =
     `<a class="button" href="/editor${editorQuery(ref)}">${iconSvg("pencilRuler")}<span>` +
     `${ref.kind === "graph" ? EDITOR_EDIT_COPY : EDITOR_ADD_TO_GRAPH}</span></a>`;

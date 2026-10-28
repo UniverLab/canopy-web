@@ -8,7 +8,8 @@
  */
 import { describe, expect, it } from "vitest";
 import { NOT_PAGE, handlePage } from "../src/pages/routes.js";
-import { BLOCKED_HEADING, INDEXING_BODY, INDEXING_HEADING, COPY_BUTTON, EMPTY_OFFICIAL_GRAPHS, EMPTY_OFFICIAL_NODES, REPORT_LABEL, REPORT_REPO_LABEL, SEARCH_BUTTON, SEARCH_LABEL } from "../src/pages/copy.js";
+import { linkAttrs } from "../src/pages/layout.js";
+import { BLOCKED_HEADING, INDEXING_BODY, INDEXING_HEADING, COMMUNITY_GRAPHS_HEADING, COMMUNITY_NODES_HEADING, COPY_BUTTON, EMPTY_OFFICIAL_GRAPHS, EMPTY_OFFICIAL_NODES, OFFICIAL_GRAPHS_HEADING, OFFICIAL_NODES_HEADING, REPORT_LABEL, REPORT_REPO_LABEL, SEARCH_BUTTON, SEARCH_LABEL } from "../src/pages/copy.js";
 import { REPORT_REPOSITORY_HREF, reportUrl } from "../src/pages/report.js";
 import { blockedKey, type BlockedEntry } from "../src/blocked.js";
 import { escapeHtml } from "../src/pages/md.js";
@@ -17,7 +18,7 @@ import { runIndexer } from "../src/indexer.js";
 import { resetIndexMemo } from "../src/store.js";
 import { FakeCache, FakeKV, dirBody, fakeFetch, fileBody, type Stub } from "./fakes.js";
 import { EVIL_README_TEXT, FIVE_NODE_GRAPH_TEXT, PAGES_README_TEXT } from "./pages-fixture.js";
-import { VALID_GRAPH_TEXT } from "./documents-fixture.js";
+import { VALID_GRAPH_TEXT, VALID_NODE_TEXT } from "./documents-fixture.js";
 import { communityStubs, flowSearchStubs, officialStubs, REPO_DIR, searchStubs } from "./stubs.js";
 
 const ORIGIN = "https://graphs.univerlab.org";
@@ -80,6 +81,13 @@ describe("route snapshots", () => {
     expect(html).toContain(`<span>${SEARCH_BUTTON}</span></button>`);
     expect(html).toContain(`<a href="/search?sort=top">`);
     expect(html).toContain(`<a href="/search?sort=new">`);
+    // The search form lives in the page body, above the lists — never in
+    // the header.
+    const main = html.slice(html.indexOf(`<main class="look-col">`), html.indexOf(`</main>`));
+    expect(main).toContain(`<form class="search"`);
+    expect(main.indexOf(`<form class="search"`)).toBeLessThan(main.indexOf(`<ol class="index">`));
+    const header = html.slice(html.indexOf(`<header class="site-header">`), html.indexOf(`</header>`));
+    expect(header).not.toContain(`<form`);
   });
 
   it("renders /search with community results", async () => {
@@ -353,7 +361,11 @@ describe("the page shell", () => {
     })).text();
     expect(html).toMatch(/<dt>Stars<\/dt><dd><svg[\s\S]*?<\/svg> 7 stars<\/dd>/);
     expect(html).toMatch(
-      /<a class="button" href="https:\/\/github.com\/UniverLab\/canopy-graphs"><svg[\s\S]*?<\/svg><span>Star on GitHub<\/span><\/a>/,
+      /<a class="button" href="https:\/\/github.com\/UniverLab\/canopy-graphs" target="_blank" rel="noopener noreferrer"><svg[\s\S]*?<\/svg><span>Star on GitHub<\/span><\/a>/,
+    );
+    // The GitHub source leaves the site too, in a new tab.
+    expect(html).toContain(
+      `<a href="https://github.com/UniverLab/canopy-graphs" target="_blank" rel="noopener noreferrer">`,
     );
     expect(html).toContain("<dt>Agent nodes</dt><dd>build, docs</dd>");
     expect(html).toContain("<dt>Nodes</dt><dd>agent 2 · check 1 · gate 1 · router 1</dd>");
@@ -372,7 +384,7 @@ describe("the page shell", () => {
     const html = await (await call("/g/acme/things/flow", { stubs: searchStubs() })).text();
     expect(html).toContain("canopy graph install acme/things/flow");
     expect(html).toMatch(
-      /<a class="button" href="https:\/\/github.com\/acme\/things"><svg[\s\S]*?<\/svg><span>Star on GitHub<\/span><\/a>/,
+      /<a class="button" href="https:\/\/github.com\/acme\/things" target="_blank" rel="noopener noreferrer"><svg[\s\S]*?<\/svg><span>Star on GitHub<\/span><\/a>/,
     );
   });
 
@@ -402,10 +414,55 @@ describe("the technical index", () => {
     expect(html).not.toMatch(/li\.row \{[^}]*background:/);
   });
 
-  it("keeps the Official heading as a mono uppercase kicker", async () => {
+  it("heads the home lists Official graphs and Official nodes, as mono uppercase kickers", async () => {
     const html = await (await call("/")).text();
-    expect(html).toContain(`<h2 class="kicker">Official</h2>`);
+    expect(html).toContain(`<h2 class="kicker">${OFFICIAL_GRAPHS_HEADING}</h2>`);
+    expect(html).toContain(`<h2 class="kicker">${OFFICIAL_NODES_HEADING}</h2>`);
+    expect(html).not.toContain(`<h2 class="kicker">Official</h2>`);
     expect(html).toMatch(/\.kicker \{[^}]*text-transform: uppercase;/);
+  });
+
+  it("lists community documents under Community graphs and Community nodes", async () => {
+    const withNode = searchStubs().map((stub) =>
+      stub.url === "repos/acme/things/git/trees/main"
+        ? {
+          ...stub,
+          body: {
+            tree: [
+              { path: "graphs/flow/graph.json", type: "blob" },
+              { path: "nodes/cool-node/node.json", type: "blob" },
+            ],
+          },
+        }
+        : stub,
+    );
+    const coolNode = JSON.stringify({ ...(JSON.parse(VALID_NODE_TEXT) as Record<string, unknown>), name: "cool-node" });
+    const stubs = [
+      ...withNode,
+      { url: "repos/acme/things/contents/nodes/cool-node/node.json", status: 200, body: fileBody("nodes/cool-node/node.json", coolNode) },
+      { url: "repos/acme/things/contents/nodes/cool-node/README.md", status: 404, body: {} },
+    ];
+    const html = await (await call("/", { stubs })).text();
+    expect(html).toContain(`<h2 class="kicker">${COMMUNITY_GRAPHS_HEADING}</h2>`);
+    expect(html).toContain(`<h2 class="kicker">${COMMUNITY_NODES_HEADING}</h2>`);
+    expect(html).toContain(`<a class="row-name" href="/g/acme/things/flow">hello-graph</a>`);
+    expect(html).toContain(`<a class="row-name" href="/n/acme/things/cool-node">cool-node</a>`);
+    // Community sections follow the official lists, in kind order.
+    const order = [OFFICIAL_GRAPHS_HEADING, OFFICIAL_NODES_HEADING, COMMUNITY_GRAPHS_HEADING, COMMUNITY_NODES_HEADING]
+      .map((heading) => html.indexOf(heading));
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    const twin = await (await call("/", { stubs, accept: "text/markdown" })).text();
+    expect(twin).toContain(`## ${COMMUNITY_GRAPHS_HEADING}`);
+    expect(twin).toContain(`## ${COMMUNITY_NODES_HEADING}`);
+  });
+
+  it("shows no community section when nothing community is indexed", async () => {
+    const html = await (await call("/")).text();
+    expect(html).not.toContain(COMMUNITY_GRAPHS_HEADING);
+    expect(html).not.toContain(COMMUNITY_NODES_HEADING);
+    const twin = await (await call("/", { accept: "text/markdown" })).text();
+    expect(twin).not.toContain(COMMUNITY_GRAPHS_HEADING);
+    expect(twin).not.toContain(COMMUNITY_NODES_HEADING);
   });
 
   it("marks the active tab underlined, with aria-current", async () => {
@@ -456,11 +513,11 @@ describe("the technical index", () => {
 });
 
 describe("the header band", () => {
-  it("holds the banner home link, the search form and Editor/Publish/Source over the honeycomb", async () => {
+  it("holds the banner home link and Editor/Publish/Patterns/Source over the honeycomb, and no form", async () => {
     const html = await (await call("/")).text();
     const header = html.slice(html.indexOf(`<header class="site-header">`), html.indexOf(`</header>`));
     expect(header).toContain(`<a class="banner-home" href="/" aria-label="Canopy graphs, home">`);
-    expect(header).toContain(`<form class="search"`);
+    expect(header).not.toContain(`<form`);
     // Editor wears the pencil ruler, Publish the upload arrow, Source the
     // GitHub mark — Editor sits beside Publish, per the editor spec. Each
     // link carries its label as aria-label and title too, so the word
@@ -468,7 +525,7 @@ describe("the header band", () => {
     expect(header).toMatch(/<a href="\/editor" aria-label="Editor" title="Editor"><svg[\s\S]*?<\/svg><span>Editor<\/span><\/a>/);
     expect(header).toMatch(/<a href="\/publish" aria-label="Publish" title="Publish"><svg[\s\S]*?<\/svg><span>Publish<\/span><\/a>/);
     expect(header).toMatch(
-      /<a href="https:\/\/github.com\/UniverLab\/canopy-web" aria-label="Source" title="Source"><svg[\s\S]*?<\/svg><span>Source<\/span><\/a>/,
+      /<a href="https:\/\/github.com\/UniverLab\/canopy-web" target="_blank" rel="noopener noreferrer" aria-label="Source" title="Source"><svg[\s\S]*?<\/svg><span>Source<\/span><\/a>/,
     );
     expect(header).toContain(`<div class="fondo" id="fondo" aria-hidden="true"></div>`);
     // The band is 160 px on desktop, 120 px on mobile, clipping the honeycomb.
@@ -476,9 +533,43 @@ describe("the header band", () => {
     expect(html).toMatch(/@media \(min-width: 640px\) \{[\s\S]*\.site-header \{ height: 160px; \}/);
   });
 
-  it("holds the current query in the search box", async () => {
+  it("holds the current query in the search box, in the page body", async () => {
     const html = await (await call("/search?q=flow&sort=top", { stubs: searchStubs() })).text();
     expect(html).toContain(`<input id="q" name="q" type="search" value="flow"`);
+    const main = html.slice(html.indexOf(`<main class="look-col">`), html.indexOf(`</main>`));
+    expect(main).toContain(`<form class="search"`);
+    const header = html.slice(html.indexOf(`<header class="site-header">`), html.indexOf(`</header>`));
+    expect(header).not.toContain(`<form`);
+  });
+
+  it("shows no search box on pages that are not home or search", async () => {
+    for (const path of ["/g/hello-graph", "/n/hello-node", "/editor", "/publish", "/patterns"]) {
+      const html = await (await call(path, { stubs: searchStubs() })).text();
+      expect(html, path).not.toContain(`<form class="search"`);
+    }
+  });
+});
+
+describe("the link helper", () => {
+  it("opens an outside URL in a new tab, safely", () => {
+    expect(linkAttrs("https://github.com/UniverLab/canopy-web")).toBe(
+      ` target="_blank" rel="noopener noreferrer"`,
+    );
+    expect(linkAttrs("https://univerlab.org/canopy/")).toBe(
+      ` target="_blank" rel="noopener noreferrer"`,
+    );
+  });
+
+  it("keeps an extra rel in front on an outside URL", () => {
+    expect(linkAttrs("https://example.com/agents", "nofollow")).toBe(
+      ` target="_blank" rel="nofollow noopener noreferrer"`,
+    );
+  });
+
+  it("leaves a same-site link in the current tab", () => {
+    expect(linkAttrs("/g/hello-graph")).toBe("");
+    expect(linkAttrs("#what-this-runs")).toBe("");
+    expect(linkAttrs("https://graphs.univerlab.org/g/hello-graph")).toBe("");
   });
 });
 
@@ -857,6 +948,7 @@ describe("the blocked list", () => {
     expect(html).toContain(BLOCKED_HEADING);
     expect(html).toContain(blocked.reason);
     expect(html).toContain(`href="${blocked.issue}"`);
+    expect(html).toContain(`target="_blank" rel="noopener noreferrer">The community report</a>`);
     expect(html).not.toContain("<dt>Install</dt>");
   });
 

@@ -189,7 +189,7 @@ describe("the page states the code's own values", () => {
   it("tells readers official documents live in the official repo, proposed by pull request", async () => {
     const html = await (await call("/publish")).text();
     expect(html).toContain(
-      `Official documents live in <a href="${OFFICIAL_HREF}" rel="nofollow">${OFFICIAL_REPOSITORY}<svg`,
+      `Official documents live in <a href="${OFFICIAL_HREF}" target="_blank" rel="nofollow noopener noreferrer">${OFFICIAL_REPOSITORY}<svg`,
     );
     expect(html).toContain("proposed by pull request there");
     expect(html).toContain("the quickest way to start a graphs repo");

@@ -14,7 +14,7 @@
  * inside its block at 390 px, and a missing document; a screenshot per page
  * is attached to the report for the operator's review, never compared.
  * The stage and the meaning tints are asserted as computed colours: the
- * plate on black, the datasheet in info, the community warning and runs
+ * plate and the datasheet on black panels, the community warning and runs
  * summary in warn, the 404 block in error — no body banner anywhere, and
  * the colophon links share one row at desktop width.
  */
@@ -162,7 +162,14 @@ for (const viewport of VIEWPORTS) {
           expect(box.height).toBeGreaterThanOrEqual(44);
         }
       }
-      await expect(page.locator("header form.search input#q")).toBeVisible();
+      // The header holds the banner and the nav only: the search form
+      // lives in the page body on the home page, and nowhere else here.
+      await expect(page.locator("header form")).toHaveCount(0);
+      if (target.label === "home") {
+        await expect(page.locator("main form.search input#q")).toBeVisible();
+      } else {
+        await expect(page.locator("main form.search")).toHaveCount(0);
+      }
       const colophon = page.locator("footer.look-colophon");
       await expect(colophon).toBeVisible();
       await expect(colophon).toContainText("Canopy graphs");
@@ -178,14 +185,14 @@ for (const viewport of VIEWPORTS) {
 
       // Listing pages render dense rows; document pages a plate beside a sheet.
       if (target.label === "home") {
-        await expect(page.locator("ol.index > li.row")).toHaveCount(2);
+        await expect(page.locator("ol.index > li.row")).toHaveCount(3);
         // The index rows keep their one-line command beside the Copy button.
         const indexCode = page.locator("ol.index > li.row .row-install code").first();
         await expect(indexCode).toBeVisible();
         const whiteSpace = await indexCode.evaluate((el) => getComputedStyle(el).whiteSpace);
         expect(whiteSpace).toBe("nowrap");
       } else {
-        // The plate is the black stage; the datasheet wears the info tint.
+        // The plate is the black stage; the datasheet sits on the same panel.
         const painted = await page.evaluate(() => ({
           plate: getComputedStyle(document.querySelector("figure.plate") as HTMLElement)
             .backgroundColor,
@@ -193,7 +200,7 @@ for (const viewport of VIEWPORTS) {
             .backgroundColor,
         }));
         expect(painted.plate).toBe("rgb(5, 5, 5)");
-        expect(painted.sheet).toBe("rgb(1, 29, 38)");
+        expect(painted.sheet).toBe("rgb(5, 5, 5)");
         const plate = page.locator("figure.plate");
         await expect(plate).toHaveCount(1);
         await expect(page.locator("dl.sheet")).toHaveCount(1);
@@ -259,9 +266,9 @@ for (const viewport of VIEWPORTS) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await page.goto("/", { waitUntil: "load" });
 
-    // The header's icons are Lucide data drawn inline: currentColor, hidden
+    // The page's icons are Lucide data drawn inline: currentColor, hidden
     // from readers, and no font or sprite request anywhere.
-    const search = page.locator("header form.search button svg.icon");
+    const search = page.locator("main form.search button svg.icon");
     await expect(search).toHaveCount(1);
     await expect(search).toHaveAttribute("aria-hidden", "true");
     await expect(search).toHaveAttribute("stroke", "currentColor");
@@ -275,7 +282,7 @@ for (const viewport of VIEWPORTS) {
     ).toBe(0);
 
     // Every row's kind chip carries its icon, the official badge its own.
-    await expect(page.locator("ol.index .kind svg.icon")).toHaveCount(2);
+    await expect(page.locator("ol.index .kind svg.icon")).toHaveCount(3);
     await expect(page.locator("ol.index .badge-official svg.icon")).toHaveCount(2);
     await expect(page.locator("ol.index .row-meta svg.icon").first()).toBeVisible();
 
@@ -408,6 +415,41 @@ test("the colophon links share one row at 1280x900", async ({ page }) => {
     .evaluateAll((links) => links.map((link) => (link as HTMLElement).offsetTop));
   expect(tops).toHaveLength(5);
   expect(new Set(tops).size).toBe(1);
+});
+
+test("the home lists sit on dark panels with the search in the page at 1280x900", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/", { waitUntil: "load" });
+
+  // The lists read on near-black panels over the green ground.
+  const painted = await page.evaluate(() => ({
+    body: getComputedStyle(document.body).backgroundColor,
+    panel: getComputedStyle(document.querySelector("ol.index") as HTMLElement).backgroundColor,
+  }));
+  expect(painted.body).toBe("rgb(1, 38, 36)");
+  expect(painted.panel).toBe("rgb(5, 5, 5)");
+
+  // The search form renders in the page body, above the lists — and no
+  // header descendant is a form.
+  await expect(page.locator("main form.search")).toHaveCount(1);
+  await expect(page.locator("header form")).toHaveCount(0);
+  const order = await page.evaluate(() => {
+    const form = document.querySelector("main form.search")?.getBoundingClientRect().top ?? -1;
+    const list = document.querySelector("main ol.index")?.getBoundingClientRect().top ?? -1;
+    return { form, list };
+  });
+  expect(order.form).toBeGreaterThan(-1);
+  expect(order.form).toBeLessThan(order.list);
+
+  // The sections name their standing and kind on both sides.
+  await expect(page.locator("main h2.kicker", { hasText: "Official graphs" })).toHaveCount(1);
+  await expect(page.locator("main h2.kicker", { hasText: "Official nodes" })).toHaveCount(1);
+  await expect(page.locator("main h2.kicker", { hasText: "Community graphs" })).toHaveCount(1);
+
+  // The search results page carries the same form, in the body too.
+  await page.goto("/search?q=evil", { waitUntil: "load" });
+  await expect(page.locator("main form.search input#q")).toHaveValue("evil");
+  await expect(page.locator("header form")).toHaveCount(0);
 });
 
 test("the header fits the banner and its four links at 480x900", async ({ page }) => {

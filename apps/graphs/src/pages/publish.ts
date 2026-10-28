@@ -58,7 +58,7 @@ import {
   publishTopicStep,
   publishWhenIndex,
 } from "./copy.js";
-import { type Page } from "./layout.js";
+import { linkAttrs, type Page } from "./layout.js";
 import { copyButton } from "./look.js";
 import { escapeHtml } from "./md.js";
 import { iconSvg } from "../../../../packages/look/icon-svg.js";
@@ -79,7 +79,7 @@ function paraLinks(text: string, links: Array<{ label: string; href: string }>):
   let out = escapeHtml(text);
   for (const { label, href } of links) {
     const anchor =
-      `<a href="${escapeHtml(href)}" rel="nofollow">${escapeHtml(label)}` +
+      `<a href="${escapeHtml(href)}"${linkAttrs(href, "nofollow")}>${escapeHtml(label)}` +
       `${iconSvg("arrowUpRight")}</a>`;
     out = out.replace(escapeHtml(label), () => anchor);
   }
