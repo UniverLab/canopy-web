@@ -35,6 +35,8 @@ export interface CatalogCli {
   cli: string;
   label: string;
   models: string[];
+  /** True when the harness accepts yolo spawns; missing means unsupported. */
+  yolo?: boolean;
 }
 
 export interface CatalogProject {
@@ -73,12 +75,18 @@ export interface PromptDraft {
   project?: string;
 }
 
+// The New dialog's spawn: an agent runs a harness in a directory, a
+// terminal runs the user's shell there. Kind defaults to agent; terminal
+// spawns omit cli, prompt and yolo entirely.
+export type SpawnKind = "agent" | "terminal";
+
 export interface SpawnRequest {
-  cli: string;
-  model?: string;
+  kind?: SpawnKind;
+  cli?: string;
   workdir: string;
   name?: string;
   prompt?: string;
+  yolo?: boolean;
 }
 
 function isRecord(frame: unknown): frame is Record<string, unknown> {
@@ -233,7 +241,9 @@ function parseCli(value: unknown): CatalogCli | null {
     return null;
   }
   const label = typeof value.label === "string" && value.label !== "" ? value.label : value.cli;
-  return { cli: value.cli, label, models: stringList(value.models) };
+  // A host without the flag means unsupported: only an explicit true lands.
+  const yolo = isRecord(value) && value.yolo === true ? { yolo: true as const } : {};
+  return { cli: value.cli, label, models: stringList(value.models), ...yolo };
 }
 
 function parseProject(value: unknown): CatalogProject | null {
@@ -436,9 +446,19 @@ export function buildCatalog(req: string): string {
 }
 
 export function buildSpawn(req: string, spawn: SpawnRequest): string {
-  const frame: Record<string, unknown> = { t: "spawn", req, kind: "agent", cli: spawn.cli };
-  if (spawn.model !== undefined && spawn.model !== "") {
-    frame.model = spawn.model;
+  // A terminal is the user's shell in a directory: no harness, no prompt,
+  // no yolo, even when the caller left them on the request.
+  if (spawn.kind === "terminal") {
+    const frame: Record<string, unknown> = { t: "spawn", req, kind: "terminal" };
+    frame.workdir = spawn.workdir;
+    if (spawn.name !== undefined && spawn.name !== "") {
+      frame.name = spawn.name;
+    }
+    return JSON.stringify(frame);
+  }
+  const frame: Record<string, unknown> = { t: "spawn", req, kind: "agent" };
+  if (spawn.cli !== undefined && spawn.cli !== "") {
+    frame.cli = spawn.cli;
   }
   frame.workdir = spawn.workdir;
   if (spawn.name !== undefined && spawn.name !== "") {
@@ -446,6 +466,9 @@ export function buildSpawn(req: string, spawn: SpawnRequest): string {
   }
   if (spawn.prompt !== undefined && spawn.prompt !== "") {
     frame.prompt = spawn.prompt;
+  }
+  if (spawn.yolo === true) {
+    frame.yolo = true;
   }
   return JSON.stringify(frame);
 }

@@ -8,8 +8,8 @@
 import { Composer } from "./composer.js";
 import { CatalogStore } from "./catalog.js";
 import { Builder } from "./builder.js";
-import { renderKeyBar } from "./keys.js";
-import type { KeyDef } from "./keys.js";
+import { renderKeyBar, updateKeyBarLatches } from "./keys.js";
+import { keyBytesWithModifiers, ModifierLatches, textBytesWithModifiers } from "./modifiers.js";
 import { NewDialog } from "./new-dialog.js";
 import { defaultDeviceLabel } from "./pairing.js";
 import { connectFailMessage } from "./peer.js";
@@ -33,8 +33,10 @@ export interface ShellCallbacks {
   onPairAgain: () => void;
   onOpenSession: (id: string) => void;
   onLeaveSession: () => void;
-  onKeyPress: (def: KeyDef) => void;
-  onTerminalInput: (text: string) => void;
+  /** Key-bar bytes with the latches applied; the shell owns the latches. */
+  onKeyPress: (bytes: Uint8Array) => void;
+  /** Phone-keyboard bytes with the latches applied. */
+  onTerminalInput: (bytes: Uint8Array) => void;
   onComposerSend: (text: string, req: string) => void;
   /** False when the frame could not be sent; the dialog then says so. */
   onSpawn: (spawn: SpawnRequest, req: string) => boolean;
@@ -52,6 +54,7 @@ export interface Shell {
   showBuilder: () => void;
   setLogin: (login: string | null) => void;
   setHostLabel: (label: string) => void;
+  setHostId: (id: string) => void;
   setConnectionState: (state: string) => void;
   setOnlineHosts: (hosts: OnlineHost[]) => void;
   setPairedHosts: (hosts: { host_id: string; label: string }[]) => void;
@@ -110,6 +113,10 @@ export function createShell(
   let route: Route = "signin";
   let login: string | null = null;
   let hostLabel = "";
+  let hostId = "";
+  // The one-shot Ctrl/Shift latches for the open session, released on
+  // every consumed key and every session render.
+  const latches = new ModifierLatches();
   let connectionState = "connecting";
   let online: OnlineHost[] = [];
   let paired: { host_id: string; label: string }[] = [];
@@ -130,9 +137,13 @@ export function createShell(
   // The catalog the host sent and the two sheets that consume it. The
   // dialogs subscribe to the store themselves while they are open.
   const catalog = deps?.catalog ?? new CatalogStore();
-  const newDialog = new NewDialog(catalog, {
-    onSpawn: (spawn, req) => callbacks.onSpawn(spawn, req),
-  });
+  const newDialog = new NewDialog(
+    catalog,
+    {
+      onSpawn: (spawn, req) => callbacks.onSpawn(spawn, req),
+    },
+    { sessions: store, hostId },
+  );
   const builder = new Builder(catalog, {
     onCompose: (draft, req) => callbacks.onCompose(draft, req),
     onSend: (draft, req) => callbacks.onSendDraft(draft, req),
@@ -365,6 +376,7 @@ export function createShell(
 
   const renderSession = () => {
     teardownSessionWidgets();
+    latches.release();
     const flash = spawnFlash;
     spawnFlash = null;
     root.innerHTML = `
@@ -428,7 +440,25 @@ export function createShell(
     });
     const bar = root.querySelector<HTMLElement>("#keybar");
     if (bar) {
-      renderKeyBar(bar, (def) => callbacks.onKeyPress(def));
+      renderKeyBar(bar, (def) => {
+        // A latch toggles and shows pressed; a second tap releases it
+        // without sending. Any other key goes out with the latch applied,
+        // then the latch releases.
+        if (def.id === "ctrl") {
+          latches.toggleCtrl();
+          updateKeyBarLatches(bar, latches.snapshot());
+          return;
+        }
+        if (def.id === "shift") {
+          latches.toggleShift();
+          updateKeyBarLatches(bar, latches.snapshot());
+          return;
+        }
+        const bytes = keyBytesWithModifiers(def.id, latches.snapshot());
+        latches.release();
+        updateKeyBarLatches(bar, latches.snapshot());
+        callbacks.onKeyPress(bytes);
+      });
     }
     const slot = root.querySelector<HTMLElement>("#composer-slot");
     if (slot) {
@@ -548,6 +578,10 @@ export function createShell(
         render();
       }
     },
+    setHostId(id: string): void {
+      hostId = id;
+      newDialog.setHostId(id);
+    },
     setConnectionState(state: string): void {
       connectionState = state;
       if (route === "sessions" || route === "session") {
@@ -620,7 +654,19 @@ export function createShell(
       terminalView = new TerminalView(
         terminalFactory,
         {
-          onUserInput: (text) => callbacks.onTerminalInput(text),
+          // Phone-keyboard keys honour the latches too: Ctrl+c sends 0x03,
+          // then the latch releases and the bar shows it.
+          onUserInput: (text) => {
+            const bytes = textBytesWithModifiers(text, latches.snapshot());
+            if (latches.hasLatch) {
+              latches.release();
+              const bar = root.querySelector<HTMLElement>("#keybar");
+              if (bar) {
+                updateKeyBarLatches(bar, latches.snapshot());
+              }
+            }
+            callbacks.onTerminalInput(bytes);
+          },
           onFollowChange: ({ following }) => {
             if (latestButton) {
               latestButton.hidden = following;

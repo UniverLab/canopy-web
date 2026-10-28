@@ -9,7 +9,7 @@ import { CatalogStore } from "./catalog.js";
 import { createChannelHandler } from "./channel.js";
 import { b64encode } from "./crypto.js";
 import { mountCanopyBackground } from "../../../../packages/look/fondo/index.js";
-import { buildCatalog, buildList, newReqId } from "./protocol.js";
+import { buildCatalog, buildList, buildSpawn, newReqId } from "./protocol.js";
 import type { PromptDraft, SessionItem, ShelfItem } from "./protocol.js";
 import { createFrameRouter } from "./router.js";
 import { SessionController } from "./session.js";
@@ -23,7 +23,7 @@ const b64 = (text: string): string => b64encode(new TextEncoder().encode(text));
 
 const CATALOG = {
   clis: [
-    { cli: "muse", label: "Muse", models: ["spark", "core"] },
+    { cli: "muse", label: "Muse", models: ["spark", "core"], yolo: true },
     { cli: "claude", label: "Claude", models: [] },
   ],
   projects: [
@@ -167,8 +167,8 @@ function main(): void {
       id?: string;
       req?: string;
       text?: string;
+      kind?: string;
       cli?: string;
-      model?: string;
       workdir?: string;
       name?: string;
       file_id?: string;
@@ -226,11 +226,12 @@ function main(): void {
     } else if (frame.t === "spawn") {
       nextSpawn += 1;
       const id = `spawned-${nextSpawn}`;
+      const terminal = frame.kind === "terminal";
       const item: SessionItem = {
         id,
         name: frame.name ?? id,
-        cli: frame.cli ?? "",
-        model: frame.model ?? "",
+        cli: terminal ? "" : (frame.cli ?? ""),
+        model: "",
         workdir: frame.workdir ?? "",
         status: "running",
         lastOutputAt: null,
@@ -272,19 +273,16 @@ function main(): void {
         controller.close();
         shell.showSessions();
       },
-      onKeyPress: (def) => {
-        controller.sendInputBytes(new Uint8Array(def.bytes));
+      onKeyPress: (bytes) => {
+        controller.sendInputBytes(bytes);
       },
-      onTerminalInput: (text) => {
-        controller.sendInputText(text);
+      onTerminalInput: (bytes) => {
+        controller.sendInputBytes(bytes);
       },
       onComposerSend: (text, req) => {
         controller.sendPrompt(text, req);
       },
-      onSpawn: (spawn, req) => {
-        const frame = { t: "spawn", req, kind: "agent", ...spawn };
-        return send(JSON.stringify(frame));
-      },
+      onSpawn: (spawn, req) => send(buildSpawn(req, spawn)),
       onCompose: (draft, req) => send(JSON.stringify({ t: "compose", req, draft })),
       onSendDraft: (draft, req) => controller.sendPromptDraft(draft, req),
     },

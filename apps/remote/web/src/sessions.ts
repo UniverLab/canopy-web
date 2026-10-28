@@ -130,7 +130,7 @@ export function renderSessions(
   const list = items.length === 0 && shelfRow === "";
   root.innerHTML =
     `<div class="sessions-head"><h2>Sessions</h2>` +
-    `<button type="button" id="session-new">New agent</button></div>` +
+    `<button type="button" id="session-new">New session</button></div>` +
     (list ? `<p class="empty">No sessions on this host.</p>` : `<ul class="session-list">${shelfRow}${rows}</ul>`);
   root.querySelector("#session-new")?.addEventListener("click", () => callbacks.onNew());
   if (shelfOn) {

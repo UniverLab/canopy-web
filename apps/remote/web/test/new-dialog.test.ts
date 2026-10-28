@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CatalogStore } from "../src/catalog.js";
-import { NewDialog } from "../src/new-dialog.js";
+import { readLastDir, readRecentDirs } from "../src/dir-history.js";
+import { NewDialog, YOLO_HINT } from "../src/new-dialog.js";
+import type { Catalog, SessionItem } from "../src/protocol.js";
 import type { SpawnRequest } from "../src/protocol.js";
-import type { Catalog } from "../src/protocol.js";
 
 const CATALOG: Catalog = {
   clis: [
-    { cli: "muse", label: "Muse", models: ["spark", "core"] },
+    { cli: "muse", label: "Muse", models: ["spark", "core"], yolo: true },
     { cli: "claude", label: "Claude", models: [] },
   ],
   projects: [
@@ -17,6 +18,18 @@ const CATALOG: Catalog = {
   presets: [],
   skills: [],
 };
+
+const SESSIONS: SessionItem[] = [
+  {
+    id: "s1",
+    name: "live",
+    cli: "muse",
+    model: "spark",
+    workdir: "/home/u/live",
+    status: "running",
+    lastOutputAt: null,
+  },
+];
 
 describe("NewDialog", () => {
   let root: HTMLDivElement;
@@ -39,25 +52,36 @@ describe("NewDialog", () => {
     );
   };
 
-  const change = (selector: string, value: string): void => {
+  const changeSelect = (selector: string, value: string): void => {
     const el = query<HTMLSelectElement>(selector);
     el.value = value;
     el.dispatchEvent(new Event("change", { bubbles: true }));
   };
 
+  const pickKind = (kind: string): void => {
+    const el = query<HTMLInputElement>(`input[name="kind"][value="${kind}"]`);
+    el.checked = true;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+
   beforeEach(() => {
+    localStorage.clear();
     root = document.createElement("div");
     document.body.appendChild(root);
     catalog = new CatalogStore();
     catalog.replace(CATALOG);
     spawns = [];
     connected = true;
-    dialog = new NewDialog(catalog, {
-      onSpawn: (spawn, req) => {
-        spawns.push({ spawn, req });
-        return connected;
+    dialog = new NewDialog(
+      catalog,
+      {
+        onSpawn: (spawn, req) => {
+          spawns.push({ spawn, req });
+          return connected;
+        },
       },
-    });
+      { sessions: SESSIONS, hostId: "h1" },
+    );
     dialog.open(root);
   });
 
@@ -65,36 +89,47 @@ describe("NewDialog", () => {
     dialog.close();
     root.remove();
     document.body.innerHTML = "";
+    localStorage.clear();
   });
 
-  it("defaults to the first harness with its models and no project", () => {
+  it("defaults to Agent with the harness, directory, yolo, name and prompt", () => {
+    expect(query<HTMLInputElement>("#new-kind-agent").checked).toBe(true);
     expect(query<HTMLSelectElement>("#new-cli").value).toBe("muse");
-    const models = [...root.querySelectorAll<HTMLOptionElement>("#new-model option")];
-    expect(models.map((option) => option.value)).toEqual(["", "spark", "core"]);
-    expect(query<HTMLSelectElement>("#new-model").value).toBe("");
-    expect(query<HTMLSelectElement>("#new-project").value).toBe("");
-    expect(query<HTMLOptionElement>("#new-project option").textContent).toBe("Choose a project…");
+    expect(root.querySelector("#new-directory")).not.toBeNull();
+    expect(root.querySelector("#new-yolo")).not.toBeNull();
+    expect(root.querySelector("#new-name")).not.toBeNull();
+    expect(root.querySelector("#new-prompt")).not.toBeNull();
   });
 
-  it("preselects the only project and follows a harness change", () => {
-    catalog.replace({ ...CATALOG, projects: [CATALOG.projects[0] as Catalog["projects"][number]] });
-    expect(query<HTMLSelectElement>("#new-project").value).toBe("demo");
-    change("#new-cli", "claude");
-    expect(query<HTMLSelectElement>("#new-cli").value).toBe("claude");
-    const models = [...root.querySelectorAll<HTMLOptionElement>("#new-model option")];
-    expect(models.map((option) => option.value)).toEqual([""]);
-    expect(query<HTMLSelectElement>("#new-model").value).toBe("");
+  it("has no model field anywhere", () => {
+    expect(root.querySelector("#new-model")).toBeNull();
+    expect(root.querySelector('[name="model"]')).toBeNull();
+    pickKind("terminal");
+    expect(root.querySelector("#new-model")).toBeNull();
   });
 
-  it("sends the exact spawn frame and omits empty optional fields", () => {
-    change("#new-cli", "claude");
-    change("#new-project", "demo");
+  it("shows only directory and name for Terminal", () => {
+    pickKind("terminal");
+    expect(root.querySelector("#new-directory")).not.toBeNull();
+    expect(root.querySelector("#new-name")).not.toBeNull();
+    expect(root.querySelector("#new-cli")).toBeNull();
+    expect(root.querySelector("#new-yolo")).toBeNull();
+    expect(root.querySelector("#new-prompt")).toBeNull();
+    pickKind("agent");
+    expect(root.querySelector("#new-cli")).not.toBeNull();
+    expect(root.querySelector("#new-yolo")).not.toBeNull();
+    expect(root.querySelector("#new-prompt")).not.toBeNull();
+  });
+
+  it("sends the exact agent spawn and omits empty optional fields", () => {
+    query<HTMLInputElement>("#new-directory").value = "  /home/u/demo  ";
     query<HTMLInputElement>("#new-name").value = "  build  ";
     query<HTMLTextAreaElement>("#new-prompt").value = "  do the thing \n";
     submit();
     expect(spawns).toHaveLength(1);
     expect(spawns[0]?.spawn).toEqual({
-      cli: "claude",
+      kind: "agent",
+      cli: "muse",
       workdir: "/home/u/demo",
       name: "build",
       prompt: "do the thing",
@@ -103,27 +138,91 @@ describe("NewDialog", () => {
     expect(dialog.isOpen).toBe(true);
   });
 
-  it("includes a chosen model", () => {
-    change("#new-project", "other");
-    change("#new-model", "spark");
+  it("sends a terminal spawn without cli, prompt or yolo", () => {
+    pickKind("terminal");
+    query<HTMLInputElement>("#new-directory").value = "~/scratch";
+    query<HTMLInputElement>("#new-name").value = "shell";
     submit();
-    expect(spawns[0]?.spawn).toEqual({
-      cli: "muse",
-      model: "spark",
-      workdir: "/home/u/other",
-    });
+    expect(spawns).toHaveLength(1);
+    expect(spawns[0]?.spawn).toEqual({ kind: "terminal", workdir: "~/scratch", name: "shell" });
+    expect("cli" in (spawns[0]?.spawn ?? {})).toBe(false);
+    expect("prompt" in (spawns[0]?.spawn ?? {})).toBe(false);
+    expect("yolo" in (spawns[0]?.spawn ?? {})).toBe(false);
   });
 
-  it("requires a project", () => {
+  it("enables yolo only for harnesses whose catalog entry carries it", () => {
+    const box = query<HTMLInputElement>("#new-yolo");
+    expect(box.disabled).toBe(false);
+    expect(query<HTMLElement>("#new-yolo-hint").hidden).toBe(true);
+    changeSelect("#new-cli", "claude");
+    expect(query<HTMLInputElement>("#new-yolo").disabled).toBe(true);
+    const hint = query<HTMLElement>("#new-yolo-hint");
+    expect(hint.hidden).toBe(false);
+    expect(hint.textContent).toBe(YOLO_HINT);
+  });
+
+  it("sends yolo only when checked, and never remembers it", () => {
+    const box = query<HTMLInputElement>("#new-yolo");
+    box.checked = true;
+    box.dispatchEvent(new Event("change", { bubbles: true }));
+    query<HTMLInputElement>("#new-directory").value = "/home/u/demo";
+    submit();
+    expect(spawns[0]?.spawn).toEqual({
+      kind: "agent",
+      cli: "muse",
+      workdir: "/home/u/demo",
+      yolo: true,
+    });
+    // A harness switch to an unsupported entry unchecks.
+    changeSelect("#new-cli", "claude");
+    expect(query<HTMLInputElement>("#new-yolo").checked).toBe(false);
+    // A fresh open is always off.
+    dialog.close();
+    dialog.open(root);
+    expect(query<HTMLInputElement>("#new-yolo").checked).toBe(false);
+  });
+
+  it("requires a directory", () => {
     submit();
     expect(spawns).toHaveLength(0);
-    const error = query<HTMLElement>("#new-project-error");
+    const error = query<HTMLElement>("#new-directory-error");
     expect(error.hidden).toBe(false);
-    expect(error.textContent).toBe("Choose a project");
+    expect(error.textContent).toBe("Enter a directory");
+    pickKind("terminal");
+    submit();
+    expect(spawns).toHaveLength(0);
+    expect(query<HTMLElement>("#new-directory-error").hidden).toBe(false);
+  });
+
+  it("suggests catalog, session and recent directories without duplicates", () => {
+    query<HTMLInputElement>("#new-directory").value = "/home/u/typed";
+    submit();
+    expect(spawns).toHaveLength(1);
+    dialog.close();
+    dialog.open(root);
+    const options = [...root.querySelectorAll<HTMLOptionElement>("#new-directory-list option")].map(
+      (option) => option.value,
+    );
+    expect(options).toEqual(["/home/u/demo", "/home/u/other", "/home/u/live", "/home/u/typed"]);
+  });
+
+  it("prefills the last directory used on this host", () => {
+    query<HTMLInputElement>("#new-directory").value = "/home/u/demo";
+    submit();
+    expect(readLastDir("h1")).toBe("/home/u/demo");
+    expect(readRecentDirs()).toEqual(["/home/u/demo"]);
+    expect(dialog.handleSpawned(spawns[0]?.req ?? "")).toBe(true);
+    dialog.open(root);
+    expect(query<HTMLInputElement>("#new-directory").value).toBe("/home/u/demo");
+    // Other hosts start empty: memory is per host.
+    dialog.setHostId("h2");
+    dialog.close();
+    dialog.open(root);
+    expect(query<HTMLInputElement>("#new-directory").value).toBe("");
   });
 
   it("closes on a matching spawned and ignores other reqs", () => {
-    change("#new-project", "demo");
+    query<HTMLInputElement>("#new-directory").value = "/home/u/demo";
     submit();
     const req = spawns[0]?.req ?? "";
     expect(dialog.handleSpawned("other")).toBe(false);
@@ -133,22 +232,22 @@ describe("NewDialog", () => {
     expect(root.querySelector(".sheet-overlay")).toBeNull();
   });
 
-  it("shows a spawn error beside the project field and keeps the form", () => {
-    change("#new-project", "demo");
+  it("shows a host path error beside the directory field and keeps the form", () => {
+    query<HTMLInputElement>("#new-directory").value = "/home/u/nope";
     query<HTMLInputElement>("#new-name").value = "build";
     submit();
     const req = spawns[0]?.req ?? "";
-    expect(dialog.handleError("unknown project: demo", req, "unknown_project")).toBe(true);
-    const error = query<HTMLElement>("#new-project-error");
+    expect(dialog.handleError("unknown workdir: /home/u/nope", req, "unknown_project")).toBe(true);
+    const error = query<HTMLElement>("#new-directory-error");
     expect(error.hidden).toBe(false);
-    expect(error.textContent).toBe("unknown project: demo");
+    expect(error.textContent).toBe("unknown workdir: /home/u/nope");
     expect(dialog.isOpen).toBe(true);
     expect(query<HTMLInputElement>("#new-name").value).toBe("build");
-    expect(query<HTMLSelectElement>("#new-project").value).toBe("demo");
+    expect(query<HTMLInputElement>("#new-directory").value).toBe("/home/u/nope");
   });
 
   it("shows other errors above the actions", () => {
-    change("#new-project", "demo");
+    query<HTMLInputElement>("#new-directory").value = "/home/u/demo";
     submit();
     const req = spawns[0]?.req ?? "";
     expect(dialog.handleError("spawn_failed: harness exited", req, "spawn_failed")).toBe(true);
@@ -158,18 +257,18 @@ describe("NewDialog", () => {
 
   it("says so when the frame cannot be sent", () => {
     connected = false;
-    change("#new-project", "demo");
+    query<HTMLInputElement>("#new-directory").value = "/home/u/demo";
     submit();
     expect(query("#new-error").textContent).toBe("Not connected");
     expect(dialog.isOpen).toBe(true);
   });
 
-  it("fills the pickers when the catalog arrives late", () => {
+  it("fills the harness picker when the catalog arrives late", () => {
     catalog.clear();
     expect(query<HTMLOptionElement>("#new-cli option").textContent).toBe("No harnesses");
     catalog.replace(CATALOG);
     expect(query<HTMLSelectElement>("#new-cli").value).toBe("muse");
-    expect([...root.querySelectorAll("#new-project option")]).toHaveLength(3);
+    expect(query<HTMLInputElement>("#new-yolo").disabled).toBe(false);
   });
 
   it("closes from the close button", () => {

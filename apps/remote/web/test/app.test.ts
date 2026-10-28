@@ -3,8 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createShell } from "../src/app.js";
 import type { Shell, ShellCallbacks } from "../src/app.js";
 import { CatalogStore } from "../src/catalog.js";
-import { keyBytes } from "../src/keys.js";
-import type { KeyDef } from "../src/keys.js";
 import { connectFailMessage } from "../src/peer.js";
 import type { PromptDraft, SpawnRequest } from "../src/protocol.js";
 import { SessionStore } from "../src/sessions.js";
@@ -74,8 +72,8 @@ describe("createShell", () => {
   let shell: Shell;
   let calls: ShellCallbacks & {
     pairs: PairSubmit[];
-    keys: KeyDef[];
-    inputs: string[];
+    keys: Uint8Array[];
+    inputs: Uint8Array[];
     composerSends: { text: string; req: string }[];
     spawns: { spawn: SpawnRequest; req: string }[];
     composes: { draft: PromptDraft; req: string }[];
@@ -95,6 +93,7 @@ describe("createShell", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-10-27T00:00:00.000Z"));
+    localStorage.clear();
     root = document.createElement("div");
     document.body.appendChild(root);
     store = new SessionStore();
@@ -119,8 +118,8 @@ describe("createShell", () => {
       return handle;
     };
     const pairs: PairSubmit[] = [];
-    const keys: KeyDef[] = [];
-    const inputs: string[] = [];
+    const keys: Uint8Array[] = [];
+    const inputs: Uint8Array[] = [];
     const composerSends: { text: string; req: string }[] = [];
     const spawns: { spawn: SpawnRequest; req: string }[] = [];
     const composes: { draft: PromptDraft; req: string }[] = [];
@@ -156,8 +155,8 @@ describe("createShell", () => {
       onLeaveSession: () => {
         signal.left += 1;
       },
-      onKeyPress: (def) => keys.push(def),
-      onTerminalInput: (text) => inputs.push(text),
+      onKeyPress: (bytes) => keys.push(bytes),
+      onTerminalInput: (bytes) => inputs.push(bytes),
       onComposerSend: (text, req) => composerSends.push({ text, req }),
       onSpawn: (spawn, req) => {
         spawns.push({ spawn, req });
@@ -184,6 +183,7 @@ describe("createShell", () => {
     shell.dispose();
     root.remove();
     document.body.innerHTML = "";
+    localStorage.clear();
     vi.useRealTimers();
   });
 
@@ -345,10 +345,9 @@ describe("createShell", () => {
     shell.showSession("s1", "build");
     expect(query(".session-title").textContent).toBe("build");
     const keys = [...root.querySelectorAll<HTMLButtonElement>("#keybar .key")];
-    expect(keys).toHaveLength(10);
+    expect(keys).toHaveLength(9);
     keys[0]?.click();
-    expect(calls.keys.map((def) => def.id)).toEqual(["esc"]);
-    expect([...keyBytes(calls.keys[0] as KeyDef)]).toEqual([0x1b]);
+    expect(calls.keys.map((bytes) => [...bytes])).toEqual([[0x1b]]);
 
     query<HTMLTextAreaElement>(".composer-input").value = "hello";
     query<HTMLButtonElement>(".composer-send").click();
@@ -362,6 +361,31 @@ describe("createShell", () => {
     query<HTMLButtonElement>("#builder-close").click();
     query<HTMLButtonElement>("#session-back").click();
     expect(signal().left).toBe(1);
+  });
+
+  it("latches Ctrl and Shift for exactly one key", () => {
+    shell.showSession("s1", "build");
+    shell.ensureTerminal("s1", 80, 24);
+    const ctrl = query<HTMLButtonElement>('#keybar .key[data-key="ctrl"]');
+    const tab = query<HTMLButtonElement>('#keybar .key[data-key="tab"]');
+    const shift = query<HTMLButtonElement>('#keybar .key[data-key="shift"]');
+    ctrl.click();
+    expect(ctrl.getAttribute("aria-pressed")).toBe("true");
+    expect(calls.keys).toHaveLength(0);
+    // A second tap releases without sending.
+    ctrl.click();
+    expect(ctrl.getAttribute("aria-pressed")).toBe("false");
+    expect(calls.keys).toHaveLength(0);
+    // Latched Ctrl turns the phone keyboard's c into 0x03, then releases.
+    ctrl.click();
+    handles[0]?.emitInput("c");
+    expect(calls.inputs.map((bytes) => [...bytes])).toEqual([[0x03]]);
+    expect(ctrl.getAttribute("aria-pressed")).toBe("false");
+    // Latched Shift turns the bar's Tab into back-tab, then releases.
+    shift.click();
+    tab.click();
+    expect(calls.keys.map((bytes) => [...bytes])).toEqual([[0x1b, 0x5b, 0x5a]]);
+    expect(shift.getAttribute("aria-pressed")).toBe("false");
   });
 
   it("mounts the terminal on ensureTerminal and writes to it", () => {
@@ -380,7 +404,7 @@ describe("createShell", () => {
     expect(handles).toHaveLength(1);
     // Terminal input flows to the host.
     handles[0]?.emitInput("x");
-    expect(calls.inputs).toEqual(["x"]);
+    expect(calls.inputs.map((bytes) => [...bytes])).toEqual([[0x78]]);
   });
 
   it("keeps the terminal and the composer draft across state changes", () => {
@@ -471,15 +495,14 @@ describe("createShell", () => {
     shell.showSessions();
     query<HTMLButtonElement>("#session-new").click();
     expect(root.querySelector("#new-form")).not.toBeNull();
-    const project = query<HTMLSelectElement>("#new-project");
-    project.value = "demo";
-    project.dispatchEvent(new Event("change", { bubbles: true }));
+    query<HTMLInputElement>("#new-directory").value = "/home/u/demo";
     query<HTMLInputElement>("#new-name").value = "build";
     query<HTMLFormElement>("#new-form").dispatchEvent(
       new Event("submit", { bubbles: true, cancelable: true }),
     );
     expect(calls.spawns).toHaveLength(1);
     expect(calls.spawns[0]?.spawn).toEqual({
+      kind: "agent",
       cli: "muse",
       workdir: "/home/u/demo",
       name: "build",
@@ -492,9 +515,7 @@ describe("createShell", () => {
   it("confirms a spawn once, at the top of the opened session", () => {
     shell.showSessions();
     query<HTMLButtonElement>("#session-new").click();
-    const project = query<HTMLSelectElement>("#new-project");
-    project.value = "demo";
-    project.dispatchEvent(new Event("change", { bubbles: true }));
+    query<HTMLInputElement>("#new-directory").value = "/home/u/demo";
     query<HTMLFormElement>("#new-form").dispatchEvent(
       new Event("submit", { bubbles: true, cancelable: true }),
     );
@@ -512,30 +533,26 @@ describe("createShell", () => {
     sendable = false;
     shell.showSessions();
     query<HTMLButtonElement>("#session-new").click();
-    const project = query<HTMLSelectElement>("#new-project");
-    project.value = "demo";
-    project.dispatchEvent(new Event("change", { bubbles: true }));
+    query<HTMLInputElement>("#new-directory").value = "/home/u/demo";
     query<HTMLFormElement>("#new-form").dispatchEvent(
       new Event("submit", { bubbles: true, cancelable: true }),
     );
     expect(query("#new-error").textContent).toBe("Not connected");
     expect(root.querySelector("#new-form")).not.toBeNull();
-    expect(query<HTMLSelectElement>("#new-project").value).toBe("demo");
+    expect(query<HTMLInputElement>("#new-directory").value).toBe("/home/u/demo");
   });
 
-  it("shows a spawn error beside the project field", () => {
+  it("shows a spawn error beside the directory field", () => {
     shell.showSessions();
     query<HTMLButtonElement>("#session-new").click();
-    const project = query<HTMLSelectElement>("#new-project");
-    project.value = "demo";
-    project.dispatchEvent(new Event("change", { bubbles: true }));
+    query<HTMLInputElement>("#new-directory").value = "/home/u/demo";
     query<HTMLFormElement>("#new-form").dispatchEvent(
       new Event("submit", { bubbles: true, cancelable: true }),
     );
-    shell.sheetError("unknown project: demo", calls.spawns[0]?.req ?? "", "unknown_project");
-    const error = query<HTMLElement>("#new-project-error");
+    shell.sheetError("unknown workdir: /home/u/demo", calls.spawns[0]?.req ?? "", "unknown_project");
+    const error = query<HTMLElement>("#new-directory-error");
     expect(error.hidden).toBe(false);
-    expect(error.textContent).toBe("unknown project: demo");
+    expect(error.textContent).toBe("unknown workdir: /home/u/demo");
   });
 
   it("previews and sends a draft from the Builder", () => {

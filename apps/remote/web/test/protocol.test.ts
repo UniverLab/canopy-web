@@ -54,16 +54,17 @@ describe("builders", () => {
 
   it("builds the exact spawn, compose and draft frames", () => {
     expect(
-      JSON.parse(buildSpawn("r3", { cli: "muse", workdir: "/home/u/demo" })),
+      JSON.parse(buildSpawn("r3", { kind: "agent", cli: "muse", workdir: "/home/u/demo" })),
     ).toEqual({ t: "spawn", req: "r3", kind: "agent", cli: "muse", workdir: "/home/u/demo" });
     expect(
       JSON.parse(
         buildSpawn("r4", {
+          kind: "agent",
           cli: "muse",
-          model: "spark",
           workdir: "/home/u/demo",
           name: "build",
           prompt: "do it",
+          yolo: true,
         }),
       ),
     ).toEqual({
@@ -71,11 +72,38 @@ describe("builders", () => {
       req: "r4",
       kind: "agent",
       cli: "muse",
-      model: "spark",
       workdir: "/home/u/demo",
       name: "build",
       prompt: "do it",
+      yolo: true,
     });
+    // Unchecked yolo sends nothing; a missing kind is an agent.
+    expect(JSON.parse(buildSpawn("r7", { cli: "muse", workdir: "/home/u/demo" }))).toEqual({
+      t: "spawn",
+      req: "r7",
+      kind: "agent",
+      cli: "muse",
+      workdir: "/home/u/demo",
+    });
+    // A terminal is the user's shell: workdir and an optional name only.
+    expect(JSON.parse(buildSpawn("r8", { kind: "terminal", workdir: "/home/u/demo" }))).toEqual({
+      t: "spawn",
+      req: "r8",
+      kind: "terminal",
+      workdir: "/home/u/demo",
+    });
+    expect(
+      JSON.parse(
+        buildSpawn("r9", {
+          kind: "terminal",
+          cli: "muse",
+          workdir: "/home/u/demo",
+          name: "shell",
+          prompt: "ignored",
+          yolo: true,
+        }),
+      ),
+    ).toEqual({ t: "spawn", req: "r9", kind: "terminal", workdir: "/home/u/demo", name: "shell" });
     const draft = { sections: [{ title: "Goal", content: "ship it" }], skills: ["tdd"] };
     expect(JSON.parse(buildCompose("r5", draft))).toEqual({ t: "compose", req: "r5", draft });
     expect(JSON.parse(buildPromptDraft("r6", "s1", draft))).toEqual({
@@ -197,6 +225,29 @@ describe("frame parsers", () => {
     });
     expect(parseComposed({ t: "composed", req: "r2" })).toBeNull();
     expect(parseComposed({ t: "ok", req: "r2" })).toBeNull();
+  });
+
+  it("reads the harness yolo flag defensively", () => {
+    expect(
+      parseCatalog({
+        t: "catalog",
+        req: "r1",
+        clis: [
+          { cli: "muse", label: "Muse", models: [], yolo: true },
+          { cli: "claude", label: "Claude", models: [], yolo: false },
+          { cli: "plain", label: "Plain", models: [] },
+          { cli: "weird", label: "Weird", models: [], yolo: "yes" },
+        ],
+        projects: [],
+        presets: [],
+        skills: [],
+      })?.clis,
+    ).toEqual([
+      { cli: "muse", label: "Muse", models: [], yolo: true },
+      { cli: "claude", label: "Claude", models: [] },
+      { cli: "plain", label: "Plain", models: [] },
+      { cli: "weird", label: "Weird", models: [] },
+    ]);
   });
 
   it("parses the catalog and drops malformed entries", () => {

@@ -17,7 +17,7 @@ test.beforeEach(async ({ page }) => {
 test("renders the terminal and the key bar at 360x640", async ({ page }) => {
   expect(await terminalText(page)).toContain("$ muse run");
   const keys = page.locator("#keybar .key");
-  await expect(keys).toHaveCount(10);
+  await expect(keys).toHaveCount(9);
   await expect(page.locator(".topbar .login")).toHaveText("smoke");
   await expect(page.locator(".topbar .host")).toHaveText("smoke host");
   // Live output flows into the terminal.
@@ -104,21 +104,24 @@ test("keeps the terminal text off its border at 1280x900", async ({ page }) => {
   );
 });
 
-test("shows all ten keys inside the viewport at 360x640", async ({ page }) => {
+test("shows all nine keys inside the viewport at 360x640", async ({ page }) => {
   const keys = page.locator("#keybar .key");
-  await expect(keys).toHaveCount(10);
+  await expect(keys).toHaveCount(9);
   const boxes = await keys.evaluateAll((els) =>
     els.map((el) => {
       const r = el.getBoundingClientRect();
       return { x: r.x, y: r.y, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
     }),
   );
-  // Two rows of five equal-width keys, every one a touch target in view.
-  const rows = new Set(boxes.map((box) => Math.round(box.y)));
-  expect(rows.size).toBe(2);
-  for (const rowY of rows) {
-    const row = boxes.filter((box) => Math.round(box.y) === rowY);
-    expect(row).toHaveLength(5);
+  // Two rows of equal-width keys (five, then four), every one a touch
+  // target in view.
+  const rows = [...new Set(boxes.map((box) => Math.round(box.y)))].sort((a, b) => a - b);
+  expect(rows).toHaveLength(2);
+  const first = boxes.filter((box) => Math.round(box.y) === rows[0]);
+  const second = boxes.filter((box) => Math.round(box.y) === rows[1]);
+  expect(first).toHaveLength(5);
+  expect(second).toHaveLength(4);
+  for (const row of [first, second]) {
     for (const box of row) {
       expect(Math.abs(box.width - row[0]!.width)).toBeLessThanOrEqual(1);
     }
@@ -240,11 +243,42 @@ test("terminal pans when zoomed", async ({ page }) => {
 
 test("sends key bar bytes as input", async ({ page }) => {
   await page.evaluate(() => window.__fake.clearSent());
-  await page.locator('#keybar .key[data-key="y"]').click();
+  await page.locator('#keybar .key[data-key="tab"]').click();
   await page.locator('#keybar .key[data-key="up"]').click();
   const sent = await page.evaluate(() => window.__fake.sent());
-  expect(sent).toContainEqual({ t: "input", id: "smoke", data: "eQ==" });
+  expect(sent).toContainEqual({ t: "input", id: "smoke", data: "CQ==" });
   expect(sent).toContainEqual({ t: "input", id: "smoke", data: "G1tB" });
+});
+
+test("latches Ctrl so the keyboard's c sends 0x03", async ({ page }) => {
+  await page.evaluate(() => window.__fake.clearSent());
+  const ctrl = page.locator('#keybar .key[data-key="ctrl"]');
+  await ctrl.click();
+  await expect(ctrl).toHaveAttribute("aria-pressed", "true");
+  // Focus xterm's hidden textarea and type: the latch turns c into 0x03.
+  await page.locator(".xterm-helper-textarea").press("c");
+  const sent = await page.evaluate(() => window.__fake.sent());
+  expect(sent).toContainEqual({ t: "input", id: "smoke", data: "Aw==" });
+  await expect(ctrl).toHaveAttribute("aria-pressed", "false");
+});
+
+test("spawns a terminal from the New dialog", async ({ page }) => {
+  await page.locator("#session-back").click();
+  await page.locator("#session-new").click();
+  await expect(page.locator("#new-form")).toBeVisible();
+  await page.locator("#new-kind-terminal").check();
+  await expect(page.locator("#new-cli")).toBeHidden();
+  await page.locator("#new-directory").fill("/tmp");
+  await page.evaluate(() => window.__fake.clearSent());
+  await page.locator("#new-create").click();
+  const sent = await page.evaluate(() => window.__fake.sent());
+  const spawn = (sent as Record<string, unknown>[]).find((frame) => frame.t === "spawn");
+  expect(spawn).toMatchObject({ t: "spawn", kind: "terminal", workdir: "/tmp" });
+  expect(spawn).not.toHaveProperty("cli");
+  expect(spawn).not.toHaveProperty("prompt");
+  expect(spawn).not.toHaveProperty("yolo");
+  // The fake host answers spawned and the shell opens the session.
+  await expect(page.locator("main.session-view > .flash-ok")).toHaveText("Session started ✓");
 });
 
 test("composer sends a prompt and clears on ok", async ({ page }) => {

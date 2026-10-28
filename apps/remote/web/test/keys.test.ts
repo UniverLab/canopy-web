@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { afterEach, describe, expect, it } from "vitest";
-import { keyById, keyBytes, KEY_DEFS, renderKeyBar } from "../src/keys.js";
+import { isLatchKey, keyById, keyBytes, KEY_DEFS, renderKeyBar, updateKeyBarLatches } from "../src/keys.js";
 import type { KeyDef } from "../src/keys.js";
 
 describe("key bar bytes", () => {
@@ -12,7 +12,7 @@ describe("key bar bytes", () => {
     return [...keyBytes(def)];
   };
 
-  it("sends the exact control bytes", () => {
+  it("sends the exact base bytes", () => {
     expect(bytesOf("esc")).toEqual([0x1b]);
     expect(bytesOf("tab")).toEqual([0x09]);
     expect(bytesOf("up")).toEqual([0x1b, 0x5b, 0x41]);
@@ -20,25 +20,32 @@ describe("key bar bytes", () => {
     expect(bytesOf("left")).toEqual([0x1b, 0x5b, 0x44]);
     expect(bytesOf("right")).toEqual([0x1b, 0x5b, 0x43]);
     expect(bytesOf("enter")).toEqual([0x0d]);
-    expect(bytesOf("ctrl-c")).toEqual([0x03]);
-    expect(bytesOf("y")).toEqual([0x79]);
-    expect(bytesOf("n")).toEqual([0x6e]);
   });
 
-  it("defines ten keys in bar order", () => {
+  it("gives the latching modifiers no bytes of their own", () => {
+    expect(bytesOf("ctrl")).toEqual([]);
+    expect(bytesOf("shift")).toEqual([]);
+    expect(isLatchKey("ctrl")).toBe(true);
+    expect(isLatchKey("shift")).toBe(true);
+    expect(isLatchKey("tab")).toBe(false);
+  });
+
+  it("defines nine keys in bar order", () => {
     expect(KEY_DEFS.map((def) => def.id)).toEqual([
       "esc",
+      "ctrl",
+      "shift",
       "tab",
+      "left",
       "up",
       "down",
-      "left",
       "right",
       "enter",
-      "ctrl-c",
-      "y",
-      "n",
     ]);
     expect(keyById("nope")).toBeNull();
+    expect(keyById("ctrl-c")).toBeNull();
+    expect(keyById("y")).toBeNull();
+    expect(keyById("n")).toBeNull();
   });
 });
 
@@ -53,10 +60,27 @@ describe("renderKeyBar", () => {
     const pressed: KeyDef[] = [];
     renderKeyBar(bar, (def) => pressed.push(def));
     const buttons = [...bar.querySelectorAll<HTMLButtonElement>("button.key")];
-    expect(buttons).toHaveLength(10);
+    expect(buttons).toHaveLength(9);
     expect(buttons[0]?.textContent).toBe("Esc");
-    buttons[7]?.click();
-    expect(pressed.map((def) => def.id)).toEqual(["ctrl-c"]);
+    buttons[4]?.click();
+    expect(pressed.map((def) => def.id)).toEqual(["left"]);
     expect(bar.getAttribute("role")).toBe("toolbar");
+  });
+
+  it("marks the latches unpressed until the shell updates them", () => {
+    const bar = document.createElement("div");
+    document.body.appendChild(bar);
+    renderKeyBar(bar, () => {});
+    const ctrl = bar.querySelector<HTMLButtonElement>('button.key[data-key="ctrl"]');
+    const shift = bar.querySelector<HTMLButtonElement>('button.key[data-key="shift"]');
+    const tab = bar.querySelector<HTMLButtonElement>('button.key[data-key="tab"]');
+    expect(ctrl?.getAttribute("aria-pressed")).toBe("false");
+    expect(shift?.getAttribute("aria-pressed")).toBe("false");
+    expect(tab?.hasAttribute("aria-pressed")).toBe(false);
+    updateKeyBarLatches(bar, { ctrl: true, shift: false });
+    expect(ctrl?.getAttribute("aria-pressed")).toBe("true");
+    expect(shift?.getAttribute("aria-pressed")).toBe("false");
+    updateKeyBarLatches(bar, { ctrl: false, shift: false });
+    expect(ctrl?.getAttribute("aria-pressed")).toBe("false");
   });
 });

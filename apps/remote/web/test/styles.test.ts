@@ -4,9 +4,9 @@ import { isAbsolute, join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * The meaning tints in the remote's stylesheet: the dormant yolo row
- * contract (no view renders `.yolo-row` yet, but when one does the checked
- * row wears the warn tint) and the error label ink beside its block.
+ * The meaning tints in the remote's stylesheet: the New dialog's yolo row
+ * (the checked row wears the warn tint) and the error label ink beside
+ * its block.
  */
 describe("web/src/styles.css", () => {
   const resolveFromRoot = (path: string): string =>

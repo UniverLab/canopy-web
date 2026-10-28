@@ -11,7 +11,6 @@ import { createChannelHandler } from "./channel.js";
 import { generateDeviceKey } from "./crypto.js";
 import type { DeviceKey } from "./crypto.js";
 import { mountCanopyBackground } from "../../../../packages/look/fondo/index.js";
-import { keyBytes } from "./keys.js";
 import { buildCatalog, buildCompose, buildList, buildSpawn, newReqId } from "./protocol.js";
 import { runPairing } from "./pairing.js";
 import { ConnectionManager } from "./reconnect.js";
@@ -109,11 +108,11 @@ async function main(): Promise<void> {
         controller.close();
         shell.showSessions();
       },
-      onKeyPress: (def) => {
-        controller.sendInputBytes(keyBytes(def));
+      onKeyPress: (bytes) => {
+        controller.sendInputBytes(bytes);
       },
-      onTerminalInput: (text) => {
-        controller.sendInputText(text);
+      onTerminalInput: (bytes) => {
+        controller.sendInputBytes(bytes);
       },
       onComposerSend: (text, req) => {
         if (!controller.sendPrompt(text, req)) {
@@ -149,6 +148,7 @@ async function main(): Promise<void> {
     catalog.clear();
     shelf.reset();
     shell.setHostLabel(host.label);
+    shell.setHostId(host.host_id);
     shell.showSessions();
     const frames = createChannelHandler({
       onSnapshot: router.handleSnapshot,

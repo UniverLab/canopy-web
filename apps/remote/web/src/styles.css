@@ -441,8 +441,9 @@ label > textarea {
   display: none;
 }
 
-/* Ten keys, all visible: two rows of five equal-width touch targets. The
- * bar is one info block; the keys inside stay flat so the tint reads once. */
+/* Nine keys, all visible: two rows of five equal-width touch targets,
+ * the last cell empty. The bar is one info block; the keys inside stay
+ * flat so the tint reads once. */
 .keybar {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -460,6 +461,12 @@ label > textarea {
   font-size: 0.78rem;
   background: transparent;
   border-color: var(--tint-line);
+}
+
+/* A latched Ctrl or Shift shows pressed until the next key releases it. */
+.keybar .key[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .composer {
@@ -535,17 +542,69 @@ label > textarea {
   margin-left: auto;
 }
 
-/* The yolo checkbox row, when it lands: calm until checked, warn-tinted
- * after. Dormant — no view renders `.yolo-row` yet; when one does, the
- * label or row MUST carry this class. */
+/* The yolo checkbox row in the New dialog: calm until checked,
+ * warn-tinted after. The label carries `.yolo-row`. */
 .yolo-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   border: 1px solid transparent;
   border-radius: var(--radius);
+}
+
+.yolo-row input {
+  display: inline-block;
+  width: auto;
+  min-height: 0;
+  margin: 0;
 }
 
 .yolo-row:has(input:checked) {
   background: var(--tint-warn);
   border-color: var(--tint-line);
+}
+
+.yolo-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0.25rem 0 0.75rem;
+}
+
+.yolo-hint[hidden] {
+  display: none;
+}
+
+/* The New dialog's Agent/Terminal segmented control. */
+.kind-segment {
+  display: flex;
+  gap: var(--gap);
+  margin: 0.75rem 0;
+}
+
+.kind-option {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  min-height: 2.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.kind-option:has(input:checked) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.kind-option input {
+  display: inline-block;
+  width: auto;
+  min-height: 0;
+  margin: 0;
 }
 
 /* Shared modal sheet: New dialog and Prompt Builder. */
