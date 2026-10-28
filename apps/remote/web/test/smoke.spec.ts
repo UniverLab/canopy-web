@@ -7,6 +7,34 @@ async function terminalText(page: import("@playwright/test").Page): Promise<stri
   return page.evaluate(() => window.__fake.terminalText());
 }
 
+/**
+ * The box of `selector` once the session's own layout has stopped moving.
+ * The terminal measures itself after its face loads — a row appears a moment
+ * after attach — and everything below it follows. Waiting for the fit's row
+ * height and two equal reads keeps an icon's before/after comparison about
+ * the icon, never about that first fit.
+ */
+async function settledBox(
+  page: import("@playwright/test").Page,
+  selector: string,
+): Promise<{ x: number; y: number; width: number; height: number } | null> {
+  await expect(page.locator(".term-fit")).toHaveAttribute("data-row-height", /^\d+$/);
+  let previous = "";
+  let stable = 0;
+  await expect
+    .poll(async () => {
+      const next = JSON.stringify(await page.locator(selector).boundingBox());
+      stable = next === previous ? stable + 1 : 0;
+      previous = next;
+      return stable;
+    })
+    .toBeGreaterThanOrEqual(2);
+  // The value three reads agreed on — not a fourth that a late shift races.
+  return previous === ""
+    ? null
+    : (JSON.parse(previous) as { x: number; y: number; width: number; height: number } | null);
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto("/fake.html");
   await expect(page.locator('[data-session="smoke"]')).toBeVisible();
@@ -254,7 +282,10 @@ for (const viewport of [
     const send = page.locator(".composer-send");
     const icon = send.locator(".icon-slot");
     await expect(icon).toHaveAttribute("data-icon", "send");
-    const before = await icon.boundingBox();
+    // The terminal reports its row height once it has measured itself, and
+    // the composer below it settles a moment later. Measuring before that
+    // would blame the session's own fit for an icon-sized move.
+    const before = await settledBox(page, ".composer-send .icon-slot");
     expect(before).not.toBeNull();
 
     // Send → (loader while the frame is out) → check on the host's ok.

@@ -119,6 +119,8 @@ describe("iconSvg", () => {
   it("throws on a name the kit does not export", () => {
     expect(() => iconSvg("nope" as never)).toThrow(/unknown icon: nope/);
     expect(() => iconSvg("Copy" as never)).toThrow(/unknown icon: Copy/);
+    // A prototype member is not an icon either.
+    expect(() => iconSvg("constructor" as never)).toThrow(/unknown icon: constructor/);
   });
 });
 
@@ -142,8 +144,10 @@ describe("the icon module", () => {
     const names = new Set(exportedNames());
     const scanned = sources();
     for (const name of names) {
+      // This file names icons in its own assertions, so it proves nothing:
+      // every export must be drawn by real code or another test.
       const used = scanned.some(
-        ({ file, text }) => file !== ICONS && text.includes(`"${name}"`),
+        ({ file, text }) => file !== ICONS && file !== SELF && text.includes(`"${name}"`),
       );
       expect(used, `packages/look/icons.ts exports ${name}, nobody draws it`).toBe(true);
     }

@@ -54,7 +54,9 @@ function element([tag, attrs]: readonly [
  * so a typo fails the page test instead of drawing an empty box.
  */
 export function iconSvg(name: IconName, options: IconSvgOptions = {}): string {
-  const node = icons[name] as IconNode | undefined;
+  // Own keys only: a name the kit does not export must throw, never fall
+  // through to a prototype member ("constructor") and break mid-drawing.
+  const node = Object.hasOwn(icons, name) ? (icons[name] as IconNode) : undefined;
   if (node === undefined) {
     throw new Error(`unknown icon: ${name}`);
   }

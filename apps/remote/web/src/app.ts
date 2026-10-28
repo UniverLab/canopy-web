@@ -350,7 +350,12 @@ export function createShell(
     }
     const enabled = shelf?.enabled() ?? false;
     button.hidden = !enabled;
-    shelfIcon?.to((shelf?.isOpen() ?? false) ? "folderOpen" : "folder");
+    // A morph says the meaning changed; a repaint that leaves the sheet as
+    // it was must not restart it.
+    const next: IconName = (shelf?.isOpen() ?? false) ? "folderOpen" : "folder";
+    if (shelfIcon !== null && shelfIcon.name !== next) {
+      shelfIcon.to(next);
+    }
     const badge = button.querySelector<HTMLElement>("#session-files-badge");
     if (!badge) {
       return;
@@ -619,12 +624,17 @@ export function createShell(
       if (route === "sessions" || route === "session") {
         // Never a full re-render here: it would drop the terminal and
         // the composer's draft. Only the header and the banner carry the
-        // state, so patch them in place — the host chip's link icon too.
+        // state, so patch them in place — the host chip's link icon too. The
+        // chip only morphs when its meaning flips: connecting → retrying is
+        // still the same crossed-out link, and must not restart the morph.
         const topbar = root.querySelector(".topbar");
         if (topbar) {
           topbar.setAttribute("data-conn", state);
         }
-        hostIcon?.to(linkIcon());
+        const link = linkIcon();
+        if (hostIcon !== null && hostIcon.name !== link) {
+          hostIcon.to(link);
+        }
         const conn = root.querySelector(".topbar .conn");
         if (conn) {
           conn.textContent = state;
