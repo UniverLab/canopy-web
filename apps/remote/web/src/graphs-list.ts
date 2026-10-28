@@ -25,18 +25,22 @@ const STATUS_ICON: Record<string, IconName> = {
   blocked: "triangleAlert",
 };
 
-/** The chip's icon: a spinner while it runs, an alert while it is blocked. */
+/** The chip's icon: a spinner while it runs, an alert while it is blocked.
+ * Own keys only — a host status like "constructor" must circle, never fall
+ * through to a prototype member and break the whole list. */
 export function graphStatusIcon(word: string): IconName {
-  return STATUS_ICON[word] ?? "circle";
+  return Object.hasOwn(STATUS_ICON, word) ? STATUS_ICON[word] : "circle";
 }
 
-/** The status chip: icon plus word, never colour alone. */
+/** The status chip: icon plus word, never colour alone. The word is host
+ * text, so it rides through esc() into the attributes and the label alike. */
 export function statusChip(summary: Pick<GraphSummary, "status" | "blocked">): string {
   const word = graphStatusWord(summary);
+  const shown = esc(word);
   const spin = word === "running" ? " chip-spin" : "";
   return (
-    `<span class="status-chip${spin}" data-status="${word}" title="${word}">` +
-    `${icon(graphStatusIcon(word))}<span class="status-word">${word}</span></span>`
+    `<span class="status-chip${spin}" data-status="${shown}" title="${shown}">` +
+    `${icon(graphStatusIcon(word))}<span class="status-word">${shown}</span></span>`
   );
 }
 

@@ -100,6 +100,11 @@ describe("the status vocabulary", () => {
     expect(graphStatusIcon("completed")).toBe("check");
     expect(graphStatusIcon("blocked")).toBe("triangleAlert");
     expect(graphStatusIcon("mystery")).toBe("circle");
+    // Host statuses are any string; a prototype key must circle too, never
+    // resolve to Object and throw inside icon().
+    expect(graphStatusIcon("constructor")).toBe("circle");
+    expect(graphStatusIcon("__proto__")).toBe("circle");
+    expect(graphStatusIcon("toString")).toBe("circle");
   });
 
   it("chips the word beside its icon, spinning only while running", () => {
@@ -111,6 +116,17 @@ describe("the status vocabulary", () => {
     const blocked = statusChip(summary({ blocked: true }));
     expect(blocked).toContain(`data-status="blocked"`);
     expect(blocked).not.toContain(`chip-spin`);
+  });
+
+  it("escapes a hostile status word in the chip's attributes and label", () => {
+    const hostile = statusChip(summary({ status: `"><img src=x onerror=alert(1)>` }));
+    // The quote and angle brackets are entities, so no element opens — the
+    // word stays one attribute value and one text node.
+    expect(hostile).not.toContain(`<img`);
+    expect(hostile).toContain(`&quot;&gt;&lt;img`);
+    // The chip still renders its icon and never throws on the word.
+    expect(hostile).toContain(`<svg`);
+    expect(statusChip(summary({ status: "constructor" }))).toContain(`<svg`);
   });
 
   it("maps each checklist status to its icon and label", () => {
@@ -401,6 +417,46 @@ describe("the graph view", () => {
         }),
       );
       expect(seen.map((row) => row.getAttribute("data-spec"))).toEqual(["s2", "s3"]);
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
+  it("finds the running row even when its id breaks a CSS selector", () => {
+    // The id is host text: as a selector fragment a backslash turns into an
+    // escape (the row is missed) and a newline throws in a real browser, so
+    // the view must match the attribute exactly instead of interpolating.
+    const seen: Element[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (this: Element): void {
+      seen.push(this);
+    };
+    try {
+      const root = document.createElement("div");
+      const hostile = graphState({
+        current_spec_id: "line1\nline2",
+        specs: [
+          { id: "line1\nline2", code: "FIX-9", name: "Odd id", status: "running", attempts: 1 },
+          { id: "a\\b", code: "FIX-10", name: "Escaped id", status: "pending", attempts: 1 },
+        ],
+      });
+      renderGraphView(root, viewArgs({ state: hostile }));
+      expect(root.querySelectorAll("#spec-list .spec-row")).toHaveLength(2);
+      expect(seen.map((row) => row.getAttribute("data-spec"))).toEqual(["line1\nline2"]);
+      // Moving the running flag to the backslash id still finds and scrolls it.
+      updateGraphView(
+        root,
+        viewArgs({
+          state: graphState({
+            current_spec_id: "a\\b",
+            specs: [
+              { id: "line1\nline2", code: "FIX-9", name: "Odd id", status: "completed", attempts: 1 },
+              { id: "a\\b", code: "FIX-10", name: "Escaped id", status: "running", attempts: 1 },
+            ],
+          }),
+        }),
+      );
+      expect(seen.map((row) => row.getAttribute("data-spec"))).toEqual(["line1\nline2", "a\\b"]);
     } finally {
       Element.prototype.scrollIntoView = original;
     }

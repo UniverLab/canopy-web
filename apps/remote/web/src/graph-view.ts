@@ -95,12 +95,24 @@ function checklistHtml(state: GraphState | null): string {
   return state.specs.map(specRow).join("");
 }
 
+/** The row of one spec, matched exactly by attribute — never through a
+ * selector built from the id, which the host controls (a newline in it
+ * would make querySelector throw inside paint). */
+function specRowById(list: HTMLElement, id: string): HTMLElement | null {
+  for (const row of list.querySelectorAll<HTMLElement>(".spec-row")) {
+    if (row.getAttribute("data-spec") === id) {
+      return row;
+    }
+  }
+  return null;
+}
+
 /** Scroll the running row into view the moment it changes, never again. */
 function scrollRunning(list: HTMLElement, state: GraphState | null): void {
   const running = state?.specs.find((spec) => spec.status === "running") ?? null;
   const id = running?.id ?? null;
   if (id !== null && id !== scrolledRunning) {
-    const row = list.querySelector<HTMLElement>(`[data-spec="${id.replace(/"/g, '\\"')}"]`);
+    const row = specRowById(list, id);
     try {
       row?.scrollIntoView({ block: "nearest" });
     } catch {
