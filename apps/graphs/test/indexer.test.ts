@@ -3,32 +3,57 @@
  * The scheduled indexer, against the fake GitHub the worker tests share:
  * discovery over two search pages, invalid documents recorded and
  * skipped, the budget cut-off carrying over unvisited repositories,
- * deletion of vanished document keys, official entries flagged, and
- * the unauthenticated budget. The read side's memo is pinned here too.
+ * deletion of vanished document keys, official entries flagged, and the
+ * single subrequest budget — authenticated runs over a GraphQL fixture the
+ * size of the real official repository, REST runs when there is no token.
+ * The fake transport refuses the free plan's 51st subrequest. The read
+ * side's memo is pinned here too.
  */
 import { describe, expect, it } from "vitest";
-import { createGitHub } from "../src/github.js";
+import { createGitHub, type CacheLike } from "../src/github.js";
 import {
-  AUTHENTICATED_BUDGET,
-  UNAUTHENTICATED_BUDGET,
+  SUBREQUEST_BUDGET,
   buildIndexPayload,
   discoveryUrl,
   runIndexer,
 } from "../src/indexer.js";
-import { createStore, docKey, resetIndexMemo, type IndexEntry } from "../src/store.js";
+import { createStore, docKey, patternKey, resetIndexMemo, type IndexEntry } from "../src/store.js";
 import { blockedDocKey, blockedRepoKey, type BlockedEntry } from "../src/blocked.js";
-import { FakeCache, FakeKV, fakeFetch, fileBody, type Stub } from "./fakes.js";
+import {
+  FakeCache,
+  FakeKV,
+  SUBREQUEST_LIMIT,
+  SubrequestMeter,
+  fakeFetch,
+  fileBody,
+  meteredFetch,
+  type Stub,
+} from "./fakes.js";
 import { officialStubs } from "./stubs.js";
 import {
   BROKEN_NODE_TEXT,
   INVALID_GRAPH_TEXT,
   VALID_GRAPH_TEXT,
 } from "./documents-fixture.js";
+import {
+  OFFICIAL_GRAPH_SLUGS,
+  OFFICIAL_NODE_SLUGS,
+  PATTERN_SLUGS,
+  communitySnapshotStub,
+  emptySearchStub,
+  graphqlStub,
+  officialSnapshotStub,
+  patternPage,
+  snapshotBody,
+} from "./graphql-fixture.js";
 
 const OFFICIAL_GRAPHS = "repos/UniverLab/canopy-graphs/contents/graphs";
 const OFFICIAL_NODES = "repos/UniverLab/canopy-graphs/contents/nodes";
 const OFFICIAL_BLOCKED = "repos/UniverLab/canopy-graphs/contents/blocked.json";
 const OFFICIAL_REPO = "repos/UniverLab/canopy-graphs";
+
+/** A budget no test reaches by accident: the REST fixtures are not the point. */
+const TEST_BUDGET = 2000;
 
 /** The issue every blocked fixture names. */
 const BLOCK_ISSUE = "https://github.com/UniverLab/canopy-graphs/issues/9";
@@ -99,13 +124,20 @@ interface RunOptions {
   budget?: number;
   kv?: FakeKV;
   now?: () => number;
+  /** The cache wired into the transport; the cron path passes none. */
+  cache?: CacheLike | null;
+  /** The free-plan meter every outbound call is counted against. */
+  meter?: SubrequestMeter;
 }
 
 async function run(stubs: Stub[], options: RunOptions = {}) {
   resetIndexMemo();
   const fake = fakeFetch(stubs);
   const kv = options.kv ?? new FakeKV();
-  const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
+  const github = createGitHub({
+    fetchImpl: options.meter === undefined ? fake.fetchImpl : meteredFetch(fake, options.meter),
+    cache: options.cache ?? null,
+  });
   const meta = await runIndexer({
     github,
     index: kv,
@@ -147,12 +179,13 @@ describe("the scheduled indexer", () => {
       ...names.flatMap((name, i) => repoStubs(name, i + 1)),
       ...repoStubs("r-101", 101),
     ];
-    const { meta, kv, fake } = await run(stubs);
+    const { meta, kv, fake } = await run(stubs, { authenticated: false, budget: TEST_BUDGET });
 
     expect(meta.documents).toBe(101);
     expect(meta.repos_seen).toBe(102);
     expect(meta.truncated).toBe(false);
-    expect(meta.authenticated).toBe(true);
+    expect(meta.authenticated).toBe(false);
+    expect(meta.stopped).toBeNull();
     expect(meta.invalid).toEqual([]);
     // Removal list (1) + official (4: graphs, nodes, repo, patterns) + two
     // search pages (2) + one tree, document and README per repository
@@ -212,7 +245,7 @@ describe("the scheduled indexer", () => {
       { url: `${base}/contents/nodes/void/node.json`, status: 200, body: fileBody("nodes/void/node.json", BROKEN_NODE_TEXT) },
       { url: `${base}/contents/graphs/garbled/graph.json`, status: 200, body: fileBody("graphs/garbled/graph.json", "this is not json") },
       { url: `${base}/contents/graphs/gone/graph.json`, status: 404, body: {} },
-    ]);
+    ], { authenticated: false });
 
     const index = await storedIndex(kv);
     expect(index.entries.map((entry) => entry["slug"])).toEqual(["flow"]);
@@ -227,7 +260,7 @@ describe("the scheduled indexer", () => {
     expect(await kv.get(docKey("graph", "acme", "things", "broken"))).toBeNull();
   });
 
-  it("carries over unvisited repositories when the budget cuts the run", async () => {
+  it("carries over unvisited repositories when the REST budget cuts the run", async () => {
     const kv = new FakeKV();
     const previousEntry = (repo: string, slug: string, name: string): Record<string, unknown> => ({
       kind: "graph",
@@ -269,12 +302,14 @@ describe("the scheduled indexer", () => {
         ...repoStubs("one", 4),
         ...repoStubs("two", 6),
       ],
-      { kv, budget: 9 },
+      { kv, budget: 9, authenticated: false },
     );
 
     expect(meta.calls).toBe(9);
+    expect(meta.subrequests).toBe(9);
     expect(fake.calls.length).toBe(9);
     expect(meta.truncated).toBe(true);
+    expect(meta.stopped).toBe("budget of 9 subrequests reached");
     const index = await storedIndex(kv);
     expect(index.entries.map((entry) => `${entry["repo"]}/${entry["slug"]}`).sort()).toEqual([
       "one/flow",
@@ -319,8 +354,8 @@ describe("the scheduled indexer", () => {
     }
 
     // Ten full pages: GitHub's cap, every repository with an empty tree
-    // (one call each, no documents). Removal list (1) + official (4) +
-    // discovery (10) + trees (1,000) stays under the 1,200 budget.
+    // (one call each, no documents). The run spends 1,015 of the override's
+    // 2,000 calls here: this case is about the discovery cap, not the budget.
     const stubs: Stub[] = [...emptyOfficialStubs()];
     for (let page = 1; page <= 10; page += 1) {
       const names = Array.from({ length: 100 }, (_, i) => `r-${String((page - 1) * 100 + i + 1).padStart(3, "0")}`);
@@ -337,7 +372,7 @@ describe("the scheduled indexer", () => {
         });
       }
     }
-    const { meta } = await run(stubs, { kv });
+    const { meta } = await run(stubs, { kv, authenticated: false, budget: TEST_BUDGET });
 
     expect(meta.truncated).toBe(true);
     expect(meta.calls).toBe(5 + 10 + 1000);
@@ -382,7 +417,7 @@ describe("the scheduled indexer", () => {
         },
         ...repoStubs("one", 4),
       ],
-      { kv },
+      { kv, authenticated: false },
     );
 
     const index = await storedIndex(kv);
@@ -434,7 +469,7 @@ describe("the scheduled indexer", () => {
       { url: `${base}/contents/graphs/flow/README.md`, status: 404, body: {} },
       // Stubbed valid on purpose: the skip, not a missing file, drops it.
       { url: `${base}/contents/graphs/toxic/graph.json`, status: 200, body: fileBody("graphs/toxic/graph.json", VALID_GRAPH_TEXT) },
-    ], { kv });
+    ], { kv, authenticated: false });
 
     const index = await storedIndex(kv);
     expect(index.entries.map((entry) => entry["slug"])).toEqual(["flow"]);
@@ -466,7 +501,7 @@ describe("the scheduled indexer", () => {
         },
       },
       ...repoStubs("things", 5),
-    ]);
+    ], { authenticated: false });
 
     const index = await storedIndex(kv);
     expect(index.entries.map((entry) => `${entry["repo"]}/${entry["slug"]}`)).toEqual([
@@ -510,7 +545,7 @@ describe("the scheduled indexer", () => {
     // Discovery fails, so the previous entry would normally carry over.
     const { meta } = await run(
       [...withBlocks([block]), { url: "search/repositories", status: 500, body: {} }],
-      { kv },
+      { kv, authenticated: false },
     );
 
     const index = await storedIndex(kv);
@@ -533,14 +568,14 @@ describe("the scheduled indexer", () => {
     await kv.put(key, JSON.stringify(block));
 
     // officialStubs() answers 404 for blocked.json.
-    const { meta } = await run(officialStubs(), { kv });
+    const { meta } = await run(officialStubs(), { kv, authenticated: false });
 
     expect(meta.blocked).toBe(0);
     expect(kv.has(key)).toBe(true);
   });
 
   it("flags official entries and indexes the official repository in the same run", async () => {
-    const { meta, kv } = await run(officialStubs());
+    const { meta, kv } = await run(officialStubs(), { authenticated: false });
     const index = await storedIndex(kv);
     expect(index.entries.length).toBe(2);
     for (const entry of index.entries) {
@@ -576,7 +611,7 @@ describe("the scheduled indexer", () => {
       // Would-be community answers for the same documents, never fetched:
       // the queued set already holds the official repository.
       { url: "repos/UniverLab/canopy-graphs/git/trees/main", status: 200, body: { tree: [{ path: "graphs/hello-graph/graph.json", type: "blob" }] } },
-    ]);
+    ], { authenticated: false });
 
     const index = await storedIndex(kv);
     expect(index.entries.map((entry) => `${entry["kind"]}/${entry["slug"]}`).sort()).toEqual([
@@ -614,7 +649,7 @@ describe("the scheduled indexer", () => {
 
     const { meta } = await run(
       [...emptyOfficialStubs(), { url: "search/repositories", status: 500, body: {} }],
-      { kv },
+      { kv, authenticated: false },
     );
     const index = await storedIndex(kv);
     // The failed discovery proves nothing gone: the entry stays, with
@@ -626,11 +661,10 @@ describe("the scheduled indexer", () => {
     expect(meta.truncated).toBe(false);
   });
 
-  it("caps unauthenticated runs at 50 calls and says so in the meta", async () => {
-    expect(UNAUTHENTICATED_BUDGET).toBe(50);
-    expect(AUTHENTICATED_BUDGET).toBe(1200);
+  it("stops at the single subrequest budget and says why in the meta", async () => {
+    expect(SUBREQUEST_BUDGET).toBe(45);
     const names = Array.from({ length: 25 }, (_, i) => `r-${String(i + 1).padStart(2, "0")}`);
-    const { meta } = await run(
+    const { meta, fake } = await run(
       [
         ...emptyOfficialStubs(),
         {
@@ -643,21 +677,255 @@ describe("the scheduled indexer", () => {
       { authenticated: false },
     );
     expect(meta.authenticated).toBe(false);
-    expect(meta.calls).toBe(50);
+    expect(meta.subrequests).toBe(45);
+    expect(meta.calls).toBe(45);
+    expect(fake.calls.length).toBe(45);
     expect(meta.truncated).toBe(true);
-    // Official (5, patterns listed) + search + fourteen full repositories
-    // (3 calls each) spend 48 calls; the fifteenth repository's tree and
-    // document are the 49th and 50th, its README never fetched, so the
-    // fifteenth repository rolls back.
-    expect(meta.documents).toBe(14);
-    expect(meta.repos_seen).toBe(15);
+    expect(meta.stopped).toBe("budget of 45 subrequests reached");
+    // Official (5, patterns listed) + search + thirteen full repositories
+    // (3 calls each) spend exactly 45; the fourteenth repository's tree is
+    // the call the budget refuses, so it is never visited and nothing of
+    // it is written.
+    expect(meta.documents).toBe(13);
+    expect(meta.repos_seen).toBe(14);
   });
 
   it("stamps the meta with the run's clock and duration", async () => {
     let tick = 1_791_000_000_000;
-    const { meta } = await run(officialStubs(), { now: () => (tick += 500) });
+    const { meta } = await run(officialStubs(), {
+      now: () => (tick += 500),
+      authenticated: false,
+    });
     expect(meta.built_at).toBe(new Date(1_791_000_000_500).toISOString());
     expect(meta.duration_ms).toBe(500);
+  });
+});
+
+describe("the GraphQL snapshot run", () => {
+  it("indexes the whole official repository in two subrequests", async () => {
+    // The transport refuses the free plan's 51st subrequest, cache operations
+    // included: this run may spend two, one GraphQL answer and one search.
+    const meter = new SubrequestMeter(SUBREQUEST_LIMIT);
+    const { meta, kv, fake } = await run(
+      [officialSnapshotStub(), emptySearchStub()],
+      { authenticated: true, meter },
+    );
+
+    expect(meta.subrequests).toBe(2);
+    expect(meta.calls).toBe(2);
+    expect(meta.stopped).toBeNull();
+    expect(meta.truncated).toBe(false);
+    expect(meta.authenticated).toBe(true);
+    expect(meta.invalid).toEqual([]);
+    expect(meta.repos_seen).toBe(1);
+    expect(meter.total).toBe(2);
+    // The cron transport has no cache at all, so no cache operation is spent.
+    expect(meter.cacheOps).toBe(0);
+    expect(fake.missing).toEqual([]);
+    expect(fake.calls.filter((url) => url.includes("graphql"))).toHaveLength(1);
+    expect(fake.calls.filter((url) => url.includes("search/repositories"))).toHaveLength(1);
+
+    // Every document: 3 graphs and 9 nodes, each with its README.
+    expect(meta.documents).toBe(12);
+    const index = await storedIndex(kv);
+    expect(index.entries.map((entry) => entry["slug"]).sort()).toEqual(
+      [...OFFICIAL_GRAPH_SLUGS, ...OFFICIAL_NODE_SLUGS].sort(),
+    );
+    for (const entry of index.entries) {
+      expect(entry["official"]).toBe(true);
+      expect(entry["owner"]).toBe("UniverLab");
+      expect(entry["stars"]).toBe(7);
+      expect(entry["updated"]).toBe("2026-10-27");
+      expect(entry["ref"]).toBe("main");
+    }
+    const graph = JSON.parse(
+      (await kv.get(docKey("graph", "UniverLab", "canopy-graphs", "graph-alpha"))) as string,
+    ) as { document: { name: string }; readme: string };
+    expect(graph.document.name).toBe("hello-graph");
+    expect(graph.readme).toBe("# graph-alpha\n");
+    const node = JSON.parse(
+      (await kv.get(docKey("node", "UniverLab", "canopy-graphs", "node-india"))) as string,
+    ) as { document: { name: string } };
+    expect(node.document.name).toBe("hello-node");
+
+    // Every pattern page, figures included, again from the same answer.
+    const patterns = JSON.parse((await kv.get("patterns:v1")) as string) as {
+      entries: Array<{ slug: string; title: string }>;
+    };
+    expect(patterns.entries.map((entry) => entry.slug).sort()).toEqual([...PATTERN_SLUGS].sort());
+    const page = JSON.parse(
+      (await kv.get(patternKey("pattern-alpha"))) as string,
+    ) as { title: string; body: string; sources: unknown[]; figure: { name: string } };
+    expect(page.title).toBe("Page pattern-alpha");
+    expect(page.body.trim()).toBe("The pattern-alpha page.");
+    expect(page.sources).toHaveLength(1);
+    expect(page.figure.name).toBe("hello-graph");
+  });
+
+  it("reads each community repository in one GraphQL request", async () => {
+    const { meta, kv, fake } = await run(
+      [
+        officialSnapshotStub(),
+        {
+          url: "search/repositories",
+          status: 200,
+          body: { total_count: 1, items: [searchHit("things", 2)] },
+        },
+        communitySnapshotStub(),
+      ],
+      { authenticated: true },
+    );
+
+    // Official answer (1) + discovery (1) + the community repository (1).
+    expect(meta.subrequests).toBe(3);
+    expect(meta.stopped).toBeNull();
+    expect(fake.calls.filter((url) => url.includes("graphql"))).toHaveLength(2);
+    expect(fake.calls.some((url) => url.includes("contents") || url.includes("git/trees")))
+      .toBe(false);
+    const index = await storedIndex(kv);
+    const community = index.entries.filter((entry) => entry["official"] === false);
+    expect(community.map((entry) => `${entry["repo"]}/${entry["slug"]}`)).toEqual(["things/flow"]);
+    expect(community[0]["stars"]).toBe(2);
+    expect(community[0]["ref"]).toBe("main");
+  });
+
+  it("names why a document could not be read and keeps the rest", async () => {
+    const partial = graphqlStub("canopy-graphs", snapshotBody({
+      blocked: "[]",
+      errors: ["the blob service timed out"],
+      graphs: [
+        { slug: "graph-alpha", text: VALID_GRAPH_TEXT, readme: "# graph-alpha\n" },
+        { slug: "graph-binary", text: null },
+        { slug: "graph-dropped", text: null, document: false },
+      ],
+      nodes: [{ slug: "node-dropped", text: null, document: false }],
+    }));
+    const { meta } = await run([partial, emptySearchStub()], { authenticated: true });
+
+    expect(meta.documents).toBe(1);
+    expect(meta.invalid).toEqual([
+      { repo: "UniverLab/canopy-graphs", slug: "graph-binary", reason: "blob not text" },
+      { repo: "UniverLab/canopy-graphs", slug: "graph-dropped", reason: "graphql error" },
+      { repo: "UniverLab/canopy-graphs", slug: "node-dropped", reason: "graphql error" },
+    ]);
+  });
+
+  it("reports the same pattern reasons from a snapshot as from REST", async () => {
+    const body = snapshotBody({
+      blocked: "[]",
+      patterns: [
+        { slug: "pattern-alpha", page: patternPage("pattern-alpha"), figure: VALID_GRAPH_TEXT },
+        { slug: "pattern-bravo", page: "no front matter here", figure: VALID_GRAPH_TEXT },
+        {
+          slug: "pattern-charlie",
+          page: patternPage("pattern-charlie"),
+          figure: VALID_GRAPH_TEXT,
+          figureName: "somewhere-else.figure.json",
+        },
+        { slug: "pattern-delta", page: patternPage("pattern-delta"), figure: "{not json" },
+        {
+          slug: "pattern-echo",
+          page: patternPage("pattern-echo"),
+          figure: JSON.stringify({ not: "a document" }),
+        },
+      ],
+    });
+    const { meta, kv } = await run(
+      [graphqlStub("canopy-graphs", body), emptySearchStub()],
+      { authenticated: true },
+    );
+
+    expect(meta.invalid).toEqual([
+      { repo: "UniverLab/canopy-graphs", slug: "pattern-bravo", reason: "malformed front matter" },
+      { repo: "UniverLab/canopy-graphs", slug: "pattern-charlie", reason: "missing figure" },
+      { repo: "UniverLab/canopy-graphs", slug: "pattern-delta", reason: "unparseable figure JSON" },
+      { repo: "UniverLab/canopy-graphs", slug: "pattern-echo", reason: "figure failed the graph schema" },
+    ]);
+    const patterns = JSON.parse((await kv.get("patterns:v1")) as string) as {
+      entries: Array<{ slug: string }>;
+    };
+    expect(patterns.entries.map((entry) => entry.slug)).toEqual(["pattern-alpha"]);
+    expect(await kv.get(patternKey("pattern-bravo"))).toBeNull();
+  });
+
+  it("calls an entry that vanished without an errors array a missing file", async () => {
+    const { meta } = await run(
+      [
+        graphqlStub("canopy-graphs", snapshotBody({
+          blocked: "[]",
+          graphs: [{ slug: "graph-alpha", text: null, document: false }],
+        })),
+        emptySearchStub(),
+      ],
+      { authenticated: true },
+    );
+
+    expect(meta.documents).toBe(0);
+    expect(meta.invalid).toEqual([
+      { repo: "UniverLab/canopy-graphs", slug: "graph-alpha", reason: "missing file" },
+    ]);
+  });
+
+  it("keeps the previous official entries when the answer carries no tree", async () => {
+    const kv = new FakeKV();
+    await kv.put("index:v1", JSON.stringify({
+      built_at: "2026-10-26T00:00:00.000Z",
+      entries: [{
+        kind: "graph",
+        owner: "UniverLab",
+        repo: "canopy-graphs",
+        slug: "graph-alpha",
+        name: "Old alpha",
+        description: "",
+        official: true,
+        stars: 7,
+        updated: null,
+        ref: "main",
+      }],
+    }));
+    await kv.put(
+      docKey("graph", "UniverLab", "canopy-graphs", "graph-alpha"),
+      JSON.stringify({ document: { name: "Old alpha" }, readme: "old" }),
+    );
+
+    const { meta } = await run(
+      [
+        graphqlStub("canopy-graphs", {
+          data: { repository: null },
+          errors: [{ message: "Could not resolve to a Repository with the name 'UniverLab/canopy-graphs'." }],
+        }),
+        emptySearchStub(),
+      ],
+      { authenticated: true, kv },
+    );
+
+    expect(meta.stopped).toBe("official repository unavailable");
+    expect(meta.truncated).toBe(true);
+    expect(meta.repos_seen).toBe(0);
+    expect(meta.subrequests).toBe(1);
+    const index = await storedIndex(kv);
+    expect(index.entries.map((entry) => entry["slug"])).toEqual(["graph-alpha"]);
+    expect(index.entries[0]["name"]).toBe("Old alpha");
+    expect(await kv.get(docKey("graph", "UniverLab", "canopy-graphs", "graph-alpha"))).not.toBeNull();
+  });
+
+  it("counts every outbound call, cache operations included, and refuses the 51st", async () => {
+    const meter = new SubrequestMeter(SUBREQUEST_LIMIT);
+    const cache: CacheLike = new FakeCache(meter);
+    const fake = fakeFetch([{ url: "repos/acme/things", status: 200, body: { stargazers_count: 1 } }]);
+    const github = createGitHub({ fetchImpl: meteredFetch(fake, meter), cache });
+    await github.get("https://api.github.com/repos/acme/things", "contents");
+    expect(meter.fetches).toBe(1);
+    // One match before the fetch, one store after it.
+    expect(meter.cacheOps).toBe(2);
+    expect(meter.total).toBe(3);
+
+    const full = new SubrequestMeter(SUBREQUEST_LIMIT);
+    for (let index = 0; index < SUBREQUEST_LIMIT; index += 1) {
+      full.spend(index % 2 === 0 ? "fetch" : "cache");
+    }
+    expect(full.total).toBe(50);
+    expect(() => full.spend("cache")).toThrow("Too many subrequests");
   });
 });
 
@@ -732,6 +1000,34 @@ describe("the read side", () => {
     const store = createStore(kv);
     expect((await store.getDoc("graph", "ACME", "Things", "flow"))?.readme).toBe("hi");
     expect((await store.getMeta())?.calls).toBe(2);
+    // An older meta wrote neither field: the count falls back to `calls` and
+    // the stop reason is null, so /api/index-status keeps answering.
+    expect((await store.getMeta())?.subrequests).toBe(2);
+    expect((await store.getMeta())?.stopped).toBeNull();
+  });
+
+  it("reads the stop reason a truncated run wrote", async () => {
+    resetIndexMemo();
+    const kv = new FakeKV();
+    await kv.put(
+      "index:meta",
+      JSON.stringify({
+        built_at: "t",
+        duration_ms: 1,
+        calls: 45,
+        subrequests: 45,
+        repos_seen: 14,
+        documents: 13,
+        blocked: 0,
+        invalid: [],
+        truncated: true,
+        stopped: "budget of 45 subrequests reached",
+        authenticated: false,
+      }),
+    );
+    const meta = await createStore(kv).getMeta();
+    expect(meta?.subrequests).toBe(45);
+    expect(meta?.stopped).toBe("budget of 45 subrequests reached");
   });
 
   it("answers null for a missing binding, a missing key and a corrupt value", async () => {

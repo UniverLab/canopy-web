@@ -107,7 +107,7 @@ async function seeded(stubsToSeed: Stub[]): Promise<{ kv: FakeKV; meta: { invali
   const fake = fakeFetch(stubsToSeed);
   const kv = new FakeKV();
   const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
-  const meta = await runIndexer({ github, index: kv, authenticated: true });
+  const meta = await runIndexer({ github, index: kv, authenticated: false });
   return { kv, meta };
 }
 
@@ -293,7 +293,7 @@ describe("the patterns index build", () => {
     }));
     const fake = fakeFetch(gatedStubs());
     const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
-    await runIndexer({ github, index: kv, authenticated: true });
+    await runIndexer({ github, index: kv, authenticated: false });
     expect(await kv.get(patternKey("retired"))).toBeNull();
     expect(await kv.get(patternKey("gated-check"))).not.toBeNull();
   });
@@ -318,7 +318,7 @@ describe("the patterns index build", () => {
     ]);
     const kv = new FakeKV();
     const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
-    await runIndexer({ github, index: kv, authenticated: true });
+    await runIndexer({ github, index: kv, authenticated: false });
     expect(fake.calls.some((url) => url.includes("repos/acme/things/contents/patterns"))).toBe(false);
     expect(fake.calls.filter((url) => url.includes("/contents/patterns"))).toHaveLength(3);
   });
@@ -339,7 +339,7 @@ describe("the patterns index build", () => {
     const fake = fakeFetch(stubs);
     const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
     resetIndexMemo();
-    await runIndexer({ github, index: kv, authenticated: true });
+    await runIndexer({ github, index: kv, authenticated: false });
     expect(await kv.get(patternKey("kept"))).not.toBeNull();
     expect(JSON.parse((await kv.get("patterns:v1")) as string)).toEqual({ built_at: "t", entries: [] });
   });

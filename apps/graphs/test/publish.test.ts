@@ -65,7 +65,7 @@ async function call(path: string, accept?: string): Promise<Response> {
   const seed = fakeFetch(officialStubs());
   const kv = new FakeKV();
   const github = createGitHub({ fetchImpl: seed.fetchImpl, cache: new FakeCache() });
-  await runIndexer({ github, index: kv, authenticated: true });
+  await runIndexer({ github, index: kv, authenticated: false });
   const fake = fakeFetch([]);
   const headers = new Headers();
   if (accept !== undefined) {

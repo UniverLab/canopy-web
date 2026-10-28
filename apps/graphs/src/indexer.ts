@@ -4,27 +4,32 @@
  *
  * A Cron Trigger runs this every 15 minutes: it reads the community
  * removal list (`blocked.json` in the official repository) first,
- * discovers every repository tagged `topic:canopy-graph`, lists each one's
- * document folders through the same discovery the live search uses, fetches
- * and validates every document, indexes the official repository in the same
- * run, and writes the catalogue into KV — `index:v1` (entries, no full
- * documents), one `doc:v1:*` key per document plus its README, one
- * `blocked:v1:*` key per blocked entry, and `index:meta` with the run's
- * accounting. The run also reads the official `patterns/` directory from
- * `main` into `patterns:v1` plus one `pattern:v1:*` key per page; a
- * malformed page or a figure that fails the graph schema is skipped with a
- * reason in the run's invalid list, never a failed run. A blocked document
- * or repository is never written to `doc:v1:*`, and a stale `doc:v1:*` key
- * is deleted. The request path then serves everything from KV and never
- * spends GitHub quota on traffic.
+ * discovers every repository tagged `topic:canopy-graph`, and reads each
+ * repository's document folders — one GraphQL answer per repository when it
+ * has a token, folder by folder over REST when it does not — validating
+ * every document and indexing the official repository in the same run. It
+ * writes the catalogue into KV — `index:v1` (entries, no full documents),
+ * one `doc:v1:*` key per document plus its README, one `blocked:v1:*` key
+ * per blocked entry, and `index:meta` with the run's accounting. The
+ * official `patterns/` directory lands in `patterns:v1` plus one
+ * `pattern:v1:*` key per page; a malformed page or a figure that fails the
+ * graph schema is skipped with a reason in the run's invalid list, never a
+ * failed run. A blocked document or repository is never written to
+ * `doc:v1:*`, and a stale `doc:v1:*` key is deleted. The request path then
+ * serves everything from KV and never spends GitHub quota on traffic.
  *
- * The run is budgeted (1,200 GitHub calls authenticated, 50 without a
- * token). When the budget, a rate limit or a failed discovery page stops
- * the run early, the previous entries of the repositories it could not
- * visit are carried over, so a short run never shrinks the catalogue;
- * only documents in visited repositories that are truly gone — and
- * repositories absent from a completed discovery — have their keys
- * deleted.
+ * The run is budgeted: 45 outbound subrequests, which is the Workers Free
+ * plan's 50 minus a margin. An authenticated run reads each repository's
+ * whole catalogue — every document, README, pattern page and figure — in one
+ * GitHub GraphQL request, so the official repository costs one subrequest
+ * and the machine-generated discovery search the rest; without a token it
+ * falls back to the REST path. When the budget, a rate limit or a failed
+ * discovery page stops the run early, the previous entries of the
+ * repositories it could not visit are carried over, so a short run never
+ * shrinks the catalogue; only documents in visited repositories that are
+ * truly gone — and repositories absent from a completed discovery — have
+ * their keys deleted. The meta records how many subrequests the run spent
+ * and why it stopped, so a truncated run is visible from outside.
  */
 import type { DocumentKind, JsonValue } from "../../../src/schema.js";
 import {
@@ -32,29 +37,32 @@ import {
   blockedDocument,
   blockedKey,
   blockedRepository,
-  parseBlockedList,
   type BlockedEntry,
 } from "./blocked.js";
 import type { ApiError, GitHub, Log } from "./github.js";
 import { isApiError } from "./github.js";
-import { decodeBase64, isArray, isNumber, isRecord, readJson, stringField } from "./json.js";
+import { isArray, isNumber, isRecord, readJson, stringField } from "./json.js";
 import { CATALOGUE_TOPIC, discoverSources } from "./discovery.js";
 import {
   type CatalogEntry,
+  type DocumentLoad,
   type DocumentSource,
-  branchFromRepository,
-  documentDirectory,
   loadDocumentWithReason,
-  starsFromRepository,
-  updatedFromRepository,
 } from "./documents.js";
-import { OFFICIAL_OWNER, OFFICIAL_REPO, OFFICIAL_REPOSITORY } from "./lib.js";
+import { OFFICIAL_OWNER, OFFICIAL_REPO } from "./lib.js";
 import {
   type PatternEntry,
   type StoredPattern,
   PatternsHalt,
   fetchOfficialPatterns,
 } from "./patterns.js";
+import { officialSources, readBlocked } from "./rest.js";
+import {
+  documentOfSnapshot,
+  fetchSnapshot,
+  officialCatalogueOf,
+  snapshotSources,
+} from "./snapshot.js";
 import {
   DOC_PREFIX,
   INDEX_KEY,
@@ -92,11 +100,13 @@ export const DISCOVERY_PAGE_SIZE = 100;
  */
 export const DISCOVERY_MAX_PAGES = 10;
 
-/** GitHub calls one authenticated run may spend, at most. */
-export const AUTHENTICATED_BUDGET = 1200;
-
-/** GitHub calls one run without `GITHUB_TOKEN` may spend, at most. */
-export const UNAUTHENTICATED_BUDGET = 50;
+/**
+ * Outbound subrequests one run may spend, at most: GitHub REST, GraphQL and
+ * the discovery search alike, with Cache API operations counting too (which
+ * is why the cron path builds its transport with `cache: null`). The plan
+ * allows 50 per invocation; 45 leaves room for the KV writes and the answer.
+ */
+export const SUBREQUEST_BUDGET = 45;
 
 /**
  * `index:v1` stays far under KV's 25 MiB value limit: past 5 MiB every
@@ -106,43 +116,6 @@ export const INDEX_MAX_BYTES = 5 * 1024 * 1024;
 
 /** Descriptions are cut to this length when the index would overshoot. */
 export const DESCRIPTION_TRIM = 280;
-
-/**
- * The removal list, read once per run from `main` before anything else:
- * `blocked.json` at the root of the official catalogue repository, through
- * the contents API so the run spends one call and no more. A refusal to
- * read it keeps the previous blocks (the KV keys stay); a readable list
- * replaces them.
- */
-export const BLOCKED_FILE_URL =
-  `https://api.github.com/repos/${OFFICIAL_REPOSITORY}/contents/blocked.json?ref=main`;
-
-/** What one read of the removal list proved: the entries, and whether it read. */
-interface BlockedRead {
-  entries: BlockedEntry[];
-  /** False when the file was missing or unreadable: keep the previous keys. */
-  loaded: boolean;
-}
-
-async function readBlocked(github: GitHub, log: Log): Promise<BlockedRead> {
-  const response = await github.get(BLOCKED_FILE_URL, "contents");
-  if (isApiError(response)) {
-    if (response.kind === "rate-limit") {
-      throw new StopRun("rate-limited reading blocked.json");
-    }
-    log(`indexer: blocked.json ${response.kind}; keeping the previous blocks`);
-    return { entries: [], loaded: false };
-  }
-  const body = await readJson(response);
-  const content = body.ok && isRecord(body.value) ? body.value["content"] : undefined;
-  const text = decodeBase64(content);
-  const entries = text === null ? null : parseBlockedList(text);
-  if (entries === null) {
-    log("indexer: blocked.json did not parse as a JSON array; keeping the previous blocks");
-    return { entries: [], loaded: false };
-  }
-  return { entries, loaded: true };
-}
 
 /** The discovery query: the catalogue topic, best starred first. */
 export function discoveryUrl(page: number): string {
@@ -161,7 +134,11 @@ export interface IndexerOptions {
   github: GitHub;
   /** The index namespace the catalogue reads. */
   index: KV;
-  /** True when the run authenticates; false caps the budget at 50 calls. */
+  /**
+   * True when the run authenticates. GitHub's GraphQL API needs a token, so
+   * this picks the transport as well as the account: authenticated runs take
+   * each repository in one GraphQL request, unauthenticated runs use REST.
+   */
   authenticated: boolean;
   /** Budget override. Production never sets it; the tests force cut-offs. */
   budget?: number;
@@ -278,47 +255,11 @@ export function buildIndexPayload(
   return JSON.stringify({ built_at: builtAt, entries: trimmed });
 }
 
-/** The directory names in a contents listing; anything unreadable is none. */
-function listedDirectories(value: unknown): string[] {
-  if (!isArray(value)) {
-    return [];
-  }
-  return value.flatMap((entry) => {
-    if (isRecord(entry) && entry["type"] === "dir") {
-      const name = entry["name"];
-      return typeof name === "string" ? [name] : [];
-    }
-    return [];
-  });
-}
-
-/** What one `/repos/...` call tells the index: stars, updated, branch. */
-interface RepoInfo {
-  stars: number | null;
-  updated: string | null;
-  branch: string;
-}
-
-async function repoInfo(github: GitHub, repository: string): Promise<RepoInfo> {
-  const blank: RepoInfo = { stars: null, updated: null, branch: "" };
-  const response = await github.get(`https://api.github.com/repos/${repository}`, "contents");
-  if (isApiError(response)) {
-    return blank;
-  }
-  const body = await readJson(response);
-  if (!body.ok) {
-    return blank;
-  }
-  return {
-    stars: starsFromRepository(body.value),
-    updated: updatedFromRepository(body.value),
-    branch: branchFromRepository(body.value),
-  };
-}
-
 interface RunState {
   github: GitHub;
   log: Log;
+  /** True when each repository arrives as one GraphQL snapshot. */
+  graphql: boolean;
   entries: IndexEntry[];
   documents: Map<string, StoredDoc>;
   patterns: PatternEntry[];
@@ -335,11 +276,15 @@ interface RunState {
   truncated: boolean;
 }
 
+/** How one document folder is read, whatever the transport. */
+type DocumentLoader = (source: DocumentSource) => Promise<DocumentLoad | ApiError>;
+
 /** Load one source into the run, recording drops in the invalid list. */
 async function indexSource(
   state: RunState,
   source: DocumentSource,
   official: boolean,
+  load: DocumentLoader,
 ): Promise<void> {
   const block = blockedDocument(
     state.blocked,
@@ -354,7 +299,7 @@ async function indexSource(
     );
     return;
   }
-  const loaded = await loadDocumentWithReason(state.github, source, state.log);
+  const loaded = await load(source);
   if (loaded.kind === "doc") {
     state.entries.push(entryFromLoaded(source, loaded.entry, official));
     state.documents.set(
@@ -386,69 +331,67 @@ async function indexSource(
 }
 
 /**
- * Index the official repository: both `graphs/` and `nodes/` directories,
- * every folder through validation. A missing directory is an empty kind,
- * not an outage; anything else unreadable logs and contributes nothing.
+ * Index the official repository over REST, without a token: both `graphs/`
+ * and `nodes/` directories, every folder through validation. A missing
+ * directory is an empty kind, not an outage; anything else unreadable logs
+ * and contributes nothing.
  */
-async function indexOfficial(state: RunState): Promise<void> {
+async function indexOfficialRest(state: RunState): Promise<void> {
   const repoBlock = blockedRepository(state.blocked, OFFICIAL_OWNER, OFFICIAL_REPO);
   if (repoBlock !== null) {
     state.log(`indexer: blocked the official repository: ${repoBlock.reason}`);
     return;
   }
-  const slugs: Record<DocumentKind, string[]> = { graph: [], node: [] };
-  for (const kind of ["graph", "node"] as const) {
-    const listing = await state.github.get(
-      `https://api.github.com/repos/${OFFICIAL_REPOSITORY}/contents/${kind}s`,
-      "contents",
-    );
-    if (isApiError(listing)) {
-      if (listing.kind === "rate-limit") {
-        throw new StopRun("rate-limited listing the official repository");
-      }
-      if (listing.kind !== "not-found") {
-        state.log(`indexer: official ${kind}s failed: ${listing.kind}`);
-      }
-      continue;
-    }
-    const body = await readJson(listing);
-    if (!body.ok) {
-      state.log(`indexer: official ${kind}s did not parse as JSON`);
-      continue;
-    }
-    slugs[kind] = listedDirectories(body.value);
+  const read = await officialSources(state.github, state.log);
+  if (read.kind === "halt") {
+    throw new StopRun(read.reason);
   }
-  const info = await repoInfo(state.github, OFFICIAL_REPOSITORY);
-  for (const kind of ["graph", "node"] as const) {
-    for (const slug of slugs[kind]) {
-      await indexSource(
-        state,
-        {
-          owner: OFFICIAL_OWNER,
-          repo: OFFICIAL_REPO,
-          directory: documentDirectory(kind, slug),
-          kind,
-          slug,
-          stars: info.stars,
-          updated: info.updated,
-          ref: info.branch,
-        },
-        true,
-      );
-    }
+  for (const source of read.sources) {
+    await indexSource(
+      state,
+      source,
+      true,
+      (one) => loadDocumentWithReason(state.github, one, state.log),
+    );
   }
 }
 
-/** Index one community repository discovered by the topic search. */
-async function indexRepo(state: RunState, hit: RepoHit): Promise<void> {
-  const repoBlock = blockedRepository(state.blocked, hit.owner, hit.repo);
-  if (repoBlock !== null) {
-    // Skip before the tree call: a blocked repository costs one discovery
-    // hit and no contents call, and still counts as visited so its previous
-    // entries are dropped.
-    state.log(`indexer: blocked repository ${hit.owner}/${hit.repo}: ${repoBlock.reason}`);
-    return;
+/**
+ * Index the official repository from one GraphQL answer: the removal list,
+ * every document and README, and every pattern page with its figure, all in
+ * the run's second subrequest. Returns whether the removal list was readable,
+ * so the caller keeps the previous blocks when it was not.
+ */
+async function indexOfficialSnapshot(state: RunState): Promise<boolean> {
+  const snapshot = await fetchSnapshot(state.github, OFFICIAL_OWNER, OFFICIAL_REPO, state.log);
+  if (isApiError(snapshot)) {
+    throw new StopRun(
+      snapshot.kind === "rate-limit"
+        ? "rate-limited reading the official repository"
+        : `official repository ${snapshot.kind}`,
+    );
   }
+  if (snapshot.tree === null) {
+    // No tree is a repository the answer could not read: stopping here keeps
+    // the previous entries instead of replacing them with nothing.
+    throw new StopRun("official repository unavailable");
+  }
+  const catalogue = await officialCatalogueOf(snapshot, state.log);
+  if (catalogue.blocked !== null) {
+    state.blocked = catalogue.blocked;
+  }
+  for (const item of catalogue.documents) {
+    await indexSource(state, item.source, true, () => documentOfSnapshot(item, state.log));
+  }
+  state.invalid.push(...catalogue.patterns.invalid);
+  state.patterns = catalogue.patterns.entries;
+  state.patternDocs = catalogue.patterns.documents;
+  state.patternsComplete = catalogue.patterns.complete;
+  return catalogue.blocked !== null;
+}
+
+/** Index one community repository over REST: a tree, then two calls per folder. */
+async function indexRepoRest(state: RunState, hit: RepoHit): Promise<void> {
   const sources = await discoverSources(state.github, hit.owner, hit.repo, hit.branch, state.log);
   if (isApiError(sources)) {
     throw new StopRun(`rate-limited discovering ${hit.owner}/${hit.repo}`);
@@ -457,28 +400,75 @@ async function indexRepo(state: RunState, hit: RepoHit): Promise<void> {
     source.stars = hit.stars;
     source.updated = hit.updated;
     source.ref = hit.branch;
-    await indexSource(state, source, false);
+    await indexSource(
+      state,
+      source,
+      false,
+      (one) => loadDocumentWithReason(state.github, one, state.log),
+    );
   }
 }
 
+/**
+ * Index one community repository discovered by the topic search. The
+ * authenticated run takes its whole catalogue in one GraphQL request; the
+ * REST path discovers the folders first. Returns false when the repository
+ * could not be read, so its previous entries carry over.
+ */
+async function indexRepo(state: RunState, hit: RepoHit): Promise<boolean> {
+  const repoBlock = blockedRepository(state.blocked, hit.owner, hit.repo);
+  if (repoBlock !== null) {
+    // Skip before the snapshot call: a blocked repository costs one discovery
+    // hit and no contents call, and still counts as visited so its previous
+    // entries are dropped.
+    state.log(`indexer: blocked repository ${hit.owner}/${hit.repo}: ${repoBlock.reason}`);
+    return true;
+  }
+  if (!state.graphql) {
+    await indexRepoRest(state, hit);
+    return true;
+  }
+  const snapshot = await fetchSnapshot(state.github, hit.owner, hit.repo, state.log);
+  if (isApiError(snapshot)) {
+    if (snapshot.kind === "rate-limit") {
+      throw new StopRun(`rate-limited reading ${hit.owner}/${hit.repo}`);
+    }
+    state.log(`indexer: ${hit.owner}/${hit.repo} unavailable: ${snapshot.kind}`);
+    return false;
+  }
+  if (snapshot.tree === null) {
+    state.log(`indexer: ${hit.owner}/${hit.repo} answered no tree; keeping its previous entries`);
+    return false;
+  }
+  for (const item of snapshotSources(snapshot, hit.owner, hit.repo)) {
+    await indexSource(state, item.source, false, () => documentOfSnapshot(item, state.log));
+  }
+  return true;
+}
+
+/** What one community repository's visit proved. */
+type RepoOutcome =
+  | { status: "indexed" }
+  | { status: "unavailable" }
+  | { status: "stopped"; reason: string };
+
 /** Run one repository with rollback: a stop discards its partial entries. */
-async function indexRepoAtomic(state: RunState, hit: RepoHit): Promise<boolean> {
+async function indexRepoAtomic(state: RunState, hit: RepoHit): Promise<RepoOutcome> {
   const entriesBefore = state.entries.length;
   const documentsBefore = new Map(state.documents);
   const invalidBefore = state.invalid.length;
   try {
-    await indexRepo(state, hit);
+    return { status: (await indexRepo(state, hit)) ? "indexed" : "unavailable" };
   } catch (error) {
     state.entries.length = entriesBefore;
     state.documents = documentsBefore;
     state.invalid.length = invalidBefore;
     if (error instanceof StopRun) {
       state.log(`indexer: stopped at ${hit.owner}/${hit.repo}: ${error.reason}`);
-      return false;
+      return { status: "stopped", reason: error.reason };
     }
     throw error;
   }
-  return true;
 }
 
 /**
@@ -491,20 +481,29 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
   const now = options.now ?? Date.now;
   const started = now();
   const log = options.log ?? (() => undefined);
-  const budget = options.budget ?? (options.authenticated ? AUTHENTICATED_BUDGET : UNAUTHENTICATED_BUDGET);
+  const budget = options.budget ?? SUBREQUEST_BUDGET;
   let calls = 0;
+  /** Spend one subrequest, or stop the run when the budget is gone. */
+  const spend = (): void => {
+    if (calls >= budget) {
+      throw new StopRun(`budget of ${budget} subrequests reached`);
+    }
+    calls += 1;
+  };
   const guarded: GitHub = {
     get: async (url, cacheClass) => {
-      if (calls >= budget) {
-        throw new StopRun(`budget of ${budget} GitHub calls reached`);
-      }
-      calls += 1;
+      spend();
       return options.github.get(url, cacheClass);
+    },
+    graphql: async (query, variables) => {
+      spend();
+      return options.github.graphql(query, variables);
     },
   };
   const state: RunState = {
     github: guarded,
     log,
+    graphql: options.authenticated,
     entries: [],
     documents: new Map(),
     patterns: [],
@@ -522,45 +521,60 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
 
   let blocksLoaded = false;
   let discoveryComplete = false;
+  let stopped: string | null = null;
   try {
-    // The removal list is the run's first GitHub call, so nothing is
-    // indexed before the run knows what must not be.
-    const read = await readBlocked(guarded, log);
-    state.blocked = read.entries;
-    blocksLoaded = read.loaded;
-
-    const officialBefore = { entries: state.entries.length, invalid: state.invalid.length };
-    const officialDocs = new Map(state.documents);
+    // The removal list and the official catalogue in one request when the run
+    // authenticates: nothing is indexed before the run knows what must not be,
+    // and the whole repository costs a single subrequest. Without a token the
+    // list is the run's first REST call, so the same order holds.
+    const officialEntries = state.entries.length;
+    const officialDocuments = new Map(state.documents);
+    const officialInvalid = state.invalid.length;
     try {
-      await indexOfficial(state);
-      state.visited.add(officialKey);
+      if (options.authenticated) {
+        blocksLoaded = await indexOfficialSnapshot(state);
+      } else {
+        const read = await readBlocked(guarded, log);
+        if (read.kind === "halt") {
+          throw new StopRun(read.reason);
+        }
+        if (read.kind === "read") {
+          state.blocked = read.entries;
+          blocksLoaded = true;
+        }
+        await indexOfficialRest(state);
+      }
     } catch (error) {
-      state.entries.length = officialBefore.entries;
-      state.documents = officialDocs;
-      state.invalid.length = officialBefore.invalid;
+      state.entries.length = officialEntries;
+      state.documents = officialDocuments;
+      state.invalid.length = officialInvalid;
       throw error;
     }
+    state.visited.add(officialKey);
 
-    // The pattern pages, from the official repository's `main` only. A halt
-    // (a rate limit mid-read) or a spent budget stops the run like any other
-    // stop — truncated with carry-over, the catalogue still committed — and
-    // the previous patterns stay because this run never read them end to
-    // end; an unreadable directory keeps them too instead of emptying them.
-    const patternsInvalid = state.invalid.length;
-    try {
-      const read = await fetchOfficialPatterns(state.github, state.log);
-      state.invalid.push(...read.invalid);
-      if (read.complete) {
-        state.patterns = read.entries;
-        state.patternDocs = read.documents;
-        state.patternsComplete = true;
+    // The REST path reads the pattern pages after the documents, one file per
+    // call. A halt (a rate limit mid-read) or a spent budget stops the run like
+    // any other stop — truncated with carry-over, the catalogue still
+    // committed — and the previous patterns stay because this run never read
+    // them end to end; an unreadable directory keeps them too instead of
+    // emptying them. The snapshot path already holds them.
+    if (!options.authenticated) {
+      const patternsInvalid = state.invalid.length;
+      try {
+        const read = await fetchOfficialPatterns(state.github, state.log);
+        state.invalid.push(...read.invalid);
+        if (read.complete) {
+          state.patterns = read.entries;
+          state.patternDocs = read.documents;
+          state.patternsComplete = true;
+        }
+      } catch (error) {
+        state.invalid.length = patternsInvalid;
+        if (error instanceof PatternsHalt) {
+          throw new StopRun(error.reason);
+        }
+        throw error;
       }
-    } catch (error) {
-      state.invalid.length = patternsInvalid;
-      if (error instanceof PatternsHalt) {
-        throw new StopRun(error.reason);
-      }
-      throw error;
     }
 
     let page = 1;
@@ -608,10 +622,16 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
     }
 
     for (const hit of queue) {
-      const done = await indexRepoAtomic(state, hit);
-      if (!done) {
+      const outcome = await indexRepoAtomic(state, hit);
+      if (outcome.status === "stopped") {
+        stopped = outcome.reason;
         state.truncated = true;
         break;
+      }
+      if (outcome.status === "unavailable") {
+        // Unread, not empty: its previous entries carry over.
+        state.truncated = true;
+        continue;
       }
       state.visited.add(repoKey(hit.owner, hit.repo));
     }
@@ -620,6 +640,7 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
       throw error;
     }
     log(`indexer: ${error.reason}`);
+    stopped = error.reason;
     state.truncated = true;
   }
 
@@ -698,11 +719,13 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
     built_at: builtAt,
     duration_ms: Math.max(0, now() - started),
     calls,
+    subrequests: calls,
     repos_seen: state.visited.size,
     documents: state.entries.length,
     blocked: state.blocked.length,
     invalid: state.invalid,
     truncated: state.truncated,
+    stopped,
     authenticated: options.authenticated,
   };
   await options.index.put(META_KEY, JSON.stringify(meta));

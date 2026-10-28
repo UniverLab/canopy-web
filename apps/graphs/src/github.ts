@@ -2,15 +2,22 @@
 /**
  * GitHub transport for graphs.univerlab.org.
  *
- * Every call is a GET wrapped in the Cache API: the exact GitHub URL is the
+ * Two methods, both typed the same way: `get` is the cached REST read the
+ * pages make, `graphql` is the one uncached POST the scheduled index uses to
+ * take a whole repository's catalogue in a single request.
+ *
+ * REST calls are GETs wrapped in the Cache API: the exact GitHub URL is the
  * cache key, only status 200 is stored, and the time-to-live depends on what
  * the URL is for (search 10 minutes, contents and raw files 30 minutes).
  * Lookup happens before the fetch, so a warm cache keeps serving when the
- * token runs out of rate limit.
+ * token runs out of rate limit. A transport built with `cache: null` never
+ * touches the Cache API at all: that is the cron path, where every cache
+ * lookup and store would spend one of the run's subrequests.
  *
  * Errors are typed values, never exceptions: rate limiting, a missing path
  * and an upstream failure all come back as an `ApiError` the pages can show.
  */
+import { isArray, isRecord, readJson, stringField } from "./json.js";
 
 /** Where the caller wants the result cached, which sets the time-to-live. */
 export type CacheClass = "search" | "contents" | "raw" | "analytics";
@@ -26,6 +33,9 @@ export const TTL: Record<CacheClass, number> = {
 /** User-Agent GitHub asks every client to send. */
 export const USER_AGENT = "canopy-graphs";
 
+/** The one GraphQL endpoint; the catalogue's only POST to GitHub. */
+export const GRAPHQL_URL = "https://api.github.com/graphql";
+
 /** A sink for notes worth keeping (dropped documents, skipped repos). */
 export type Log = (message: string) => void;
 
@@ -33,6 +43,14 @@ export type Log = (message: string) => void;
 export interface CacheLike {
   match(request: Request): Promise<Response | undefined>;
   put(request: Request, response: Response): Promise<void>;
+}
+
+/** What one GraphQL answer carries. Never an exception, never cached. */
+export interface GraphQLResult {
+  /** The `data` member, or null when the answer carried none. */
+  data: unknown;
+  /** The `errors[].message` lines; empty when the query answered cleanly. */
+  errors: string[];
 }
 
 /** A typed catalogue error. `status` is what the API answers with. */
@@ -60,8 +78,13 @@ export function isApiError(value: unknown): value is ApiError {
 export interface GitHubOptions {
   /** Substitutable fetch; defaults to the global. */
   fetchImpl?: typeof fetch;
-  /** Substitutable cache; defaults to `caches.default`. */
-  cache?: CacheLike;
+  /**
+   * Substitutable cache; defaults to `caches.default`. `null` disables the
+   * Cache API outright, which is how the scheduled index is built: on the
+   * Workers Free plan a cache lookup or store is one of the run's 50
+   * subrequests, and the run would rather spend them on GitHub.
+   */
+  cache?: CacheLike | null;
   /** Optional token, sent as a Bearer so the catalogue shares its quota fairly. */
   token?: string;
   /** Where dropped or skipped things are noted; defaults to no-op. */
@@ -72,6 +95,12 @@ export interface GitHubOptions {
 export interface GitHub {
   /** GET a URL, cache-first. Returns the (cached) Response or a typed error. */
   get(url: string, cacheClass: CacheClass): Promise<Response | ApiError>;
+  /**
+   * POST a GraphQL query with the same token header, shaped into the same
+   * typed errors. Never cached: the scheduled index reads one answer and
+   * no request-path reader ever replays it.
+   */
+  graphql(query: string, variables: Record<string, unknown>): Promise<GraphQLResult | ApiError>;
 }
 
 /** `caches.default` from the Worker runtime, found without a hard type import. */
@@ -144,20 +173,11 @@ async function store(
 /** Build the transport. Defaults wire to the Worker runtime; tests inject. */
 export function createGitHub(options: GitHubOptions = {}): GitHub {
   const fetchImpl = options.fetchImpl ?? fetch;
-  const cache: CacheLike = options.cache ?? defaultCache();
+  const cache: CacheLike | null = options.cache === undefined ? defaultCache() : options.cache;
   const log: Log = options.log ?? (() => undefined);
 
-  async function get(url: string, cacheClass: CacheClass): Promise<Response | ApiError> {
-    const request = new Request(url, { method: "GET" });
-    try {
-      const cached = await cache.match(request);
-      if (cached !== undefined) {
-        return cached;
-      }
-    } catch {
-      // An unreadable cache falls through to a plain fetch.
-    }
-
+  /** The headers every GitHub call shares: user-agent, accept, token. */
+  function githubHeaders(): Headers {
     const headers = new Headers({
       "user-agent": USER_AGENT,
       accept: "application/vnd.github+json",
@@ -165,10 +185,39 @@ export function createGitHub(options: GitHubOptions = {}): GitHub {
     if (options.token !== undefined && options.token !== "") {
       headers.set("authorization", `Bearer ${options.token}`);
     }
+    return headers;
+  }
+
+  /** The `errors[].message` lines of a GraphQL body; empty when clean. */
+  function errorMessages(value: unknown): string[] {
+    if (!isArray(value)) {
+      return [];
+    }
+    return value.flatMap((entry) => {
+      if (!isRecord(entry)) {
+        return [];
+      }
+      const message = stringField(entry, "message");
+      return message === "" ? [] : [message];
+    });
+  }
+
+  async function get(url: string, cacheClass: CacheClass): Promise<Response | ApiError> {
+    const request = new Request(url, { method: "GET" });
+    if (cache !== null) {
+      try {
+        const cached = await cache.match(request);
+        if (cached !== undefined) {
+          return cached;
+        }
+      } catch {
+        // An unreadable cache falls through to a plain fetch.
+      }
+    }
 
     let response: Response;
     try {
-      response = await fetchImpl(new Request(url, { headers }));
+      response = await fetchImpl(new Request(url, { headers: githubHeaders() }));
     } catch (error) {
       log(`github: fetch failed for ${url}: ${String(error)}`);
       return { kind: "upstream", message: `GitHub unreachable: ${url}`, status: 502 };
@@ -178,9 +227,48 @@ export function createGitHub(options: GitHubOptions = {}): GitHub {
       log(`github: ${url} answered ${response.status}`);
       return errorFor(response, url);
     }
-    await store(cache, request, response, cacheClass);
+    if (cache !== null) {
+      await store(cache, request, response, cacheClass);
+    }
     return response;
   }
 
-  return { get };
+  async function graphql(
+    query: string,
+    variables: Record<string, unknown>,
+  ): Promise<GraphQLResult | ApiError> {
+    const headers = githubHeaders();
+    headers.set("content-type", "application/json");
+
+    let response: Response;
+    try {
+      response = await fetchImpl(
+        new Request(GRAPHQL_URL, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ query, variables }),
+        }),
+      );
+    } catch (error) {
+      log(`github: graphql failed: ${String(error)}`);
+      return { kind: "upstream", message: `GitHub unreachable: ${GRAPHQL_URL}`, status: 502 };
+    }
+
+    if (!response.ok) {
+      log(`github: ${GRAPHQL_URL} answered ${response.status}`);
+      return errorFor(response, GRAPHQL_URL);
+    }
+    const body = await readJson(response);
+    if (!body.ok || !isRecord(body.value)) {
+      log(`github: ${GRAPHQL_URL} answered something other than JSON`);
+      return {
+        kind: "upstream",
+        message: `Upstream error: ${new URL(GRAPHQL_URL).host}${new URL(GRAPHQL_URL).pathname} answered a body that is not JSON`,
+        status: 502,
+      };
+    }
+    return { data: body.value["data"], errors: errorMessages(body.value["errors"]) };
+  }
+
+  return { get, graphql };
 }

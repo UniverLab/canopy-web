@@ -275,6 +275,11 @@ export interface DocContext {
   official?: boolean;
 }
 
+/** What one document folder proved: a rendered entry, or why it was dropped. */
+export type DocumentLoad =
+  | { kind: "doc"; entry: CatalogEntry }
+  | { kind: "absent"; reason: string | null };
+
 /**
  * Render one validated document and its README into the row and page
  * shape. The live loader and the scheduled index share it, so a document
@@ -303,6 +308,34 @@ export function docFromDocument(
 }
 
 /**
+ * Parse, validate and render one document from the texts a transport
+ * decoded. The REST loader and the GraphQL snapshot both call this, so the
+ * catalogue's document rules — and the reasons it reports — have one owner.
+ *
+ * `readme` is a thunk because the only real cost of a document is its
+ * GitHub call: a document that fails validation must not fetch a README.
+ */
+export async function documentFromTexts(
+  context: DocContext,
+  documentText: string,
+  readme: () => string | null | Promise<string | null>,
+  log: (message: string) => void,
+): Promise<DocumentLoad> {
+  const where = `${context.owner}/${context.repo} ${context.kind}s/${context.slug}`;
+  const parsed = parseJson(documentText);
+  if (!parsed.ok || !isRecord(parsed.value)) {
+    log(`documents: dropped ${where}: unparseable JSON`);
+    return { kind: "absent", reason: "unparseable JSON" };
+  }
+  if (!isValidDocument(context.kind, parsed.value)) {
+    log(`documents: dropped ${where}: invalid document`);
+    return { kind: "absent", reason: "schema validation failed" };
+  }
+  const inline = (await readme()) ?? "";
+  return { kind: "doc", entry: { document: parsed.value, doc: docFromDocument(context, parsed.value, inline) } };
+}
+
+/**
  * Load, validate and render one document, carrying the drop reason. An
  * `absent` miss is ordinary (no folder, no file) and carries no reason;
  * an invalid document carries why it failed to validate, for the
@@ -312,11 +345,7 @@ export async function loadDocumentWithReason(
   github: GitHub,
   source: DocumentSource,
   log: (message: string) => void,
-): Promise<
-  | { kind: "doc"; entry: CatalogEntry }
-  | { kind: "absent"; reason: string | null }
-  | ApiError
-> {
+): Promise<DocumentLoad | ApiError> {
   const { owner, repo, kind } = source;
   const ref = source.ref ?? "";
   const jsonPath = `${source.directory}/${documentFile(kind)}`;
@@ -328,23 +357,13 @@ export async function loadDocumentWithReason(
   if (documentText.kind !== "text") {
     return documentText;
   }
-  const parsed = parseJson(documentText.text);
-  if (!parsed.ok || !isRecord(parsed.value)) {
-    log(`documents: dropped ${owner}/${repo} ${jsonPath}: unparseable JSON`);
-    return { kind: "absent", reason: "unparseable JSON" };
-  }
-  if (!isValidDocument(kind, parsed.value)) {
-    log(`documents: dropped ${owner}/${repo} ${jsonPath}: invalid document`);
-    return { kind: "absent", reason: "schema validation failed" };
-  }
-  const document = parsed.value;
-  const readmePath = `${source.directory}/README.md`;
-  const readme = await readText(github, owner, repo, readmePath, ref, log);
-  const readmeText = readme.kind === "text" ? readme.text : "";
-  if (readme.kind === "absent") {
-    log(`documents: ${owner}/${repo} ${jsonPath} listed without a README`);
-  }
-  return { kind: "doc", entry: { document, doc: docFromDocument(source, document, readmeText) } };
+  return documentFromTexts(source, documentText.text, async () => {
+    const readme = await readText(github, owner, repo, `${source.directory}/README.md`, ref, log);
+    if (readme.kind === "absent") {
+      log(`documents: ${owner}/${repo} ${jsonPath} listed without a README`);
+    }
+    return readme.kind === "text" ? readme.text : null;
+  }, log);
 }
 
 /**

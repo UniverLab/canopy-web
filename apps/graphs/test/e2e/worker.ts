@@ -105,9 +105,9 @@ let seeded: Promise<unknown> | null = null;
 function seed(): Promise<unknown> {
   if (seeded === null) {
     seeded = runIndexer({
-      github: createGitHub({ fetchImpl: github.fetchImpl, cache }),
+      github: createGitHub({ fetchImpl: github.fetchImpl, cache: null }),
       index: kv,
-      authenticated: true,
+      authenticated: false,
     });
   }
   return seeded;

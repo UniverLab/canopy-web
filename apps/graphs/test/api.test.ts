@@ -55,11 +55,11 @@ function flowStubs(): Stub[] {
 }
 
 /** Seed a fresh KV by running the indexer over the stub table. */
-async function seeded(stubsToSeed: Stub[]): Promise<FakeKV> {
+async function seeded(stubsToSeed: Stub[], budget?: number): Promise<FakeKV> {
   const fake = fakeFetch(stubsToSeed);
   const kv = new FakeKV();
   const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
-  await runIndexer({ github, index: kv, authenticated: true });
+  await runIndexer({ github, index: kv, authenticated: false, budget });
   return kv;
 }
 
@@ -70,11 +70,13 @@ interface Options {
   requestStubs?: Stub[];
   /** Skip seeding: the cold start, before the first scheduled run. */
   cold?: boolean;
+  /** Budget override for a fixture larger than one cron run may read. */
+  budget?: number;
 }
 
 async function call(path: string, options: Options = {}): Promise<{ response: Response; fetch: FakeFetch }> {
   resetIndexMemo();
-  const kv = options.cold === true ? new FakeKV() : await seeded(options.stubs ?? stubs());
+  const kv = options.cold === true ? new FakeKV() : await seeded(options.stubs ?? stubs(), options.budget);
   const fake = fakeFetch(options.requestStubs ?? []);
   const req = new Request(`https://graphs.univerlab.org${path}`);
   const answer = await handleApi(req, { ...options.env, INDEX: kv }, {
@@ -218,7 +220,7 @@ describe("the JSON API", () => {
         ] as Stub[];
       }),
     ];
-    const first = (await (await call("/api/search?page=1", { stubs: table })).response.json()) as {
+    const first = (await (await call("/api/search?page=1", { stubs: table, budget: 2000 })).response.json()) as {
       items: unknown[];
       total: number;
       truncated: boolean;
@@ -226,7 +228,7 @@ describe("the JSON API", () => {
     expect(first.items.length).toBe(20);
     expect(first.total).toBe(21);
     expect(first.truncated).toBe(true);
-    const second = (await (await call("/api/search?page=2", { stubs: table })).response.json()) as {
+    const second = (await (await call("/api/search?page=2", { stubs: table, budget: 2000 })).response.json()) as {
       items: unknown[];
       total: number;
       truncated: boolean;
@@ -367,19 +369,23 @@ describe("the JSON API", () => {
       built_at: string;
       duration_ms: number;
       calls: number;
+      subrequests: number;
       repos_seen: number;
       documents: number;
       invalid: unknown[];
       truncated: boolean;
+      stopped: string | null;
       authenticated: boolean;
     };
     expect(typeof body.built_at).toBe("string");
     expect(body.calls).toBeGreaterThan(0);
+    expect(body.subrequests).toBe(body.calls);
     expect(body.repos_seen).toBe(1);
     expect(body.documents).toBe(2);
     expect(body.invalid).toEqual([]);
     expect(body.truncated).toBe(false);
-    expect(body.authenticated).toBe(true);
+    expect(body.stopped).toBeNull();
+    expect(body.authenticated).toBe(false);
   });
 
   it("trims /api/index-status invalid details past the first 20", async () => {

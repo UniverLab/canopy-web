@@ -21,7 +21,7 @@ async function seeded(stubsToSeed: Stub[]): Promise<FakeKV> {
   const fake = fakeFetch(stubsToSeed);
   const kv = new FakeKV();
   const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
-  await runIndexer({ github, index: kv, authenticated: true });
+  await runIndexer({ github, index: kv, authenticated: false });
   return kv;
 }
 

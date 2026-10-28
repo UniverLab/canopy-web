@@ -304,6 +304,74 @@ type FileText =
   | { kind: "halt"; reason: string }
   | { kind: "error"; reason: string };
 
+/** One figure file as a transport found it. */
+export type FigureText =
+  | { kind: "text"; text: string }
+  | { kind: "absent" }
+  | { kind: "error"; reason: string };
+
+/** One page composed from its markdown and its figure. */
+export type PatternLoad =
+  | { kind: "pattern"; entry: PatternEntry; stored: StoredPattern }
+  | { kind: "invalid"; reason: string };
+
+/**
+ * Parse one page and its figure into the card and the stored page. The REST
+ * reader and the GraphQL snapshot both call this, so a malformed page, a
+ * missing figure and a figure that fails the graph schema are reported the
+ * same way on either transport. The figure name comes from the page's own
+ * front matter, so the caller only says how to read a named file.
+ */
+export async function patternFromTexts(
+  slug: string,
+  page: string,
+  figure: (name: string) => Promise<FigureText>,
+  log: Log,
+): Promise<PatternLoad> {
+  const parsed = parsePatternFile(page);
+  if (parsed === null) {
+    log(`patterns: dropped ${slug}: malformed front matter`);
+    return { kind: "invalid", reason: "malformed front matter" };
+  }
+  const found = await figure(parsed.meta.figure);
+  if (found.kind === "absent") {
+    log(`patterns: dropped ${slug}: the figure ${parsed.meta.figure} is missing`);
+    return { kind: "invalid", reason: "missing figure" };
+  }
+  if (found.kind === "error") {
+    return { kind: "invalid", reason: found.reason };
+  }
+  const figureJson = parseJson(found.text);
+  if (!figureJson.ok || !isRecord(figureJson.value)) {
+    log(`patterns: dropped ${slug}: the figure is not JSON`);
+    return { kind: "invalid", reason: "unparseable figure JSON" };
+  }
+  if (!isValidDocument("graph", figureJson.value)) {
+    log(`patterns: dropped ${slug}: the figure failed the graph schema`);
+    return { kind: "invalid", reason: "figure failed the graph schema" };
+  }
+  return {
+    kind: "pattern",
+    entry: {
+      slug,
+      title: parsed.meta.title,
+      summary: parsed.meta.summary,
+      status: parsed.meta.status,
+      implements: parsed.meta.implements,
+      figure: figureJson.value,
+    },
+    stored: {
+      title: parsed.meta.title,
+      summary: parsed.meta.summary,
+      status: parsed.meta.status,
+      implements: parsed.meta.implements,
+      sources: parsed.meta.sources,
+      body: parsed.body,
+      figure: figureJson.value,
+    },
+  };
+}
+
 /** One file from the official repo at `main`, through the contents API. */
 async function readOfficialFile(github: GitHub, path: string, log: Log): Promise<FileText> {
   const response = await github.get(contentsUrl(path), "contents");
@@ -384,53 +452,22 @@ export async function fetchOfficialPatterns(github: GitHub, log: Log): Promise<P
       invalid.push({ repo: OFFICIAL_REPOSITORY, slug, reason: page.reason });
       continue;
     }
-    const parsed = parsePatternFile(page.text);
-    if (parsed === null) {
-      log(`patterns: dropped ${slug}: malformed front matter`);
-      invalid.push({ repo: OFFICIAL_REPOSITORY, slug, reason: "malformed front matter" });
+    const loaded = await patternFromTexts(slug, page.text, async (name) => {
+      const found = await readOfficialFile(github, `patterns/${name}`, log);
+      if (found.kind === "halt") {
+        throw new PatternsHalt(found.reason);
+      }
+      if (found.kind === "text") {
+        return { kind: "text", text: found.text };
+      }
+      return found.kind === "absent" ? { kind: "absent" } : { kind: "error", reason: found.reason };
+    }, log);
+    if (loaded.kind === "invalid") {
+      invalid.push({ repo: OFFICIAL_REPOSITORY, slug, reason: loaded.reason });
       continue;
     }
-    const figure = await readOfficialFile(github, `patterns/${parsed.meta.figure}`, log);
-    if (figure.kind === "halt") {
-      throw new PatternsHalt(figure.reason);
-    }
-    if (figure.kind === "absent") {
-      log(`patterns: dropped ${slug}: the figure ${parsed.meta.figure} is missing`);
-      invalid.push({ repo: OFFICIAL_REPOSITORY, slug, reason: "missing figure" });
-      continue;
-    }
-    if (figure.kind !== "text") {
-      invalid.push({ repo: OFFICIAL_REPOSITORY, slug, reason: figure.reason });
-      continue;
-    }
-    const figureJson = parseJson(figure.text);
-    if (!figureJson.ok || !isRecord(figureJson.value)) {
-      log(`patterns: dropped ${slug}: the figure is not JSON`);
-      invalid.push({ repo: OFFICIAL_REPOSITORY, slug, reason: "unparseable figure JSON" });
-      continue;
-    }
-    if (!isValidDocument("graph", figureJson.value)) {
-      log(`patterns: dropped ${slug}: the figure failed the graph schema`);
-      invalid.push({ repo: OFFICIAL_REPOSITORY, slug, reason: "figure failed the graph schema" });
-      continue;
-    }
-    entries.push({
-      slug,
-      title: parsed.meta.title,
-      summary: parsed.meta.summary,
-      status: parsed.meta.status,
-      implements: parsed.meta.implements,
-      figure: figureJson.value,
-    });
-    documents.set(slug, {
-      title: parsed.meta.title,
-      summary: parsed.meta.summary,
-      status: parsed.meta.status,
-      implements: parsed.meta.implements,
-      sources: parsed.meta.sources,
-      body: parsed.body,
-      figure: figureJson.value,
-    });
+    entries.push(loaded.entry);
+    documents.set(slug, loaded.stored);
   }
   return { entries, documents, invalid, complete: true };
 }

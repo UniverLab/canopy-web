@@ -3,7 +3,7 @@ import { SELF } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import worker, { createWorker, type DataPoint, type Env } from "../src/index.js";
 import { createGitHub } from "../src/github.js";
-import { runIndexer } from "../src/indexer.js";
+import { SUBREQUEST_BUDGET, runIndexer } from "../src/indexer.js";
 import { INDEXING_BODY } from "../src/pages/copy.js";
 import { resetIndexMemo } from "../src/store.js";
 import { blockedDocKey, blockedRepoKey, type BlockedEntry } from "../src/blocked.js";
@@ -11,6 +11,7 @@ import { FakeCache, FakeKV, fakeFetch, fileBody, type Stub } from "./fakes.js";
 import { VALID_GRAPH_TEXT, VALID_NODE_TEXT, INVALID_GRAPH_TEXT } from "./documents-fixture.js";
 import { SLUG_PATTERN, SLUG_RE } from "../src/lib.js";
 import { officialStubs, searchStubs } from "./stubs.js";
+import { emptySearchStub, graphqlStub, snapshotBody } from "./graphql-fixture.js";
 
 const ORIGIN = "https://graphs.univerlab.org";
 
@@ -32,7 +33,7 @@ async function seeded(): Promise<FakeKV> {
   const fake = fakeFetch(searchStubs());
   const kv = new FakeKV();
   const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
-  await runIndexer({ github, index: kv, authenticated: true });
+  await runIndexer({ github, index: kv, authenticated: false });
   return kv;
 }
 
@@ -111,7 +112,7 @@ describe("redirects", () => {
       { url: "repos/acme/things/contents/nodes/cool-node/README.md", status: 404, body: {} },
     ]);
     const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
-    await runIndexer({ github, index: kv, authenticated: true });
+    await runIndexer({ github, index: kv, authenticated: false });
     const response = await call("/i/acme/things/node/cool-node", { env: { INDEX: kv } });
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(community("acme", "things", "node", "cool-node"));
@@ -451,9 +452,20 @@ describe("analytics never changes the answer", () => {
 
 describe("the scheduled run", () => {
   it("fills the index from the scheduled handler, authenticated with the token", async () => {
-    const fake = fakeFetch(officialStubs());
+    // A token switches the run to GitHub GraphQL: one answer carries the whole
+    // official repository, so the scheduled handler spends two subrequests and
+    // never touches the Cache API.
+    const body = snapshotBody({
+      stars: 7,
+      branch: "main",
+      blocked: "[]",
+      graphs: [{ slug: "hello-graph", text: VALID_GRAPH_TEXT, readme: "# hello-graph\n" }],
+      nodes: [{ slug: "hello-node", text: VALID_NODE_TEXT }],
+    });
+    const fake = fakeFetch([graphqlStub("canopy-graphs", body), emptySearchStub()]);
+    const cache = new FakeCache();
     const kv = new FakeKV();
-    const scheduled = createWorker({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
+    const scheduled = createWorker({ fetchImpl: fake.fetchImpl, cache });
     let waited = 0;
     await scheduled.scheduled(
       { scheduledTime: Date.now(), cron: "*/15 * * * *" },
@@ -463,8 +475,15 @@ describe("the scheduled run", () => {
     expect(waited).toBe(1);
     const index = JSON.parse((await kv.get("index:v1")) as string) as { entries: unknown[] };
     expect(index.entries.length).toBe(2);
-    const meta = JSON.parse((await kv.get("index:meta")) as string) as { authenticated: boolean };
+    const meta = JSON.parse((await kv.get("index:meta")) as string) as {
+      authenticated: boolean;
+      subrequests: number;
+      stopped: string | null;
+    };
     expect(meta.authenticated).toBe(true);
+    expect(meta.subrequests).toBe(2);
+    expect(meta.stopped).toBeNull();
+    expect(cache.ops).toBe(0);
   });
 
   it("runs unauthenticated without a token", async () => {
@@ -472,9 +491,14 @@ describe("the scheduled run", () => {
     const kv = new FakeKV();
     const scheduled = createWorker({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
     await scheduled.scheduled({ scheduledTime: Date.now(), cron: "*/15 * * * *" }, { INDEX: kv });
-    const meta = JSON.parse((await kv.get("index:meta")) as string) as { authenticated: boolean; calls: number };
+    const meta = JSON.parse((await kv.get("index:meta")) as string) as {
+      authenticated: boolean;
+      calls: number;
+      subrequests: number;
+    };
     expect(meta.authenticated).toBe(false);
-    expect(meta.calls).toBeLessThanOrEqual(50);
+    expect(meta.calls).toBeLessThanOrEqual(SUBREQUEST_BUDGET);
+    expect(meta.subrequests).toBe(meta.calls);
   });
 
   it("does nothing without the index binding", async () => {

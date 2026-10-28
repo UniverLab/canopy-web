@@ -121,13 +121,21 @@ export interface IndexInvalid {
 export interface IndexMeta {
   built_at: string;
   duration_ms: number;
+  /** Outbound subrequests the run made. Kept as `calls` for older readers. */
   calls: number;
+  /**
+   * Outbound subrequests the run made: GitHub REST, GraphQL and search, with
+   * Cache API operations counted too. `calls` carries the same number.
+   */
+  subrequests: number;
   repos_seen: number;
   documents: number;
   /** How many `blocked.json` entries the run read. */
   blocked: number;
   invalid: IndexInvalid[];
   truncated: boolean;
+  /** Why the run stopped early, or null when it read everything it reached. */
+  stopped: string | null;
   authenticated: boolean;
 }
 
@@ -387,6 +395,9 @@ export function parseMeta(text: string): IndexMeta | null {
     built_at: built,
     duration_ms: duration,
     calls,
+    // Written since the subrequest budget shipped; a meta from before it
+    // carries the same count under `calls` instead.
+    subrequests: isNumber(value["subrequests"]) ? value["subrequests"] : calls,
     repos_seen: repos,
     documents,
     // Written since the blocked list shipped; a meta from before it reads
@@ -397,6 +408,7 @@ export function parseMeta(text: string): IndexMeta | null {
       return parsedEntry === null ? [] : [parsedEntry];
     }),
     truncated: value["truncated"],
+    stopped: isString(value["stopped"]) ? value["stopped"] : null,
     authenticated: value["authenticated"],
   };
 }

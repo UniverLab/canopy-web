@@ -217,9 +217,11 @@ export function createWorker(deps: WorkerDeps = {}) {
       if (kv === undefined) {
         return Promise.resolve();
       }
+      // No Cache API on the cron path: every lookup and store is one of the
+      // free plan's 50 subrequests, so the run spends them on GitHub instead.
       const github = createGitHub({
         fetchImpl: deps.fetchImpl,
-        cache: deps.cache ?? defaultCache(),
+        cache: null,
         token: env.GITHUB_TOKEN,
         log: () => undefined,
       });

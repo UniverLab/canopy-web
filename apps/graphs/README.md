@@ -86,6 +86,38 @@ turn into a 500 for an agent to choke on. `downloads` (90-day install
 counts) is attached when `CF_ACCOUNT_ID` + `CF_ANALYTICS_TOKEN` are set, and
 absent when not: counts are never zero-filled.
 
+## The scheduled index (and the free plan's subrequest budget)
+
+A Cron Trigger rebuilds the catalogue every 15 minutes (`*/15 * * * *`, in
+`wrangler.toml`) into KV: one entry per listed document, its validated JSON
+and README, the removal list, and the pattern pages with their figures. The
+request path reads only KV, so traffic never spends GitHub quota.
+
+The Worker runs on the Workers **Free** plan: one invocation may spend **50
+subrequests**, and a Cache API lookup or store is one of them. The indexer
+therefore keeps to a single constant, `SUBREQUEST_BUDGET = 45` in
+`src/indexer.ts` — the plan's 50 minus the margin the KV writes and the
+answer need — which caps **every** outbound call of one run: GitHub REST,
+GraphQL and the discovery search.
+
+| Run | Transport | Cost of the official repository |
+|---|---|---|
+| `GITHUB_TOKEN` set | one `POST https://api.github.com/graphql` per repository | 1 subrequest for every document, README, pattern page and figure |
+| no token | REST contents and raw URLs | 2–4 calls per folder, so the budget may stop it early |
+
+The GraphQL query asks for the three top-level folders (`graphs/`, `nodes/`,
+`patterns/`) and `blocked.json`, three entry levels deep, and nothing else in
+the repository. The scheduled transport is built with `cache: null`, so the
+cron path never touches the Cache API — the request path keeps its cache
+exactly as before.
+
+When the budget, a rate limit or an unreadable answer stops a run, it still
+writes what it read, **carries over** the previous entries of every
+repository it did not reach, and never shrinks the catalogue. `GET
+/api/index-status` shows `subrequests` (the calls spent) and `stopped` (why
+the run ended early, or `null`), so a truncated run is visible without
+`wrangler tail`.
+
 ## Agent discovery
 
 The catalogue is a public index agents should read, so it speaks the same

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, expect, it } from "vitest";
-import { createGitHub, TTL, USER_AGENT, type ApiError } from "../src/github.js";
+import { createGitHub, GRAPHQL_URL, TTL, USER_AGENT, type ApiError } from "../src/github.js";
 import { FakeCache, fakeFetch, type Stub } from "./fakes.js";
 
 const url = "https://api.github.com/repos/UniverLab/canopy-web";
@@ -170,5 +170,99 @@ describe("the GitHub transport", () => {
     await github.get(url, "contents");
     expect(cache.has(url)).toBe(false);
     expect(cache.puts).toBe(0);
+  });
+
+  it("never touches the Cache API when it is built with cache: null", async () => {
+    // The cron path: a cache lookup or store would spend one of the run's
+    // subrequests, so the transport must not make any.
+    const fake = fakeFetch([{ url, status: 200, body: { ok: 1 } }]);
+    const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: null });
+    await github.get(url, "contents");
+    await github.get(url, "contents");
+    expect(fake.calls.length).toBe(2);
+  });
+});
+
+describe("the GraphQL transport", () => {
+  it("POSTs the query and variables with the token header, and caches nothing", async () => {
+    const seen: Request[] = [];
+    const bodies: string[] = [];
+    const fetchImpl = (async (input: Request) => {
+      seen.push(input);
+      bodies.push(await input.clone().text());
+      return new Response(JSON.stringify({ data: { repository: { stargazerCount: 7 } } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as unknown as typeof fetch;
+    const cache = new FakeCache();
+    const github = createGitHub({ fetchImpl, cache, token: "tok-123" });
+
+    const result = await github.graphql("query Q($owner: String!) { repository { id } }", {
+      owner: "UniverLab",
+    });
+
+    expect(cache.ops).toBe(0);
+    expect(seen[0].method).toBe("POST");
+    expect(seen[0].url).toBe(GRAPHQL_URL);
+    expect(seen[0].headers.get("authorization")).toBe("Bearer tok-123");
+    expect(seen[0].headers.get("content-type")).toContain("application/json");
+    expect(JSON.parse(bodies[0] as string)).toEqual({
+      query: "query Q($owner: String!) { repository { id } }",
+      variables: { owner: "UniverLab" },
+    });
+    expect((result as { errors: string[] }).errors).toEqual([]);
+    expect((result as { data: unknown }).data).toEqual({ repository: { stargazerCount: 7 } });
+  });
+
+  it("returns the errors array of a partial answer instead of throwing", async () => {
+    const fake = fakeFetch([
+      {
+        url: GRAPHQL_URL,
+        status: 200,
+        body: {
+          data: { repository: null },
+          errors: [{ message: "Could not resolve to a Repository" }, { message: "and another" }],
+        },
+      },
+    ]);
+    const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: null });
+    const result = await github.graphql("query { viewer { login } }", {});
+    expect((result as { data: unknown }).data).toEqual({ repository: null });
+    expect((result as { errors: string[] }).errors).toEqual([
+      "Could not resolve to a Repository",
+      "and another",
+    ]);
+  });
+
+  it("shapes a GraphQL rate limit into the same typed 429", async () => {
+    const fake = fakeFetch([
+      {
+        url: GRAPHQL_URL,
+        status: 403,
+        body: {},
+        headers: { "x-ratelimit-remaining": "0", "x-ratelimit-reset": "2000000000" },
+      },
+    ]);
+    const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: null });
+    const error = await github.graphql("query { viewer { login } }", {});
+    expect((error as ApiError).kind).toBe("rate-limit");
+    expect((error as ApiError).status).toBe(429);
+    expect((error as ApiError).retryAfter).toBeGreaterThan(0);
+  });
+
+  it("turns an unparseable answer and a network failure into upstream errors", async () => {
+    const notJson = fakeFetch([{ url: GRAPHQL_URL, status: 200, text: "<html>nope</html>" }]);
+    const bad = await createGitHub({ fetchImpl: notJson.fetchImpl, cache: null })
+      .graphql("query { viewer { login } }", {});
+    expect((bad as ApiError).kind).toBe("upstream");
+    expect((bad as ApiError).status).toBe(502);
+
+    const down = (async () => {
+      throw new Error("network down");
+    }) as unknown as typeof fetch;
+    const failed = await createGitHub({ fetchImpl: down, cache: null })
+      .graphql("query { viewer { login } }", {});
+    expect((failed as ApiError).kind).toBe("upstream");
   });
 });
