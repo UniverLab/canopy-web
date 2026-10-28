@@ -540,6 +540,15 @@ details.run-prompt summary .run-where { color: var(--surface-ink); }
 .run-builtin { margin: 0.5rem 0 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--surface-ink-dim); }
 details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
+/* Under 480 px the header's four links show their icon alone, so the row
+ * fits a 320 px screen: the label leaves the layout but stays in the
+ * accessibility tree through the link's aria-label and title, and each
+ * link is a 44 px square target (the 639 block below adds the height). */
+@media (max-width: 479px) {
+  .site-nav { gap: 0.25rem; }
+  .site-nav a { min-width: 44px; justify-content: center; }
+  .site-nav a span { display: none; }
+}
 @media (max-width: 639px) {
   .plate .plate-h { display: none; }
   .plate .plate-v { display: block; }

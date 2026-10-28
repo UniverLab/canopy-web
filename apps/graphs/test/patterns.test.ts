@@ -18,7 +18,8 @@ import {
   PATTERN_MISSING_REF,
   PATTERN_SOURCES_HEADING,
 } from "../src/pages/copy.js";
-import { parsePatternFile } from "../src/patterns.js";
+import { parsePatternFile, type StoredPattern } from "../src/patterns.js";
+import { patternPage } from "../src/pages/patterns.js";
 import { createGitHub } from "../src/github.js";
 import { runIndexer } from "../src/indexer.js";
 import { patternKey, resetIndexMemo } from "../src/store.js";
@@ -411,7 +412,7 @@ describe("the plates", () => {
     expect(html).toContain(PATTERNS_EMPTY);
     expect(html).not.toContain(`<li class="card">`);
     const header = html.slice(html.indexOf(`<header class="site-header">`), html.indexOf(`</header>`));
-    expect(header).toMatch(/<a href="\/patterns"><svg[\s\S]*?<\/svg><span>Patterns<\/span><\/a>/);
+    expect(header).toMatch(/<a href="\/patterns" aria-label="Patterns" title="Patterns"><svg[\s\S]*?<\/svg><span>Patterns<\/span><\/a>/);
   });
 
   it("links the list from the home page", async () => {
@@ -547,6 +548,44 @@ describe("the body sanitizer", () => {
     expect(twin).toContain(`- [Good](https://example.com/good)`);
     expect(twin).not.toContain(`javascript:`);
     expect(twin.split("\n")).toContain(`- Bad`);
+  });
+});
+
+describe("the body's leading title", () => {
+  const pattern: StoredPattern = {
+    title: "Gated check",
+    summary: "Shell checks decide pass or fail, never an LLM judge.",
+    status: "standard",
+    implements: [],
+    sources: [],
+    figure: JSON.parse(FIGURE_TEXT),
+    body: "",
+  };
+
+  /** The rendered readme div of one body: the section under test. */
+  function readme(body: string): string {
+    const html = patternPage({ ...pattern, body }, []).html;
+    return /<div class="readme">[\s\S]*?<\/div>/.exec(html)?.[0] ?? "";
+  }
+
+  it("drops a leading H1 that repeats the front-matter title", () => {
+    const section = readme("# Gated check\n\nA graph the pattern tests render.\n");
+    expect(section).not.toContain("<h1>");
+    expect(section).toContain("<p>A graph the pattern tests render.</p>");
+    // Case and a trailing space do not save a repeated title.
+    expect(readme("# gated check \n\nBody.\n")).not.toContain("<h1>");
+  });
+
+  it("keeps a leading H1 that says something else", () => {
+    const section = readme("# Another heading\n\nBody.\n");
+    expect(section).toContain("<h1>Another heading</h1>");
+    expect(section).toContain("<p>Body.</p>");
+  });
+
+  it("keeps a body that opens with no H1", () => {
+    const section = readme("Straight into the prose.\n");
+    expect(section).not.toContain("<h1>");
+    expect(section).toContain("<p>Straight into the prose.</p>");
   });
 });
 

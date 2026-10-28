@@ -90,7 +90,7 @@ describe("the publish route", () => {
     expect(html).toContain(`<h1 class="doc-title"><svg`);
     expect(html).toContain(`<span>${PUBLISH_TITLE}</span></h1>`);
     expect(html).toContain(PUBLISH_LEDE);
-    expect(html).toContain(`<a href="${PUBLISH_HREF}"><svg`);
+    expect(html).toContain(`<a href="${PUBLISH_HREF}" aria-label="${PUBLISH_LABEL}" title="${PUBLISH_LABEL}"><svg`);
   });
 
   it("serves /publish through the deployed Worker, not the redirector", async () => {

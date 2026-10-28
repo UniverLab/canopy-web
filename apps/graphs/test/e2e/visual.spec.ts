@@ -126,6 +126,25 @@ for (const viewport of VIEWPORTS) {
       await expect(page.locator("header nav.site-nav a[href='/publish']")).toHaveText("Publish");
       await expect(page.locator("header nav.site-nav a[href='/patterns']")).toHaveText("Patterns");
       await expect(page.locator("header nav.site-nav a[href='https://github.com/UniverLab/canopy-web']")).toHaveText("Source");
+      // Every header link lies inside the viewport at both reference
+      // sizes — the Source link was cut off at 390 px — and under 640 px
+      // each is a 44 px target, icon only with the label as its name.
+      const nav = await page.evaluate(() => ({
+        view: window.innerWidth,
+        boxes: [...document.querySelectorAll<HTMLElement>("header nav.site-nav a")].map((link) => {
+          const box = link.getBoundingClientRect();
+          return { left: box.left, right: box.right, width: box.width, height: box.height };
+        }),
+      }));
+      expect(nav.boxes).toHaveLength(4);
+      for (const box of nav.boxes) {
+        expect(box.left).toBeGreaterThanOrEqual(0);
+        expect(box.right).toBeLessThanOrEqual(nav.view);
+        if (viewport.width < 640) {
+          expect(box.width).toBeGreaterThanOrEqual(44);
+          expect(box.height).toBeGreaterThanOrEqual(44);
+        }
+      }
       await expect(page.locator("header form.search input#q")).toBeVisible();
       const colophon = page.locator("footer.look-colophon");
       await expect(colophon).toBeVisible();

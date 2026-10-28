@@ -147,6 +147,26 @@ function sourceItem(source: { title: string; url: string }): string {
 }
 
 /**
+ * The body's leading `# Title` when it merely repeats the front-matter
+ * title: the page already renders that title as its heading, so the second
+ * copy goes. Only the first non-blank line is ever considered, and only a
+ * level-1 heading whose text equals the title (trimmed, case-insensitive)
+ * is dropped — any other first line, heading or not, comes through
+ * untouched, and so does the body byte-for-byte when nothing matched.
+ * Graph READMEs and the markdown twin keep their own titles.
+ */
+export function dropLeadingTitle(body: string, title: string): string {
+  const lines = body.replaceAll("\r\n", "\n").split("\n");
+  const first = lines.findIndex((line) => line.trim() !== "");
+  const heading = first === -1 ? null : /^#\s+(.*)$/.exec(lines[first] ?? "");
+  if (heading === null || (heading[1] ?? "").trim().toLowerCase() !== title.trim().toLowerCase()) {
+    return body;
+  }
+  lines.splice(first, 1);
+  return lines.join("\n");
+}
+
+/**
  * One pattern page: the figure's plate at the top, full width, then the
  * status badge (an experiment carries its one-line notice), the body, the
  * sources as links, and Implemented-by. The twin carries the same order,
@@ -162,7 +182,7 @@ export function patternPage(pattern: StoredPattern, rows: ImplementsRow[]): Page
   const notice = pattern.status === "experiment"
     ? `<aside class="community-warning" role="note">${iconSvg("triangleAlert")}<p>${escapeHtml(EXPERIMENT_NOTICE)}</p></aside>`
     : "";
-  const body = `<div class="readme">${renderMarkdown(pattern.body)}</div>`;
+  const body = `<div class="readme">${renderMarkdown(dropLeadingTitle(pattern.body, pattern.title))}</div>`;
   const sources =
     `<h2 class="kicker">${iconSvg("bookOpen")}<span>${escapeHtml(PATTERN_SOURCES_HEADING)}</span></h2>\n` +
     `<ul class="sources">${pattern.sources.map(sourceItem).join("")}</ul>`;

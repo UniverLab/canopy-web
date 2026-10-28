@@ -79,6 +79,25 @@ for (const viewport of VIEWPORTS) {
     await expect(headings).toHaveCount(1);
     await expect(headings).toContainText("Gated check");
 
+    // Every header link lies inside the viewport at both reference sizes,
+    // and under 640 px each is a 44 px target.
+    const nav = await page.evaluate(() => ({
+      view: window.innerWidth,
+      boxes: [...document.querySelectorAll<HTMLElement>("header nav.site-nav a")].map((link) => {
+        const box = link.getBoundingClientRect();
+        return { left: box.left, right: box.right, width: box.width, height: box.height };
+      }),
+    }));
+    expect(nav.boxes).toHaveLength(4);
+    for (const box of nav.boxes) {
+      expect(box.left).toBeGreaterThanOrEqual(0);
+      expect(box.right).toBeLessThanOrEqual(nav.view);
+      if (viewport.width < 640) {
+        expect(box.width).toBeGreaterThanOrEqual(44);
+        expect(box.height).toBeGreaterThanOrEqual(44);
+      }
+    }
+
     // The figure's plate opens the page, on the black stage: one
     // orientation visible, chosen by CSS alone — vertical under 640 px,
     // horizontal above.
@@ -104,6 +123,10 @@ for (const viewport of VIEWPORTS) {
     // catalogue rows with their install commands, the graph's own plate.
     await expect(page.locator("h1 .badge-status")).toHaveText("standard");
     await expect(page.locator("div.readme")).toContainText("one fail edge");
+    // The fixture body opens with "# Gated check", which repeats the
+    // front-matter title: the page drops that heading, so the readme
+    // carries the title exactly once — in the page heading above it.
+    await expect(page.locator("div.readme h1")).toHaveCount(0);
     await expect(page.locator("ul.sources a")).toHaveAttribute("href", "https://example.com/agents");
     const rows = page.locator("ol.index > li.row");
     await expect(rows).toHaveCount(2);

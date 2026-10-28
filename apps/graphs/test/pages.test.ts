@@ -458,11 +458,13 @@ describe("the header band", () => {
     expect(header).toContain(`<a class="wordmark" href="https://univerlab.org/canopy/">graphs</a>`);
     expect(header).toContain(`<form class="search"`);
     // Editor wears the pencil ruler, Publish the upload arrow, Source the
-    // GitHub mark — Editor sits beside Publish, per the editor spec.
-    expect(header).toMatch(/<a href="\/editor"><svg[\s\S]*?<\/svg><span>Editor<\/span><\/a>/);
-    expect(header).toMatch(/<a href="\/publish"><svg[\s\S]*?<\/svg><span>Publish<\/span><\/a>/);
+    // GitHub mark — Editor sits beside Publish, per the editor spec. Each
+    // link carries its label as aria-label and title too, so the word
+    // survives the phone media query that hides the span.
+    expect(header).toMatch(/<a href="\/editor" aria-label="Editor" title="Editor"><svg[\s\S]*?<\/svg><span>Editor<\/span><\/a>/);
+    expect(header).toMatch(/<a href="\/publish" aria-label="Publish" title="Publish"><svg[\s\S]*?<\/svg><span>Publish<\/span><\/a>/);
     expect(header).toMatch(
-      /<a href="https:\/\/github.com\/UniverLab\/canopy-web"><svg[\s\S]*?<\/svg><span>Source<\/span><\/a>/,
+      /<a href="https:\/\/github.com\/UniverLab\/canopy-web" aria-label="Source" title="Source"><svg[\s\S]*?<\/svg><span>Source<\/span><\/a>/,
     );
     expect(header).toContain(`<div class="fondo" id="fondo" aria-hidden="true"></div>`);
     // The band is 160 px on desktop, 120 px on mobile, clipping the honeycomb.
