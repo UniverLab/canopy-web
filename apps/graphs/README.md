@@ -86,7 +86,7 @@ turn into a 500 for an agent to choke on. `downloads` (90-day install
 counts) is attached when `CF_ACCOUNT_ID` + `CF_ANALYTICS_TOKEN` are set, and
 absent when not: counts are never zero-filled.
 
-## The scheduled index (and the free plan's subrequest budget)
+## The scheduled index (and the free plan's subrequest and write budgets)
 
 A Cron Trigger rebuilds the catalogue every 15 minutes (`*/15 * * * *`, in
 `wrangler.toml`) into KV: one entry per listed document, its validated JSON
@@ -104,6 +104,15 @@ GraphQL and the discovery search.
 |---|---|---|
 | `GITHUB_TOKEN` set | one `POST https://api.github.com/graphql` per repository | 1 subrequest for every document, README, pattern page and figure |
 | no token | REST contents and raw URLs | 2–4 calls per folder, so the budget may stop it early |
+
+KV has a budget too, and it is the tighter one: the Free plan allows **1,000
+KV writes a day** per account, while the cron wakes 96 times. So the indexer
+fingerprints what it writes — one SHA-256 digest per key in `index:hashes:v1`
+(`src/hashes.ts`) — and skips any put whose value is unchanged;
+`index:v1` and `patterns:v1` are fingerprinted without their `built_at`, so
+an untouched catalogue keeps its timestamp and a whole run costs **one write**
+(`index:meta`, which shows `kv_writes` and `kv_skipped` at
+`/api/index-status`).
 
 The GraphQL query asks for the three top-level folders (`graphs/`, `nodes/`,
 `patterns/`) and `blocked.json`, three entry levels deep, and nothing else in

@@ -17,6 +17,7 @@ import {
   discoveryUrl,
   runIndexer,
 } from "../src/indexer.js";
+import { HASHES_KEY } from "../src/hashes.js";
 import { createStore, docKey, patternKey, resetIndexMemo, type IndexEntry } from "../src/store.js";
 import { blockedDocKey, blockedRepoKey, type BlockedEntry } from "../src/blocked.js";
 import {
@@ -945,6 +946,129 @@ describe("the GraphQL snapshot run", () => {
     }
     expect(full.total).toBe(50);
     expect(() => full.spend("cache")).toThrow("Too many subrequests");
+  });
+});
+
+describe("the write budget", () => {
+  /** The READMEs the official fixture answers, with one optionally edited. */
+  function officialGraphs(readme: (slug: string) => string = (slug) => `# ${slug}\n`) {
+    return OFFICIAL_GRAPH_SLUGS.map((slug) => ({
+      slug,
+      text: VALID_GRAPH_TEXT,
+      readme: readme(slug),
+    }));
+  }
+
+  /** The two stubs of one unchanged official run: one answer, no discovery hit. */
+  function officialTable(readme?: (slug: string) => string): Stub[] {
+    return [officialSnapshotStub({ graphs: officialGraphs(readme) }), emptySearchStub()];
+  }
+
+  /** The fingerprint map as the run left it. */
+  async function storedHashes(kv: FakeKV): Promise<Record<string, string>> {
+    const text = await kv.get(HASHES_KEY);
+    expect(text).not.toBeNull();
+    return JSON.parse(text as string) as Record<string, string>;
+  }
+
+  it("writes every key on the first run against an empty KV", async () => {
+    const { meta, kv } = await run(officialTable(), { authenticated: true });
+
+    // 12 documents, index:v1, 10 pattern pages, patterns:v1, index:meta, and
+    // the fingerprint map itself: every key is new, so nothing is skipped.
+    const puts = kv.putOptions.map((option) => option.key);
+    expect(puts).toHaveLength(26);
+    expect(meta.kv_skipped).toBe(0);
+    expect(meta.kv_writes).toBe(25);
+    expect(puts).toContain(docKey("graph", "UniverLab", "canopy-graphs", "graph-alpha"));
+    expect(puts).toContain(patternKey("pattern-alpha"));
+    expect(puts).toContain(HASHES_KEY);
+    // Every content key carries a fingerprint; `index:meta` does not, since it
+    // moves on every run.
+    expect(Object.keys(await storedHashes(kv))).toHaveLength(24);
+  });
+
+  it("costs exactly one put when the catalogue did not move", async () => {
+    let tick = 1_791_000_000_000;
+    const clock = (): number => (tick += 1_000);
+    const kv = new FakeKV();
+    const first = await run(officialTable(), { kv, authenticated: true, now: clock });
+    const firstBuilt = (await storedIndex(kv)).built_at;
+    expect(first.meta.kv_writes).toBe(25);
+
+    kv.putOptions.length = 0;
+    const second = await run(officialTable(), { kv, authenticated: true, now: clock });
+
+    // The only write an unchanged run issues is its own accounting, and the
+    // index keeps the `built_at` of the run that last changed it.
+    expect(kv.putOptions.map((option) => option.key)).toEqual(["index:meta"]);
+    expect(second.meta.kv_writes).toBe(1);
+    expect(second.meta.kv_skipped).toBe(first.meta.kv_writes - 1);
+    expect(second.meta.built_at).not.toBe(first.meta.built_at);
+    expect((await storedIndex(kv)).built_at).toBe(firstBuilt);
+  });
+
+  it("rewrites only the document one changed README touches", async () => {
+    const kv = new FakeKV();
+    const first = await run(officialTable(), { kv, authenticated: true });
+    const firstBuilt = (await storedIndex(kv)).built_at;
+
+    kv.putOptions.length = 0;
+    const second = await run(
+      officialTable((slug) => (slug === "graph-alpha" ? "# graph-alpha, edited\n" : `# ${slug}\n`)),
+      { kv, authenticated: true },
+    );
+
+    expect(kv.putOptions.map((option) => option.key).sort()).toEqual(
+      [docKey("graph", "UniverLab", "canopy-graphs", "graph-alpha"), "index:meta", HASHES_KEY].sort(),
+    );
+    expect(second.meta.kv_writes).toBe(2);
+    expect(second.meta.kv_skipped).toBe(first.meta.kv_writes - 2);
+    // A README is no entry field: the listing did not change, so neither did
+    // `index:v1` nor its timestamp.
+    expect((await storedIndex(kv)).built_at).toBe(firstBuilt);
+    const stored = JSON.parse(
+      (await kv.get(docKey("graph", "UniverLab", "canopy-graphs", "graph-alpha"))) as string,
+    ) as { readme: string };
+    expect(stored.readme).toBe("# graph-alpha, edited\n");
+  });
+
+  it("deletes a removed document's key and drops it from the fingerprint map", async () => {
+    let tick = 1_791_000_000_000;
+    const clock = (): number => (tick += 1_000);
+    const kv = new FakeKV();
+    await run(officialTable(), { kv, authenticated: true, now: clock });
+    const firstBuilt = (await storedIndex(kv)).built_at;
+    const gone = docKey("graph", "UniverLab", "canopy-graphs", "graph-gamma");
+    expect(Object.keys(await storedHashes(kv))).toContain(gone);
+
+    kv.putOptions.length = 0;
+    await run(
+      [officialSnapshotStub({
+        graphs: officialGraphs().filter((graph) => graph.slug !== "graph-gamma"),
+      }), emptySearchStub()],
+      { kv, authenticated: true, now: clock },
+    );
+
+    expect(kv.has(gone)).toBe(false);
+    expect(Object.keys(await storedHashes(kv))).not.toContain(gone);
+    const index = await storedIndex(kv);
+    expect(index.entries.map((entry) => entry["slug"])).not.toContain("graph-gamma");
+    // The listing lost an entry, so it was rewritten with this run's clock.
+    expect(index.built_at).not.toBe(firstBuilt);
+  });
+
+  it("treats a corrupt fingerprint map as empty and writes everything", async () => {
+    const kv = new FakeKV();
+    await run(officialTable(), { kv, authenticated: true });
+    await kv.put(HASHES_KEY, "{ not a map");
+
+    kv.putOptions.length = 0;
+    const { meta } = await run(officialTable(), { kv, authenticated: true });
+
+    expect(meta.kv_skipped).toBe(0);
+    expect(meta.kv_writes).toBe(25);
+    expect(kv.putOptions).toHaveLength(26);
   });
 });
 

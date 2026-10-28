@@ -137,6 +137,13 @@ export interface IndexMeta {
   /** Why the run stopped early, or null when it read everything it reached. */
   stopped: string | null;
   authenticated: boolean;
+  /**
+   * KV puts the run actually issued, `index:meta` included. An unchanged
+   * catalogue costs one; the fingerprint map's own put is not counted.
+   */
+  kv_writes: number;
+  /** KV puts the run skipped because their value was already stored. */
+  kv_skipped: number;
 }
 
 /** How long one isolate serves the index without re-reading KV. */
@@ -410,6 +417,10 @@ export function parseMeta(text: string): IndexMeta | null {
     truncated: value["truncated"],
     stopped: isString(value["stopped"]) ? value["stopped"] : null,
     authenticated: value["authenticated"],
+    // Written since the write budget shipped; a meta from before it reads as
+    // zero on both counters instead of turning /api/index-status into a 503.
+    kv_writes: isNumber(value["kv_writes"]) ? value["kv_writes"] : 0,
+    kv_skipped: isNumber(value["kv_skipped"]) ? value["kv_skipped"] : 0,
   };
 }
 

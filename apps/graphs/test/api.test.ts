@@ -376,6 +376,8 @@ describe("the JSON API", () => {
       truncated: boolean;
       stopped: string | null;
       authenticated: boolean;
+      kv_writes: number;
+      kv_skipped: number;
     };
     expect(typeof body.built_at).toBe("string");
     expect(body.calls).toBeGreaterThan(0);
@@ -386,6 +388,10 @@ describe("the JSON API", () => {
     expect(body.truncated).toBe(false);
     expect(body.stopped).toBeNull();
     expect(body.authenticated).toBe(false);
+    // The free plan's write budget, visible from outside: a first run writes
+    // every key, and `/api/index-status` reports what it cost.
+    expect(body.kv_writes).toBeGreaterThan(0);
+    expect(body.kv_skipped).toBe(0);
   });
 
   it("trims /api/index-status invalid details past the first 20", async () => {

@@ -468,6 +468,8 @@ export function openApiDocument(): Record<string, unknown> {
             "truncated",
             "stopped",
             "authenticated",
+            "kv_writes",
+            "kv_skipped",
           ],
           properties: {
             built_at: { type: "string" },
@@ -498,6 +500,15 @@ export function openApiDocument(): Record<string, unknown> {
               description: "Why the run stopped early, or null when it read everything it reached.",
             },
             authenticated: { type: "boolean" },
+            kv_writes: {
+              type: "integer",
+              description:
+                "KV puts the run issued, index:meta included: one on an unchanged catalogue, well under the free plan's 1,000 writes a day.",
+            },
+            kv_skipped: {
+              type: "integer",
+              description: "KV puts the run skipped because the key already held that value.",
+            },
           },
         },
         DraftRequest: {

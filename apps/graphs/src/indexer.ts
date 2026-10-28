@@ -30,6 +30,13 @@
  * truly gone — and repositories absent from a completed discovery — have
  * their keys deleted. The meta records how many subrequests the run spent
  * and why it stopped, so a truncated run is visible from outside.
+ *
+ * Writes are budgeted too, and tighter: the Free plan allows 1,000 KV writes
+ * a day while the cron wakes 96 times. Each content key's SHA-256 digest
+ * lives in `index:hashes:v1` (hashes.ts), so a run puts a key only when its
+ * value differs — an unchanged catalogue costs one write, `index:meta` — and
+ * `index:v1` and `patterns:v1` are fingerprinted without `built_at`, which
+ * therefore marks when their content last changed.
  */
 import type { DocumentKind, JsonValue } from "../../../src/schema.js";
 import {
@@ -42,6 +49,8 @@ import {
 import type { ApiError, GitHub, Log } from "./github.js";
 import { isApiError } from "./github.js";
 import { isArray, isNumber, isRecord, readJson, stringField } from "./json.js";
+import { HASHES_KEY, KvWriter, parseHashes } from "./hashes.js";
+import { buildIndexValue } from "./index-payload.js";
 import { CATALOGUE_TOPIC, discoverSources } from "./discovery.js";
 import {
   type CatalogEntry,
@@ -108,14 +117,14 @@ export const DISCOVERY_MAX_PAGES = 10;
  */
 export const SUBREQUEST_BUDGET = 45;
 
-/**
- * `index:v1` stays far under KV's 25 MiB value limit: past 5 MiB every
- * description is cut to 280 characters first.
- */
-export const INDEX_MAX_BYTES = 5 * 1024 * 1024;
-
-/** Descriptions are cut to this length when the index would overshoot. */
-export const DESCRIPTION_TRIM = 280;
+// `index:v1`'s byte cap and trim live with the payload builder, and stay
+// exported here for the readers that already import them.
+export {
+  DESCRIPTION_TRIM,
+  INDEX_MAX_BYTES,
+  buildIndexPayload,
+  type IndexPayload,
+} from "./index-payload.js";
 
 /** The discovery query: the catalogue topic, best starred first. */
 export function discoveryUrl(page: number): string {
@@ -231,28 +240,6 @@ function entryFromLoaded(
     kinds: nodeKinds(source.kind, loaded.document),
     harness_hint: doc.harnesses,
   };
-}
-
-/**
- * Serialize the index, cutting descriptions past 280 characters when the
- * value would overshoot the byte cap. Pure, so the tests pin the trim
- * without building a 5 MiB fixture.
- */
-export function buildIndexPayload(
-  entries: IndexEntry[],
-  builtAt: string,
-  maxBytes: number = INDEX_MAX_BYTES,
-): string {
-  const payload = JSON.stringify({ built_at: builtAt, entries });
-  if (new TextEncoder().encode(payload).length <= maxBytes) {
-    return payload;
-  }
-  const trimmed = entries.map((entry) =>
-    entry.description.length > DESCRIPTION_TRIM
-      ? { ...entry, description: entry.description.slice(0, DESCRIPTION_TRIM) }
-      : entry
-  );
-  return JSON.stringify({ built_at: builtAt, entries: trimmed });
 }
 
 interface RunState {
@@ -665,25 +652,38 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
   }
 
   const builtAt = new Date(started).toISOString();
+  // The write phase is fingerprinted: one digest per content key, read once,
+  // so a run whose catalogue did not move costs a single put, `index:meta`,
+  // and stays far under the free plan's 1,000 writes a day (README, "the
+  // write budget"). A missing or unreadable map reads as empty: every key is
+  // written, exactly as a run without a fingerprint always did.
+  const hashesText = await options.index.get(HASHES_KEY).catch(() => null);
+  const writer = new KvWriter(options.index, parseHashes(hashesText));
+
   for (const [key, stored] of state.documents) {
-    await options.index.put(key, JSON.stringify(stored));
+    await writer.put(key, JSON.stringify(stored));
   }
-  await options.index.put(INDEX_KEY, buildIndexPayload(state.entries, builtAt));
+  const index = buildIndexValue(state.entries, builtAt);
+  await writer.putByContent(INDEX_KEY, index.content, index.value);
 
   // The pattern pages, only from a run that read them end to end: a short
   // run keeps the previous `patterns:v1` and its keys untouched.
   if (state.patternsComplete) {
     for (const [slug, stored] of state.patternDocs) {
-      await options.index.put(patternKey(slug), JSON.stringify(stored));
+      await writer.put(patternKey(slug), JSON.stringify(stored));
     }
-    await options.index.put(PATTERNS_KEY, JSON.stringify({ built_at: builtAt, entries: state.patterns }));
+    await writer.putByContent(
+      PATTERNS_KEY,
+      JSON.stringify({ entries: state.patterns }),
+      JSON.stringify({ built_at: builtAt, entries: state.patterns }),
+    );
     const livePatterns = new Set([...state.patternDocs.keys()].map((slug) => patternKey(slug)));
     let patternCursor: string | undefined;
     do {
       const listed = await options.index.list({ prefix: PATTERN_PREFIX, cursor: patternCursor });
       for (const key of listed.keys) {
         if (!livePatterns.has(key.name)) {
-          await options.index.delete(key.name);
+          await writer.remove(key.name);
         }
       }
       patternCursor = listed.list_complete ? undefined : listed.cursor;
@@ -700,7 +700,7 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
       continue;
     }
     liveBlocks.add(key);
-    await options.index.put(key, JSON.stringify(entry));
+    await writer.put(key, JSON.stringify(entry));
   }
   if (blocksLoaded) {
     let blocksCursor: string | undefined;
@@ -708,13 +708,14 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
       const listed = await options.index.list({ prefix: BLOCKED_PREFIX, cursor: blocksCursor });
       for (const key of listed.keys) {
         if (!liveBlocks.has(key.name)) {
-          await options.index.delete(key.name);
+          await writer.remove(key.name);
         }
       }
       blocksCursor = listed.list_complete ? undefined : listed.cursor;
     } while (blocksCursor !== undefined);
   }
 
+  const stats = writer.stats;
   const meta: IndexMeta = {
     built_at: builtAt,
     duration_ms: Math.max(0, now() - started),
@@ -727,6 +728,10 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
     truncated: state.truncated,
     stopped,
     authenticated: options.authenticated,
+    // What the write phase actually cost: the content puts above plus this
+    // meta, which is the one key written on every run.
+    kv_writes: stats.writes + 1,
+    kv_skipped: stats.skipped,
   };
   await options.index.put(META_KEY, JSON.stringify(meta));
 
@@ -741,11 +746,15 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
     const listed = await options.index.list({ prefix: DOC_PREFIX, cursor });
     for (const key of listed.keys) {
       if (!live.has(key.name)) {
-        await options.index.delete(key.name);
+        await writer.remove(key.name);
       }
     }
     cursor = listed.list_complete ? undefined : listed.cursor;
   } while (cursor !== undefined);
+
+  // The map goes last, and only when this run changed it: an unchanged run
+  // then spends exactly the meta put and nothing else.
+  await writer.flush();
 
   return meta;
 }
