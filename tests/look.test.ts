@@ -189,14 +189,29 @@ describe("the header banners", () => {
     }
   });
 
-  it("renders one hidden pre per app with eleven coloured lines", () => {
+  it("renders one hidden pre per app with eleven spans and no inline style", () => {
     for (const app of ["graphs", "remote"] as const) {
       const html = renderHeaderBanner(app);
       expect(html).toContain(`<pre class="look-banner-header" aria-hidden="true">`);
-      const spans = html.match(/<span style="color:#[0-9a-f]{6}">/g) ?? [];
-      expect(spans).toHaveLength(11);
+      expect(html.match(/<span>/g) ?? []).toHaveLength(11);
+      // A style attribute is refused by the remote's CSP: the ink is CSS.
+      expect(html).not.toContain("style=");
     }
     expect(renderHeaderBanner("graphs")).not.toBe(renderHeaderBanner("remote"));
+  });
+
+  it("paints the header lines from banner.css with the gradient's stops", () => {
+    const css = readFileSync(path.join(KIT, "banner", "banner.css"), "utf8");
+    const painted = new Map<number, string>();
+    for (const rule of css.matchAll(
+      /\.look-banner-header span:nth-child\((\d+)\) \{ color: (#[0-9a-f]{6}); \}/g,
+    )) {
+      painted.set(Number(rule[1]), rule[2] as string);
+    }
+    const stops = [0, 0, 1, 1, 1, 2, 2, 3, 3, 3, 4];
+    expect([...painted.entries()].sort((a, b) => a[0] - b[0])).toEqual(
+      stops.map((stop, index) => [index + 1, BANNER_GRADIENT[stop]]),
+    );
   });
 });
 

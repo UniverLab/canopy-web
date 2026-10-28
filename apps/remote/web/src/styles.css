@@ -239,6 +239,14 @@ label > textarea {
   text-overflow: ellipsis;
 }
 
+/* The banner takes about half of a phone's header, so the login gives up
+ * its width first (an ellipsis, never a push): the connection state keeps
+ * its place at the right edge. */
+.topbar .login {
+  min-width: 0;
+  flex-shrink: 1;
+}
+
 .topbar .host {
   min-width: 0;
   flex-shrink: 1;

@@ -132,6 +132,13 @@ for (const viewport of VIEWPORTS) {
       const art = await page.locator("header .look-banner-header").boundingBox();
       expect(art).not.toBeNull();
       expect(Math.abs((art?.height ?? 0) - (viewport.width < 640 ? 28 : 40))).toBeLessThanOrEqual(5);
+      // The teal gradient comes from banner.css — never a style attribute,
+      // which the remote's CSP refuses — so the art is teal, not flat ink.
+      const inks = await page
+        .locator("header .look-banner-header span")
+        .evaluateAll((spans) => spans.map((span) => getComputedStyle(span).color));
+      expect(inks[0]).toBe("rgb(82, 255, 246)");
+      expect(inks[10]).toBe("rgb(0, 102, 97)");
       await expect(page.locator("header nav.site-nav a[href='/editor']")).toHaveText("Editor");
       await expect(page.locator("header nav.site-nav a[href='/publish']")).toHaveText("Publish");
       await expect(page.locator("header nav.site-nav a[href='/patterns']")).toHaveText("Patterns");
@@ -393,11 +400,33 @@ test("the header banner resolves to the app home", async ({ page }) => {
 test("the colophon links share one row at 1280x900", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/", { waitUntil: "load" });
+  // The middot between links is decoration, never part of a link's name.
+  await expect(page.getByRole("link", { name: "univerlab.org", exact: true })).toHaveCount(1);
+  await expect(page.getByRole("link", { name: "Terms", exact: true })).toHaveCount(1);
   const tops = await page
     .locator("footer.look-colophon nav a")
     .evaluateAll((links) => links.map((link) => (link as HTMLElement).offsetTop));
   expect(tops).toHaveLength(5);
   expect(new Set(tops).size).toBe(1);
+});
+
+test("the header fits the banner and its four links at 480x900", async ({ page }) => {
+  // The tightest width for the band: just below the labelled nav's
+  // threshold, where the row has the least room beside the banner.
+  await page.setViewportSize({ width: 480, height: 900 });
+  await page.goto("/", { waitUntil: "load" });
+  const fit = await page.evaluate(() => {
+    const header = document.querySelector(".site-header") as HTMLElement;
+    const links = [...document.querySelectorAll(".site-nav a")];
+    const last = links[links.length - 1] as HTMLElement;
+    return {
+      clipped: header.scrollWidth - header.clientWidth,
+      lastRight: Math.round(last.getBoundingClientRect().right),
+      view: window.innerWidth,
+    };
+  });
+  expect(fit.clipped).toBeLessThanOrEqual(0);
+  expect(fit.lastRight).toBeLessThanOrEqual(fit.view);
 });
 
 test("the colophon wraps without sideways scroll at 390x844", async ({ page }) => {

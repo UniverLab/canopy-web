@@ -118,16 +118,13 @@ export function renderBanner(app: BannerApp): string {
 
 /**
  * Render the header banner: the app's own DOS Rebel art in a `pre`
- * hidden from assistive tech, one colour per line over the same teal
- * gradient. The header link around it carries the app's accessible name.
+ * hidden from assistive tech, one span per line. banner.css paints the
+ * lines with the teal gradient, never a style attribute: the remote's
+ * CSP refuses inline styles. The header link around it carries the
+ * app's accessible name.
  */
 export function renderHeaderBanner(app: BannerApp): string {
   const lines = app === "graphs" ? GRAPHS_BANNER_LINES : REMOTE_BANNER_LINES;
-  const art = lines
-    .map(
-      (line, index) =>
-        `<span style="color:${bannerColor(index, lines.length)}">${escapeHtml(line)}</span>`,
-    )
-    .join("\n");
+  const art = lines.map((line) => `<span>${escapeHtml(line)}</span>`).join("\n");
   return `<pre class="look-banner-header" aria-hidden="true">${art}</pre>`;
 }

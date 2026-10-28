@@ -84,6 +84,14 @@ test("sign-in wears the header banner and a one-row colophon at 1280x900", async
   await expect(home.locator(".look-banner-header span")).toHaveCount(11);
   await expect(page.locator(".topbar a[href*='univerlab.org/canopy']")).toHaveCount(0);
   await expect(page.locator("main.signin .look-banner")).toHaveCount(0);
+  // The teal gradient survives the app's `style-src 'self'` CSP: the ink
+  // comes from banner.css, not from a style attribute the header refuses.
+  const inks = await page
+    .locator(".topbar .look-banner-header span")
+    .evaluateAll((spans) => spans.map((span) => getComputedStyle(span).color));
+  expect(inks).toHaveLength(11);
+  expect(inks[0]).toBe("rgb(82, 255, 246)");
+  expect(inks[10]).toBe("rgb(0, 102, 97)");
   const tops = await page
     .locator("footer.look-colophon nav a")
     .evaluateAll((links) => links.map((link) => (link as HTMLElement).offsetTop));

@@ -88,8 +88,10 @@
   align-items: center;
   gap: 0.35rem 0;
 }
+/* The empty alternative text keeps the separator out of each link's
+ * accessible name: without it a reader announces "· univerlab.org". */
 .look-colophon .colophon-col a + a::before {
-  content: "·";
+  content: "·" / "";
   margin: 0 0.75em;
   color: var(--f-ink-faint);
 }

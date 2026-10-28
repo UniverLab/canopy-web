@@ -235,6 +235,29 @@ for (const viewport of [
   });
 }
 
+test("keeps the connection chip in the header with a long login at 390x844", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  // The banner takes half the header's width, so a long GitHub login must
+  // give way with an ellipsis instead of pushing the connection state out.
+  const boxes = await page.evaluate(() => {
+    const login = document.querySelector(".topbar .login") as HTMLElement;
+    login.textContent = "a-very-long-github-username-1234567890";
+    const bar = document.querySelector(".topbar") as HTMLElement;
+    const conn = bar.querySelector(".conn") as HTMLElement;
+    return {
+      overflow: bar.scrollWidth - bar.clientWidth,
+      barRight: Math.round(bar.getBoundingClientRect().right),
+      connRight: Math.round(conn.getBoundingClientRect().right),
+      loginWidth: Math.round(login.getBoundingClientRect().width),
+    };
+  });
+  expect(boxes.overflow).toBeLessThanOrEqual(0);
+  expect(boxes.connRight).toBeLessThanOrEqual(boxes.barRight);
+  expect(boxes.loginWidth).toBeLessThan(boxes.barRight / 2);
+});
+
 test("puts the Content textarea full width in its card", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator(".composer-builder").click();

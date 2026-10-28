@@ -493,11 +493,15 @@ details.run-prompt summary .run-where { color: var(--surface-ink); }
 .run-builtin { margin: 0.5rem 0 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--surface-ink-dim); }
 details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
-/* Under 480 px the header's four links show their icon alone, so the row
+/* Under 520 px the header's four links show their icon alone, so the row
  * fits a 320 px screen: the label leaves the layout but stays in the
  * accessibility tree through the link's aria-label and title, and each
- * link is a 44 px square target (the 639 block below adds the height). */
-@media (max-width: 479px) {
+ * link is a 44 px square target (the 639 block below adds the height).
+ * The threshold leaves room for the banner at its phone scale (58 mono
+ * columns, about 114 px): the four labelled links need 354 px beside it,
+ * so between 480 and 519 px the labels would push Source past the edge
+ * and the band's overflow would cut it off. */
+@media (max-width: 519px) {
   .site-nav { gap: 0.25rem; }
   .site-nav a { min-width: 44px; justify-content: center; }
   .site-nav a span { display: none; }
@@ -535,17 +539,17 @@ details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 <div class="fondo" id="fondo" aria-hidden="true"></div>
 <div class="band">
 <div class="band-top">
-<a class="banner-home" href="/" aria-label="Canopy graphs, home"><pre class="look-banner-header" aria-hidden="true"><span style="color:#52fff6">                                        █████             </span>
-<span style="color:#52fff6">                                       ░░███              </span>
-<span style="color:#1ffff3">  ███████ ████████   ██████   ████████  ░███████    █████ </span>
-<span style="color:#1ffff3"> ███░░███░░███░░███ ░░░░░███ ░░███░░███ ░███░░███  ███░░  </span>
-<span style="color:#1ffff3">░███ ░███ ░███ ░░░   ███████  ░███ ░███ ░███ ░███ ░░█████ </span>
-<span style="color:#00e0d4">░███ ░███ ░███      ███░░███  ░███ ░███ ░███ ░███  ░░░░███</span>
-<span style="color:#00e0d4">░░███████ █████    ░░████████ ░███████  ████ █████ ██████ </span>
-<span style="color:#00a9a0"> ░░░░░███░░░░░      ░░░░░░░░  ░███░░░  ░░░░ ░░░░░ ░░░░░░  </span>
-<span style="color:#00a9a0"> ███ ░███                     ░███                        </span>
-<span style="color:#00a9a0">░░██████                      █████                       </span>
-<span style="color:#006661"> ░░░░░░                      ░░░░░                        </span></pre></a>
+<a class="banner-home" href="/" aria-label="Canopy graphs, home"><pre class="look-banner-header" aria-hidden="true"><span>                                        █████             </span>
+<span>                                       ░░███              </span>
+<span>  ███████ ████████   ██████   ████████  ░███████    █████ </span>
+<span> ███░░███░░███░░███ ░░░░░███ ░░███░░███ ░███░░███  ███░░  </span>
+<span>░███ ░███ ░███ ░░░   ███████  ░███ ░███ ░███ ░███ ░░█████ </span>
+<span>░███ ░███ ░███      ███░░███  ░███ ░███ ░███ ░███  ░░░░███</span>
+<span>░░███████ █████    ░░████████ ░███████  ████ █████ ██████ </span>
+<span> ░░░░░███░░░░░      ░░░░░░░░  ░███░░░  ░░░░ ░░░░░ ░░░░░░  </span>
+<span> ███ ░███                     ░███                        </span>
+<span>░░██████                      █████                       </span>
+<span> ░░░░░░                      ░░░░░                        </span></pre></a>
 <nav class="site-nav" aria-label="Catalogue">
 <a href="/editor" aria-label="Editor" title="Editor"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span>Editor</span></a>
 <a href="/publish" aria-label="Publish" title="Publish"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg><span>Publish</span></a>
@@ -1099,11 +1103,15 @@ details.run-prompt summary .run-where { color: var(--surface-ink); }
 .run-builtin { margin: 0.5rem 0 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--surface-ink-dim); }
 details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
-/* Under 480 px the header's four links show their icon alone, so the row
+/* Under 520 px the header's four links show their icon alone, so the row
  * fits a 320 px screen: the label leaves the layout but stays in the
  * accessibility tree through the link's aria-label and title, and each
- * link is a 44 px square target (the 639 block below adds the height). */
-@media (max-width: 479px) {
+ * link is a 44 px square target (the 639 block below adds the height).
+ * The threshold leaves room for the banner at its phone scale (58 mono
+ * columns, about 114 px): the four labelled links need 354 px beside it,
+ * so between 480 and 519 px the labels would push Source past the edge
+ * and the band's overflow would cut it off. */
+@media (max-width: 519px) {
   .site-nav { gap: 0.25rem; }
   .site-nav a { min-width: 44px; justify-content: center; }
   .site-nav a span { display: none; }
@@ -1141,17 +1149,17 @@ details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 <div class="fondo" id="fondo" aria-hidden="true"></div>
 <div class="band">
 <div class="band-top">
-<a class="banner-home" href="/" aria-label="Canopy graphs, home"><pre class="look-banner-header" aria-hidden="true"><span style="color:#52fff6">                                        █████             </span>
-<span style="color:#52fff6">                                       ░░███              </span>
-<span style="color:#1ffff3">  ███████ ████████   ██████   ████████  ░███████    █████ </span>
-<span style="color:#1ffff3"> ███░░███░░███░░███ ░░░░░███ ░░███░░███ ░███░░███  ███░░  </span>
-<span style="color:#1ffff3">░███ ░███ ░███ ░░░   ███████  ░███ ░███ ░███ ░███ ░░█████ </span>
-<span style="color:#00e0d4">░███ ░███ ░███      ███░░███  ░███ ░███ ░███ ░███  ░░░░███</span>
-<span style="color:#00e0d4">░░███████ █████    ░░████████ ░███████  ████ █████ ██████ </span>
-<span style="color:#00a9a0"> ░░░░░███░░░░░      ░░░░░░░░  ░███░░░  ░░░░ ░░░░░ ░░░░░░  </span>
-<span style="color:#00a9a0"> ███ ░███                     ░███                        </span>
-<span style="color:#00a9a0">░░██████                      █████                       </span>
-<span style="color:#006661"> ░░░░░░                      ░░░░░                        </span></pre></a>
+<a class="banner-home" href="/" aria-label="Canopy graphs, home"><pre class="look-banner-header" aria-hidden="true"><span>                                        █████             </span>
+<span>                                       ░░███              </span>
+<span>  ███████ ████████   ██████   ████████  ░███████    █████ </span>
+<span> ███░░███░░███░░███ ░░░░░███ ░░███░░███ ░███░░███  ███░░  </span>
+<span>░███ ░███ ░███ ░░░   ███████  ░███ ░███ ░███ ░███ ░░█████ </span>
+<span>░███ ░███ ░███      ███░░███  ░███ ░███ ░███ ░███  ░░░░███</span>
+<span>░░███████ █████    ░░████████ ░███████  ████ █████ ██████ </span>
+<span> ░░░░░███░░░░░      ░░░░░░░░  ░███░░░  ░░░░ ░░░░░ ░░░░░░  </span>
+<span> ███ ░███                     ░███                        </span>
+<span>░░██████                      █████                       </span>
+<span> ░░░░░░                      ░░░░░                        </span></pre></a>
 <nav class="site-nav" aria-label="Catalogue">
 <a href="/editor" aria-label="Editor" title="Editor"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span>Editor</span></a>
 <a href="/publish" aria-label="Publish" title="Publish"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg><span>Publish</span></a>
@@ -1714,11 +1722,15 @@ details.run-prompt summary .run-where { color: var(--surface-ink); }
 .run-builtin { margin: 0.5rem 0 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--surface-ink-dim); }
 details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
-/* Under 480 px the header's four links show their icon alone, so the row
+/* Under 520 px the header's four links show their icon alone, so the row
  * fits a 320 px screen: the label leaves the layout but stays in the
  * accessibility tree through the link's aria-label and title, and each
- * link is a 44 px square target (the 639 block below adds the height). */
-@media (max-width: 479px) {
+ * link is a 44 px square target (the 639 block below adds the height).
+ * The threshold leaves room for the banner at its phone scale (58 mono
+ * columns, about 114 px): the four labelled links need 354 px beside it,
+ * so between 480 and 519 px the labels would push Source past the edge
+ * and the band's overflow would cut it off. */
+@media (max-width: 519px) {
   .site-nav { gap: 0.25rem; }
   .site-nav a { min-width: 44px; justify-content: center; }
   .site-nav a span { display: none; }
@@ -1756,17 +1768,17 @@ details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 <div class="fondo" id="fondo" aria-hidden="true"></div>
 <div class="band">
 <div class="band-top">
-<a class="banner-home" href="/" aria-label="Canopy graphs, home"><pre class="look-banner-header" aria-hidden="true"><span style="color:#52fff6">                                        █████             </span>
-<span style="color:#52fff6">                                       ░░███              </span>
-<span style="color:#1ffff3">  ███████ ████████   ██████   ████████  ░███████    █████ </span>
-<span style="color:#1ffff3"> ███░░███░░███░░███ ░░░░░███ ░░███░░███ ░███░░███  ███░░  </span>
-<span style="color:#1ffff3">░███ ░███ ░███ ░░░   ███████  ░███ ░███ ░███ ░███ ░░█████ </span>
-<span style="color:#00e0d4">░███ ░███ ░███      ███░░███  ░███ ░███ ░███ ░███  ░░░░███</span>
-<span style="color:#00e0d4">░░███████ █████    ░░████████ ░███████  ████ █████ ██████ </span>
-<span style="color:#00a9a0"> ░░░░░███░░░░░      ░░░░░░░░  ░███░░░  ░░░░ ░░░░░ ░░░░░░  </span>
-<span style="color:#00a9a0"> ███ ░███                     ░███                        </span>
-<span style="color:#00a9a0">░░██████                      █████                       </span>
-<span style="color:#006661"> ░░░░░░                      ░░░░░                        </span></pre></a>
+<a class="banner-home" href="/" aria-label="Canopy graphs, home"><pre class="look-banner-header" aria-hidden="true"><span>                                        █████             </span>
+<span>                                       ░░███              </span>
+<span>  ███████ ████████   ██████   ████████  ░███████    █████ </span>
+<span> ███░░███░░███░░███ ░░░░░███ ░░███░░███ ░███░░███  ███░░  </span>
+<span>░███ ░███ ░███ ░░░   ███████  ░███ ░███ ░███ ░███ ░░█████ </span>
+<span>░███ ░███ ░███      ███░░███  ░███ ░███ ░███ ░███  ░░░░███</span>
+<span>░░███████ █████    ░░████████ ░███████  ████ █████ ██████ </span>
+<span> ░░░░░███░░░░░      ░░░░░░░░  ░███░░░  ░░░░ ░░░░░ ░░░░░░  </span>
+<span> ███ ░███                     ░███                        </span>
+<span>░░██████                      █████                       </span>
+<span> ░░░░░░                      ░░░░░                        </span></pre></a>
 <nav class="site-nav" aria-label="Catalogue">
 <a href="/editor" aria-label="Editor" title="Editor"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span>Editor</span></a>
 <a href="/publish" aria-label="Publish" title="Publish"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg><span>Publish</span></a>
@@ -2336,11 +2348,15 @@ details.run-prompt summary .run-where { color: var(--surface-ink); }
 .run-builtin { margin: 0.5rem 0 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--surface-ink-dim); }
 details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
-/* Under 480 px the header's four links show their icon alone, so the row
+/* Under 520 px the header's four links show their icon alone, so the row
  * fits a 320 px screen: the label leaves the layout but stays in the
  * accessibility tree through the link's aria-label and title, and each
- * link is a 44 px square target (the 639 block below adds the height). */
-@media (max-width: 479px) {
+ * link is a 44 px square target (the 639 block below adds the height).
+ * The threshold leaves room for the banner at its phone scale (58 mono
+ * columns, about 114 px): the four labelled links need 354 px beside it,
+ * so between 480 and 519 px the labels would push Source past the edge
+ * and the band's overflow would cut it off. */
+@media (max-width: 519px) {
   .site-nav { gap: 0.25rem; }
   .site-nav a { min-width: 44px; justify-content: center; }
   .site-nav a span { display: none; }
@@ -2378,17 +2394,17 @@ details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 <div class="fondo" id="fondo" aria-hidden="true"></div>
 <div class="band">
 <div class="band-top">
-<a class="banner-home" href="/" aria-label="Canopy graphs, home"><pre class="look-banner-header" aria-hidden="true"><span style="color:#52fff6">                                        █████             </span>
-<span style="color:#52fff6">                                       ░░███              </span>
-<span style="color:#1ffff3">  ███████ ████████   ██████   ████████  ░███████    █████ </span>
-<span style="color:#1ffff3"> ███░░███░░███░░███ ░░░░░███ ░░███░░███ ░███░░███  ███░░  </span>
-<span style="color:#1ffff3">░███ ░███ ░███ ░░░   ███████  ░███ ░███ ░███ ░███ ░░█████ </span>
-<span style="color:#00e0d4">░███ ░███ ░███      ███░░███  ░███ ░███ ░███ ░███  ░░░░███</span>
-<span style="color:#00e0d4">░░███████ █████    ░░████████ ░███████  ████ █████ ██████ </span>
-<span style="color:#00a9a0"> ░░░░░███░░░░░      ░░░░░░░░  ░███░░░  ░░░░ ░░░░░ ░░░░░░  </span>
-<span style="color:#00a9a0"> ███ ░███                     ░███                        </span>
-<span style="color:#00a9a0">░░██████                      █████                       </span>
-<span style="color:#006661"> ░░░░░░                      ░░░░░                        </span></pre></a>
+<a class="banner-home" href="/" aria-label="Canopy graphs, home"><pre class="look-banner-header" aria-hidden="true"><span>                                        █████             </span>
+<span>                                       ░░███              </span>
+<span>  ███████ ████████   ██████   ████████  ░███████    █████ </span>
+<span> ███░░███░░███░░███ ░░░░░███ ░░███░░███ ░███░░███  ███░░  </span>
+<span>░███ ░███ ░███ ░░░   ███████  ░███ ░███ ░███ ░███ ░░█████ </span>
+<span>░███ ░███ ░███      ███░░███  ░███ ░███ ░███ ░███  ░░░░███</span>
+<span>░░███████ █████    ░░████████ ░███████  ████ █████ ██████ </span>
+<span> ░░░░░███░░░░░      ░░░░░░░░  ░███░░░  ░░░░ ░░░░░ ░░░░░░  </span>
+<span> ███ ░███                     ░███                        </span>
+<span>░░██████                      █████                       </span>
+<span> ░░░░░░                      ░░░░░                        </span></pre></a>
 <nav class="site-nav" aria-label="Catalogue">
 <a href="/editor" aria-label="Editor" title="Editor"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span>Editor</span></a>
 <a href="/publish" aria-label="Publish" title="Publish"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg><span>Publish</span></a>
@@ -2945,11 +2961,15 @@ details.run-prompt summary .run-where { color: var(--surface-ink); }
 .run-builtin { margin: 0.5rem 0 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--surface-ink-dim); }
 details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
-/* Under 480 px the header's four links show their icon alone, so the row
+/* Under 520 px the header's four links show their icon alone, so the row
  * fits a 320 px screen: the label leaves the layout but stays in the
  * accessibility tree through the link's aria-label and title, and each
- * link is a 44 px square target (the 639 block below adds the height). */
-@media (max-width: 479px) {
+ * link is a 44 px square target (the 639 block below adds the height).
+ * The threshold leaves room for the banner at its phone scale (58 mono
+ * columns, about 114 px): the four labelled links need 354 px beside it,
+ * so between 480 and 519 px the labels would push Source past the edge
+ * and the band's overflow would cut it off. */
+@media (max-width: 519px) {
   .site-nav { gap: 0.25rem; }
   .site-nav a { min-width: 44px; justify-content: center; }
   .site-nav a span { display: none; }
@@ -2987,17 +3007,17 @@ details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 <div class="fondo" id="fondo" aria-hidden="true"></div>
 <div class="band">
 <div class="band-top">
-<a class="banner-home" href="/" aria-label="Canopy graphs, home"><pre class="look-banner-header" aria-hidden="true"><span style="color:#52fff6">                                        █████             </span>
-<span style="color:#52fff6">                                       ░░███              </span>
-<span style="color:#1ffff3">  ███████ ████████   ██████   ████████  ░███████    █████ </span>
-<span style="color:#1ffff3"> ███░░███░░███░░███ ░░░░░███ ░░███░░███ ░███░░███  ███░░  </span>
-<span style="color:#1ffff3">░███ ░███ ░███ ░░░   ███████  ░███ ░███ ░███ ░███ ░░█████ </span>
-<span style="color:#00e0d4">░███ ░███ ░███      ███░░███  ░███ ░███ ░███ ░███  ░░░░███</span>
-<span style="color:#00e0d4">░░███████ █████    ░░████████ ░███████  ████ █████ ██████ </span>
-<span style="color:#00a9a0"> ░░░░░███░░░░░      ░░░░░░░░  ░███░░░  ░░░░ ░░░░░ ░░░░░░  </span>
-<span style="color:#00a9a0"> ███ ░███                     ░███                        </span>
-<span style="color:#00a9a0">░░██████                      █████                       </span>
-<span style="color:#006661"> ░░░░░░                      ░░░░░                        </span></pre></a>
+<a class="banner-home" href="/" aria-label="Canopy graphs, home"><pre class="look-banner-header" aria-hidden="true"><span>                                        █████             </span>
+<span>                                       ░░███              </span>
+<span>  ███████ ████████   ██████   ████████  ░███████    █████ </span>
+<span> ███░░███░░███░░███ ░░░░░███ ░░███░░███ ░███░░███  ███░░  </span>
+<span>░███ ░███ ░███ ░░░   ███████  ░███ ░███ ░███ ░███ ░░█████ </span>
+<span>░███ ░███ ░███      ███░░███  ░███ ░███ ░███ ░███  ░░░░███</span>
+<span>░░███████ █████    ░░████████ ░███████  ████ █████ ██████ </span>
+<span> ░░░░░███░░░░░      ░░░░░░░░  ░███░░░  ░░░░ ░░░░░ ░░░░░░  </span>
+<span> ███ ░███                     ░███                        </span>
+<span>░░██████                      █████                       </span>
+<span> ░░░░░░                      ░░░░░                        </span></pre></a>
 <nav class="site-nav" aria-label="Catalogue">
 <a href="/editor" aria-label="Editor" title="Editor"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span>Editor</span></a>
 <a href="/publish" aria-label="Publish" title="Publish"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg><span>Publish</span></a>
@@ -3545,11 +3565,15 @@ details.run-prompt summary .run-where { color: var(--surface-ink); }
 .run-builtin { margin: 0.5rem 0 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--surface-ink-dim); }
 details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
-/* Under 480 px the header's four links show their icon alone, so the row
+/* Under 520 px the header's four links show their icon alone, so the row
  * fits a 320 px screen: the label leaves the layout but stays in the
  * accessibility tree through the link's aria-label and title, and each
- * link is a 44 px square target (the 639 block below adds the height). */
-@media (max-width: 479px) {
+ * link is a 44 px square target (the 639 block below adds the height).
+ * The threshold leaves room for the banner at its phone scale (58 mono
+ * columns, about 114 px): the four labelled links need 354 px beside it,
+ * so between 480 and 519 px the labels would push Source past the edge
+ * and the band's overflow would cut it off. */
+@media (max-width: 519px) {
   .site-nav { gap: 0.25rem; }
   .site-nav a { min-width: 44px; justify-content: center; }
   .site-nav a span { display: none; }
@@ -3587,17 +3611,17 @@ details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 <div class="fondo" id="fondo" aria-hidden="true"></div>
 <div class="band">
 <div class="band-top">
-<a class="banner-home" href="/" aria-label="Canopy graphs, home"><pre class="look-banner-header" aria-hidden="true"><span style="color:#52fff6">                                        █████             </span>
-<span style="color:#52fff6">                                       ░░███              </span>
-<span style="color:#1ffff3">  ███████ ████████   ██████   ████████  ░███████    █████ </span>
-<span style="color:#1ffff3"> ███░░███░░███░░███ ░░░░░███ ░░███░░███ ░███░░███  ███░░  </span>
-<span style="color:#1ffff3">░███ ░███ ░███ ░░░   ███████  ░███ ░███ ░███ ░███ ░░█████ </span>
-<span style="color:#00e0d4">░███ ░███ ░███      ███░░███  ░███ ░███ ░███ ░███  ░░░░███</span>
-<span style="color:#00e0d4">░░███████ █████    ░░████████ ░███████  ████ █████ ██████ </span>
-<span style="color:#00a9a0"> ░░░░░███░░░░░      ░░░░░░░░  ░███░░░  ░░░░ ░░░░░ ░░░░░░  </span>
-<span style="color:#00a9a0"> ███ ░███                     ░███                        </span>
-<span style="color:#00a9a0">░░██████                      █████                       </span>
-<span style="color:#006661"> ░░░░░░                      ░░░░░                        </span></pre></a>
+<a class="banner-home" href="/" aria-label="Canopy graphs, home"><pre class="look-banner-header" aria-hidden="true"><span>                                        █████             </span>
+<span>                                       ░░███              </span>
+<span>  ███████ ████████   ██████   ████████  ░███████    █████ </span>
+<span> ███░░███░░███░░███ ░░░░░███ ░░███░░███ ░███░░███  ███░░  </span>
+<span>░███ ░███ ░███ ░░░   ███████  ░███ ░███ ░███ ░███ ░░█████ </span>
+<span>░███ ░███ ░███      ███░░███  ░███ ░███ ░███ ░███  ░░░░███</span>
+<span>░░███████ █████    ░░████████ ░███████  ████ █████ ██████ </span>
+<span> ░░░░░███░░░░░      ░░░░░░░░  ░███░░░  ░░░░ ░░░░░ ░░░░░░  </span>
+<span> ███ ░███                     ░███                        </span>
+<span>░░██████                      █████                       </span>
+<span> ░░░░░░                      ░░░░░                        </span></pre></a>
 <nav class="site-nav" aria-label="Catalogue">
 <a href="/editor" aria-label="Editor" title="Editor"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span>Editor</span></a>
 <a href="/publish" aria-label="Publish" title="Publish"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg><span>Publish</span></a>
