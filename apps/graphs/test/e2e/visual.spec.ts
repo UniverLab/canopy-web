@@ -124,6 +124,7 @@ for (const viewport of VIEWPORTS) {
       await expect(wordmark).toHaveAttribute("href", "https://univerlab.org/canopy/");
       await expect(page.locator("header nav.site-nav a[href='/editor']")).toHaveText("Editor");
       await expect(page.locator("header nav.site-nav a[href='/publish']")).toHaveText("Publish");
+      await expect(page.locator("header nav.site-nav a[href='/patterns']")).toHaveText("Patterns");
       await expect(page.locator("header nav.site-nav a[href='https://github.com/UniverLab/canopy-web']")).toHaveText("Source");
       await expect(page.locator("header form.search input#q")).toBeVisible();
       const colophon = page.locator("footer.look-colophon");
@@ -236,7 +237,7 @@ for (const viewport of VIEWPORTS) {
     await expect(search).toHaveAttribute("aria-hidden", "true");
     await expect(search).toHaveAttribute("stroke", "currentColor");
     await expect(search).toHaveAttribute("stroke-width", "1.75");
-    await expect(page.locator("header nav.site-nav svg.icon")).toHaveCount(3);
+    await expect(page.locator("header nav.site-nav svg.icon")).toHaveCount(4);
     await expect(page.locator("link[rel='preload'][as='font']")).toHaveCount(0);
     expect(
       await page.evaluate(() =>

@@ -579,3 +579,58 @@ export const EDITOR_API_BAD_DRAFT_ID = "that is not a draft id";
 
 /** The fallback line when a failure carries no words of its own. */
 export const EDITOR_FAILED = "Something went wrong.";
+
+/* ── Patterns (/patterns) ───────────────────────────────────────────────
+ * Every string the pattern pages render: the list of cards, one pattern
+ * page with its figure plate, the Implemented-by rows and the Patterns
+ * back-link on document pages.
+ */
+
+/** The patterns list: its route, its header link beside Publish, its h1. */
+export const PATTERNS_HREF = "/patterns";
+export const PATTERNS_LABEL = "Patterns";
+export const PATTERNS_TITLE = "Patterns";
+
+/** The list page's meta description and its one-line lede. */
+export const PATTERNS_DESCRIPTION = "Evergreen pages on the agent-orchestration patterns the lab runs.";
+export const PATTERNS_LEDE = "Evergreen pages on the agent-orchestration patterns the lab runs. Each one opens with its drawing.";
+
+/** Shown on the list when no pattern page has been indexed yet. */
+export const PATTERNS_EMPTY = "No patterns published yet.";
+
+/** The home page's pointer to the list, over its lead and link. */
+export const PATTERNS_HOME_LEAD = "The lab's orchestration patterns:";
+
+/** The home twin's pointer to the list, over its label and href. */
+export function homePatternsLine(label: string, href: string): string {
+  return `The lab's orchestration patterns: [${label}](${href})`;
+}
+
+/** The one-line notice every experiment page carries under its badge. */
+export const EXPERIMENT_NOTICE = "Experiment: this pattern is not yet proven in the lab.";
+
+/** The sources section: the lab's reading behind the page. */
+export const PATTERN_SOURCES_HEADING = "Sources";
+
+/** The section naming the catalogue documents that implement the pattern. */
+export const IMPLEMENTED_BY_HEADING = "Implemented by";
+
+/** Shown when nothing in the catalogue implements the pattern yet. */
+export const PATTERNS_NO_IMPLEMENTS = "No catalogue document implements this pattern yet.";
+
+/** A ref the index does not know, listed as text beside the ref itself. */
+export const PATTERN_MISSING_REF = "not in the catalogue yet";
+
+/** The datasheet field linking a document page back to its patterns. */
+export const PATTERNS_SHEET_LABEL = "Patterns";
+
+/** The twin's figure section: the drawing as a fenced JSON block. */
+export const PATTERN_FIGURE_HEADING = "Figure";
+
+/** The llms.txt section heading over the pattern lines. */
+export const LLMS_PATTERNS_HEADING = "Patterns";
+
+/** One llms.txt pattern line: title, summary, page path — tab-separated. */
+export function llmsPatternLine(title: string, summary: string, slug: string): string {
+  return `${title}\t${summary}\t${PATTERNS_HREF}/${slug}`;
+}

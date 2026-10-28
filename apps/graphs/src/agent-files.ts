@@ -56,7 +56,7 @@ export const ROBOTS_BODY = [
 ].join("\n");
 
 /** The fixed sitemap entries: present even with an empty or missing index. */
-const SITEMAP_FIXED_PATHS = ["/", "/search", "/publish", "/llms.txt"];
+const SITEMAP_FIXED_PATHS = ["/", "/search", "/publish", "/patterns", "/llms.txt"];
 
 /** The catalogue origin, for absolute sitemap URLs and linkset hrefs. */
 function origin(): string {
@@ -74,23 +74,29 @@ function escapeXml(text: string): string {
 }
 
 /**
- * The sitemap: the four fixed URLs plus the page URL of every graph and
- * node in the index, each with `lastmod` when the index entry carries an
- * `updated` date. It reads the index the pages already read and makes no
- * GitHub call; an empty or missing index still lists the fixed four.
+ * The sitemap: the five fixed URLs plus the page URL of every graph, node
+ * and pattern in the indexes, each with `lastmod` when the index entry
+ * carries an `updated` date. It reads the indexes the pages already read
+ * and makes no GitHub call; an empty or missing index still lists the
+ * fixed five.
  */
 async function sitemapBody(env: AgentEnv): Promise<string> {
   const urls: Array<{ loc: string; lastmod: string | null }> = SITEMAP_FIXED_PATHS.map((path) => ({
     loc: `${origin()}${path}`,
     lastmod: null,
   }));
-  const index = await createStore(env.INDEX).getIndex();
+  const store = createStore(env.INDEX);
+  const index = await store.getIndex();
   for (const entry of index?.entries ?? []) {
     const ref = pageRef(entry.kind, entry.owner, entry.repo, entry.slug);
     urls.push({
       loc: `${origin()}${pagePath(ref)}`,
       lastmod: entry.updated === null || entry.updated === "" ? null : entry.updated,
     });
+  }
+  const patterns = await store.getPatterns();
+  for (const entry of patterns?.entries ?? []) {
+    urls.push({ loc: `${origin()}/patterns/${entry.slug}`, lastmod: null });
   }
   const items = urls.map(({ loc, lastmod }) =>
     lastmod === null

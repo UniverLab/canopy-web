@@ -68,7 +68,7 @@ describe("sitemap.xml", () => {
     expect(response.headers.get("content-type")).toBe("application/xml; charset=utf-8");
     const body = await response.text();
     expect(body).toContain(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`);
-    for (const path of ["/", "/search", "/publish", "/llms.txt", "/g/hello-graph", "/n/hello-node"]) {
+    for (const path of ["/", "/search", "/publish", "/patterns", "/llms.txt", "/g/hello-graph", "/n/hello-node"]) {
       expect(body).toContain(`<loc>https://graphs.univerlab.org${path}</loc>`);
     }
     expect(body).toContain("<lastmod>2026-10-27</lastmod>");
@@ -79,14 +79,25 @@ describe("sitemap.xml", () => {
     expect(body).toContain("<loc>https://graphs.univerlab.org/g/acme/things/flow</loc>");
   });
 
-  it("lists only the four fixed URLs with an empty or missing index", async () => {
+  it("lists every indexed pattern page", async () => {
+    const kv = await seeded(datedStubs());
+    await kv.put("patterns:v1", JSON.stringify({
+      built_at: "2026-10-27T00:00:00Z",
+      entries: [{ slug: "gated-check", title: "Gated check", summary: "", status: "standard", implements: [], figure: {} }],
+    }));
+    resetIndexMemo();
+    const body = await (await call("/sitemap.xml", kv)).text();
+    expect(body).toContain("<loc>https://graphs.univerlab.org/patterns/gated-check</loc>");
+  });
+
+  it("lists only the five fixed URLs with an empty or missing index", async () => {
     const empty = new FakeKV();
     resetIndexMemo();
     await empty.put("index:v1", JSON.stringify({ built_at: "2026-10-27T00:00:00Z", entries: [] }));
     for (const kv of [empty, undefined]) {
       const body = await (await call("/sitemap.xml", kv)).text();
-      expect(body.match(/<loc>/g)).toHaveLength(4);
-      for (const path of ["/", "/search", "/publish", "/llms.txt"]) {
+      expect(body.match(/<loc>/g)).toHaveLength(5);
+      for (const path of ["/", "/search", "/publish", "/patterns", "/llms.txt"]) {
         expect(body).toContain(`<loc>https://graphs.univerlab.org${path}</loc>`);
       }
       expect(body).not.toContain("<lastmod>");

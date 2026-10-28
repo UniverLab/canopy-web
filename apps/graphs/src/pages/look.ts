@@ -279,6 +279,64 @@ li.row {
   color: var(--surface-ink-dim);
 }
 
+ol.cards {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 1rem;
+}
+li.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.9rem 1rem 1rem;
+  background: var(--tint-info);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-card);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+.card-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-self: stretch;
+  color: var(--surface-ink);
+  text-decoration: none;
+}
+.card-link:hover .card-title { text-decoration: underline; text-decoration-color: var(--teal); }
+.card-title { font-family: var(--font-display); font-size: 1.25rem; }
+.card-summary { font-family: var(--font-body); font-size: 1rem; color: var(--surface-ink-dim); }
+
+/* A plate at thumbnail size: the same black stage, cropped, still, and out
+ * of the pointer's way. Index rows carry one after their install box. */
+figure.thumb { margin: 0; padding: 0.5rem; max-height: 12rem; overflow: hidden; pointer-events: none; }
+figure.thumb svg { width: 100%; height: auto; max-height: 11rem; }
+figure.thumb .token { display: none; }
+li.row figure.thumb { flex-basis: 100%; order: 3; margin-top: 0.5rem; }
+
+.badge-status {
+  display: inline-block;
+  padding: 0.05rem 0.4rem;
+  background: var(--tint-ok);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius-ctl);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.badge-status.status-in-use { background: var(--tint-info); }
+.badge-status.status-experiment { background: var(--tint-warn); }
+.doc-title .badge-status { font-size: 0.8rem; }
+
+ul.sources { margin: 0 0 1.5rem; padding-left: 1.25rem; font-family: var(--font-body); font-size: 1.05rem; }
+ul.sources li { margin: 0 0 0.35rem; }
+
 .button {
   display: inline-block;
   padding: 0.6rem 1.1rem;

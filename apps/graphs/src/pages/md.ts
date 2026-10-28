@@ -26,6 +26,11 @@ export function escapeHtml(text: string): string {
 /** Only these link targets become anchors; the rest degrade to text. */
 const SAFE_URL = /^(?:https?:\/\/|\/|#|\.\.?\/)/i;
 
+/** True when a link target may become an anchor; the rest degrade to text. */
+export function isSafeUrl(target: string): boolean {
+  return SAFE_URL.test(target);
+}
+
 /** Inline pieces this renderer understands, scanned left to right. */
 const INLINE_RE = /(`[^`\n]+`|\[[^\]\n]+\]\([^)\s]+\))/g;
 
@@ -64,7 +69,7 @@ function renderInline(raw: string): string {
     const close = piece.indexOf("](");
     const label = piece.slice(1, close);
     const target = piece.slice(close + 2, -1);
-    if (SAFE_URL.test(target)) {
+    if (isSafeUrl(target)) {
       html += `<a href="${escapeHtml(target)}" rel="nofollow">${renderInline(label)}</a>`;
     } else {
       html += renderInline(label);

@@ -8,6 +8,8 @@
  *   GET /g/<owner>/<repo>/<slug>              community graph page
  *   GET /n/<slug>, /n/<owner>/<repo>/<slug>   node pages likewise
  *   GET /d/<id>                               one unreviewed draft, until it expires or installs
+ *   GET /patterns                             the lab's pattern pages, as cards
+ *   GET /patterns/<slug>                      one pattern: its figure, then its words
  *   GET /llms.txt                             one line per document: name, description, ref
  *   GET /publish, /publish.md                 how to list a graph or node (page, markdown twin)
  *   GET /editor                               the hand-assembly canvas (server-rendered shell)
@@ -24,14 +26,14 @@ import { type ApiDeps, type ApiEnv } from "../api.js";
 import { attachDownloads, createAnalytics, type Downloads } from "../analytics.js";
 import { type Log } from "../github.js";
 import { OFFICIAL_OWNER, OFFICIAL_REPO, OWNER_RE, REPO_RE, SLUG_RE } from "../lib.js";
-import { harnessColor } from "../../../../packages/plate/vocabulary.js";
 import type { DocumentKind } from "../../../../src/schema.js";
 import type { Doc } from "../documents.js";
 import { docFromDocument } from "../documents.js";
 import { readDraft } from "../drafts.js";
 import { createStore, type BlockedEntry } from "../store.js";
-import { documentFromStored, entryFor, officialFromIndex, searchFromIndex } from "../catalog.js";
+import { documentFromStored, entryFor, officialFromIndex, rowFromEntry, searchFromIndex } from "../catalog.js";
 import { type SearchSort } from "../search.js";
+import { comparePatterns, implementingPatterns } from "../patterns.js";
 import {
   BLOCKED_HEADING,
   BLOCKED_ISSUE_LABEL,
@@ -45,27 +47,29 @@ import {
   INDEXING_BODY,
   INDEXING_HEADING,
   LLMS_HEADER,
+  LLMS_PATTERNS_HEADING,
   NEW_TAB,
   NODES_HEADING,
-  NODES_LABEL,
   NO_RESULTS,
   NOT_FOUND_BODY,
   NOT_FOUND_HEADING,
-  OFFICIAL_BADGE,
   OFFICIAL_HEADING,
+  PATTERNS_HOME_LEAD,
+  PATTERNS_HREF,
+  PATTERNS_LABEL,
   PUBLISH_HREF,
   PUBLISH_LABEL,
   PUBLISH_TITLE,
   SITE_NAME,
-  STARS_LABEL,
   TAGLINE,
   TOP_TAB,
-  countLine,
   draftBannerMarkdown,
   draftTime,
+  homePatternsLine,
   homePublishLine,
   installCommand,
   llmsLine,
+  llmsPatternLine,
   resultsFor,
 } from "./copy.js";
 import { page, type Page, withMarkdownFooter } from "./layout.js";
@@ -74,9 +78,10 @@ import { iconSvg, type IconName } from "../../../../packages/look/icon-svg.js";
 import { escapeHtml } from "./md.js";
 import { publishPage } from "./publish.js";
 import { editorPage } from "./editor.js";
-import { docPath, docRef, pageRef, type PageRef } from "./ref.js";
-import { copyButton } from "./look.js";
-import { documentPage, mdText } from "./document.js";
+import { docRef, pageRef, type PageRef } from "./ref.js";
+import { documentPage } from "./document.js";
+import { docList, docListMarkdown } from "./rows.js";
+import { patternPage, patternsIndexPage, type ImplementsRow } from "./patterns.js";
 
 /** A non-page request: index.ts keeps routing it to the redirector. */
 export const NOT_PAGE = true as const;
@@ -177,73 +182,6 @@ function tabs(q: string, active: SearchSort | null): string {
   return `<nav class="tabs">${tab("top", TOP_TAB)}${tab("new", NEW_TAB)}</nav>`;
 }
 
-/** The harness dots of an index row: one accent dot per known harness. */
-function harnessDots(harnesses: string[]): string {
-  if (harnesses.length === 0) {
-    return "";
-  }
-  const dots = harnesses.map((stem) => {
-    const color = harnessColor(stem) ?? "var(--canopy)";
-    return `<span class="dot" style="--nc:${color}" title="${escapeHtml(stem)}"></span>`;
-  });
-  return `<span class="dots" role="img" aria-label="harnesses: ${escapeHtml(harnesses.join(", "))}">${dots.join("")}</span>`;
-}
-
-/**
- * One index row: the name in the display face, the kind badge, the node
- * count for graphs, harness dots, stars, last updated and the install box.
- * One flex line on desktop, three stacked lines under 900 px; the
- * description rides along as the row's second block. Official rows carry
- * the badge next to the name; community rows show their source instead.
- */
-function docItem(doc: Doc): string {
-  const install = installCommand(doc.kind, docRef(doc).ref);
-  const standing = doc.official
-    ? `<span class="badge-official">${iconSvg("badgeCheck")}<span>${OFFICIAL_BADGE}</span></span>`
-    : `<span class="row-source">${escapeHtml(doc.repo)}</span>`;
-  const kind = `<span class="kind">${iconSvg(doc.kind === "graph" ? "workflow" : "box")}<span>${escapeHtml(doc.kind)}</span></span>`;
-  const nodes = doc.kind === "graph" ? `<span class="row-meta">${countLine(NODES_LABEL, doc.nodeCount)}</span>` : "";
-  const stars = doc.stars === null
-    ? ""
-    : `<span class="row-meta">${iconSvg("star")} ${escapeHtml(countLine(STARS_LABEL, doc.stars))}</span>`;
-  const updated = doc.updated === null
-    ? ""
-    : `<time class="row-meta" datetime="${escapeHtml(doc.updated)}">${escapeHtml(doc.updated)}</time>`;
-  const description = doc.description === ""
-    ? ""
-    : `<span class="row-desc">${escapeHtml(doc.description)}</span>`;
-  return (
-    `<li class="row">` +
-    `<a class="row-name" href="${docPath(doc)}">${escapeHtml(doc.name)}</a>` +
-    standing +
-    kind +
-    nodes +
-    harnessDots(doc.harnesses) +
-    stars +
-    updated +
-    `<span class="row-install"><code>${escapeHtml(install)}</code>${copyButton(install)}</span>` +
-    description +
-    `</li>`
-  );
-}
-
-function docList(docs: Doc[], emptyLine: string): string {
-  if (docs.length === 0) {
-    return `<p>${emptyLine}</p>`;
-  }
-  return `<ol class="index">${docs.map(docItem).join("")}</ol>`;
-}
-
-function docListMarkdown(docs: Doc[], emptyLine: string): string {
-  if (docs.length === 0) {
-    return `${emptyLine}\n`;
-  }
-  const lines = docs.map(
-    (doc) => `- [${mdText(doc.name)}](${docPath(doc)}) — ${mdText(doc.description)} — ${docRef(doc).ref}`,
-  );
-  return `${lines.join("\n")}\n`;
-}
-
 /** The draft's banner: unreviewed, expiring at a `<time>`, gone after one install. */
 function draftBanner(expiresAt: string): { html: string; markdown: string } {
   const when = draftTime(expiresAt);
@@ -309,6 +247,8 @@ function homePage(graphs: Doc[], nodes: Doc[]): Page {
     docList(graphs, EMPTY_OFFICIAL_GRAPHS),
     `<h3 class="kicker">${NODES_HEADING}</h3>`,
     docList(nodes, EMPTY_OFFICIAL_NODES),
+    `<h2 class="kicker">${PATTERNS_LABEL}</h2>`,
+    `<p>${escapeHtml(PATTERNS_HOME_LEAD)} <a href="${PATTERNS_HREF}">${escapeHtml(PATTERNS_LABEL)}</a></p>`,
   ].join("\n");
   const markdown = [
     `# ${SITE_NAME}`,
@@ -323,6 +263,9 @@ function homePage(graphs: Doc[], nodes: Doc[]): Page {
     `### ${NODES_HEADING}`,
     ``,
     docListMarkdown(nodes, EMPTY_OFFICIAL_NODES),
+    `## ${PATTERNS_LABEL}`,
+    ``,
+    `${homePatternsLine(PATTERNS_LABEL, PATTERNS_HREF)}\n`,
     `## ${PUBLISH_TITLE}`,
     ``,
     `${homePublishLine(PUBLISH_LABEL, PUBLISH_HREF)}\n`,
@@ -369,7 +312,70 @@ async function documentResponse(req: Request, env: PageEnv, deps: PageDeps, ref:
   }
   const loaded = documentFromStored(entry, stored);
   const [doc] = attachDownloads([loaded.doc], await volumes());
-  return page(req, documentPage(doc, loaded.document, ref));
+  // A pattern's `implements` names official documents by kind and slug, so
+  // only an official page can carry the Patterns back-link.
+  const patterns = ref.official ? await store.getPatterns() : null;
+  const backlinks = patterns === null
+    ? []
+    : implementingPatterns(patterns.entries, ref.kind, ref.slug).map((pattern) => ({
+      slug: pattern.slug,
+      title: pattern.title,
+    }));
+  return page(req, documentPage(doc, loaded.document, ref, { patterns: backlinks }));
+}
+
+/** The patterns list: every card from the patterns index. */
+async function patternsResponse(req: Request, env: PageEnv, deps: PageDeps): Promise<Response> {
+  const { store } = readers(env, deps);
+  const patterns = await store.getPatterns();
+  if (patterns === null) {
+    return indexing(req);
+  }
+  return page(req, patternsIndexPage(patterns.entries));
+}
+
+/**
+ * One pattern page: the stored page joined to the catalogue index, so each
+ * `implements` ref renders as its row. A missing catalogue index is the
+ * cold start, not an empty Implemented-by.
+ */
+async function patternResponse(
+  req: Request,
+  env: PageEnv,
+  deps: PageDeps,
+  slug: string,
+): Promise<Response> {
+  if (!SLUG_RE.test(slug)) {
+    return notFound(req);
+  }
+  const { store } = readers(env, deps);
+  const patterns = await store.getPatterns();
+  if (patterns === null) {
+    return indexing(req);
+  }
+  const stored = await store.getPattern(slug);
+  if (stored === null) {
+    return notFound(req);
+  }
+  const index = await store.getIndex();
+  if (index === null) {
+    return indexing(req);
+  }
+  const rows: ImplementsRow[] = [];
+  for (const ref of stored.implements) {
+    const entry = entryFor(index, ref.kind, OFFICIAL_OWNER, OFFICIAL_REPO, ref.slug);
+    if (entry === null) {
+      rows.push({ ref, doc: null, figure: null });
+      continue;
+    }
+    let figure = null;
+    if (ref.kind === "graph") {
+      const graph = await store.getDoc(ref.kind, entry.owner, entry.repo, entry.slug);
+      figure = graph === null ? null : graph.document;
+    }
+    rows.push({ ref, doc: rowFromEntry(entry), figure });
+  }
+  return page(req, patternPage(stored, rows));
 }
 
 async function homeResponse(req: Request, env: PageEnv, deps: PageDeps): Promise<Response> {
@@ -415,6 +421,14 @@ async function llmsResponse(req: Request, env: PageEnv, deps: PageDeps): Promise
   for (const doc of docs) {
     lines.push(llmsLine(doc, docRef(doc).ref));
   }
+  const patterns = await store.getPatterns();
+  const ordered = [...(patterns?.entries ?? [])].sort(comparePatterns);
+  if (ordered.length > 0) {
+    lines.push("", `## ${LLMS_PATTERNS_HEADING}`, "");
+    for (const entry of ordered) {
+      lines.push(llmsPatternLine(entry.title, entry.summary, entry.slug));
+    }
+  }
   return textResponse(`${lines.join("\n")}\n`, 200);
 }
 
@@ -458,6 +472,12 @@ export async function handlePage(
   }
   if (segments.length === 2 && segments[0] === "d") {
     return draftResponse(req, env, segments[1] ?? "");
+  }
+  if (segments.length === 1 && segments[0] === "patterns") {
+    return patternsResponse(req, env, deps);
+  }
+  if (segments.length === 2 && segments[0] === "patterns") {
+    return patternResponse(req, env, deps, segments[1] ?? "");
   }
   const verb = segments[0];
   if ((verb === "g" || verb === "n") && (segments.length === 2 || segments.length === 4)) {

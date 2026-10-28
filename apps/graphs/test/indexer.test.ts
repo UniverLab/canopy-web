@@ -154,9 +154,10 @@ describe("the scheduled indexer", () => {
     expect(meta.truncated).toBe(false);
     expect(meta.authenticated).toBe(true);
     expect(meta.invalid).toEqual([]);
-    // Removal list (1) + official (3) + two search pages (2) + one tree,
-    // document and README per repository (101 x 3): every call counted.
-    expect(meta.calls).toBe(4 + 2 + 101 * 3);
+    // Removal list (1) + official (4: graphs, nodes, repo, patterns) + two
+    // search pages (2) + one tree, document and README per repository
+    // (101 x 3): every call counted.
+    expect(meta.calls).toBe(5 + 2 + 101 * 3);
     expect(fake.calls.length).toBe(meta.calls);
     const searches = fake.calls.filter((url) => url.includes("search/repositories"));
     expect(searches.length).toBe(2);
@@ -253,9 +254,10 @@ describe("the scheduled indexer", () => {
       JSON.stringify({ document: { name: "Old two" }, readme: "old two readme" }),
     );
 
-    // Removal list (1) + official (3) + search (1) + one full repository
-    // (tree, document, README): the eighth call spends the budget of 8, and
-    // the second repository is never visited.
+    // Removal list (1) + official (4: graphs, nodes, repo, patterns) +
+    // search (1) + one full repository (tree, document, README): the ninth
+    // call spends the budget of 9, and the second repository is never
+    // visited.
     const { meta, fake } = await run(
       [
         ...emptyOfficialStubs(),
@@ -267,11 +269,11 @@ describe("the scheduled indexer", () => {
         ...repoStubs("one", 4),
         ...repoStubs("two", 6),
       ],
-      { kv, budget: 8 },
+      { kv, budget: 9 },
     );
 
-    expect(meta.calls).toBe(8);
-    expect(fake.calls.length).toBe(8);
+    expect(meta.calls).toBe(9);
+    expect(fake.calls.length).toBe(9);
     expect(meta.truncated).toBe(true);
     const index = await storedIndex(kv);
     expect(index.entries.map((entry) => `${entry["repo"]}/${entry["slug"]}`).sort()).toEqual([
@@ -317,7 +319,7 @@ describe("the scheduled indexer", () => {
     }
 
     // Ten full pages: GitHub's cap, every repository with an empty tree
-    // (one call each, no documents). Removal list (1) + official (3) +
+    // (one call each, no documents). Removal list (1) + official (4) +
     // discovery (10) + trees (1,000) stays under the 1,200 budget.
     const stubs: Stub[] = [...emptyOfficialStubs()];
     for (let page = 1; page <= 10; page += 1) {
@@ -338,7 +340,7 @@ describe("the scheduled indexer", () => {
     const { meta } = await run(stubs, { kv });
 
     expect(meta.truncated).toBe(true);
-    expect(meta.calls).toBe(4 + 10 + 1000);
+    expect(meta.calls).toBe(5 + 10 + 1000);
     const index = await storedIndex(kv);
     // The visited repository had no documents, so its previous entry is
     // gone; the repository beyond the cap was never proven gone, so its
@@ -643,11 +645,12 @@ describe("the scheduled indexer", () => {
     expect(meta.authenticated).toBe(false);
     expect(meta.calls).toBe(50);
     expect(meta.truncated).toBe(true);
-    // Official + search + fifteen full repositories (3 calls each) spend
-    // 49 calls; the sixteenth repository's tree is the 50th, and its
-    // document is never fetched.
-    expect(meta.documents).toBe(15);
-    expect(meta.repos_seen).toBe(16);
+    // Official (5, patterns listed) + search + fourteen full repositories
+    // (3 calls each) spend 48 calls; the fifteenth repository's tree and
+    // document are the 49th and 50th, its README never fetched, so the
+    // fifteenth repository rolls back.
+    expect(meta.documents).toBe(14);
+    expect(meta.repos_seen).toBe(15);
   });
 
   it("stamps the meta with the run's clock and duration", async () => {

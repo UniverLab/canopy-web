@@ -6,7 +6,7 @@
  *   canopy graph install hello-graph
  *
  * Three surfaces, one Worker: `/api/*` is the JSON API (api.ts), the
- * catalogue pages (/, /search, /g, /n, /llms.txt, /publish, /editor) are the
+ * catalogue pages (/, /search, /g, /n, /llms.txt, /publish, /patterns, /editor) are the
  * HTML/markdown renderer (pages/routes.ts), and everything else that
  * is not an install URL falls through to the redirector below, which
  * verifies the document against the scheduled index and answers with
@@ -149,12 +149,13 @@ function firstSegment(pathname: string): string {
   return pathname.replace(/^\/+/, "").split("/")[0] ?? "";
 }
 
-/** The catalogue pages claim /, /search, /g, /n, /llms.txt, /publish and /editor;
+/** The catalogue pages claim /, /search, /g, /n, /llms.txt, /publish, /patterns and /editor;
  * every other path (the /i install routes above all) stays a redirect. */
 function isPagePath(pathname: string): boolean {
   const first = firstSegment(pathname);
   return first === "" || first === "search" || first === "llms.txt" || first === "g" || first === "n" ||
-    first === "d" || first === "publish" || first === "publish.md" || first === "editor";
+    first === "d" || first === "publish" || first === "publish.md" || first === "patterns" ||
+    first === "editor";
 }
 
 /** The injected transport and cache: production defaults, test overrides. */
@@ -190,7 +191,7 @@ async function answer(req: Request, env: Env, deps: WorkerDeps): Promise<Respons
     const result = await handleApi(req, env, apiDeps);
     return result === true ? install(req, env, url, deps) : result;
   }
-  // The catalogue pages claim /, /search, /g, /n, /llms.txt and /publish;
+  // The catalogue pages claim /, /search, /g, /n, /llms.txt, /publish and /patterns;
   // every other path (the /i install routes above all) stays a redirect.
   if (isPagePath(url.pathname)) {
     const result = await handlePage(req, env, apiDeps);

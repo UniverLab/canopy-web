@@ -10,9 +10,13 @@
  * run, and writes the catalogue into KV — `index:v1` (entries, no full
  * documents), one `doc:v1:*` key per document plus its README, one
  * `blocked:v1:*` key per blocked entry, and `index:meta` with the run's
- * accounting. A blocked document or repository is never written to
- * `doc:v1:*`, and a stale `doc:v1:*` key is deleted. The request path then
- * serves everything from KV and never spends GitHub quota on traffic.
+ * accounting. The run also reads the official `patterns/` directory from
+ * `main` into `patterns:v1` plus one `pattern:v1:*` key per page; a
+ * malformed page or a figure that fails the graph schema is skipped with a
+ * reason in the run's invalid list, never a failed run. A blocked document
+ * or repository is never written to `doc:v1:*`, and a stale `doc:v1:*` key
+ * is deleted. The request path then serves everything from KV and never
+ * spends GitHub quota on traffic.
  *
  * The run is budgeted (1,200 GitHub calls authenticated, 50 without a
  * token). When the budget, a rate limit or a failed discovery page stops
@@ -46,10 +50,19 @@ import {
 } from "./documents.js";
 import { OFFICIAL_OWNER, OFFICIAL_REPO, OFFICIAL_REPOSITORY } from "./lib.js";
 import {
+  type PatternEntry,
+  type StoredPattern,
+  PatternsHalt,
+  fetchOfficialPatterns,
+} from "./patterns.js";
+import {
   DOC_PREFIX,
   INDEX_KEY,
   META_KEY,
+  PATTERN_PREFIX,
+  PATTERNS_KEY,
   docKey,
+  patternKey,
   readIndex,
   type IndexEntry,
   type IndexInvalid,
@@ -308,6 +321,10 @@ interface RunState {
   log: Log;
   entries: IndexEntry[];
   documents: Map<string, StoredDoc>;
+  patterns: PatternEntry[];
+  patternDocs: Map<string, StoredPattern>;
+  /** True once the official `patterns/` directory read end to end. */
+  patternsComplete: boolean;
   invalid: IndexInvalid[];
   /** The entries `blocked.json` held at the start of this run. */
   blocked: BlockedEntry[];
@@ -490,6 +507,9 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
     log,
     entries: [],
     documents: new Map(),
+    patterns: [],
+    patternDocs: new Map(),
+    patternsComplete: false,
     invalid: [],
     blocked: [],
     visited: new Set(),
@@ -518,6 +538,27 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
       state.entries.length = officialBefore.entries;
       state.documents = officialDocs;
       state.invalid.length = officialBefore.invalid;
+      throw error;
+    }
+
+    // The pattern pages, from the official repository's `main` only. A halt
+    // (a rate limit mid-read) or a spent budget stops the run like any other
+    // stop, with nothing committed; an unreadable directory keeps the
+    // previous patterns instead of emptying them.
+    const patternsInvalid = state.invalid.length;
+    try {
+      const read = await fetchOfficialPatterns(state.github, state.log);
+      state.invalid.push(...read.invalid);
+      if (read.complete) {
+        state.patterns = read.entries;
+        state.patternDocs = read.documents;
+        state.patternsComplete = true;
+      }
+    } catch (error) {
+      state.invalid.length = patternsInvalid;
+      if (error instanceof PatternsHalt) {
+        throw new StopRun(error.reason);
+      }
       throw error;
     }
 
@@ -606,6 +647,26 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
     await options.index.put(key, JSON.stringify(stored));
   }
   await options.index.put(INDEX_KEY, buildIndexPayload(state.entries, builtAt));
+
+  // The pattern pages, only from a run that read them end to end: a short
+  // run keeps the previous `patterns:v1` and its keys untouched.
+  if (state.patternsComplete) {
+    for (const [slug, stored] of state.patternDocs) {
+      await options.index.put(patternKey(slug), JSON.stringify(stored));
+    }
+    await options.index.put(PATTERNS_KEY, JSON.stringify({ built_at: builtAt, entries: state.patterns }));
+    const livePatterns = new Set([...state.patternDocs.keys()].map((slug) => patternKey(slug)));
+    let patternCursor: string | undefined;
+    do {
+      const listed = await options.index.list({ prefix: PATTERN_PREFIX, cursor: patternCursor });
+      for (const key of listed.keys) {
+        if (!livePatterns.has(key.name)) {
+          await options.index.delete(key.name);
+        }
+      }
+      patternCursor = listed.list_complete ? undefined : listed.cursor;
+    } while (patternCursor !== undefined);
+  }
 
   // The removal list, one key per entry, so the request path can answer a
   // block without reading the whole file. Only a list that was actually

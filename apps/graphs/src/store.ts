@@ -6,7 +6,9 @@
  * value with every listed entry, no full documents), one `doc:v1:*` key
  * per validated document plus its README, and `index:meta` with the
  * run's accounting — plus one `blocked:v1:*` key per `blocked.json`
- * entry, which the request path reads before the index. Every page and
+ * entry, which the request path reads before the index, and the pattern
+ * pages as `patterns:v1` (one JSON value with every listed pattern,
+ * figures included) plus one `pattern:v1:*` key per page. Every page and
  * API answer reads through this module.
  * The index is memoised in the isolate for 60 seconds; documents and
  * meta are read fresh, one KV read each. Everything here is total: a
@@ -21,6 +23,7 @@ import {
   type BlockedEntry,
 } from "./blocked.js";
 import { isArray, isNumber, isRecord, isString, parseJson, stringField } from "./json.js";
+import type { PatternEntry, PatternRef, PatternSource, StoredPattern } from "./patterns.js";
 
 export type { BlockedEntry } from "./blocked.js";
 
@@ -57,6 +60,17 @@ export function docKey(kind: DocumentKind, owner: string, repo: string, slug: st
   return `${DOC_PREFIX}${kind}:${owner.toLowerCase()}/${repo.toLowerCase()}/${slug}`;
 }
 
+/** The one JSON value holding every pattern card the list renders. */
+export const PATTERNS_KEY = "patterns:v1";
+
+/** Prefix of the per-pattern keys, holding body, sources and figure. */
+export const PATTERN_PREFIX = "pattern:v1:";
+
+/** One pattern's key. Slugs match the slug rule, so no encoding is needed. */
+export function patternKey(slug: string): string {
+  return `${PATTERN_PREFIX}${slug}`;
+}
+
 /**
  * One catalogue row in the index: everything a listing renders, and the
  * coordinates a document page joins its `doc:v1:*` value to. It holds no
@@ -90,6 +104,12 @@ export interface StoredDoc {
   readme: string;
 }
 
+/** The `patterns:v1` value: when it was built, and every listed pattern. */
+export interface StoredPatterns {
+  built_at: string;
+  entries: PatternEntry[];
+}
+
 /** One document the indexer left out, with the reason it gives. */
 export interface IndexInvalid {
   repo: string;
@@ -116,9 +136,12 @@ export const INDEX_MEMO_MS = 60_000;
 
 let memo: { at: number; index: StoredIndex | null } | null = null;
 
-/** Forget the memoised index. The tests seed a fresh KV per case. */
+let patternsMemo: { at: number; patterns: StoredPatterns | null } | null = null;
+
+/** Forget the memoised indexes. The tests seed a fresh KV per case. */
 export function resetIndexMemo(): void {
   memo = null;
+  patternsMemo = null;
 }
 
 function entryOf(value: unknown): IndexEntry | null {
@@ -205,6 +228,128 @@ export function parseStoredDoc(text: string): StoredDoc | null {
   return { document, readme };
 }
 
+function patternRefOf(value: unknown): PatternRef | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const kind = value["kind"];
+  const slug = value["slug"];
+  if ((kind !== "graph" && kind !== "node") || !isString(slug) || slug === "") {
+    return null;
+  }
+  return { kind, slug };
+}
+
+function patternSourceOf(value: unknown): PatternSource | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const title = value["title"];
+  const url = value["url"];
+  if (!isString(title) || title === "" || !isString(url) || url === "") {
+    return null;
+  }
+  return { title, url };
+}
+
+function patternStatusOf(value: unknown): PatternEntry["status"] | null {
+  return value === "standard" || value === "in use" || value === "experiment" ? value : null;
+}
+
+function patternEntryOf(value: unknown): PatternEntry | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const slug = value["slug"];
+  const title = value["title"];
+  const summary = value["summary"];
+  const status = patternStatusOf(value["status"]);
+  const refs = value["implements"];
+  const figure = value["figure"];
+  if (
+    !isString(slug) || slug === "" || !isString(title) || title === "" ||
+    !isString(summary) || status === null || !isArray(refs) || !isRecord(figure)
+  ) {
+    return null;
+  }
+  const implementsRefs: PatternRef[] = [];
+  for (const ref of refs) {
+    const parsed = patternRefOf(ref);
+    if (parsed === null) {
+      return null;
+    }
+    implementsRefs.push(parsed);
+  }
+  return { slug, title, summary, status, implements: implementsRefs, figure };
+}
+
+/** Parse a `patterns:v1` body; malformed entries are dropped, never fatal. */
+export function parsePatterns(text: string): StoredPatterns | null {
+  const parsed = parseJson(text);
+  if (!parsed.ok || !isRecord(parsed.value)) {
+    return null;
+  }
+  const built = parsed.value["built_at"];
+  const entries = parsed.value["entries"];
+  if (!isString(built) || !isArray(entries)) {
+    return null;
+  }
+  return {
+    built_at: built,
+    entries: entries.flatMap((entry) => {
+      const parsedEntry = patternEntryOf(entry);
+      return parsedEntry === null ? [] : [parsedEntry];
+    }),
+  };
+}
+
+/** Parse a `pattern:v1:*` body: the page fields plus its figure. */
+export function parseStoredPattern(text: string): StoredPattern | null {
+  const parsed = parseJson(text);
+  if (!parsed.ok || !isRecord(parsed.value)) {
+    return null;
+  }
+  const value = parsed.value;
+  const title = value["title"];
+  const summary = value["summary"];
+  const status = patternStatusOf(value["status"]);
+  const refs = value["implements"];
+  const sources = value["sources"];
+  const body = value["body"];
+  const figure = value["figure"];
+  if (
+    !isString(title) || title === "" || !isString(summary) || status === null ||
+    !isArray(refs) || !isArray(sources) || !isString(body) || !isRecord(figure)
+  ) {
+    return null;
+  }
+  const implementsRefs: PatternRef[] = [];
+  for (const ref of refs) {
+    const parsedRef = patternRefOf(ref);
+    if (parsedRef === null) {
+      return null;
+    }
+    implementsRefs.push(parsedRef);
+  }
+  const parsedSources: PatternSource[] = [];
+  for (const source of sources) {
+    const parsedSource = patternSourceOf(source);
+    if (parsedSource === null) {
+      return null;
+    }
+    parsedSources.push(parsedSource);
+  }
+  return {
+    title,
+    summary,
+    status,
+    implements: implementsRefs,
+    sources: parsedSources,
+    body,
+    figure,
+  };
+}
+
 function invalidOf(value: unknown): IndexInvalid | null {
   if (!isRecord(value)) {
     return null;
@@ -267,12 +412,27 @@ export async function readIndex(kv: KV): Promise<StoredIndex | null> {
   return text === null ? null : parseIndex(text);
 }
 
-/** The request path's read side: the index memoised, the rest fresh. */
+/** Read the patterns index straight from KV, with no memo. */
+export async function readPatterns(kv: KV): Promise<StoredPatterns | null> {
+  let text: string | null;
+  try {
+    text = await kv.get(PATTERNS_KEY);
+  } catch {
+    return null;
+  }
+  return text === null ? null : parsePatterns(text);
+}
+
+/** The request path's read side: the indexes memoised, the rest fresh. */
 export interface IndexStore {
   /** The catalogue index, memoised in the isolate for 60 seconds. */
   getIndex(): Promise<StoredIndex | null>;
+  /** The patterns index, memoised beside the catalogue index. */
+  getPatterns(): Promise<StoredPatterns | null>;
   /** One validated document plus its README, or null when not indexed. */
   getDoc(kind: DocumentKind, owner: string, repo: string, slug: string): Promise<StoredDoc | null>;
+  /** One pattern page plus its figure, or null when not indexed. */
+  getPattern(slug: string): Promise<StoredPattern | null>;
   /**
    * The block that covers this document, if any: its own `blocked:v1:<kind>:*`
    * key first, then a whole-repository `blocked:v1:repo:*` block. The request
@@ -301,6 +461,32 @@ export function createStore(kv: KV | undefined): IndexStore {
     }
     memo = { at: now, index };
     return index;
+  }
+
+  async function getPatterns(): Promise<StoredPatterns | null> {
+    const now = Date.now();
+    if (patternsMemo !== null && now - patternsMemo.at < INDEX_MEMO_MS) {
+      return patternsMemo.patterns;
+    }
+    let patterns: StoredPatterns | null = null;
+    if (kv !== undefined) {
+      patterns = await readPatterns(kv);
+    }
+    patternsMemo = { at: now, patterns };
+    return patterns;
+  }
+
+  async function getPattern(slug: string): Promise<StoredPattern | null> {
+    if (kv === undefined) {
+      return null;
+    }
+    let text: string | null;
+    try {
+      text = await kv.get(patternKey(slug));
+    } catch {
+      return null;
+    }
+    return text === null ? null : parseStoredPattern(text);
   }
 
   async function getDoc(
@@ -364,5 +550,5 @@ export function createStore(kv: KV | undefined): IndexStore {
     return text === null ? null : parseMeta(text);
   }
 
-  return { getIndex, getDoc, getBlocked, getMeta };
+  return { getIndex, getPatterns, getDoc, getPattern, getBlocked, getMeta };
 }

@@ -238,6 +238,64 @@ li.row {
   color: var(--surface-ink-dim);
 }
 
+ol.cards {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 1rem;
+}
+li.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.9rem 1rem 1rem;
+  background: var(--tint-info);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-card);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+.card-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-self: stretch;
+  color: var(--surface-ink);
+  text-decoration: none;
+}
+.card-link:hover .card-title { text-decoration: underline; text-decoration-color: var(--teal); }
+.card-title { font-family: var(--font-display); font-size: 1.25rem; }
+.card-summary { font-family: var(--font-body); font-size: 1rem; color: var(--surface-ink-dim); }
+
+/* A plate at thumbnail size: the same black stage, cropped, still, and out
+ * of the pointer's way. Index rows carry one after their install box. */
+figure.thumb { margin: 0; padding: 0.5rem; max-height: 12rem; overflow: hidden; pointer-events: none; }
+figure.thumb svg { width: 100%; height: auto; max-height: 11rem; }
+figure.thumb .token { display: none; }
+li.row figure.thumb { flex-basis: 100%; order: 3; margin-top: 0.5rem; }
+
+.badge-status {
+  display: inline-block;
+  padding: 0.05rem 0.4rem;
+  background: var(--tint-ok);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius-ctl);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.badge-status.status-in-use { background: var(--tint-info); }
+.badge-status.status-experiment { background: var(--tint-warn); }
+.doc-title .badge-status { font-size: 0.8rem; }
+
+ul.sources { margin: 0 0 1.5rem; padding-left: 1.25rem; font-family: var(--font-body); font-size: 1.05rem; }
+ul.sources li { margin: 0 0 0.35rem; }
+
 .button {
   display: inline-block;
   padding: 0.6rem 1.1rem;
@@ -478,6 +536,7 @@ details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 <nav class="site-nav" aria-label="Catalogue">
 <a href="/editor"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span>Editor</span></a>
 <a href="/publish"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg><span>Publish</span></a>
+<a href="/patterns"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg><span>Patterns</span></a>
 <a href="https://github.com/UniverLab/canopy-web"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg><span>Source</span></a>
 </nav>
 </div>
@@ -507,6 +566,8 @@ details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 <ol class="index"><li class="row"><a class="row-name" href="/g/hello-graph">hello-graph</a><span class="badge-official"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4"/></svg><span>Official</span></span><span class="kind"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg><span>graph</span></span><span class="row-meta">5 nodes</span><span class="row-meta"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg> 7 stars</span><span class="row-install"><code>canopy graph install hello-graph</code><button type="button" class="copy" data-copy="canopy graph install hello-graph" data-label="Copy" data-done="Copied" aria-label="Copy the install command to the clipboard"><span class="copy-icon" data-icon="copy"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></span><span class="copy-text">Copy</span></button></span><span class="row-desc">Five nodes with one fail edge, for the drawing test.</span></li></ol>
 <h3 class="kicker">Nodes</h3>
 <ol class="index"><li class="row"><a class="row-name" href="/n/hello-node">hello-node</a><span class="badge-official"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4"/></svg><span>Official</span></span><span class="kind"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg><span>node</span></span><span class="row-meta"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg> 7 stars</span><span class="row-install"><code>canopy node install hello-node</code><button type="button" class="copy" data-copy="canopy node install hello-node" data-label="Copy" data-done="Copied" aria-label="Copy the install command to the clipboard"><span class="copy-icon" data-icon="copy"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></span><span class="copy-text">Copy</span></button></span><span class="row-desc">Example catalogue node: drafts an implementation plan.</span></li></ol>
+<h2 class="kicker">Patterns</h2>
+<p>The lab's orchestration patterns: <a href="/patterns">Patterns</a></p>
 </main>
 <footer class="look-colophon">
   <picture class="colophon-band" aria-hidden="true">
@@ -785,6 +846,64 @@ li.row {
   color: var(--surface-ink-dim);
 }
 
+ol.cards {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 1rem;
+}
+li.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.9rem 1rem 1rem;
+  background: var(--tint-info);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-card);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+.card-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-self: stretch;
+  color: var(--surface-ink);
+  text-decoration: none;
+}
+.card-link:hover .card-title { text-decoration: underline; text-decoration-color: var(--teal); }
+.card-title { font-family: var(--font-display); font-size: 1.25rem; }
+.card-summary { font-family: var(--font-body); font-size: 1rem; color: var(--surface-ink-dim); }
+
+/* A plate at thumbnail size: the same black stage, cropped, still, and out
+ * of the pointer's way. Index rows carry one after their install box. */
+figure.thumb { margin: 0; padding: 0.5rem; max-height: 12rem; overflow: hidden; pointer-events: none; }
+figure.thumb svg { width: 100%; height: auto; max-height: 11rem; }
+figure.thumb .token { display: none; }
+li.row figure.thumb { flex-basis: 100%; order: 3; margin-top: 0.5rem; }
+
+.badge-status {
+  display: inline-block;
+  padding: 0.05rem 0.4rem;
+  background: var(--tint-ok);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius-ctl);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.badge-status.status-in-use { background: var(--tint-info); }
+.badge-status.status-experiment { background: var(--tint-warn); }
+.doc-title .badge-status { font-size: 0.8rem; }
+
+ul.sources { margin: 0 0 1.5rem; padding-left: 1.25rem; font-family: var(--font-body); font-size: 1.05rem; }
+ul.sources li { margin: 0 0 0.35rem; }
+
 .button {
   display: inline-block;
   padding: 0.6rem 1.1rem;
@@ -1025,6 +1144,7 @@ details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 <nav class="site-nav" aria-label="Catalogue">
 <a href="/editor"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span>Editor</span></a>
 <a href="/publish"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg><span>Publish</span></a>
+<a href="/patterns"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg><span>Patterns</span></a>
 <a href="https://github.com/UniverLab/canopy-web"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg><span>Source</span></a>
 </nav>
 </div>
@@ -1328,6 +1448,64 @@ li.row {
   color: var(--surface-ink-dim);
 }
 
+ol.cards {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 1rem;
+}
+li.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.9rem 1rem 1rem;
+  background: var(--tint-info);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-card);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+.card-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-self: stretch;
+  color: var(--surface-ink);
+  text-decoration: none;
+}
+.card-link:hover .card-title { text-decoration: underline; text-decoration-color: var(--teal); }
+.card-title { font-family: var(--font-display); font-size: 1.25rem; }
+.card-summary { font-family: var(--font-body); font-size: 1rem; color: var(--surface-ink-dim); }
+
+/* A plate at thumbnail size: the same black stage, cropped, still, and out
+ * of the pointer's way. Index rows carry one after their install box. */
+figure.thumb { margin: 0; padding: 0.5rem; max-height: 12rem; overflow: hidden; pointer-events: none; }
+figure.thumb svg { width: 100%; height: auto; max-height: 11rem; }
+figure.thumb .token { display: none; }
+li.row figure.thumb { flex-basis: 100%; order: 3; margin-top: 0.5rem; }
+
+.badge-status {
+  display: inline-block;
+  padding: 0.05rem 0.4rem;
+  background: var(--tint-ok);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius-ctl);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.badge-status.status-in-use { background: var(--tint-info); }
+.badge-status.status-experiment { background: var(--tint-warn); }
+.doc-title .badge-status { font-size: 0.8rem; }
+
+ul.sources { margin: 0 0 1.5rem; padding-left: 1.25rem; font-family: var(--font-body); font-size: 1.05rem; }
+ul.sources li { margin: 0 0 0.35rem; }
+
 .button {
   display: inline-block;
   padding: 0.6rem 1.1rem;
@@ -1568,6 +1746,7 @@ details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 <nav class="site-nav" aria-label="Catalogue">
 <a href="/editor"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span>Editor</span></a>
 <a href="/publish"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg><span>Publish</span></a>
+<a href="/patterns"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg><span>Patterns</span></a>
 <a href="https://github.com/UniverLab/canopy-web"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg><span>Source</span></a>
 </nav>
 </div>
@@ -1878,6 +2057,64 @@ li.row {
   color: var(--surface-ink-dim);
 }
 
+ol.cards {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 1rem;
+}
+li.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.9rem 1rem 1rem;
+  background: var(--tint-info);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-card);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+.card-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-self: stretch;
+  color: var(--surface-ink);
+  text-decoration: none;
+}
+.card-link:hover .card-title { text-decoration: underline; text-decoration-color: var(--teal); }
+.card-title { font-family: var(--font-display); font-size: 1.25rem; }
+.card-summary { font-family: var(--font-body); font-size: 1rem; color: var(--surface-ink-dim); }
+
+/* A plate at thumbnail size: the same black stage, cropped, still, and out
+ * of the pointer's way. Index rows carry one after their install box. */
+figure.thumb { margin: 0; padding: 0.5rem; max-height: 12rem; overflow: hidden; pointer-events: none; }
+figure.thumb svg { width: 100%; height: auto; max-height: 11rem; }
+figure.thumb .token { display: none; }
+li.row figure.thumb { flex-basis: 100%; order: 3; margin-top: 0.5rem; }
+
+.badge-status {
+  display: inline-block;
+  padding: 0.05rem 0.4rem;
+  background: var(--tint-ok);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius-ctl);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.badge-status.status-in-use { background: var(--tint-info); }
+.badge-status.status-experiment { background: var(--tint-warn); }
+.doc-title .badge-status { font-size: 0.8rem; }
+
+ul.sources { margin: 0 0 1.5rem; padding-left: 1.25rem; font-family: var(--font-body); font-size: 1.05rem; }
+ul.sources li { margin: 0 0 0.35rem; }
+
 .button {
   display: inline-block;
   padding: 0.6rem 1.1rem;
@@ -2118,6 +2355,7 @@ details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 <nav class="site-nav" aria-label="Catalogue">
 <a href="/editor"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span>Editor</span></a>
 <a href="/publish"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg><span>Publish</span></a>
+<a href="/patterns"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg><span>Patterns</span></a>
 <a href="https://github.com/UniverLab/canopy-web"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg><span>Source</span></a>
 </nav>
 </div>
@@ -2415,6 +2653,64 @@ li.row {
   color: var(--surface-ink-dim);
 }
 
+ol.cards {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 1rem;
+}
+li.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.9rem 1rem 1rem;
+  background: var(--tint-info);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-card);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+.card-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-self: stretch;
+  color: var(--surface-ink);
+  text-decoration: none;
+}
+.card-link:hover .card-title { text-decoration: underline; text-decoration-color: var(--teal); }
+.card-title { font-family: var(--font-display); font-size: 1.25rem; }
+.card-summary { font-family: var(--font-body); font-size: 1rem; color: var(--surface-ink-dim); }
+
+/* A plate at thumbnail size: the same black stage, cropped, still, and out
+ * of the pointer's way. Index rows carry one after their install box. */
+figure.thumb { margin: 0; padding: 0.5rem; max-height: 12rem; overflow: hidden; pointer-events: none; }
+figure.thumb svg { width: 100%; height: auto; max-height: 11rem; }
+figure.thumb .token { display: none; }
+li.row figure.thumb { flex-basis: 100%; order: 3; margin-top: 0.5rem; }
+
+.badge-status {
+  display: inline-block;
+  padding: 0.05rem 0.4rem;
+  background: var(--tint-ok);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius-ctl);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.badge-status.status-in-use { background: var(--tint-info); }
+.badge-status.status-experiment { background: var(--tint-warn); }
+.doc-title .badge-status { font-size: 0.8rem; }
+
+ul.sources { margin: 0 0 1.5rem; padding-left: 1.25rem; font-family: var(--font-body); font-size: 1.05rem; }
+ul.sources li { margin: 0 0 0.35rem; }
+
 .button {
   display: inline-block;
   padding: 0.6rem 1.1rem;
@@ -2655,6 +2951,7 @@ details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 <nav class="site-nav" aria-label="Catalogue">
 <a href="/editor"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span>Editor</span></a>
 <a href="/publish"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg><span>Publish</span></a>
+<a href="/patterns"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg><span>Patterns</span></a>
 <a href="https://github.com/UniverLab/canopy-web"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg><span>Source</span></a>
 </nav>
 </div>
@@ -2943,6 +3240,64 @@ li.row {
   color: var(--surface-ink-dim);
 }
 
+ol.cards {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 1rem;
+}
+li.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.9rem 1rem 1rem;
+  background: var(--tint-info);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-card);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+.card-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-self: stretch;
+  color: var(--surface-ink);
+  text-decoration: none;
+}
+.card-link:hover .card-title { text-decoration: underline; text-decoration-color: var(--teal); }
+.card-title { font-family: var(--font-display); font-size: 1.25rem; }
+.card-summary { font-family: var(--font-body); font-size: 1rem; color: var(--surface-ink-dim); }
+
+/* A plate at thumbnail size: the same black stage, cropped, still, and out
+ * of the pointer's way. Index rows carry one after their install box. */
+figure.thumb { margin: 0; padding: 0.5rem; max-height: 12rem; overflow: hidden; pointer-events: none; }
+figure.thumb svg { width: 100%; height: auto; max-height: 11rem; }
+figure.thumb .token { display: none; }
+li.row figure.thumb { flex-basis: 100%; order: 3; margin-top: 0.5rem; }
+
+.badge-status {
+  display: inline-block;
+  padding: 0.05rem 0.4rem;
+  background: var(--tint-ok);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius-ctl);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.badge-status.status-in-use { background: var(--tint-info); }
+.badge-status.status-experiment { background: var(--tint-warn); }
+.doc-title .badge-status { font-size: 0.8rem; }
+
+ul.sources { margin: 0 0 1.5rem; padding-left: 1.25rem; font-family: var(--font-body); font-size: 1.05rem; }
+ul.sources li { margin: 0 0 0.35rem; }
+
 .button {
   display: inline-block;
   padding: 0.6rem 1.1rem;
@@ -3183,6 +3538,7 @@ details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 <nav class="site-nav" aria-label="Catalogue">
 <a href="/editor"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span>Editor</span></a>
 <a href="/publish"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg><span>Publish</span></a>
+<a href="/patterns"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg><span>Patterns</span></a>
 <a href="https://github.com/UniverLab/canopy-web"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg><span>Source</span></a>
 </nav>
 </div>

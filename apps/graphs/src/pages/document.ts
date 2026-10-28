@@ -26,6 +26,7 @@ import {
   EDITOR_EDIT_COPY,
   INSTALL_HEADING,
   OFFICIAL_BADGE,
+  PATTERNS_SHEET_LABEL,
   README_HEADING,
   REPORT_LABEL,
   REPORT_REPO_LABEL,
@@ -177,7 +178,7 @@ function runsSectionHtml(kind: DocumentKind, document: JsonValue, community: boo
  * One fenced block for the twin: the fence outgrows any backtick run the
  * text carries, so a command containing ``` stays one block.
  */
-function fencedBlock(info: string, text: string): string[] {
+export function fencedBlock(info: string, text: string): string[] {
   const longest = (text.match(/`+/g) ?? []).reduce((found, run) => Math.max(found, run.length), 0);
   const fence = "`".repeat(Math.max(3, longest + 1));
   return [`${fence}${info}`, text, fence, ``];
@@ -228,6 +229,8 @@ export interface DocumentPageOptions {
   standalone?: boolean;
   /** The exact install command, when it is not the ref's own. */
   install?: string;
+  /** The pattern pages whose `implements` names this document, if any. */
+  patterns?: Array<{ slug: string; title: string }>;
 }
 
 /**
@@ -242,7 +245,7 @@ function datasheet(
   doc: Doc,
   document: JsonValue,
   ref: PageRef,
-  options: { install: string; standalone: boolean },
+  options: { install: string; standalone: boolean; patterns: Array<{ slug: string; title: string }> },
 ): { html: string; lines: string[] } {
   const install = options.install;
   const kindMark = iconSvg(ref.kind === "graph" ? "workflow" : "box");
@@ -292,6 +295,15 @@ function datasheet(
       lines.push(`- ${SHEET_AGENTS}: ${agents.join(", ")}`);
     }
   }
+  if (options.patterns.length > 0) {
+    const links = options.patterns
+      .map((pattern) => `<a href="/patterns/${escapeHtml(pattern.slug)}">${escapeHtml(pattern.title)}</a>`)
+      .join(", ");
+    fields.push(sheetField(PATTERNS_SHEET_LABEL, links));
+    lines.push(
+      `- ${PATTERNS_SHEET_LABEL}: ${options.patterns.map((pattern) => `[${mdText(pattern.title)}](/patterns/${pattern.slug})`).join(", ")}`,
+    );
+  }
   const installBox =
     `<span class="row-install"><code>${escapeHtml(install)}</code>${copyButton(install)}</span>` +
     (doc.official || options.standalone ? "" : `<p class="install-review">${escapeHtml(RUNS_REVIEW_LINE)}</p>`);
@@ -331,7 +343,11 @@ export function documentPage(
 ): Page {
   const standalone = options.standalone === true;
   const install = options.install ?? installCommand(ref.kind, ref.ref);
-  const sheet = datasheet(doc, document, ref, { install, standalone });
+  const sheet = datasheet(doc, document, ref, {
+    install,
+    standalone,
+    patterns: options.patterns ?? [],
+  });
   const badge = doc.official
     ? ` <span class="badge-official">${iconSvg("badgeCheck")}<span>${OFFICIAL_BADGE}</span></span>`
     : "";
