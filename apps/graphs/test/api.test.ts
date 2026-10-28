@@ -374,6 +374,9 @@ describe("the JSON API", () => {
       documents: number;
       invalid: unknown[];
       truncated: boolean;
+      repos_pending: number;
+      repos_unchanged: number;
+      repos_visited: number;
       stopped: string | null;
       authenticated: boolean;
       kv_writes: number;
@@ -386,6 +389,11 @@ describe("the JSON API", () => {
     expect(body.documents).toBe(2);
     expect(body.invalid).toEqual([]);
     expect(body.truncated).toBe(false);
+    // The incremental visit's accounting: no community repository was
+    // discovered, so nothing was visited, skipped or left pending.
+    expect(body.repos_pending).toBe(0);
+    expect(body.repos_unchanged).toBe(0);
+    expect(body.repos_visited).toBe(0);
     expect(body.stopped).toBeNull();
     expect(body.authenticated).toBe(false);
     // The free plan's write budget, visible from outside: a first run writes

@@ -28,7 +28,11 @@
  * repositories it could not visit are carried over, so a short run never
  * shrinks the catalogue; only documents in visited repositories that are
  * truly gone — and repositories absent from a completed discovery — have
- * their keys deleted. The meta records how many subrequests the run spent
+ * their keys deleted. A run visits only the repositories that changed or
+ * were never read (`index:repos:v1` in repo-state.ts remembers each
+ * repository's last visit), oldest visit first, so successive runs cover any
+ * number of repositories while an unchanged catalogue costs the official
+ * read plus discovery. The meta records how many subrequests the run spent
  * and why it stopped, so a truncated run is visible from outside.
  *
  * Writes are budgeted too, and tighter: the Free plan allows 1,000 KV writes
@@ -48,7 +52,7 @@ import {
 } from "./blocked.js";
 import type { ApiError, GitHub, Log } from "./github.js";
 import { isApiError } from "./github.js";
-import { isArray, isNumber, isRecord, readJson, stringField } from "./json.js";
+import { isArray, isRecord, readJson, stringField } from "./json.js";
 import { HASHES_KEY, KvWriter, parseHashes } from "./hashes.js";
 import { buildIndexValue } from "./index-payload.js";
 import { CATALOGUE_TOPIC, discoverSources } from "./discovery.js";
@@ -65,6 +69,17 @@ import {
   PatternsHalt,
   fetchOfficialPatterns,
 } from "./patterns.js";
+import {
+  REPOS_KEY,
+  hitOf,
+  parseRepoState,
+  planVisits,
+  pruneRepoState,
+  repoKey,
+  serializeRepoState,
+  type RepoHit,
+  type VisitPlan,
+} from "./repo-state.js";
 import { officialSources, readBlocked } from "./rest.js";
 import {
   documentOfSnapshot,
@@ -117,6 +132,13 @@ export const DISCOVERY_MAX_PAGES = 10;
  */
 export const SUBREQUEST_BUDGET = 45;
 
+/**
+ * The visit ledger's version, stored beside it in `index:repos:v1`. A run
+ * whose stored version differs rereads every repository over the next runs,
+ * so bump this when parsing or validation changes what a visit means.
+ */
+export const INDEXER_VERSION = 1;
+
 // `index:v1`'s byte cap and trim live with the payload builder, and stay
 // exported here for the readers that already import them.
 export {
@@ -163,42 +185,6 @@ class StopRun {
   constructor(reason: string) {
     this.reason = reason;
   }
-}
-
-/** One repository as the discovery search describes it. */
-interface RepoHit {
-  owner: string;
-  repo: string;
-  branch: string;
-  stars: number | null;
-  updated: string | null;
-}
-
-function hitOf(value: unknown): RepoHit | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-  const owner = isRecord(value["owner"]) ? stringField(value["owner"], "login") : "";
-  const repo = stringField(value, "name");
-  if (owner === "" || repo === "") {
-    return null;
-  }
-  const stars = value["stargazers_count"];
-  const updated = value["updated_at"];
-  return {
-    owner,
-    repo,
-    branch: stringField(value, "default_branch").trim() || "HEAD",
-    stars: isNumber(stars) ? stars : null,
-    updated: typeof updated === "string" && /^\d{4}-\d{2}-\d{2}/.test(updated)
-      ? updated.slice(0, 10)
-      : null,
-  };
-}
-
-/** The repository key carry-over compares: lowercase `owner/repo`. */
-function repoKey(owner: string, repo: string): string {
-  return `${owner.toLowerCase()}/${repo.toLowerCase()}`;
 }
 
 /** The distinct node kinds of a graph document, sorted; empty otherwise. */
@@ -505,10 +491,18 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
   const officialKey = repoKey(OFFICIAL_OWNER, OFFICIAL_REPO);
   const previous = await readIndex(options.index).catch(() => null);
   const previousEntries = previous?.entries ?? [];
+  const builtAt = new Date(started).toISOString();
+  // The visit ledger: what each repository's code looked like when a run
+  // last read it. A missing or unreadable ledger reads as empty, so every
+  // repository counts as never visited.
+  const reposText = await options.index.get(REPOS_KEY).catch(() => null);
+  const repoState = parseRepoState(reposText, INDEXER_VERSION);
 
   let blocksLoaded = false;
   let discoveryComplete = false;
   let stopped: string | null = null;
+  let plan: VisitPlan = { pending: [], unchanged: new Map() };
+  let reposVisited = 0;
   try {
     // The removal list and the official catalogue in one request when the run
     // authenticates: nothing is indexed before the run knows what must not be,
@@ -608,7 +602,12 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
       }
     }
 
-    for (const hit of queue) {
+    // The incremental visit: only the repositories that changed or were
+    // never read, oldest visit first, so a run cut short by the budget is
+    // resumed by the next one. A visit is recorded only after it succeeds;
+    // an unavailable repository keeps its previous state and stays pending.
+    plan = planVisits(queue, repoState);
+    for (const hit of plan.pending) {
       const outcome = await indexRepoAtomic(state, hit);
       if (outcome.status === "stopped") {
         stopped = outcome.reason;
@@ -620,7 +619,10 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
         state.truncated = true;
         continue;
       }
-      state.visited.add(repoKey(hit.owner, hit.repo));
+      const key = repoKey(hit.owner, hit.repo);
+      state.visited.add(key);
+      repoState[key] = { pushed_at: hit.pushedAt, visited_at: builtAt };
+      reposVisited += 1;
     }
   } catch (error) {
     if (!(error instanceof StopRun)) {
@@ -648,10 +650,15 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
     ) {
       continue;
     }
+    // An unchanged repository is never visited, but its star count still
+    // follows the search hit — fresh data at no subrequest cost.
+    const fresh = plan.unchanged.get(key);
+    if (fresh !== undefined && fresh.stars !== null) {
+      entry.stars = fresh.stars;
+    }
     state.entries.push(entry);
   }
 
-  const builtAt = new Date(started).toISOString();
   // The write phase is fingerprinted: one digest per content key, read once,
   // so a run whose catalogue did not move costs a single put, `index:meta`,
   // and stays far under the free plan's 1,000 writes a day (README, "the
@@ -665,6 +672,13 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
   }
   const index = buildIndexValue(state.entries, builtAt);
   await writer.putByContent(INDEX_KEY, index.content, index.value);
+
+  // The visit ledger, pruned by a completed discovery and fingerprinted like
+  // every content key: an unchanged run rewrites nothing here.
+  if (discoveryComplete) {
+    pruneRepoState(repoState, state.discovered);
+  }
+  await writer.put(REPOS_KEY, serializeRepoState(INDEXER_VERSION, repoState));
 
   // The pattern pages, only from a run that read them end to end: a short
   // run keeps the previous `patterns:v1` and its keys untouched.
@@ -716,6 +730,7 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
   }
 
   const stats = writer.stats;
+  const reposPending = plan.pending.length - reposVisited;
   const meta: IndexMeta = {
     built_at: builtAt,
     duration_ms: Math.max(0, now() - started),
@@ -725,7 +740,10 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
     documents: state.entries.length,
     blocked: state.blocked.length,
     invalid: state.invalid,
-    truncated: state.truncated,
+    truncated: state.truncated || reposPending > 0,
+    repos_pending: reposPending,
+    repos_unchanged: plan.unchanged.size,
+    repos_visited: reposVisited,
     stopped,
     authenticated: options.authenticated,
     // What the write phase actually cost: the content puts above plus this

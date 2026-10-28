@@ -981,18 +981,20 @@ describe("the write budget", () => {
   it("writes every key on the first run against an empty KV", async () => {
     const { meta, kv } = await run(officialTable(), { authenticated: true });
 
-    // 12 documents, index:v1, 10 pattern pages, patterns:v1, index:meta, and
-    // the fingerprint map itself: every key is new, so nothing is skipped.
+    // 12 documents, index:v1, 10 pattern pages, patterns:v1, the visit
+    // ledger, index:meta, and the fingerprint map itself: every key is new,
+    // so nothing is skipped.
     const puts = kv.putOptions.map((option) => option.key);
-    expect(puts).toHaveLength(26);
+    expect(puts).toHaveLength(27);
     expect(meta.kv_skipped).toBe(0);
-    expect(meta.kv_writes).toBe(25);
+    expect(meta.kv_writes).toBe(26);
     expect(puts).toContain(docKey("graph", "UniverLab", "canopy-graphs", "graph-alpha"));
     expect(puts).toContain(patternKey("pattern-alpha"));
+    expect(puts).toContain("index:repos:v1");
     expect(puts).toContain(HASHES_KEY);
     // Every content key carries a fingerprint; `index:meta` does not, since it
     // moves on every run.
-    expect(Object.keys(await storedHashes(kv))).toHaveLength(24);
+    expect(Object.keys(await storedHashes(kv))).toHaveLength(25);
   });
 
   it("costs exactly one put when the catalogue did not move", async () => {
@@ -1002,7 +1004,7 @@ describe("the write budget", () => {
     const first = await run(officialTable(), { kv, authenticated: true, now: clock });
     const firstBuilt = (await storedIndex(kv)).built_at;
     const firstPatternsBuilt = await storedPatternsBuilt(kv);
-    expect(first.meta.kv_writes).toBe(25);
+    expect(first.meta.kv_writes).toBe(26);
 
     kv.putOptions.length = 0;
     const second = await run(officialTable(), { kv, authenticated: true, now: clock });
@@ -1076,8 +1078,8 @@ describe("the write budget", () => {
     const { meta } = await run(officialTable(), { kv, authenticated: true });
 
     expect(meta.kv_skipped).toBe(0);
-    expect(meta.kv_writes).toBe(25);
-    expect(kv.putOptions).toHaveLength(26);
+    expect(meta.kv_writes).toBe(26);
+    expect(kv.putOptions).toHaveLength(27);
   });
 });
 

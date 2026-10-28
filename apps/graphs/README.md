@@ -127,6 +127,18 @@ repository it did not reach, and never shrinks the catalogue. `GET
 the run ended early, or `null`), so a truncated run is visible without
 `wrangler tail`.
 
+The visit is incremental: one KV key, `index:repos:v1`, remembers each
+repository's `pushed_at` and when a run last visited it, and a run visits
+only the repositories that changed or were never read — pending ones oldest
+visit first (never visited before anything else), so a run cut short by the
+budget is resumed by the next one and no repository starves, while an
+unchanged catalogue costs the official read plus discovery. Unchanged
+repositories keep their entries with a star count refreshed from the search
+hit at no cost; the official repository is still read in full on every run.
+`GET /api/index-status` shows `repos_visited` (visited this run),
+`repos_unchanged` (skipped) and `repos_pending` (left for later runs), and
+`truncated` is true while any repository is still pending.
+
 ## Agent discovery
 
 The catalogue is a public index agents should read, so it speaks the same

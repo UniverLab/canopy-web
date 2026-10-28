@@ -134,6 +134,12 @@ export interface IndexMeta {
   blocked: number;
   invalid: IndexInvalid[];
   truncated: boolean;
+  /** Pending repositories left for later runs: never visited, or pushed since. */
+  repos_pending: number;
+  /** Repositories skipped as unchanged: the hit's `pushed_at` matches the visit. */
+  repos_unchanged: number;
+  /** Community repositories visited this run. */
+  repos_visited: number;
   /** Why the run stopped early, or null when it read everything it reached. */
   stopped: string | null;
   authenticated: boolean;
@@ -415,6 +421,12 @@ export function parseMeta(text: string): IndexMeta | null {
       return parsedEntry === null ? [] : [parsedEntry];
     }),
     truncated: value["truncated"],
+    // Written since the incremental visit shipped; a meta from before it
+    // reads as zero on all three instead of turning /api/index-status into
+    // a 503.
+    repos_pending: isNumber(value["repos_pending"]) ? value["repos_pending"] : 0,
+    repos_unchanged: isNumber(value["repos_unchanged"]) ? value["repos_unchanged"] : 0,
+    repos_visited: isNumber(value["repos_visited"]) ? value["repos_visited"] : 0,
     stopped: isString(value["stopped"]) ? value["stopped"] : null,
     authenticated: value["authenticated"],
     // Written since the write budget shipped; a meta from before it reads as

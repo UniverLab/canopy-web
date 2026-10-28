@@ -466,6 +466,9 @@ export function openApiDocument(): Record<string, unknown> {
             "blocked",
             "invalid",
             "truncated",
+            "repos_pending",
+            "repos_unchanged",
+            "repos_visited",
             "stopped",
             "authenticated",
             "kv_writes",
@@ -495,6 +498,15 @@ export function openApiDocument(): Record<string, unknown> {
               },
             },
             truncated: { type: "boolean" },
+            repos_pending: {
+              type: "integer",
+              description: "Pending repositories left for later runs: never visited, or pushed since.",
+            },
+            repos_unchanged: {
+              type: "integer",
+              description: "Repositories skipped as unchanged this run.",
+            },
+            repos_visited: { type: "integer", description: "Community repositories visited this run." },
             stopped: {
               type: ["string", "null"],
               description: "Why the run stopped early, or null when it read everything it reached.",
