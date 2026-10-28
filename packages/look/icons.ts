@@ -1,0 +1,98 @@
+// SPDX-License-Identifier: Apache-2.0
+/**
+ * The lab's icon vocabulary: every Lucide icon both apps use, imported one
+ * by one so a bundler keeps only the ones a page reaches, and re-exported
+ * under the lab's own camelCase names. Nothing else imports "lucide" — the
+ * apps and the kit's own helpers read icons through this module.
+ *
+ * The data is Lucide's `IconNode`: a list of `[tag, attrs]` pairs drawn on
+ * the 24 × 24 grid. Icons are data, not components: the catalogue renders
+ * them to strings (icon-svg.ts) and the remote morphs them (icons-dom.ts).
+ * Licences: Lucide is ISC, morphicons (the morpher) MIT — see
+ * THIRD_PARTY_NOTICES.md at the repository root.
+ */
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowRightToLine,
+  ArrowUp,
+  ArrowUpRight,
+  BadgeCheck,
+  Blocks,
+  BookOpen,
+  Bot,
+  Box,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Circle,
+  CircleDot,
+  Copy,
+  CornerDownLeft,
+  Flag,
+  Folder,
+  FolderOpen,
+  Github,
+  Loader,
+  Minus,
+  PencilRuler,
+  Plus,
+  Search,
+  Send,
+  Square,
+  SquareTerminal,
+  Star,
+  Terminal,
+  Timer,
+  TriangleAlert,
+  Upload,
+  Wifi,
+  WifiOff,
+  Workflow,
+  X,
+  Zap,
+} from "lucide";
+
+export {
+  ArrowDown as arrowDown,
+  ArrowLeft as arrowLeft,
+  ArrowRight as arrowRight,
+  ArrowRightToLine as arrowRightToLine,
+  ArrowUp as arrowUp,
+  ArrowUpRight as arrowUpRight,
+  BadgeCheck as badgeCheck,
+  Blocks as blocks,
+  BookOpen as bookOpen,
+  Bot as bot,
+  Box as box,
+  Check as check,
+  ChevronLeft as chevronLeft,
+  ChevronRight as chevronRight,
+  Circle as circle,
+  CircleDot as circleDot,
+  Copy as copy,
+  CornerDownLeft as cornerDownLeft,
+  Flag as flag,
+  Folder as folder,
+  FolderOpen as folderOpen,
+  Github as github,
+  Loader as loader,
+  Minus as minus,
+  PencilRuler as pencilRuler,
+  Plus as plus,
+  Search as search,
+  Send as send,
+  Square as square,
+  SquareTerminal as squareTerminal,
+  Star as star,
+  Terminal as terminal,
+  Timer as timer,
+  TriangleAlert as triangleAlert,
+  Upload as upload,
+  Wifi as wifi,
+  WifiOff as wifiOff,
+  Workflow as workflow,
+  X as x,
+  Zap as zap,
+};

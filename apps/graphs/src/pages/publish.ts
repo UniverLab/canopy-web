@@ -61,6 +61,7 @@ import {
 import { type Page } from "./layout.js";
 import { copyButton } from "./look.js";
 import { escapeHtml } from "./md.js";
+import { iconSvg } from "../../../../packages/look/icon-svg.js";
 
 /** One prose paragraph: escaped, with `spans` set as inline code. */
 function para(text: string, spans: string[] = []): string {
@@ -72,11 +73,14 @@ function para(text: string, spans: string[] = []): string {
   return `<p>${out}</p>`;
 }
 
-/** One prose paragraph with links: each label becomes an anchor. */
+/** One prose paragraph with links: each label becomes an anchor, arrowed
+ * because every link this page carries leaves for another site. */
 function paraLinks(text: string, links: Array<{ label: string; href: string }>): string {
   let out = escapeHtml(text);
   for (const { label, href } of links) {
-    const anchor = `<a href="${escapeHtml(href)}" rel="nofollow">${escapeHtml(label)}</a>`;
+    const anchor =
+      `<a href="${escapeHtml(href)}" rel="nofollow">${escapeHtml(label)}` +
+      `${iconSvg("arrowUpRight")}</a>`;
     out = out.replace(escapeHtml(label), () => anchor);
   }
   return `<p>${out}</p>`;
@@ -238,7 +242,7 @@ export function publishPage(): Page {
   ];
 
   const html = [
-    `<h1 class="doc-title">${escapeHtml(PUBLISH_TITLE)}</h1>`,
+    `<h1 class="doc-title">${iconSvg("pencilRuler")}<span>${escapeHtml(PUBLISH_TITLE)}</span></h1>`,
     `<p class="description">${escapeHtml(PUBLISH_LEDE)}</p>`,
     ...sections.flatMap((section) => [
       `<h2 class="kicker">${escapeHtml(section.heading)}</h2>`,

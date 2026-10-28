@@ -76,7 +76,8 @@ describe("route snapshots", () => {
     const html = await (await call("/")).text();
     expect(html).toMatchSnapshot();
     expect(html).toContain(`<label class="sr-only" for="q">${SEARCH_LABEL}</label>`);
-    expect(html).toContain(`<button type="submit">${SEARCH_BUTTON}</button>`);
+    expect(html).toContain(`<button type="submit">`);
+    expect(html).toContain(`<span>${SEARCH_BUTTON}</span></button>`);
     expect(html).toContain(`<a href="/search?sort=top">`);
     expect(html).toContain(`<a href="/search?sort=new">`);
   });
@@ -346,8 +347,10 @@ describe("the page shell", () => {
         { url: "analytics_engine/sql", status: 200, body: { data: [{ index: "UniverLab/canopy-graphs/graph/hello-graph", count: 12 }] } },
       ],
     })).text();
-    expect(html).toContain("<dt>Stars</dt><dd>7 stars</dd>");
-    expect(html).toContain(`<a class="button" href="https://github.com/UniverLab/canopy-graphs">Star on GitHub</a>`);
+    expect(html).toMatch(/<dt>Stars<\/dt><dd><svg[\s\S]*?<\/svg> 7 stars<\/dd>/);
+    expect(html).toMatch(
+      /<a class="button" href="https:\/\/github.com\/UniverLab\/canopy-graphs"><svg[\s\S]*?<\/svg><span>Star on GitHub<\/span><\/a>/,
+    );
     expect(html).toContain("<dt>Agent nodes</dt><dd>build, docs</dd>");
     expect(html).toContain("<dt>Nodes</dt><dd>agent 2 · check 1 · gate 1 · router 1</dd>");
     expect(html).toContain("<dt>Edges</dt><dd>5 edges · 1 fail</dd>");
@@ -364,7 +367,9 @@ describe("the page shell", () => {
   it("gives the community graph the owner/repo/slug ref", async () => {
     const html = await (await call("/g/acme/things/flow", { stubs: searchStubs() })).text();
     expect(html).toContain("canopy graph install acme/things/flow");
-    expect(html).toContain(`<a class="button" href="https://github.com/acme/things">Star on GitHub</a>`);
+    expect(html).toMatch(
+      /<a class="button" href="https:\/\/github.com\/acme\/things"><svg[\s\S]*?<\/svg><span>Star on GitHub<\/span><\/a>/,
+    );
   });
 
   it("serves the short official form and the long one identically", async () => {
@@ -381,10 +386,11 @@ describe("the technical index", () => {
     expect(html).toContain(`<li class="row">`);
     expect(html).not.toContain(`doc-list`);
     expect(html).toContain(`<a class="row-name" href="/g/hello-graph">hello-graph</a>`);
-    expect(html).toContain(`<span class="kind">graph</span>`);
-    expect(html).toContain(`<span class="kind">node</span>`);
+    // The kind chip carries its icon and the word: graph flows, node is a box.
+    expect(html).toMatch(/<span class="kind"><svg[\s\S]*?<\/svg><span>graph<\/span><\/span>/);
+    expect(html).toMatch(/<span class="kind"><svg[\s\S]*?<\/svg><span>node<\/span><\/span>/);
     expect(html).toContain(`<span class="row-meta">5 nodes</span>`);
-    expect(html).toContain(`<span class="row-meta">7 stars</span>`);
+    expect(html).toMatch(/<span class="row-meta"><svg[\s\S]*?<\/svg> 7 stars<\/span>/);
     expect(html).toContain(`<code>canopy graph install hello-graph</code>`);
     expect(html).toContain(`<code>canopy node install hello-node</code>`);
     // Rows are separated by a rule, with no card background.
@@ -451,8 +457,11 @@ describe("the header band", () => {
     const header = html.slice(html.indexOf(`<header class="site-header">`), html.indexOf(`</header>`));
     expect(header).toContain(`<a class="wordmark" href="https://univerlab.org/canopy/">graphs</a>`);
     expect(header).toContain(`<form class="search"`);
-    expect(header).toContain(`<a href="/publish">Publish</a>`);
-    expect(header).toContain(`<a href="https://github.com/UniverLab/canopy-web">Source</a>`);
+    // Publish wears the upload arrow, Source the GitHub mark.
+    expect(header).toMatch(/<a href="\/publish"><svg[\s\S]*?<\/svg><span>Publish<\/span><\/a>/);
+    expect(header).toMatch(
+      /<a href="https:\/\/github.com\/UniverLab\/canopy-web"><svg[\s\S]*?<\/svg><span>Source<\/span><\/a>/,
+    );
     expect(header).toContain(`<div class="fondo" id="fondo" aria-hidden="true"></div>`);
     // The band is 160 px on desktop, 120 px on mobile, clipping the honeycomb.
     expect(html).toMatch(/\.site-header \{[^}]*height: 120px;[^}]*overflow: hidden;/);
@@ -473,7 +482,7 @@ describe("the README section", () => {
 
   it("omits the README section when the README is empty, in HTML and in the twin", async () => {
     const html = await (await call("/n/hello-node")).text();
-    expect(html).not.toContain(`>README</h2>`);
+    expect(html).not.toContain(`>README</span></h2>`);
     expect(html).not.toContain(`<div class="readme">`);
     const twin = await (await call("/n/hello-node", { accept: "text/markdown" })).text();
     expect(twin).not.toContain(`## README`);
@@ -486,7 +495,7 @@ describe("the README section", () => {
         : stub,
     );
     const html = await (await call("/g/hello-graph", { stubs })).text();
-    expect(html).not.toContain(`>README</h2>`);
+    expect(html).not.toContain(`>README</span></h2>`);
     expect(html).not.toContain(`<div class="readme">`);
     const twin = await (await call("/g/hello-graph", { stubs, accept: "text/markdown" })).text();
     expect(twin).not.toContain(`## README`);
@@ -543,7 +552,7 @@ describe("routing", () => {
     const html = await (await call("/g/acme/things/flow", {
       stubs: [...officialStubs(), ...communityStubs(), ...flowSearchStubs()],
     })).text();
-    expect(html).toContain("<dt>Stars</dt><dd>2 stars</dd>");
+    expect(html).toMatch(/<dt>Stars<\/dt><dd><svg[\s\S]*?<\/svg> 2 stars<\/dd>/);
     expect(html).toContain("<dt>Ref</dt><dd>main</dd>");
   });
 });
@@ -571,7 +580,7 @@ describe("what this runs", () => {
   it("shows every command verbatim and every prompt readable, before the README", async () => {
     const html = await (await call("/g/acme/things/flow", { stubs: searchStubs() })).text();
     expect(html).toContain(`<section class="runs" id="what-this-runs">`);
-    expect(html).toContain(`<h2 class="kicker">What this runs</h2>`);
+    expect(html).toMatch(/<h2 class="kicker"><svg[\s\S]*?<\/svg><span>What this runs<\/span><\/h2>/);
     expect(html).toContain(`Runs 2 shell commands and 4 agent instructions on your machine.`);
     // Commands stay expanded, titled by node or hook.
     expect(html).toContain(`node &quot;tests&quot;`);
@@ -619,7 +628,7 @@ describe("what this runs", () => {
     expect(html).toContain(`<span class="run-preview">one\ntwo\nthree</span>`);
     expect(html).toContain(`<pre class="run-prompt-text"><code>one\ntwo\nthree\nfour</code></pre>`);
     // The section reads before the README.
-    expect(html.indexOf(`id="what-this-runs"`)).toBeLessThan(html.indexOf(`>README</h2>`));
+    expect(html.indexOf(`id="what-this-runs"`)).toBeLessThan(html.indexOf(`>README</span></h2>`));
   });
 
   it("names a builtin preset instead of its text", async () => {
@@ -739,8 +748,9 @@ describe("the report links", () => {
       "hello-graph",
       "https://graphs.univerlab.org/g/hello-graph",
     );
-    expect(html).toContain(`<dt>${REPORT_LABEL}</dt><dd><a href="${escapeHtml(report)}"`);
-    expect(html).toContain(`target="_blank" rel="noopener noreferrer">${REPORT_LABEL}</a>`);
+    expect(html).toContain(`<dt>${REPORT_LABEL}</dt><dd><svg`);
+    expect(html).toContain(`<a href="${escapeHtml(report)}"`);
+    expect(html).toContain(`target="_blank" rel="noopener noreferrer">${REPORT_LABEL}<svg`);
     // The attribute is escaped once, for HTML; the URL itself carries `&`.
     expect(html).toContain("&amp;kind=graph&amp;source=UniverLab%2Fcanopy-graphs");
     expect(report).toContain("&kind=graph&source=UniverLab%2Fcanopy-graphs");
@@ -761,7 +771,7 @@ describe("the report links", () => {
     );
     expect(html).toContain(`href="${escapeHtml(report)}"`);
     expect(html).toContain(
-      `<a href="${REPORT_REPOSITORY_HREF}" target="_blank" rel="noopener noreferrer">${REPORT_REPO_LABEL}</a>`,
+      `<a href="${REPORT_REPOSITORY_HREF}" target="_blank" rel="noopener noreferrer">${REPORT_REPO_LABEL}<svg`,
     );
     // An official page reports the document, never its own repository.
     const official = await (await call("/g/hello-graph")).text();
@@ -867,7 +877,7 @@ describe("the meaning tints", () => {
     expect(community).toContain(`<aside class="community-warning" role="note">`);
     expect(community).toContain("Community document.");
     const official = await (await call("/g/hello-graph")).text();
-    expect(official).toContain(`<span class="badge-official">Official</span>`);
+    expect(official).toMatch(/<span class="badge-official"><svg[\s\S]*?<\/svg><span>Official<\/span><\/span>/);
   });
 
   it("paints the calm 404 and the indexing 503 as error blocks", async () => {
@@ -911,13 +921,19 @@ describe("the meaning tints", () => {
 describe("official standing", () => {
   it("badges official rows and pages, sourcing community rows", async () => {
     const home = await (await call("/")).text();
-    expect(home).toContain(`<a class="row-name" href="/g/hello-graph">hello-graph</a><span class="badge-official">Official</span>`);
-    expect(home).toContain(`<a class="row-name" href="/n/hello-node">hello-node</a><span class="badge-official">Official</span>`);
+    expect(home).toMatch(
+      /<a class="row-name" href="\/g\/hello-graph">hello-graph<\/a><span class="badge-official"><svg[\s\S]*?<\/svg><span>Official<\/span><\/span>/,
+    );
+    expect(home).toMatch(
+      /<a class="row-name" href="\/n\/hello-node">hello-node<\/a><span class="badge-official"><svg[\s\S]*?<\/svg><span>Official<\/span><\/span>/,
+    );
     expect(home).not.toContain(`<span class="row-source">`);
     const search = await (await call("/search?q=flow&sort=top", { stubs: searchStubs() })).text();
     expect(search).toContain(`<span class="row-source">acme/things</span>`);
     const doc = await (await call("/g/hello-graph")).text();
-    expect(doc).toContain(`<h1 class="doc-title">hello-graph <span class="badge-official">Official</span></h1>`);
+    expect(doc).toMatch(
+      /<h1 class="doc-title">hello-graph <span class="badge-official"><svg[\s\S]*?<\/svg><span>Official<\/span><\/span><\/h1>/,
+    );
     const community = await (await call("/g/acme/things/flow", { stubs: searchStubs() })).text();
     expect(community).not.toContain(`<span class="badge-official">`);
   });

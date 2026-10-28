@@ -127,6 +127,39 @@ button.secondary {
   color: var(--ink);
 }
 
+/* Every icon is Lucide data drawn inline (packages/look/icon-svg.ts), in
+ * currentColor. A slot keeps its box while the path inside morphs, so an
+ * icon that changes meaning never moves the layout. */
+.icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  vertical-align: -0.15em;
+}
+
+.icon-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.icon-slot svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+button:has(.icon-slot) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
 input,
 select,
 textarea {
@@ -197,6 +230,9 @@ label > textarea {
 .topbar .host {
   min-width: 0;
   flex-shrink: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
 }
 
 .topbar .conn {
@@ -312,6 +348,14 @@ label > textarea {
   font-size: 0.8rem;
   color: var(--muted);
   flex-shrink: 0;
+}
+
+/* What the session is: bot, shell or the square a kill leaves. The dot
+ * beside it keeps saying whether it runs. */
+.session-kind {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--muted);
 }
 
 .dot {
@@ -461,6 +505,16 @@ label > textarea {
   font-size: 0.78rem;
   background: transparent;
   border-color: var(--tint-line);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+}
+
+/* The latch's circle, filled to a dot while the modifier is armed. */
+.keybar .key .latch-icon {
+  width: 12px;
+  height: 12px;
 }
 
 /* A latched Ctrl or Shift shows pressed until the next key releases it. */
@@ -525,6 +579,9 @@ label > textarea {
   padding: 0.5rem 0.75rem;
   margin: 0;
   font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .flash-ok[hidden] {
@@ -540,6 +597,12 @@ label > textarea {
   color: var(--accent-ink);
   border-color: transparent;
   margin-left: auto;
+}
+
+/* The Send icon's error state: the one icon that wears red, as the error
+ * blocks' label does. */
+.composer-send[data-state="error"] .icon-slot {
+  color: var(--err-label);
 }
 
 /* The yolo checkbox row in the New dialog: calm until checked,
@@ -805,7 +868,7 @@ label > textarea {
 #session-files {
   margin-left: auto;
   flex-shrink: 0;
-  min-height: 2.25rem;
+  min-height: 2.75rem;
   padding: 0.25rem 0.7rem;
   display: inline-flex;
   align-items: center;
@@ -834,8 +897,11 @@ label > textarea {
   display: none;
 }
 
-/* The 📎 count a row carries when its shelf holds files. */
+/* The folder-and-count a row carries when its shelf holds files. */
 .session-files {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
   font-family: var(--font-mono);
   font-size: 0.8rem;
   color: var(--muted);
@@ -972,8 +1038,8 @@ label > textarea {
 }
 
 .viewer-bar button {
-  min-width: 2.5rem;
-  min-height: 2.5rem;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
   padding: 0.4rem 0.6rem;
 }
 
@@ -998,7 +1064,7 @@ label > textarea {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  min-height: 2.5rem;
+  min-height: 2.75rem;
   padding: 0.4rem 0.75rem;
   border-radius: var(--radius);
   background: var(--tint-info);

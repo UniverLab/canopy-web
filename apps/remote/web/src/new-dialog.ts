@@ -19,6 +19,7 @@ import { classifyDraftError } from "./draft.js";
 import { newReqId } from "./protocol.js";
 import type { SessionItem, SpawnKind, SpawnRequest } from "./protocol.js";
 import { Sheet, esc } from "./sheet.js";
+import { icon } from "./icons-dom.js";
 
 export interface NewDialogCallbacks {
   /** Returns false when the frame could not be sent (no connection). */
@@ -213,7 +214,7 @@ export class NewDialog {
       .map((dir) => `<option value="${esc(dir)}"></option>`)
       .join("");
     return `
-        <label>Directory
+        <label>${icon("folder")}Directory
           <input id="new-directory" name="directory" autocomplete="off" spellcheck="false"
             placeholder="/home/user/project" list="new-directory-list" value="${esc(this.form.directory)}">
         </label>
@@ -229,7 +230,7 @@ export class NewDialog {
           <select id="new-cli" name="cli"${clis.length === 0 ? " disabled" : ""}>${this.cliOptions()}</select>
         </label>
         ${this.directoryField()}
-        <label class="yolo-row"><input type="checkbox" id="new-yolo"${this.form.yolo ? " checked" : ""}${supported ? "" : " disabled"}> Yolo (skip approval prompts)</label>
+        <label class="yolo-row"><input type="checkbox" id="new-yolo"${this.form.yolo ? " checked" : ""}${supported ? "" : " disabled"}> ${icon("zap")}Yolo (skip approval prompts)</label>
         <p class="yolo-hint" id="new-yolo-hint"${supported ? " hidden" : ""}>${esc(YOLO_HINT)}</p>
         <label>Name (optional)
           <input id="new-name" name="name" autocomplete="off" value="${esc(this.form.name)}">

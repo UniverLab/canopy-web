@@ -18,6 +18,7 @@
  */
 import { COPY_ARIA, COPY_BUTTON, COPY_DONE } from "./copy.js";
 import { escapeHtml } from "./md.js";
+import { iconSvg } from "../../../../packages/look/icon-svg.js";
 
 /**
  * The kit's stylesheets, in load order: tokens first (the variables the
@@ -71,6 +72,16 @@ body {
 a { color: var(--teal); text-underline-offset: 0.15em; }
 a:hover { text-decoration-thickness: 2px; }
 :focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+
+/* Every icon is Lucide data drawn inline (packages/look/icon-svg.ts): one
+ * box, currentColor, no font and no request. The slot keeps the box fixed
+ * while its path morphs (the Copy button). */
+.icon { display: inline-block; width: 16px; height: 16px; flex: none; vertical-align: -0.15em; }
+.icon-slot { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; }
+.icon-slot svg, .icon-slot morph-icon { display: block; }
+.copy, .search button, .site-nav a, .button { display: inline-flex; align-items: center; gap: 0.4rem; }
+.copy-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; }
+.copy-icon svg, .copy-icon morph-icon { display: block; }
 .look-shell { min-height: 100vh; }
 
 .site-header {
@@ -159,7 +170,16 @@ main.look-col { max-width: 1120px; margin: 0 auto; padding: 1.5rem 1rem 3.5rem; 
 h1, h2, h3 { font-weight: 400; line-height: 1.25; color: var(--ink-hi); }
 h1 { margin: 0 0 1rem; font-family: var(--font-mono); font-size: 1.05rem; }
 .index-title { font-family: var(--font-mono); font-size: 1.05rem; margin: 0 0 1rem; }
-.doc-title { font-family: var(--font-display); font-size: clamp(1.7rem, 5vw, 2.3rem); margin: 0 0 0.5rem; }
+.doc-title {
+  font-family: var(--font-display);
+  font-size: clamp(1.7rem, 5vw, 2.3rem);
+  margin: 0 0 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.doc-title .icon { width: 24px; height: 24px; }
 .kicker {
   margin: 0;
   font-family: var(--font-mono);
@@ -168,6 +188,9 @@ h1 { margin: 0 0 1rem; font-family: var(--font-mono); font-size: 1.05rem; }
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--surface-ink-dim);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 h2.kicker { margin: 2rem 0 0.75rem; }
 h3.kicker { margin: 1.25rem 0 0.5rem; }
@@ -216,6 +239,9 @@ li.row {
 }
 .row-name:hover { text-decoration: underline; text-decoration-color: var(--teal); }
 .kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
   padding: 0.05rem 0.4rem;
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-ctl);
@@ -279,6 +305,9 @@ li.row {
   cursor: pointer;
 }
 .copy:hover { border-color: var(--teal); }
+/* The word swaps between Copy and Copied without resizing the button, so
+ * neither the icon nor the row moves while the icon morphs. */
+.copy-text { display: inline-block; min-width: 3.4rem; }
 
 .doc-cols { display: flex; flex-direction: column; gap: 1.5rem; margin: 1rem 0 1.5rem; }
 dl.sheet {
@@ -357,7 +386,9 @@ figure.plate {
 .busy-error p { color: var(--surface-ink); }
 
 .badge-official {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
   padding: 0.05rem 0.4rem;
   background: var(--tint-ok);
   border: 1px solid var(--tint-line);
@@ -369,7 +400,8 @@ figure.plate {
   text-transform: uppercase;
   white-space: nowrap;
 }
-.doc-title .badge-official { margin-left: 0.6rem; font-size: 0.8rem; vertical-align: middle; }
+.badge-official .icon { width: 14px; height: 14px; }
+.doc-title .badge-official { font-size: 0.8rem; }
 .row-source { color: var(--surface-ink-dim); }
 
 .community-warning {
@@ -382,8 +414,14 @@ figure.plate {
   font-family: var(--font-body);
   font-size: 1.05rem;
   line-height: 1.6;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
 }
 .community-warning p { margin: 0; }
+/* The one icon with an ink of its own: the warning triangle, red on the
+ * warn tint. Everything else follows currentColor. */
+.community-warning .icon { color: var(--warn-icon); margin-top: 0.35rem; }
 .install-review { margin: 0.4rem 0 0; font-family: var(--font-mono); font-size: 0.78rem; color: var(--surface-ink-dim); }
 
 .runs-summary { font-family: var(--font-mono); font-size: 0.85rem; }
@@ -447,6 +485,9 @@ details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 @media (max-width: 639px) {
   .plate .plate-h { display: none; }
   .plate .plate-v { display: block; }
+  /* Phones: every control that holds an icon alone is a 44 × 44 target. */
+  .copy { min-width: 44px; min-height: 44px; justify-content: center; }
+  .search button, .site-nav a { min-height: 44px; }
 }
 @media (max-width: 899px) {
   .row-desc { order: 1; }
@@ -489,27 +530,33 @@ export function fondoScript(): string {
 }
 
 /**
- * The copy script, inline at the end of `<body>`: one delegated listener
- * for every `.copy` button, so the buttons stay plain, focusable
- * `type="button"` elements and the keyboard reaches them for free.
+ * The copy script, inline at the end of `<body>`: it hands the buttons to
+ * the kit's `/look/icons.js` bundle (the copy morph), which installs one
+ * delegated listener for every `.copy` button. The buttons stay plain,
+ * focusable `type="button"` elements, so the keyboard reaches them for free.
  */
 export function copyScript(): string {
   return (
     `(function(){` +
-    `document.addEventListener("click",function(event){` +
-    `var target=event.target;` +
-    `if(!target||!target.classList||!target.classList.contains("copy")){return}` +
-    `var command=target.getAttribute("data-copy")||"";` +
-    `if(navigator.clipboard){navigator.clipboard.writeText(command)}` +
-    `var original=target.textContent;` +
-    `target.textContent="${COPY_DONE}";` +
-    `window.setTimeout(function(){target.textContent=original},1500);` +
-    `});` +
+    `function start(){` +
+    `if(window.CanopyIcons&&window.CanopyIcons.mountCopyButtons){window.CanopyIcons.mountCopyButtons(document)}` +
+    `}` +
+    `if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",start)}else{start()}` +
     `})();`
   );
 }
 
-/** One copy button for an install command. */
+/**
+ * One copy button for an install command: the copy icon (which morphs into
+ * a check, see /look/icons.js) beside the word, and the word's swap. The
+ * label stays the same for assistive tech throughout.
+ */
 export function copyButton(command: string): string {
-  return `<button type="button" class="copy" data-copy="${escapeHtml(command)}" aria-label="${COPY_ARIA}">${COPY_BUTTON}</button>`;
+  return (
+    `<button type="button" class="copy" data-copy="${escapeHtml(command)}"` +
+    ` data-label="${COPY_BUTTON}" data-done="${COPY_DONE}" aria-label="${COPY_ARIA}">` +
+    `<span class="copy-icon" data-icon="copy">${iconSvg("copy")}</span>` +
+    `<span class="copy-text">${COPY_BUTTON}</span>` +
+    `</button>`
+  );
 }

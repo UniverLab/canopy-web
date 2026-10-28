@@ -77,6 +77,22 @@ describe("renderSessions", () => {
     expect(opened).toEqual(["s1"]);
   });
 
+  it("marks what each row is: bot, shell or the square of a dead one", () => {
+    const { root } = render([
+      item({ id: "agent", cli: "muse" }),
+      item({ id: "shell", cli: "" }),
+      item({ id: "dead", cli: "muse", status: "exited" }),
+    ]);
+    const kind = (id: string) =>
+      root.querySelector(`[data-session="${id}"] .session-kind`)?.getAttribute("data-kind");
+    expect(kind("agent")).toBe("bot");
+    expect(kind("shell")).toBe("squareTerminal");
+    expect(kind("dead")).toBe("square");
+    for (const id of ["agent", "shell", "dead"]) {
+      expect(root.querySelector(`[data-session="${id}"] .session-kind svg`), id).not.toBeNull();
+    }
+  });
+
   it("renders the dead dot for exited sessions", () => {
     const { root } = render([item({ status: "exited" })]);
     expect(root.querySelector(".dot-dead")).not.toBeNull();

@@ -25,6 +25,8 @@ export interface ShelfHandle {
   enabled: () => boolean;
   count: (key: ShelfKey) => number;
   unseen: (sessionId: string) => number;
+  /** True while the Files sheet is up (the Files button's folder opens). */
+  isOpen: () => boolean;
   open: (parent: HTMLElement, key: ShelfKey) => void;
   close: () => void;
 }
@@ -58,6 +60,8 @@ export class ShelfController implements ShelfHandle, ShelfFrames {
   private readonly stopSessions: (() => void) | null;
   private stopStore: (() => void) | null = null;
   private sheet: ShelfSheet | null = null;
+  /** The shell's listeners: store changes plus the sheet opening/closing. */
+  private readonly uiListeners = new Set<() => void>();
 
   constructor(deps: ShelfDeps) {
     this.send = deps.send;
@@ -82,11 +86,26 @@ export class ShelfController implements ShelfHandle, ShelfFrames {
   }
 
   subscribe(listener: () => void): () => void {
-    return this.store.subscribe(listener);
+    const stopStore = this.store.subscribe(listener);
+    this.uiListeners.add(listener);
+    return () => {
+      stopStore();
+      this.uiListeners.delete(listener);
+    };
+  }
+
+  private notifyUi(): void {
+    for (const listener of this.uiListeners) {
+      listener();
+    }
   }
 
   enabled(): boolean {
     return this.store.enabled;
+  }
+
+  isOpen(): boolean {
+    return this.sheet?.isOpen ?? false;
   }
 
   count(key: ShelfKey): number {
@@ -112,10 +131,12 @@ export class ShelfController implements ShelfHandle, ShelfFrames {
         if (this.sheet === sheet) {
           this.sheet = null;
         }
+        this.notifyUi();
       },
     });
     this.sheet = sheet;
     sheet.open(parent, key, key === null ? "Host shelf" : "Files");
+    this.notifyUi();
   }
 
   close(): void {

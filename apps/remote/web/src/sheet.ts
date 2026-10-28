@@ -4,6 +4,8 @@
 // fills. Esc and the close button call the owner's close; the shell closes
 // both sheets on any route change.
 
+import { icon } from "./icons-dom.js";
+
 export interface SheetOptions {
   /** Stable name used for ids and the data-sheet attribute. */
   kind: string;
@@ -61,7 +63,8 @@ export class Sheet {
     close.className = "sheet-close";
     close.id = `${this.kind}-close`;
     close.setAttribute("aria-label", "Close");
-    close.textContent = "×";
+    close.textContent = "";
+    close.innerHTML = icon("x");
     close.addEventListener("click", () => this.onClose());
     head.append(heading, close);
 

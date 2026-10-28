@@ -223,6 +223,96 @@ for (const viewport of VIEWPORTS) {
   }
 }
 
+for (const viewport of VIEWPORTS) {
+  test(`icons and the Copy morph at ${viewport.width}x${viewport.height}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto("/", { waitUntil: "load" });
+
+    // The header's icons are Lucide data drawn inline: currentColor, hidden
+    // from readers, and no font or sprite request anywhere.
+    const search = page.locator("header form.search button svg.icon");
+    await expect(search).toHaveCount(1);
+    await expect(search).toHaveAttribute("aria-hidden", "true");
+    await expect(search).toHaveAttribute("stroke", "currentColor");
+    await expect(search).toHaveAttribute("stroke-width", "1.75");
+    await expect(page.locator("header nav.site-nav svg.icon")).toHaveCount(2);
+    await expect(page.locator("link[rel='preload'][as='font']")).toHaveCount(0);
+    expect(
+      await page.evaluate(() =>
+        [...document.querySelectorAll("use")].filter((use) => use.getAttribute("href")?.startsWith("#")).length,
+      ),
+    ).toBe(0);
+
+    // Every row's kind chip carries its icon, the official badge its own.
+    await expect(page.locator("ol.index .kind svg.icon")).toHaveCount(2);
+    await expect(page.locator("ol.index .badge-official svg.icon")).toHaveCount(2);
+    await expect(page.locator("ol.index .row-meta svg.icon").first()).toBeVisible();
+
+    // The Copy button: the icon becomes a check on a successful copy, then
+    // goes back — and the icon's box never moves.
+    const button = page.locator("ol.index li.row .copy").first();
+    const icon = button.locator(".copy-icon");
+    await expect(icon).toHaveAttribute("data-icon", "copy");
+    const before = await icon.boundingBox();
+    const buttonBefore = await button.boundingBox();
+    expect(before).not.toBeNull();
+    await button.click();
+    await expect(icon).toHaveAttribute("data-icon", "check");
+    const during = await icon.boundingBox();
+    expect(during).toEqual(before);
+    // The confirmation word does not resize the button either.
+    expect(await button.boundingBox()).toEqual(buttonBefore);
+    const copied = await page.screenshot({ path: testInfo.outputPath(`copy-check-${viewport.label}.png`) });
+    await testInfo.attach(`copy-check-${viewport.label}`, { body: copied, contentType: "image/png" });
+    await expect(icon).toHaveAttribute("data-icon", "copy", { timeout: 4000 });
+    expect(await icon.boundingBox()).toEqual(before);
+
+    // Touch targets hold on a phone.
+    if (viewport.width < 640) {
+      const box = await button.boundingBox();
+      expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+      expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+    }
+
+    // No icon paints a colour of its own: all inherit currentColor, the
+    // warning triangle alone takes the warn ink.
+    const warning = await page.goto("/g/acme/evil/evil", { waitUntil: "load" });
+    expect(warning?.status()).toBe(200);
+    const warnIcon = page.locator("aside.community-warning svg.icon");
+    await expect(warnIcon).toHaveCount(1);
+    const warnInk = await warnIcon.evaluate((el) => getComputedStyle(el).color);
+    expect(warnInk).toBe("rgb(255, 107, 107)");
+    const follows = await page.evaluate(() =>
+      [...document.querySelectorAll("svg.icon")]
+        .filter((icon) => icon.closest("aside.community-warning") === null)
+        .every(
+          (icon) =>
+            getComputedStyle(icon).stroke ===
+            getComputedStyle(icon.parentElement ?? icon).color,
+        ),
+    );
+    expect(follows).toBe(true);
+    const shot = await page.screenshot({ fullPage: true, path: testInfo.outputPath(`icons-${viewport.label}.png`) });
+    await testInfo.attach(`icons-${viewport.label}`, { body: shot, contentType: "image/png" });
+  });
+}
+
+test("the copy morph jumps under prefers-reduced-motion", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/", { waitUntil: "load" });
+  const button = page.locator("ol.index li.row .copy").first();
+  const icon = button.locator(".copy-icon");
+  await button.click();
+  await expect(icon).toHaveAttribute("data-icon", "check");
+  // No in-between shapes: the path is the check from the first frame and
+  // stays byte-identical, where a spring would be repainting it.
+  const path = icon.locator("path");
+  const first = await path.getAttribute("d");
+  await page.waitForTimeout(400);
+  expect(await path.getAttribute("d")).toBe(first);
+});
+
 test("community runs section at 390x844", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/g/acme/evil/evil", { waitUntil: "load" });

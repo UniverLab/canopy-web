@@ -67,7 +67,7 @@ describe("Composer", () => {
     const ok = query(".composer-ok");
     expect((ok as HTMLElement).hidden).toBe(true);
     expect(composer.handleOk(req)).toBe(true);
-    expect(ok.textContent).toBe("Sent ✓");
+    expect(ok.textContent).toBe("Sent");
     expect((ok as HTMLElement).hidden).toBe(false);
     // Typing hides it again.
     query<HTMLTextAreaElement>(".composer-input").value = "more";
@@ -104,6 +104,44 @@ describe("Composer", () => {
     query<HTMLButtonElement>(".composer-send").click();
     expect(composer.handleError("internal trouble", null)).toBe(true);
     expect(query(".composer-error").textContent).toBe("internal trouble");
+  });
+
+  it("turns Send into a spinner, then a check on ok", () => {
+    const send = query<HTMLButtonElement>(".composer-send");
+    const icon = () => query(".composer-send .icon-slot").getAttribute("data-icon");
+    expect(icon()).toBe("send");
+    query<HTMLTextAreaElement>(".composer-input").value = "hello";
+    send.click();
+    expect(icon()).toBe("loader");
+    expect(send.dataset["state"]).toBe("sending");
+    expect(composer.handleOk(sent[0]?.req ?? "")).toBe(true);
+    expect(icon()).toBe("check");
+    expect(send.dataset["state"]).toBe("ready");
+    // The confirmation line wears the same check beside its word.
+    expect(query(".composer-ok svg")).not.toBeNull();
+    expect(query(".composer-ok").textContent).toBe("Sent");
+  });
+
+  it("turns Send into an x on error, red, and back when typing", () => {
+    const send = query<HTMLButtonElement>(".composer-send");
+    const icon = () => query(".composer-send .icon-slot").getAttribute("data-icon");
+    query<HTMLTextAreaElement>(".composer-input").value = "hello";
+    send.click();
+    expect(composer.handleError("host is gone", sent[0]?.req ?? "")).toBe(true);
+    expect(icon()).toBe("x");
+    expect(send.dataset["state"]).toBe("error");
+    query<HTMLTextAreaElement>(".composer-input").value = "hello again";
+    query<HTMLTextAreaElement>(".composer-input").dispatchEvent(new Event("input", { bubbles: true }));
+    expect(icon()).toBe("send");
+    expect(send.dataset["state"]).toBe("ready");
+  });
+
+  it("keeps the spinner while a prompt is still out", () => {
+    query<HTMLTextAreaElement>(".composer-input").value = "hello";
+    query<HTMLButtonElement>(".composer-send").click();
+    query<HTMLTextAreaElement>(".composer-input").value = "next";
+    query<HTMLTextAreaElement>(".composer-input").dispatchEvent(new Event("input", { bubbles: true }));
+    expect(query(".composer-send .icon-slot").getAttribute("data-icon")).toBe("loader");
   });
 
   it("opens the Builder", () => {

@@ -3,12 +3,13 @@
  * Copy the shared look kit (packages/look) into both apps' public folders
  * and bundle the honeycomb background for the catalogue Worker's pages.
  *
- *   apps/graphs/public/look/      tokens.css, fonts/, colophon/, banner/, fondo/assets/, fondo.js
+ *   apps/graphs/public/look/      tokens.css, fonts/, colophon/, banner/, fondo/assets/, fondo.js, icons.js
  *   apps/remote/web/public/look/  tokens.css, fonts/, colophon/, banner/, fondo/assets/
  *
  * The remote web app imports the kit's TypeScript sources directly through
  * Vite, so only the catalogue — whose pages are server-rendered strings —
- * needs the fondo.js bundle. Both destinations are generated and gitignored.
+ * needs the fondo.js and icons.js bundles. Both destinations are generated
+ * and gitignored.
  */
 import { copyFileSync, cpSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
@@ -70,11 +71,34 @@ export async function bundleFondo(outfile) {
   });
 }
 
+/**
+ * Bundle the catalogue's copy morph as one script the server-rendered pages
+ * load with a plain <script src>: `CanopyIcons.mountCopyButtons(document)`.
+ * It carries only the two icons the button morphs between plus morphicons'
+ * element; the remote imports the same sources through Vite instead.
+ *
+ * @param {string} outfile - the destination icons.js file
+ */
+export async function bundleIcons(outfile) {
+  await build({
+    entryPoints: [path.join(KIT, "morph-client.ts")],
+    bundle: true,
+    format: "iife",
+    globalName: "CanopyIcons",
+    platform: "browser",
+    target: "es2022",
+    minify: true,
+    logLevel: "silent",
+    outfile,
+  });
+}
+
 export async function buildLook() {
   for (const target of LOOK_TARGETS) {
     copyLook(target);
   }
   await bundleFondo(path.join(GRAPHS_LOOK, "fondo.js"));
+  await bundleIcons(path.join(GRAPHS_LOOK, "icons.js"));
 }
 
 const invoked =

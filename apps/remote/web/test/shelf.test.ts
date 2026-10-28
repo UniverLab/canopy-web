@@ -374,6 +374,25 @@ describe("shelf surfaces", () => {
     expect(cell?.querySelector(".shelf-caption")?.textContent).toBe(caption);
   });
 
+  it("opens the Files folder while its sheet is up", () => {
+    const { root, sessions, shelf, shell } = shellHarness();
+    sessions.replace([session("s1", "build")]);
+    shelf.handleHello(["shelf"]);
+    shell.showSession("s1", "build");
+    const folder = () => root.querySelector("#session-files-icon")?.getAttribute("data-icon");
+    expect(folder()).toBe("folder");
+    // The shell listens to the controller: opening and closing the sheet
+    // moves the icon, and the sheet's own Esc closes it.
+    const files = root.querySelector<HTMLButtonElement>("#session-files");
+    expect(files?.hidden).toBe(false);
+    files?.click();
+    expect(shelf.isOpen()).toBe(true);
+    expect(folder()).toBe("folderOpen");
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(shelf.isOpen()).toBe(false);
+    expect(folder()).toBe("folder");
+  });
+
   it("lists the host shelf row and per-session counts", () => {
     const { root, sessions, shelf, shell, sent } = shellHarness();
     sessions.replace([session("s1", "build")]);
@@ -395,8 +414,10 @@ describe("shelf surfaces", () => {
       id: "s1",
       items: [shelfItem({ file_id: "f1" }), shelfItem({ file_id: "f2" })],
     });
-    expect(root.querySelector("#host-shelf-row")?.textContent).toContain("📎 1");
-    expect(root.querySelector('[data-session="s1"] .session-files')?.textContent).toBe("📎 2");
+    // The count rides beside the folder icon, with no glyph in the text.
+    expect(root.querySelector("#host-shelf-row .session-files-count")?.textContent).toBe("1");
+    expect(root.querySelector('[data-session="s1"] .session-files-count')?.textContent).toBe("2");
+    expect(root.querySelector('[data-session="s1"] .session-files svg')).not.toBeNull();
 
     root.querySelector<HTMLButtonElement>("#host-shelf-row")?.click();
     expect(root.querySelector('[data-sheet="shelf"]')).not.toBeNull();

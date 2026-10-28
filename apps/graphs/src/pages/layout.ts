@@ -30,6 +30,7 @@ import {
 } from "./copy.js";
 import { AGENT_LINK_HEADER } from "../agent-files.js";
 import { renderColophon } from "../../../../packages/look/colophon/footer.js";
+import { iconSvg } from "../../../../packages/look/icon-svg.js";
 import { escapeHtml } from "./md.js";
 import { copyScript, fondoHost, fondoScript, lookCss, lookLinks } from "./look.js";
 
@@ -54,7 +55,7 @@ function searchForm(q: string): string {
     `<label class="sr-only" for="q">${SEARCH_LABEL}</label>` +
     `<input id="q" name="q" type="search" value="${escapeHtml(q)}" ` +
     `placeholder="${SEARCH_PLACEHOLDER}" autocomplete="off">` +
-    `<button type="submit">${SEARCH_BUTTON}</button>` +
+    `<button type="submit">${iconSvg("search")}<span>${SEARCH_BUTTON}</span></button>` +
     `</form>`
   );
 }
@@ -83,8 +84,8 @@ function htmlDocument(q: string, page: Page): string {
     `<div class="band-top">`,
     `<a class="wordmark" href="${CANOPY_HREF}">${escapeHtml(WORDMARK)}</a>`,
     `<nav class="site-nav" aria-label="Catalogue">`,
-    `<a href="${PUBLISH_HREF}">${PUBLISH_LABEL}</a>`,
-    `<a href="${SOURCE_HREF}">${SOURCE_LABEL}</a>`,
+    `<a href="${PUBLISH_HREF}">${iconSvg("upload")}<span>${PUBLISH_LABEL}</span></a>`,
+    `<a href="${SOURCE_HREF}">${iconSvg("github")}<span>${SOURCE_LABEL}</span></a>`,
     `</nav>`,
     `</div>`,
     searchForm(q),
@@ -96,6 +97,7 @@ function htmlDocument(q: string, page: Page): string {
     renderColophon({ product: COLOPHON_PRODUCT, exp: COLOPHON_EXP, links: COLOPHON_LINKS }),
     `</div>`,
     `<script src="/look/fondo.js" defer></script>`,
+    `<script src="/look/icons.js" defer></script>`,
     `<script>`,
     fondoScript(),
     `</script>`,

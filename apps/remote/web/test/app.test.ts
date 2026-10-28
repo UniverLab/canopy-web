@@ -231,6 +231,31 @@ describe("createShell", () => {
     expect(query(".topbar").getAttribute("data-conn")).toBe("retrying in 2s");
   });
 
+  it("draws the host link as wifi while connected and wifi-off otherwise", () => {
+    shell.showSessions();
+    shell.setHostLabel("Host one");
+    shell.setConnectionState("connected");
+    const slot = () => query("#conn-icon").getAttribute("data-icon");
+    expect(slot()).toBe("wifi");
+    expect(query("#conn-icon svg").getAttribute("stroke")).toBe("currentColor");
+    shell.setConnectionState("failed: host is gone");
+    expect(slot()).toBe("wifiOff");
+    // A full re-render mounts the same icon in the current state.
+    shell.showSessions();
+    expect(slot()).toBe("wifiOff");
+  });
+
+  it("draws the session bar's controls as icons, with their names", () => {
+    shell.showSession("s1", "build");
+    expect(query("#session-back").getAttribute("aria-label")).toBe("Back to sessions");
+    expect(query("#session-back svg")).not.toBeNull();
+    expect(query("#session-back").textContent).toBe("");
+    expect(query("#term-zoom-out svg")).not.toBeNull();
+    expect(query("#term-zoom-in svg")).not.toBeNull();
+    // Fit stays a word: it is a mode, not a direction.
+    expect(query("#term-fit").textContent).toBe("Fit");
+  });
+
   it("renders the colophon on sign-in and pair only", () => {
     shell.showSignIn();
     expect(root.querySelector("footer.look-colophon")?.textContent).toContain("Canopy remote");
@@ -522,7 +547,7 @@ describe("createShell", () => {
     shell.sheetSpawned(calls.spawns[0]?.req ?? "", "s9");
     shell.showSession("s9", "build");
     const flash = query("main.session-view > .flash-ok");
-    expect(flash.textContent).toBe("Session started ✓");
+    expect(flash.textContent).toBe("Session started");
     expect(flash.getAttribute("role")).toBe("status");
     // A later render of the same session shows no confirmation.
     shell.showSession("s9", "build");

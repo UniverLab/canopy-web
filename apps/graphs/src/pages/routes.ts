@@ -88,6 +88,7 @@ import {
 } from "./copy.js";
 import { page, type Page, withMarkdownFooter } from "./layout.js";
 import { renderBanner } from "../../../../packages/look/banner/banner.js";
+import { iconSvg, type IconName } from "../../../../packages/look/icon-svg.js";
 import { escapeHtml, renderMarkdown } from "./md.js";
 import { publishPage } from "./publish.js";
 import { docPath, docRef, pagePath, pageRef, type PageRef } from "./ref.js";
@@ -144,7 +145,7 @@ function readers(env: PageEnv, deps: PageDeps) {
 
 /** The cold-start 503: no index yet, back once the first run lands. */
 function indexing(req: Request): Response {
-  const response = page(req, calmPage(INDEXING_HEADING, INDEXING_BODY), 503);
+  const response = page(req, calmPage(INDEXING_HEADING, INDEXING_BODY, "timer"), 503);
   const headers = new Headers(response.headers);
   headers.set("retry-after", "120");
   return new Response(response.body, { status: response.status, headers });
@@ -173,13 +174,20 @@ function blockedPage(blocked: BlockedEntry): Page {
   };
 }
 
-function calmPage(heading: string, body: string): Page {
+function calmPage(heading: string, body: string, icon: IconName | null = null): Page {
+  const mark = icon === null ? "" : iconSvg(icon);
   return {
     title: heading,
     description: body,
-    html: `<section class="busy-error"><h1>${escapeHtml(heading)}</h1><p>${escapeHtml(body)}</p></section>`,
+    html: `<section class="busy-error"><h1>${mark}${escapeHtml(heading)}</h1><p>${escapeHtml(body)}</p></section>`,
     markdown: `# ${heading}\n\n${body}\n`,
   };
+}
+
+/** An external link: its words, then the arrow that says it leaves the site. */
+function externalLink(href: string, label: string, newTab = false): string {
+  const tab = newTab ? ` target="_blank" rel="noopener noreferrer"` : "";
+  return `<a href="${escapeHtml(href)}"${tab}>${escapeHtml(label)}${iconSvg("arrowUpRight")}</a>`;
 }
 
 /** The agent nodes a harness will have to run; empty for node documents. */
@@ -227,10 +235,13 @@ function harnessDots(harnesses: string[]): string {
 function docItem(doc: Doc): string {
   const install = installCommand(doc.kind, docRef(doc).ref);
   const standing = doc.official
-    ? `<span class="badge-official">${OFFICIAL_BADGE}</span>`
+    ? `<span class="badge-official">${iconSvg("badgeCheck")}<span>${OFFICIAL_BADGE}</span></span>`
     : `<span class="row-source">${escapeHtml(doc.repo)}</span>`;
+  const kind = `<span class="kind">${iconSvg(doc.kind === "graph" ? "workflow" : "box")}<span>${escapeHtml(doc.kind)}</span></span>`;
   const nodes = doc.kind === "graph" ? `<span class="row-meta">${countLine(NODES_LABEL, doc.nodeCount)}</span>` : "";
-  const stars = doc.stars === null ? "" : `<span class="row-meta">${escapeHtml(countLine(STARS_LABEL, doc.stars))}</span>`;
+  const stars = doc.stars === null
+    ? ""
+    : `<span class="row-meta">${iconSvg("star")} ${escapeHtml(countLine(STARS_LABEL, doc.stars))}</span>`;
   const updated = doc.updated === null
     ? ""
     : `<time class="row-meta" datetime="${escapeHtml(doc.updated)}">${escapeHtml(doc.updated)}</time>`;
@@ -241,7 +252,7 @@ function docItem(doc: Doc): string {
     `<li class="row">` +
     `<a class="row-name" href="${docPath(doc)}">${escapeHtml(doc.name)}</a>` +
     standing +
-    `<span class="kind">${escapeHtml(doc.kind)}</span>` +
+    kind +
     nodes +
     harnessDots(doc.harnesses) +
     stars +
@@ -360,7 +371,7 @@ function runsSectionHtml(kind: DocumentKind, document: JsonValue, community: boo
   const summaryClass = community ? "runs-summary runs-community" : "runs-summary";
   return [
     `<section class="runs" id="${RUNS_SECTION_ID}">`,
-    `<h2 class="kicker">${RUNS_HEADING}</h2>`,
+    `<h2 class="kicker">${iconSvg("terminal")}<span>${RUNS_HEADING}</span></h2>`,
     `<p class="${summaryClass}">${escapeHtml(runsSummary(runs.commands.length, runs.prompts.length))}</p>`,
     ...runs.commands.map(commandBlock),
     ...runs.prompts.map(promptBlock),
@@ -418,10 +429,11 @@ function pageUrlOf(ref: PageRef): string {
  */
 function datasheet(doc: Doc, document: JsonValue, ref: PageRef): { html: string; lines: string[] } {
   const install = installCommand(ref.kind, ref.ref);
+  const kindMark = iconSvg(ref.kind === "graph" ? "workflow" : "box");
   const fields: string[] = [
-    sheetField(SHEET_KIND, escapeHtml(ref.kind)),
+    sheetField(SHEET_KIND, `${kindMark} ${escapeHtml(ref.kind)}`),
     sheetField(SHEET_NAME, escapeHtml(doc.name)),
-    sheetField(SHEET_SOURCE, `<a href="${ref.repoUrl}">${escapeHtml(doc.repo)}</a>`),
+    sheetField(SHEET_SOURCE, externalLink(ref.repoUrl, doc.repo)),
   ];
   const lines = [
     `- ${SHEET_KIND}: ${ref.kind}`,
@@ -433,7 +445,7 @@ function datasheet(doc: Doc, document: JsonValue, ref: PageRef): { html: string;
     lines.push(`- ${SHEET_REF}: ${doc.sourceRef}`);
   }
   if (doc.stars !== null) {
-    fields.push(sheetField(SHEET_STARS, escapeHtml(countLine(STARS_LABEL, doc.stars))));
+    fields.push(sheetField(SHEET_STARS, `${iconSvg("star")} ${escapeHtml(countLine(STARS_LABEL, doc.stars))}`));
     lines.push(`- ${SHEET_STARS}: ${countLine(STARS_LABEL, doc.stars)}`);
   }
   if (ref.kind === "graph") {
@@ -471,19 +483,11 @@ function datasheet(doc: Doc, document: JsonValue, ref: PageRef): { html: string;
   // page's address, kind and source. A community page also points at
   // GitHub's own report form for the repository behind the document.
   const report = reportUrl(ref.kind, ref.owner, ref.repo, ref.slug, pageUrlOf(ref));
-  fields.push(
-    sheetField(
-      REPORT_LABEL,
-      `<a href="${escapeHtml(report)}" target="_blank" rel="noopener noreferrer">${escapeHtml(REPORT_LABEL)}</a>`,
-    ),
-  );
+  fields.push(sheetField(REPORT_LABEL, `${iconSvg("flag")} ${externalLink(report, REPORT_LABEL, true)}`));
   lines.push(`- ${REPORT_LABEL}: [${REPORT_LABEL}](${report})`);
   if (!doc.official) {
     fields.push(
-      sheetField(
-        REPORT_REPO_LABEL,
-        `<a href="${REPORT_REPOSITORY_HREF}" target="_blank" rel="noopener noreferrer">${escapeHtml(REPORT_REPO_LABEL)}</a>`,
-      ),
+      sheetField(REPORT_REPO_LABEL, externalLink(REPORT_REPOSITORY_HREF, REPORT_REPO_LABEL, true)),
     );
     lines.push(`- ${REPORT_REPO_LABEL}: ${REPORT_REPOSITORY_HREF}`);
   }
@@ -498,19 +502,23 @@ function datasheet(doc: Doc, document: JsonValue, ref: PageRef): { html: string;
 function documentPage(doc: Doc, document: JsonValue, ref: PageRef): Page {
   const install = installCommand(ref.kind, ref.ref);
   const sheet = datasheet(doc, document, ref);
-  const badge = doc.official ? ` <span class="badge-official">${OFFICIAL_BADGE}</span>` : "";
+  const badge = doc.official
+    ? ` <span class="badge-official">${iconSvg("badgeCheck")}<span>${OFFICIAL_BADGE}</span></span>`
+    : "";
   const warning = doc.official
     ? ""
-    : `<aside class="community-warning" role="note"><p>${communityWarningHtml(`#${RUNS_SECTION_ID}`)}</p></aside>`;
+    : `<aside class="community-warning" role="note">` +
+      `${iconSvg("triangleAlert")}<p>${communityWarningHtml(`#${RUNS_SECTION_ID}`)}</p></aside>`;
   const runs = runsSectionHtml(ref.kind, document, !doc.official);
   const readme = doc.readme.trim() === ""
     ? ""
-    : `<h2 class="kicker">${README_HEADING}</h2>\n<div class="readme">${renderMarkdown(doc.readme)}</div>`;
+    : `<h2 class="kicker">${iconSvg("bookOpen")}<span>${README_HEADING}</span></h2>\n` +
+      `<div class="readme">${renderMarkdown(doc.readme)}</div>`;
 
   const html = [
     `<h1 class="doc-title">${escapeHtml(doc.name)}${badge}</h1>`,
     `<p class="description">${escapeHtml(doc.description)}</p>`,
-    `<p><a class="button" href="${ref.repoUrl}">${STAR_BUTTON}</a></p>`,
+    `<p><a class="button" href="${ref.repoUrl}">${iconSvg("star")}<span>${STAR_BUTTON}</span></a></p>`,
     warning,
     `<div class="doc-cols">`,
     plateFigure(document, ref.kind),

@@ -241,6 +241,74 @@ test("terminal pans when zoomed", async ({ page }) => {
   expect(["auto", "scroll"]).toContain(pan.overflow);
 });
 
+for (const viewport of [
+  { label: "390x844", width: 390, height: 844 },
+  { label: "1280x900", width: 1280, height: 900 },
+] as const) {
+  test(`morphs the session's icons at ${viewport.label}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+
+    // The host chip reads the link: wifi while connected.
+    await expect(page.locator("#conn-icon")).toHaveAttribute("data-icon", "wifi");
+
+    const send = page.locator(".composer-send");
+    const icon = send.locator(".icon-slot");
+    await expect(icon).toHaveAttribute("data-icon", "send");
+    const before = await icon.boundingBox();
+    expect(before).not.toBeNull();
+
+    // Send → (loader while the frame is out) → check on the host's ok.
+    await page.locator(".composer-input").fill("do the thing");
+    await send.click();
+    await expect(icon).toHaveAttribute("data-icon", "check", { timeout: 10_000 });
+    await expect(page.locator(".composer-ok")).toContainText("Sent");
+    await expect(page.locator(".composer-ok svg.icon")).toBeVisible();
+    expect(await icon.boundingBox()).toEqual(before);
+    const sentShot = await page.screenshot({ path: testInfo.outputPath(`morph-sent-${viewport.label}.png`) });
+    await testInfo.attach(`morph-sent-${viewport.label}`, { body: sentShot, contentType: "image/png" });
+
+    // Error → x, and the one icon that wears red.
+    await page.evaluate(() => window.__fake.failNextPrompt("delivery_failed", "host is gone"));
+    await page.locator(".composer-input").fill("do it again");
+    await send.click();
+    await expect(icon).toHaveAttribute("data-icon", "x", { timeout: 10_000 });
+    expect(await icon.evaluate((el) => getComputedStyle(el).color)).toBe("rgb(255, 107, 107)");
+    expect(await icon.boundingBox()).toEqual(before);
+    const errorShot = await page.screenshot({ path: testInfo.outputPath(`morph-error-${viewport.label}.png`) });
+    await testInfo.attach(`morph-error-${viewport.label}`, { body: errorShot, contentType: "image/png" });
+
+    // The Ctrl latch: a circle that fills to a dot, in place.
+    const latch = page.locator('#keybar .key[data-key="ctrl"] .latch-icon');
+    await expect(latch).toHaveAttribute("data-icon", "circle");
+    const latchBefore = await latch.boundingBox();
+    await page.locator('#keybar .key[data-key="ctrl"]').click();
+    await expect(page.locator('#keybar .key[data-key="ctrl"]')).toHaveAttribute("aria-pressed", "true");
+    await expect(latch).toHaveAttribute("data-icon", "circleDot");
+    expect(await latch.boundingBox()).toEqual(latchBefore);
+    const latchShot = await page.screenshot({ path: testInfo.outputPath(`morph-latch-${viewport.label}.png`) });
+    await testInfo.attach(`morph-latch-${viewport.label}`, { body: latchShot, contentType: "image/png" });
+  });
+
+  test(`connects, kills and lists sessions with their icons at ${viewport.label}`, async ({ page }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    // The header says the link is up.
+    await expect(page.locator("#conn-icon")).toHaveAttribute("data-icon", "wifi");
+    await page.locator("#session-back").click();
+    // The session row says what it is, and New wears its plus.
+    await expect(page.locator('[data-session="smoke"] .session-kind')).toHaveAttribute("data-kind", "bot");
+    await expect(page.locator("#session-new svg.icon")).toBeVisible();
+    // A terminal spawned from the dialog is a square terminal.
+    await page.locator("#session-new").click();
+    await page.locator("#new-kind-terminal").check();
+    await page.locator("#new-directory").fill("/tmp");
+    await page.locator("#new-create").click();
+    await expect(page.locator("main.session-view")).toBeVisible();
+    await page.locator("#session-back").click();
+    const spawned = page.locator('[data-session="spawned-1"] .session-kind');
+    await expect(spawned).toHaveAttribute("data-kind", "squareTerminal");
+  });
+}
+
 test("sends key bar bytes as input", async ({ page }) => {
   await page.evaluate(() => window.__fake.clearSent());
   await page.locator('#keybar .key[data-key="tab"]').click();
@@ -278,7 +346,9 @@ test("spawns a terminal from the New dialog", async ({ page }) => {
   expect(spawn).not.toHaveProperty("prompt");
   expect(spawn).not.toHaveProperty("yolo");
   // The fake host answers spawned and the shell opens the session.
-  await expect(page.locator("main.session-view > .flash-ok")).toHaveText("Session started ✓");
+  await expect(page.locator("main.session-view > .flash-ok")).toHaveText("Session started");
+  // The confirmation's check is an icon beside the words.
+  await expect(page.locator("main.session-view > .flash-ok svg.icon")).toBeVisible();
 });
 
 test("composer sends a prompt and clears on ok", async ({ page }) => {
@@ -329,8 +399,11 @@ test("shelf badge, sheet and viewer at 390x844", async ({ page }, testInfo) => {
   });
   await testInfo.attach("shelf-badge-390x844", { body: pushedShot, contentType: "image/png" });
 
+  await expect(page.locator("#session-files-icon")).toHaveAttribute("data-icon", "folder");
   await page.locator("#session-files").click();
   await expect(page.locator(".shelf-cell")).toHaveCount(4);
+  // The folder opens with the sheet.
+  await expect(page.locator("#session-files-icon")).toHaveAttribute("data-icon", "folderOpen");
   // The shelf was looked at, so the badge clears as the sheet opens.
   await expect(badge).toBeHidden();
   // Two columns on a phone.
@@ -401,8 +474,10 @@ test("shelf grid, arrow steps and list counts at 1280x900", async ({ page }, tes
   // The session list carries the counts: one 📎 per row plus the host's own.
   await page.locator("#session-back").click();
   await expect(page.locator("#host-shelf-row")).toBeVisible();
-  await expect(page.locator("#host-shelf-row")).toContainText("📎 1");
-  await expect(page.locator('[data-session="smoke"]')).toContainText("📎 4");
+  await expect(page.locator("#host-shelf-row .session-files-count")).toHaveText("1");
+  await expect(page.locator('[data-session="smoke"] .session-files-count')).toHaveText("4");
+  // The count's folder is an icon, not a glyph in the text.
+  await expect(page.locator("#host-shelf-row .session-files svg.icon")).toBeVisible();
   const listShot = await page.screenshot({
     path: testInfo.outputPath("shelf-list-1280x900.png"),
   });

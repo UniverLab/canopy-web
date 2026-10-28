@@ -8,6 +8,7 @@
 import { Composer } from "./composer.js";
 import { CatalogStore } from "./catalog.js";
 import { Builder } from "./builder.js";
+import { icon, mountMorphSlot, type IconName, type MorphSlot } from "./icons-dom.js";
 import { renderKeyBar, updateKeyBarLatches } from "./keys.js";
 import { keyBytesWithModifiers, ModifierLatches, textBytesWithModifiers } from "./modifiers.js";
 import { NewDialog } from "./new-dialog.js";
@@ -130,6 +131,10 @@ export function createShell(
   let terminalView: TerminalView | null = null;
   let composer: Composer | null = null;
   let latestButton: HTMLButtonElement | null = null;
+  // The three state-telling slots: the host chip's link icon, the Files
+  // button's folder, and nothing else — the composer owns its Send.
+  let hostIcon: MorphSlot | null = null;
+  let shelfIcon: MorphSlot | null = null;
   // The one-shot spawn confirmation: set by sheetSpawned, consumed by the
   // session view's first render, so it shows exactly once.
   let spawnFlash: string | null = null;
@@ -165,12 +170,17 @@ export function createShell(
 
   const failed = () => connectionState.startsWith("failed:");
   const unpaired = () => connectionState === `failed: ${connectFailMessage("unknown_device")}`;
+  // A live link is the wifi arc; anything else (connecting, retrying,
+  // failed) is the crossed-out one, and the conn chip's word says which.
+  const linkIcon = (): IconName => (connectionState === "connected" ? "wifi" : "wifiOff");
 
   const header = (): string => `
     <header class="topbar" data-conn="${esc(connectionState)}">
       <span class="brand">remote</span>
       ${login === null ? "" : `<span class="login chip">${esc(login)}</span>`}
-      ${hostLabel === "" ? "" : `<span class="host chip">${esc(hostLabel)}</span>`}
+      ${hostLabel === "" ? "" : `<span class="host chip">` +
+        `<span class="icon-slot" id="conn-icon" data-morph="host" aria-hidden="true">${icon(linkIcon())}</span>` +
+        `${esc(hostLabel)}</span>`}
       <span class="conn chip" role="status">${esc(connectionState)}</span>
     </header>`;
 
@@ -331,7 +341,8 @@ export function createShell(
   };
 
   // The Files badge lives in the session bar; every shelf change either
-  // patches it (session route) or repaints the list (sessions route).
+  // patches it (session route) or repaints the list (sessions route). The
+  // folder icon opens while the sheet is up and closes when it goes.
   const syncFilesBadge = () => {
     const button = root.querySelector<HTMLElement>("#session-files");
     if (!button) {
@@ -339,6 +350,7 @@ export function createShell(
     }
     const enabled = shelf?.enabled() ?? false;
     button.hidden = !enabled;
+    shelfIcon?.to((shelf?.isOpen() ?? false) ? "folderOpen" : "folder");
     const badge = button.querySelector<HTMLElement>("#session-files-badge");
     if (!badge) {
       return;
@@ -356,6 +368,17 @@ export function createShell(
     newDialog.open(root);
   };
 
+  // The host chip's link icon: mounted after every render that carries the
+  // header, and patched in place while a connection change patches the chip.
+  const mountHeaderIcon = (): void => {
+    hostIcon?.destroy();
+    hostIcon = null;
+    const slot = root.querySelector<HTMLElement>("#conn-icon");
+    if (slot !== null) {
+      hostIcon = mountMorphSlot(slot, linkIcon());
+    }
+  };
+
   const openBuilder = () => {
     if (route !== "session") {
       return;
@@ -370,6 +393,8 @@ export function createShell(
     composer?.unmount();
     composer = null;
     latestButton = null;
+    shelfIcon?.destroy();
+    shelfIcon = null;
     sessionCols = 0;
     sessionRows = 0;
   };
@@ -382,13 +407,15 @@ export function createShell(
     root.innerHTML = `
     ${header()}
     <main class="session-view">
-      ${flash === null ? "" : `<p class="flash-ok" role="status">${esc(flash)}</p>`}
+      ${flash === null ? "" : `<p class="flash-ok" role="status">${icon("check")}<span>${esc(flash)}</span></p>`}
       ${connBanner()}
       <div class="session-bar">
-        <button type="button" id="session-back" aria-label="Back to sessions">‹</button>
+        <button type="button" id="session-back" aria-label="Back to sessions">${icon("chevronLeft")}</button>
         <span class="session-title">${esc(sessionName)}</span>
         <span class="session-exit" id="session-exit" hidden></span>
-        <button type="button" id="session-files" hidden>Files<span
+        <button type="button" id="session-files" hidden>
+          <span class="icon-slot" id="session-files-icon" data-morph="shelf" aria-hidden="true">${icon("folder")}</span>
+          <span>Files</span><span
           class="files-badge" id="session-files-badge" hidden
         ></span></button>
       </div>
@@ -396,8 +423,8 @@ export function createShell(
         <p class="term-placeholder">Attaching…</p>
       </div>
       <div class="term-controls">
-        <button type="button" id="term-zoom-out" aria-label="Zoom out">−</button>
-        <button type="button" id="term-zoom-in" aria-label="Zoom in">+</button>
+        <button type="button" id="term-zoom-out" aria-label="Zoom out">${icon("minus")}</button>
+        <button type="button" id="term-zoom-in" aria-label="Zoom in">${icon("plus")}</button>
         <button
           type="button"
           id="term-fit"
@@ -405,12 +432,16 @@ export function createShell(
           aria-label="Fit terminal to pane width"
           title="Fit the terminal to the pane width"
         >Fit</button>
-        <button type="button" id="term-latest" hidden>↓ latest</button>
+        <button type="button" id="term-latest" hidden aria-label="Scroll to the latest output">${icon("arrowDown")}<span>latest</span></button>
       </div>
       <div class="keybar" id="keybar"></div>
       <div class="composer-slot" id="composer-slot"></div>
     </main>`;
     wireConnBanner();
+    const filesIcon = root.querySelector<HTMLElement>("#session-files-icon");
+    if (filesIcon) {
+      shelfIcon = mountMorphSlot(filesIcon, "folder");
+    }
     root.querySelector("#session-back")?.addEventListener("click", () => callbacks.onLeaveSession());
     // The Files sheet only exists behind hello.features "shelf"; the
     // button itself is rendered hidden and syncFilesBadge reveals it.
@@ -485,6 +516,7 @@ export function createShell(
     } else {
       renderSession();
     }
+    mountHeaderIcon();
   };
 
   const stopStore = store.subscribe(() => {
@@ -587,11 +619,12 @@ export function createShell(
       if (route === "sessions" || route === "session") {
         // Never a full re-render here: it would drop the terminal and
         // the composer's draft. Only the header and the banner carry the
-        // state, so patch them in place.
+        // state, so patch them in place — the host chip's link icon too.
         const topbar = root.querySelector(".topbar");
         if (topbar) {
           topbar.setAttribute("data-conn", state);
         }
+        hostIcon?.to(linkIcon());
         const conn = root.querySelector(".topbar .conn");
         if (conn) {
           conn.textContent = state;
@@ -701,7 +734,7 @@ export function createShell(
         return;
       }
       closeSheets();
-      spawnFlash = "Session started ✓";
+      spawnFlash = "Session started";
       callbacks.onOpenSession(id);
     },
     sheetComposed(req: string, text: string): void {
@@ -721,6 +754,8 @@ export function createShell(
       stopShelf?.();
       closeSheets();
       teardownSessionWidgets();
+      hostIcon?.destroy();
+      hostIcon = null;
       composer?.unmount();
       composer = null;
     },

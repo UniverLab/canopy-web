@@ -11,6 +11,7 @@
 import type { ShelfItem } from "./protocol.js";
 import type { ShelfKey } from "./shelf-store.js";
 import { Sheet } from "./sheet.js";
+import { icon } from "./icons-dom.js";
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 6;
@@ -107,7 +108,7 @@ class ShelfViewer {
     prev.type = "button";
     prev.id = "shelf-prev";
     prev.setAttribute("aria-label", "Previous file");
-    prev.textContent = "‹";
+    prev.innerHTML = icon("chevronLeft");
     const caption = document.createElement("span");
     caption.className = "viewer-caption";
     caption.id = "shelf-caption";
@@ -118,7 +119,7 @@ class ShelfViewer {
     next.type = "button";
     next.id = "shelf-next";
     next.setAttribute("aria-label", "Next file");
-    next.textContent = "›";
+    next.innerHTML = icon("chevronRight");
     const link = document.createElement("a");
     link.className = "viewer-download";
     link.id = "shelf-download";
@@ -128,7 +129,7 @@ class ShelfViewer {
     close.className = "viewer-close";
     close.id = "shelf-viewer-close";
     close.setAttribute("aria-label", "Close");
-    close.textContent = "✕";
+    close.innerHTML = icon("x");
     bar.append(prev, caption, counter, next, link, close);
 
     overlay.append(stage, bar);

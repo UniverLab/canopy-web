@@ -6,6 +6,7 @@
 
 import { formatLastOutput, statusDot, workdirBasename } from "./protocol.js";
 import type { SessionItem } from "./protocol.js";
+import { icon } from "./icons-dom.js";
 
 export class SessionStore {
   private readonly items = new Map<string, SessionItem>();
@@ -100,15 +101,21 @@ export function renderSessions(
       return "";
     }
     const count = shelf.count(id);
-    return count === 0 ? "" : `<span class="session-files">📎 ${count}</span>`;
+    return count === 0
+      ? ""
+      : `<span class="session-files">${icon("folder")}<span class="session-files-count">${count}</span></span>`;
   };
   const rows = items
     .map((item) => {
       const cliModel = [item.cli, item.model].filter((part) => part !== "").join(" · ");
       const base = workdirBasename(item.workdir);
       const sub = [cliModel, base].filter((part) => part !== "").join(" · ");
+      // What the row is, at a glance: a dead session is the square the
+      // kill left behind, an agent is the bot, a shell its own terminal.
+      const mark = statusDot(item.status) === "dead" ? "square" : item.cli === "" ? "squareTerminal" : "bot";
       return (
         `<li><button type="button" class="session-row" data-session="${esc(item.id)}">` +
+        `<span class="session-kind" data-kind="${mark}" aria-hidden="true">${icon(mark)}</span>` +
         `<span class="dot dot-${esc(statusDot(item.status))}" title="${esc(item.status)}" aria-hidden="true"></span>` +
         `<span class="session-main"><span class="session-name">${esc(item.name || item.id)}</span>` +
         (sub === "" ? "" : `<span class="session-sub">${esc(sub)}</span>`) +
@@ -123,14 +130,16 @@ export function renderSessions(
   const shelfOn = shelf?.enabled === true && shelf.hostCount > 0;
   const shelfRow = shelfOn && shelf
     ? `<li><button type="button" class="session-row shelf-row" id="host-shelf-row">` +
+      `<span class="session-kind" data-kind="folderOpen" aria-hidden="true">${icon("folderOpen")}</span>` +
       `<span class="session-main"><span class="session-name">Shelf</span>` +
       `<span class="session-sub">Files the host sent</span></span>` +
-      `<span class="session-files">📎 ${shelf.hostCount}</span></button></li>`
+      `<span class="session-files">${icon("folderOpen")}` +
+      `<span class="session-files-count">${shelf.hostCount}</span></span></button></li>`
     : "";
   const list = items.length === 0 && shelfRow === "";
   root.innerHTML =
     `<div class="sessions-head"><h2>Sessions</h2>` +
-    `<button type="button" id="session-new">New session</button></div>` +
+    `<button type="button" id="session-new">${icon("plus")}<span>New session</span></button></div>` +
     (list ? `<p class="empty">No sessions on this host.</p>` : `<ul class="session-list">${shelfRow}${rows}</ul>`);
   root.querySelector("#session-new")?.addEventListener("click", () => callbacks.onNew());
   if (shelfOn) {

@@ -51,6 +51,10 @@ html[data-surface='tui'] {
   /* The error label ink, on the error tint. */
   --err-label: #ff6b6b;
 
+  /* The warning icon ink: the same red, on the warn tint — the one icon
+   * allowed a colour of its own. */
+  --warn-icon: #ff6b6b;
+
   /* The Canopy experiment essence and the honeycomb comb teal. */
   --canopy: #00a9a0;
   --teal: #3fb8b0;

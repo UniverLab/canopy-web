@@ -87,16 +87,19 @@ describe("the publish route", () => {
     const html = await response.text();
     expect(html).toContain(`<title>${PUBLISH_TITLE} · graphs.univerlab.org</title>`);
     expect(html).toContain(`<meta name="description" content="${PUBLISH_DESCRIPTION}">`);
-    expect(html).toContain(`<h1 class="doc-title">${PUBLISH_TITLE}</h1>`);
+    expect(html).toContain(`<h1 class="doc-title"><svg`);
+    expect(html).toContain(`<span>${PUBLISH_TITLE}</span></h1>`);
     expect(html).toContain(PUBLISH_LEDE);
-    expect(html).toContain(`<a href="${PUBLISH_HREF}">${PUBLISH_LABEL}</a>`);
+    expect(html).toContain(`<a href="${PUBLISH_HREF}"><svg`);
   });
 
   it("serves /publish through the deployed Worker, not the redirector", async () => {
     const response = await worker.fetch(new Request(`${ORIGIN}/publish`), {});
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("text/html; charset=utf-8");
-    expect(await response.text()).toContain(`<h1 class="doc-title">${PUBLISH_TITLE}</h1>`);
+    const served = await response.text();
+    expect(served).toContain(`<h1 class="doc-title"><svg`);
+    expect(served).toContain(`<span>${PUBLISH_TITLE}</span></h1>`);
   });
 
   it("carries the eight steps in order", async () => {
@@ -186,7 +189,7 @@ describe("the page states the code's own values", () => {
   it("tells readers official documents live in the official repo, proposed by pull request", async () => {
     const html = await (await call("/publish")).text();
     expect(html).toContain(
-      `Official documents live in <a href="${OFFICIAL_HREF}" rel="nofollow">${OFFICIAL_REPOSITORY}</a>.`,
+      `Official documents live in <a href="${OFFICIAL_HREF}" rel="nofollow">${OFFICIAL_REPOSITORY}<svg`,
     );
     expect(html).toContain("proposed by pull request there");
     expect(html).toContain("the quickest way to start a graphs repo");

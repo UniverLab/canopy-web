@@ -238,6 +238,17 @@ describe("the look build", () => {
     }
   });
 
+  it("bundles the copy morph for the catalogue pages only", () => {
+    const bundle = path.join(GRAPHS_LOOK, "icons.js");
+    expect(existsSync(bundle)).toBe(true);
+    expect(existsSync(path.join(REMOTE_LOOK, "icons.js"))).toBe(false);
+    const script = readFileSync(bundle, "utf8");
+    // The element the Copy button upgrades to, and the entry point the page
+    // calls; the remote imports the same sources through Vite instead.
+    expect(script).toContain("mountCopyButtons");
+    expect(script).toContain("morph-icon");
+  });
+
   it("bundles the background for the catalogue pages only", () => {
     const bundle = path.join(GRAPHS_LOOK, "fondo.js");
     expect(existsSync(bundle)).toBe(true);
