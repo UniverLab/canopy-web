@@ -571,6 +571,13 @@ describe("the link helper", () => {
     expect(linkAttrs("#what-this-runs")).toBe("");
     expect(linkAttrs("https://graphs.univerlab.org/g/hello-graph")).toBe("");
   });
+
+  it("weighs a protocol-relative URL by its own host", () => {
+    expect(linkAttrs("//example.com/agents")).toBe(
+      ` target="_blank" rel="noopener noreferrer"`,
+    );
+    expect(linkAttrs("//graphs.univerlab.org/g/hello-graph")).toBe("");
+  });
 });
 
 describe("the README section", () => {

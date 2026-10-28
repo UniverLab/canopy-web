@@ -79,18 +79,20 @@ export function wantsMarkdown(req: Request): boolean {
  * The anchor attributes for one link, the only place that decides where a
  * link opens. An absolute link whose host is not this site opens in a new
  * tab (`target="_blank"`, with `noopener noreferrer` so the new page gets
- * no handle on this one); every same-site link — relative, fragment, or
- * our own host — keeps the current tab. An extra `rel` (a `nofollow`)
- * rides along in front. The caller escapes the href itself.
+ * no handle on this one) — absolute being http(s) or protocol-relative
+ * (`//host/…`, a URL that carries a host of its own); every same-site
+ * link — relative, fragment, or our own host — keeps the current tab. An
+ * extra `rel` (a `nofollow`) rides along in front. The caller escapes the
+ * href itself.
  */
 export function linkAttrs(href: string, rel?: string): string {
   const kept = rel === undefined ? "" : ` rel="${rel}"`;
-  if (!/^https?:\/\//i.test(href)) {
+  if (!/^(?:https?:)?\/\//i.test(href)) {
     return kept;
   }
   let outside: boolean;
   try {
-    outside = new URL(href).hostname.toLowerCase() !== SITE_NAME.toLowerCase();
+    outside = new URL(href, `https://${SITE_NAME}`).hostname.toLowerCase() !== SITE_NAME.toLowerCase();
   } catch {
     outside = true;
   }
