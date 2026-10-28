@@ -17,11 +17,13 @@ import type { Doc } from "../documents.js";
 import { isArray, isRecord, isString, stringField } from "../json.js";
 import { escapeHtml, renderMarkdown } from "./md.js";
 import { copyButton } from "./look.js";
-import { pagePath, type PageRef } from "./ref.js";
+import { editorQuery, pagePath, type PageRef } from "./ref.js";
 import { reportUrl, REPORT_REPOSITORY_HREF } from "./report.js";
 import type { Page } from "./layout.js";
 import { attentionFor, type RunCommand, type RunPrompt, runsOf } from "./runs.js";
 import {
+  EDITOR_ADD_TO_GRAPH,
+  EDITOR_EDIT_COPY,
   INSTALL_HEADING,
   OFFICIAL_BADGE,
   README_HEADING,
@@ -343,14 +345,22 @@ export function documentPage(
     : `<h2 class="kicker">${iconSvg("bookOpen")}<span>${README_HEADING}</span></h2>\n` +
       `<div class="readme">${renderMarkdown(doc.readme)}</div>`;
   const banner = options.banner?.html ?? "";
+  // Two actions under the description: Star (published pages only) and the
+  // editor link every graph and node page carries — "Edit a copy" opens a
+  // copy of the graph, "Add to a graph" starts one with this node on it.
+  const star = standalone
+    ? ""
+    : `<a class="button" href="${ref.repoUrl}">${iconSvg("star")}<span>${STAR_BUTTON}</span></a>`;
+  const edit =
+    `<a class="button" href="/editor${editorQuery(ref)}">${iconSvg("pencilRuler")}<span>` +
+    `${ref.kind === "graph" ? EDITOR_EDIT_COPY : EDITOR_ADD_TO_GRAPH}</span></a>`;
+  const actions = `<p>${[star, edit].filter((part) => part !== "").join(" ")}</p>`;
 
   const html = [
     banner,
     `<h1 class="doc-title">${escapeHtml(doc.name)}${badge}</h1>`,
     `<p class="description">${escapeHtml(doc.description)}</p>`,
-    standalone
-      ? ""
-      : `<p><a class="button" href="${ref.repoUrl}">${iconSvg("star")}<span>${STAR_BUTTON}</span></a></p>`,
+    actions,
     warning,
     `<div class="doc-cols">`,
     plateFigure(document, ref.kind),

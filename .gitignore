@@ -153,6 +153,11 @@ $RECYCLE.BIN/
 apps/graphs/public/look/
 apps/remote/web/public/look/
 
+# Generated editor bundle (npm run build:editor); its source stylesheet
+# above stays committable, the bundle below does not exist in git.
+!apps/graphs/src/editor/*.css
+apps/graphs/public/editor/
+
 # The shared look kit ships its stylesheets as source
 !packages/look/*.css
 !packages/look/*/*.css

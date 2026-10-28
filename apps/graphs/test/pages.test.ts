@@ -452,12 +452,14 @@ describe("the technical index", () => {
 });
 
 describe("the header band", () => {
-  it("holds the wordmark, the search form and Publish/Source over the honeycomb", async () => {
+  it("holds the wordmark, the search form and Editor/Publish/Source over the honeycomb", async () => {
     const html = await (await call("/")).text();
     const header = html.slice(html.indexOf(`<header class="site-header">`), html.indexOf(`</header>`));
     expect(header).toContain(`<a class="wordmark" href="https://univerlab.org/canopy/">graphs</a>`);
     expect(header).toContain(`<form class="search"`);
-    // Publish wears the upload arrow, Source the GitHub mark.
+    // Editor wears the pencil ruler, Publish the upload arrow, Source the
+    // GitHub mark — Editor sits beside Publish, per the editor spec.
+    expect(header).toMatch(/<a href="\/editor"><svg[\s\S]*?<\/svg><span>Editor<\/span><\/a>/);
     expect(header).toMatch(/<a href="\/publish"><svg[\s\S]*?<\/svg><span>Publish<\/span><\/a>/);
     expect(header).toMatch(
       /<a href="https:\/\/github.com\/UniverLab\/canopy-web"><svg[\s\S]*?<\/svg><span>Source<\/span><\/a>/,
@@ -499,6 +501,39 @@ describe("the README section", () => {
     expect(html).not.toContain(`<div class="readme">`);
     const twin = await (await call("/g/hello-graph", { stubs, accept: "text/markdown" })).text();
     expect(twin).not.toContain(`## README`);
+  });
+});
+
+describe("the editor page", () => {
+  it("renders the shell with its bundle, palette and canvas", async () => {
+    const html = await (await call("/editor")).text();
+    expect(html).toContain(`<h1 class="index-title">Editor</h1>`);
+    expect(html).toContain(`<div class="editor" id="editor">`);
+    // The shell loads its one bundle and stylesheet, and nothing else.
+    expect(html).toContain(`<link rel="stylesheet" href="/editor/editor.css">`);
+    expect(html).toContain(`<script src="/editor/editor.js" defer></script>`);
+    for (const kind of ["agent", "check", "gate", "router"]) {
+      expect(html).toContain(`data-blank="${kind}"`);
+    }
+    expect(html).toContain(`data-action="export"`);
+    expect(html).toContain(`data-action="copy-link"`);
+    expect(html).toContain(`aria-label="Graph canvas"`);
+    expect(html).toContain(`id="editor-panel"`);
+    expect(html).toContain(`id="editor-chooser"`);
+    // Static markup only: the storage lives in the bundle, not the page.
+    expect(html).not.toContain("localStorage");
+    const twin = await (await call("/editor", { accept: "text/markdown" })).text();
+    expect(twin).toContain(`# Editor`);
+    expect(twin).toContain(`[Editor](/editor)`);
+  });
+
+  it("links every document page into the editor", async () => {
+    const graph = await (await call("/g/hello-graph")).text();
+    expect(graph).toContain(`href="/editor?from=hello-graph"`);
+    expect(graph).toContain(`<span>Edit a copy</span></a>`);
+    const node = await (await call("/n/hello-node")).text();
+    expect(node).toContain(`href="/editor?node=hello-node"`);
+    expect(node).toContain(`<span>Add to a graph</span></a>`);
   });
 });
 

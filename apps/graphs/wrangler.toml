@@ -68,11 +68,13 @@ simple = { limit = 10, period = 60 }
 crons = ["*/15 * * * *"]
 
 # The static assets: the shared look kit (packages/look), copied into
-# public/look by `npm run build:look`. The pages are rendered strings, so
-# only the kit lives on disk. `run_worker_first` keeps the JSON API and the
-# install redirector in the Worker; every other request tries the assets
-# first and an asset miss falls through to the Worker, which is exactly the
-# catalogue's route table (/, /search, /g, /n, /d, /llms.txt, /publish,
+# public/look by `npm run build:look`, and the graph editor bundle,
+# built into public/editor by `npm run build:editor`. The pages are
+# rendered strings, so only those two directories live on disk.
+# `run_worker_first` keeps the JSON API and the install redirector in
+# the Worker; every other request tries the assets first and an asset
+# miss falls through to the Worker, which is exactly the catalogue's
+# route table (/, /search, /g, /n, /d, /llms.txt, /publish, /editor,
 # /robots.txt, /sitemap.xml, /.well-known/api-catalog, /api/openapi.json).
 [assets]
 directory = "public"

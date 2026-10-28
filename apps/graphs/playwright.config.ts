@@ -9,7 +9,7 @@ import { defineConfig } from "@playwright/test";
 // operator's review. Run via `npm run test:graphs-visual`.
 export default defineConfig({
   testDir: "./test/e2e",
-  testMatch: "visual.spec.ts",
+  testMatch: ["visual.spec.ts", "editor.spec.ts"],
   timeout: 60_000,
   fullyParallel: false,
   reporter: process.env.CI ? "line" : "list",

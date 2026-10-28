@@ -10,6 +10,7 @@
  *   GET /d/<id>                               one unreviewed draft, until it expires or installs
  *   GET /llms.txt                             one line per document: name, description, ref
  *   GET /publish, /publish.md                 how to list a graph or node (page, markdown twin)
+ *   GET /editor                               the hand-assembly canvas (server-rendered shell)
  *
  * Every route reads the catalogue through the scheduled index (store.ts,
  * catalog.ts) and only renders what comes back: no page reaches GitHub,
@@ -72,6 +73,7 @@ import { renderBanner } from "../../../../packages/look/banner/banner.js";
 import { iconSvg, type IconName } from "../../../../packages/look/icon-svg.js";
 import { escapeHtml } from "./md.js";
 import { publishPage } from "./publish.js";
+import { editorPage } from "./editor.js";
 import { docPath, docRef, pageRef, type PageRef } from "./ref.js";
 import { copyButton } from "./look.js";
 import { documentPage, mdText } from "./document.js";
@@ -441,6 +443,9 @@ export async function handlePage(
   }
   if (segments.length === 1 && segments[0] === "publish") {
     return page(req, publishPage());
+  }
+  if (segments.length === 1 && segments[0] === "editor") {
+    return page(req, editorPage());
   }
   if (segments.length === 1 && segments[0] === "publish.md") {
     return new Response(withMarkdownFooter(publishPage().markdown), {

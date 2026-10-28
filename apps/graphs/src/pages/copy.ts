@@ -413,3 +413,130 @@ export function publishOfficial(repo: string): string {
 export function homePublishLine(label: string, href: string): string {
   return `Share your own: [${label}](${href})`;
 }
+
+/* ── The editor (/editor) ───────────────────────────────────────────────
+ * Every string the editor page and its client bundle render lives here:
+ * the shell templates in pages/editor.ts and the browser code under
+ * src/editor/ both import from this module, so the whole surface stays
+ * swappable from one file.
+ */
+
+/** The editor's route, its header link (beside Publish) and its h1. */
+export const EDITOR_HREF = "/editor";
+export const EDITOR_LABEL = "Editor";
+export const EDITOR_TITLE = "Editor";
+
+/** The links every document page carries into the editor, by kind. */
+export const EDITOR_EDIT_COPY = "Edit a copy";
+export const EDITOR_ADD_TO_GRAPH = "Add to a graph";
+
+/** One line about the editor: its page description and markdown twin lede. */
+export const EDITOR_TAGLINE =
+  "Assemble a Canopy graph by hand: place nodes, connect them with conditions, " +
+  "edit their config, then export the file or share it as a one-use draft.";
+
+/** The markdown twin's pointer to the editor page. */
+export const EDITOR_TWIN_LINE = `Open it in a browser: [${EDITOR_LABEL}](${EDITOR_HREF})`;
+
+/** The toolbar's four actions, and the confirm before New clears the work. */
+export const EDITOR_NEW = "New";
+export const EDITOR_NEW_CONFIRM =
+  "Start over? The graph in this browser is cleared.";
+export const EDITOR_IMPORT = "Import JSON";
+export const EDITOR_EXPORT = "Export JSON";
+export const EDITOR_COPY_LINK = "Copy link";
+export const EDITOR_CANCEL = "Cancel";
+export const EDITOR_APPLY = "Import";
+
+/** The palette: blank kinds, the catalogue list, its search and its refusals. */
+export const EDITOR_PALETTE_LABEL = "Node palette";
+export const EDITOR_NODES_HEADING = "Nodes";
+export const EDITOR_BLANK_HEADING = "Blank";
+export const EDITOR_CATALOGUE_HEADING = "Catalogue";
+export const EDITOR_SEARCH_LABEL = "Search catalogue nodes";
+export const EDITOR_SEARCH_PLACEHOLDER = "hello-node";
+export const EDITOR_CATALOGUE_EMPTY = "No official nodes listed yet.";
+export const EDITOR_ENSEMBLE_NODE =
+  "Ensemble nodes cannot be added: this editor draws graph nodes, not ensembles.";
+export const EDITOR_CATALOGUE_FAILED =
+  "The catalogue did not answer. Try again in a moment.";
+
+/** The canvas: its accessible label, the empty note and the zoom controls. */
+export const EDITOR_CANVAS_LABEL = "Graph canvas";
+export const EDITOR_CANVAS_EMPTY =
+  "Add a blank node or a catalogue node from the palette to start.";
+export const EDITOR_ZOOM_IN = "Zoom in";
+export const EDITOR_ZOOM_OUT = "Zoom out";
+export const EDITOR_ZOOM_FIT = "Fit the graph";
+
+/** The condition chooser that opens when a drag lands on another node. */
+export const EDITOR_CONDITION_HEADING = "Condition";
+export const EDITOR_ROUTE_LABEL = "Route name";
+export const EDITOR_ROUTE_PLACEHOLDER = "proceed";
+export const EDITOR_ROUTE_REQUIRED = "A route needs a name.";
+
+/** The inspector panel: node fields, the edge editor and the graph view. */
+export const EDITOR_PANEL_LABEL = "Inspector";
+export const EDITOR_PANEL_NODE_HEADING = "Node";
+export const EDITOR_PANEL_GRAPH_HEADING = "Graph";
+export const EDITOR_SELECT_HINT = "Select a node or an edge on the canvas to edit it.";
+export const EDITOR_FIELD_NAME = "Name";
+export const EDITOR_FIELD_KIND = "Kind";
+export const EDITOR_FIELD_PROMPT = "Prompt";
+export const EDITOR_FIELD_PRESET = "Prompt preset";
+export const EDITOR_FIELD_COMMAND = "Command";
+export const EDITOR_FIELD_CONFIG = "Config (JSON)";
+export const EDITOR_NAME_INVALID = "A name is 1-48 characters of a-z, 0-9 or -.";
+export const EDITOR_CONFIG_INVALID =
+  "That is not JSON yet — the graph still holds the last valid config.";
+export const EDITOR_DELETE_NODE = "Delete node";
+export const EDITOR_DELETE_BLOCKED =
+  "This node is wired into an ensemble, and this editor does not edit ensembles — so it cannot be deleted.";
+export const EDITOR_EDGE_HEADING = "Edge";
+export function editorEdgeLabel(from: string, to: string): string {
+  return `${from} → ${to}`;
+}
+export const EDITOR_CONDITION_LABEL = "Condition";
+export const EDITOR_DELETE_EDGE = "Delete edge";
+
+/** The sections the editor keeps untouched, shown read-only in the panel. */
+export const EDITOR_UNTOUCHED_NOTE =
+  "Ensembles, hooks, the infra node and presets are kept exactly as they came — " +
+  "this editor does not edit them yet.";
+export const EDITOR_SECTION_ENSEMBLES = "Ensembles";
+export const EDITOR_SECTION_HOOKS = "Hooks";
+export const EDITOR_SECTION_INFRA = "Infra node";
+export const EDITOR_SECTION_PRESETS = "Presets";
+export const EDITOR_SECTION_EMPTY = "none";
+
+/** The live validation line: one clean statement, or the problems themselves. */
+export const EDITOR_NO_PROBLEMS = "No problems.";
+export function editorProblemCount(count: number): string {
+  return count === 1 ? "1 problem" : `${count} problems`;
+}
+
+/** The import box: what to paste, and the two refusals it can answer. */
+export const EDITOR_IMPORT_HEADING = "Import JSON";
+export const EDITOR_IMPORT_LABEL = "Paste a graph.json, or choose a file.";
+export const EDITOR_IMPORT_FILE = "Choose file";
+export const EDITOR_IMPORT_BAD = "That text is not a JSON graph document.";
+export const EDITOR_IMPORT_HARNESS =
+  "That document binds a harness: shared documents never carry platform, model or cli — " +
+  "the person who installs chooses the harnesses.";
+
+/** The share block the Copy link action fills: heading, page link, countdown. */
+export const EDITOR_SHARE_HEADING = "Draft";
+export const EDITOR_SHARE_BUSY = "Creating a draft…";
+export const EDITOR_SHARE_PAGE = "Open the draft page";
+export const EDITOR_DRAFT_NODE =
+  "That draft holds a node document; the editor draws graphs.";
+export function draftExpiresIn(when: string): string {
+  return `expires in ${when}`;
+}
+export const DRAFT_EXPIRED = "expired";
+
+/** Loading a document into the canvas: the failure line over the API's text. */
+export const EDITOR_LOAD_FAILED = "Could not open that document";
+
+/** The fallback line when a failure carries no words of its own. */
+export const EDITOR_FAILED = "Something went wrong.";

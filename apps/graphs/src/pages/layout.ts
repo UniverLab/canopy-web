@@ -16,6 +16,8 @@ import {
   COLOPHON_EXP,
   COLOPHON_LINKS,
   COLOPHON_PRODUCT,
+  EDITOR_HREF,
+  EDITOR_LABEL,
   MD_FOOTER,
   PUBLISH_HREF,
   PUBLISH_LABEL,
@@ -46,6 +48,14 @@ export interface Page {
    * sitemap and llms.txt. Absent keeps the existing pages byte-identical.
    */
   noindex?: boolean;
+  /**
+   * Extra stylesheets this one page loads after the kit's, and extra
+   * deferred scripts after the inline ones. Only the editor passes them
+   * (its bundled `/editor/editor.css` and `editor.js`); every other page
+   * leaves them absent, so its shell stays byte-identical.
+   */
+  styles?: string[];
+  scripts?: string[];
 }
 
 /** True when the request prefers the markdown twin over HTML. */
@@ -79,6 +89,7 @@ function htmlDocument(q: string, page: Page): string {
     `<meta name="description" content="${description}">`,
     ...(page.noindex === true ? [`<meta name="robots" content="noindex">`] : []),
     lookLinks(),
+    ...(page.styles ?? []).map((href) => `<link rel="stylesheet" href="${href}">`),
     `<style>`,
     lookCss(),
     `</style>`,
@@ -91,6 +102,7 @@ function htmlDocument(q: string, page: Page): string {
     `<div class="band-top">`,
     `<a class="wordmark" href="${CANOPY_HREF}">${escapeHtml(WORDMARK)}</a>`,
     `<nav class="site-nav" aria-label="Catalogue">`,
+    `<a href="${EDITOR_HREF}">${iconSvg("pencilRuler")}<span>${EDITOR_LABEL}</span></a>`,
     `<a href="${PUBLISH_HREF}">${iconSvg("upload")}<span>${PUBLISH_LABEL}</span></a>`,
     `<a href="${SOURCE_HREF}">${iconSvg("github")}<span>${SOURCE_LABEL}</span></a>`,
     `</nav>`,
@@ -111,6 +123,7 @@ function htmlDocument(q: string, page: Page): string {
     `<script>`,
     copyScript(),
     `</script>`,
+    ...(page.scripts ?? []).map((src) => `<script src="${src}" defer></script>`),
     `</body>`,
     `</html>`,
     ``,

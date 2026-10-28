@@ -67,6 +67,19 @@ export function docRef(doc: Doc): PageRef {
   return pageRef(doc.kind, owner, repo, doc.slug);
 }
 
+/**
+ * The editor query one document opens with: `?from=` for a graph, `?node=`
+ * for a node — both by the same ref the install command takes — and
+ * `?draft=` for a draft, which has no repository. The editor reads exactly
+ * these three keys, so this is the one place that spells them.
+ */
+export function editorQuery(ref: PageRef): string {
+  if (ref.ref.startsWith("draft:")) {
+    return `?draft=${segment(ref.slug)}`;
+  }
+  return `${ref.kind === "graph" ? "?from=" : "?node="}${segment(ref.ref)}`;
+}
+
 /** The catalogue path of a listed document. */
 export function docPath(doc: Doc): string {
   return pagePath(docRef(doc));

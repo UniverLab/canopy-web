@@ -8,9 +8,10 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "npm run build:look && npm run build:remote-web",
+    "build": "npm run build:look && npm run build:remote-web && npm run build:editor",
     "build:look": "node scripts/build-look.mjs",
     "build:remote-web": "vite build --config apps/remote/web/vite.config.ts",
+    "build:editor": "node scripts/build-editor.mjs",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run && npm run test:worker && npm run test:remote-worker && npm run test:remote-web",

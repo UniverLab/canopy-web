@@ -7,6 +7,12 @@
  * `@cfworker/json-schema` validators over the same imported `schema/*.json`,
  * never a copied version of the rules.
  *
+ * The schemas are imported straight from `schema/` (what `src/schema.ts`
+ * re-exports) because that module also re-exports `src/slug.ts`, which
+ * imports `node:path` — absent in a Worker and in the browser, where the
+ * editor bundles this validator. `DocumentKind` travels as an `import type`,
+ * so it costs no runtime import either way.
+ *
  * Two questions live here. `documentProblems` is the catalogue's own question
  * — does this value match `schema/<kind>`? — and it is what the indexer and
  * the pages ask, so a published document that names a harness still lists.
@@ -17,7 +23,9 @@
  * document's own config.
  */
 import { type Schema, Validator } from "@cfworker/json-schema";
-import { graphSchema, nodeSchema, type DocumentKind } from "../../../src/schema.js";
+import type { DocumentKind } from "../../../src/schema.js";
+import graphSchema from "../../../schema/graph.schema.json" with { type: "json" };
+import nodeSchema from "../../../schema/node.schema.json" with { type: "json" };
 import { isRecord, type ParsedJson, parseJson } from "./json.js";
 
 /** One problem, with the JSON pointer of the value that caused it. */
