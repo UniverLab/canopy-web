@@ -26,6 +26,8 @@ export interface SnapshotDoc {
   readme?: string | null;
   /** False to answer the folder without its document file at all. */
   document?: boolean;
+  /** False to answer the entry with a null object, as a partial answer does. */
+  present?: boolean;
 }
 
 /** One pattern folder in the fixture: the page and the figure it names. */
@@ -62,7 +64,11 @@ function tree(name: string, entries: unknown[]): unknown {
 function documentFolders(file: string, docs: SnapshotDoc[]): unknown[] {
   return docs.map((doc) =>
     tree(doc.slug, [
-      ...(doc.document === false ? [] : [blob(file, doc.text)]),
+      ...(doc.document === false
+        ? []
+        : doc.present === false
+          ? [{ name: file, type: "blob", object: null }]
+          : [blob(file, doc.text)]),
       ...(doc.readme === undefined || doc.readme === null ? [] : [blob("README.md", doc.readme)]),
     ])
   );

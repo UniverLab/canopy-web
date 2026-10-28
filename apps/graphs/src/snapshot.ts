@@ -205,10 +205,15 @@ export interface SnapshotSource {
 
 /** Why one named file has no text, or null when it has one. */
 function reasonFor(file: SnapshotFile | undefined, partial: boolean): string | null {
-  if (file === undefined || !file.present) {
+  if (file === undefined) {
     // A partial answer may simply have dropped the entry; say so instead of
     // claiming the file is gone.
     return partial ? "graphql error" : "missing file";
+  }
+  if (!file.present) {
+    // The entry arrived but its object did not: the blob is missing, even on
+    // a partial answer where an absent entry would be a GraphQL error.
+    return "missing file";
   }
   return file.text === null ? "blob not text" : null;
 }

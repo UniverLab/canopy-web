@@ -866,6 +866,25 @@ describe("the GraphQL snapshot run", () => {
     ]);
   });
 
+  it("calls an entry with a null object a missing file even when errors arrived", async () => {
+    const { meta } = await run(
+      [
+        graphqlStub("canopy-graphs", snapshotBody({
+          blocked: "[]",
+          errors: ["the blob service timed out"],
+          graphs: [{ slug: "graph-alpha", text: null, present: false }],
+        })),
+        emptySearchStub(),
+      ],
+      { authenticated: true },
+    );
+
+    expect(meta.documents).toBe(0);
+    expect(meta.invalid).toEqual([
+      { repo: "UniverLab/canopy-graphs", slug: "graph-alpha", reason: "missing file" },
+    ]);
+  });
+
   it("keeps the previous official entries when the answer carries no tree", async () => {
     const kv = new FakeKV();
     await kv.put("index:v1", JSON.stringify({
