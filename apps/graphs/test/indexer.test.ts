@@ -971,6 +971,13 @@ describe("the write budget", () => {
     return JSON.parse(text as string) as Record<string, string>;
   }
 
+  /** The `patterns:v1` timestamp as the run left it. */
+  async function storedPatternsBuilt(kv: FakeKV): Promise<string> {
+    const text = await kv.get("patterns:v1");
+    expect(text).not.toBeNull();
+    return (JSON.parse(text as string) as { built_at: string }).built_at;
+  }
+
   it("writes every key on the first run against an empty KV", async () => {
     const { meta, kv } = await run(officialTable(), { authenticated: true });
 
@@ -994,18 +1001,20 @@ describe("the write budget", () => {
     const kv = new FakeKV();
     const first = await run(officialTable(), { kv, authenticated: true, now: clock });
     const firstBuilt = (await storedIndex(kv)).built_at;
+    const firstPatternsBuilt = await storedPatternsBuilt(kv);
     expect(first.meta.kv_writes).toBe(25);
 
     kv.putOptions.length = 0;
     const second = await run(officialTable(), { kv, authenticated: true, now: clock });
 
-    // The only write an unchanged run issues is its own accounting, and the
-    // index keeps the `built_at` of the run that last changed it.
+    // The only write an unchanged run issues is its own accounting, and both
+    // listings keep the `built_at` of the run that last changed them.
     expect(kv.putOptions.map((option) => option.key)).toEqual(["index:meta"]);
     expect(second.meta.kv_writes).toBe(1);
     expect(second.meta.kv_skipped).toBe(first.meta.kv_writes - 1);
     expect(second.meta.built_at).not.toBe(first.meta.built_at);
     expect((await storedIndex(kv)).built_at).toBe(firstBuilt);
+    expect(await storedPatternsBuilt(kv)).toBe(firstPatternsBuilt);
   });
 
   it("rewrites only the document one changed README touches", async () => {
