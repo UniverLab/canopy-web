@@ -6,6 +6,7 @@
 
 import { createShell } from "./app.js";
 import type { Shell } from "./app.js";
+import { fetchLogin, signOut } from "./auth.js";
 import { CatalogStore } from "./catalog.js";
 import { createChannelHandler } from "./channel.js";
 import { generateDeviceKey } from "./crypto.js";
@@ -21,7 +22,7 @@ import type { OnlineHost } from "./relay.js";
 import { SessionController } from "./session.js";
 import { ShelfController } from "./shelf-controller.js";
 import { SessionStore } from "./sessions.js";
-import { getHost, listHosts, loadDeviceKey, saveDeviceKey, saveHost } from "./store.js";
+import { clearDevice, getHost, listHosts, loadDeviceKey, saveDeviceKey, saveHost } from "./store.js";
 import type { HostRecord } from "./store.js";
 import { consumePairFragment } from "./ui.js";
 import type { PairSubmit } from "./ui.js";
@@ -35,32 +36,6 @@ async function ensureDeviceKey(): Promise<DeviceKey> {
   const fresh = await generateDeviceKey();
   await saveDeviceKey(fresh);
   return fresh;
-}
-
-// The worker answers 401 without a session cookie, 200 {login} with one.
-async function fetchLogin(): Promise<string | null> {
-  let res: Response;
-  try {
-    res = await globalThis.fetch("/auth/me");
-  } catch {
-    return null;
-  }
-  if (res.status === 401) {
-    return null;
-  }
-  if (!res.ok) {
-    return null;
-  }
-  let body: unknown;
-  try {
-    body = await res.json();
-  } catch {
-    return null;
-  }
-  if (typeof body === "object" && body !== null && typeof (body as { login: unknown }).login === "string") {
-    return (body as { login: string }).login;
-  }
-  return null;
 }
 
 async function main(): Promise<void> {
@@ -120,6 +95,8 @@ async function main(): Promise<void> {
         controller.close();
         shell.showSessions();
       },
+      onSignOut: () => void doSignOut(false),
+      onForgetDevice: () => void doSignOut(true),
       onKeyPress: (bytes) => {
         controller.sendInputBytes(bytes);
       },
@@ -237,6 +214,36 @@ async function main(): Promise<void> {
       return;
     }
     startSession(host);
+  }
+
+  async function doSignOut(forget: boolean): Promise<void> {
+    shell.setSignOutError(null);
+    try {
+      await signOut();
+    } catch (err) {
+      shell.setSignOutError(err instanceof Error ? err.message : "Could not sign out");
+      return;
+    }
+    // The server session is gone: drop everything that only made sense
+    // signed in — the peer, the relay socket, the caches — and, on
+    // Forget, the pairing keys themselves. The keys stay otherwise.
+    controller.close();
+    manager?.stop();
+    manager = null;
+    catalog.clear();
+    shelf.reset();
+    graphs.reset();
+    relay.close();
+    if (forget) {
+      try {
+        await clearDevice();
+      } catch {
+        // The session is already dead; a stale key row is repaired on
+        // the next pair, never a reason to hold the sign-in screen.
+      }
+    }
+    shell.setLogin(null);
+    shell.showSignIn();
   }
 
   async function doDisconnect(): Promise<void> {

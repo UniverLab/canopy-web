@@ -137,3 +137,14 @@ export async function deleteHost(hostId: string): Promise<void> {
     s.delete(hostId);
   });
 }
+
+// Forget this device: drop the device key and every paired host, so the
+// browser holds nothing that only made sense signed in.
+export async function clearDevice(): Promise<void> {
+  await withStore(KEYS_STORE, "readwrite", (s) => {
+    s.delete(DEVICE_ROW_ID);
+  });
+  await withStore(HOSTS_STORE, "readwrite", (s) => {
+    s.clear();
+  });
+}

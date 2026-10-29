@@ -155,6 +155,8 @@ describe("createShell", () => {
       onLeaveSession: () => {
         signal.left += 1;
       },
+      onSignOut: () => {},
+      onForgetDevice: () => {},
       onKeyPress: (bytes) => keys.push(bytes),
       onTerminalInput: (bytes) => inputs.push(bytes),
       onComposerSend: (text, req) => composerSends.push({ text, req }),

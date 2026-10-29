@@ -5,6 +5,7 @@
 // compose and prompt exactly like the daemon's session protocol.
 
 import { createShell } from "./app.js";
+import { signOut } from "./auth.js";
 import { CatalogStore } from "./catalog.js";
 import { createChannelHandler } from "./channel.js";
 import { b64encode } from "./crypto.js";
@@ -509,6 +510,8 @@ function main(): void {
         controller.close();
         shell.showSessions();
       },
+      onSignOut: () => void doFakeSignOut(),
+      onForgetDevice: () => void doFakeSignOut(),
       onKeyPress: (bytes) => {
         controller.sendInputBytes(bytes);
       },
@@ -558,15 +561,41 @@ function main(): void {
     onFrame: router.handleFrame,
   });
 
+  // The real sign-out POST, so Playwright can stub or refuse /auth/logout
+  // and watch the shell land on the sign-in screen or hold its error.
+  async function doFakeSignOut(): Promise<void> {
+    shell.setSignOutError(null);
+    try {
+      await signOut();
+    } catch (err) {
+      shell.setSignOutError(err instanceof Error ? err.message : "Could not sign out");
+      return;
+    }
+    controller.close();
+    shell.setLogin(null);
+    shell.showSignIn();
+  }
+
   // The host greets first: hello.features is what turns the shelf UI on.
   deliver({ t: "hello", features: ["shelf"] });
 
+  // Playwright picks the opening screen: the sessions home by default,
+  // the hosts list for the sign-out walk, the sign-in for the colophon.
+  const screen = new URLSearchParams(globalThis.location.search).get("screen");
   shell.setLogin("smoke");
-  shell.setHostLabel("smoke host");
-  shell.setConnectionState("connected");
-  shell.showSessions();
-  send(buildList(newReqId()));
-  send(buildCatalog(newReqId()));
+  if (screen === "signin") {
+    shell.setLogin(null);
+    shell.showSignIn();
+  } else if (screen === "hosts") {
+    shell.setPairedHosts([{ host_id: "h1", label: "demo host" }]);
+    shell.showHosts();
+  } else {
+    shell.setHostLabel("smoke host");
+    shell.setConnectionState("connected");
+    shell.showSessions();
+    send(buildList(newReqId()));
+    send(buildCatalog(newReqId()));
+  }
 
   window.__fake = {
     sent: () => [...sent],

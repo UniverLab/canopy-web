@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * The remote's icons: static markup through the kit's `iconSvg`, and the
- * morph slots that change an icon without swapping it.
+ * The remote's icons: static markup through the kit's `iconSvgFrom`, and
+ * the morph slots that change an icon without swapping it.
  *
  * A slot owns one 16 px SVG with a single path; morphicons re-plans that
  * path's geometry between two Lucide `IconNode`s with a spring, so the
@@ -11,25 +11,84 @@
  *
  * Every icon is currentColor. The caller colours the slot: the error tint
  * is the only place an icon wears a colour of its own.
+ *
+ * The imports name exactly the icons the remote draws, so the bundler
+ * drops the rest of the kit: a namespace import would ship every icon
+ * to every remote load. `RemoteIconName` is that subset; a new icon
+ * joins the record and the name together, never one without the other.
  */
 import { canonicalD, createMorph, type ReducedMotionMode } from "morphicons/dom";
-import { iconSvg, type IconName } from "../../../../packages/look/icon-svg.js";
-import * as iconData from "../../../../packages/look/icons.js";
+import { iconSvgFrom, type IconSvgOptions } from "../../../../packages/look/icon-svg.js";
+import {
+  arrowDown,
+  arrowLeft,
+  arrowRight,
+  arrowRightToLine,
+  arrowUp,
+  blocks,
+  bot,
+  check,
+  chevronLeft,
+  chevronRight,
+  circle,
+  circleDot,
+  cornerDownLeft,
+  folder,
+  folderOpen,
+  loader,
+  logOut,
+  minus,
+  pause,
+  plus,
+  send,
+  square,
+  squareTerminal,
+  triangleAlert,
+  wifi,
+  wifiOff,
+  x,
+  zap,
+} from "../../../../packages/look/icons.js";
 
-export type { IconName } from "../../../../packages/look/icon-svg.js";
+const REMOTE_ICONS = {
+  arrowDown,
+  arrowLeft,
+  arrowRight,
+  arrowRightToLine,
+  arrowUp,
+  blocks,
+  bot,
+  check,
+  chevronLeft,
+  chevronRight,
+  circle,
+  circleDot,
+  cornerDownLeft,
+  folder,
+  folderOpen,
+  loader,
+  logOut,
+  minus,
+  pause,
+  plus,
+  send,
+  square,
+  squareTerminal,
+  triangleAlert,
+  wifi,
+  wifiOff,
+  x,
+  zap,
+};
+
+/** The icons the remote draws: exactly the keys of its record. */
+export type RemoteIconName = keyof typeof REMOTE_ICONS;
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-export interface IconOptions {
-  /** Drawn size in pixels; the drawing stays on Lucide's 24 × 24 grid. */
-  size?: number;
-  /** An accessible name; without one the icon is hidden from readers. */
-  label?: string;
-}
-
 /** One icon as static markup, for the parts of the UI that never morph. */
-export function icon(name: IconName, options: IconOptions = {}): string {
-  return iconSvg(name, options);
+export function icon(name: RemoteIconName, options: IconSvgOptions = {}): string {
+  return iconSvgFrom(REMOTE_ICONS, name, options);
 }
 
 export interface MorphSlotOptions {
@@ -41,11 +100,11 @@ export interface MorphSlotOptions {
 /** One icon that can become another; the box never changes. */
 export interface MorphSlot {
   readonly host: HTMLElement;
-  readonly name: IconName;
+  readonly name: RemoteIconName;
   /** Spring to `name`; the host's `data-icon` says where it is going. */
-  to: (name: IconName) => void;
+  to: (name: RemoteIconName) => void;
   /** Jump to `name` with no animation. */
-  set: (name: IconName) => void;
+  set: (name: RemoteIconName) => void;
   destroy: () => void;
 }
 
@@ -55,7 +114,7 @@ export interface MorphSlot {
  */
 export function mountMorphSlot(
   host: HTMLElement,
-  name: IconName,
+  name: RemoteIconName,
   options: MorphSlotOptions = {},
 ): MorphSlot {
   const size = options.size ?? 16;
@@ -73,11 +132,11 @@ export function mountMorphSlot(
   svg.setAttribute("stroke-linejoin", "round");
   svg.setAttribute("aria-hidden", "true");
   const path = doc.createElementNS(SVG_NS, "path");
-  path.setAttribute("d", canonicalD(iconData[name]));
+  path.setAttribute("d", canonicalD(REMOTE_ICONS[name]));
   svg.append(path);
   host.replaceChildren(svg);
 
-  const morph = createMorph(path, iconData[name], {
+  const morph = createMorph(path, REMOTE_ICONS[name], {
     reducedMotion: options.reducedMotion ?? "user",
   });
   let current = name;
@@ -85,18 +144,18 @@ export function mountMorphSlot(
 
   return {
     host,
-    get name(): IconName {
+    get name(): RemoteIconName {
       return current;
     },
-    to(next: IconName): void {
+    to(next: RemoteIconName): void {
       current = next;
       host.dataset["icon"] = next;
-      morph.morphTo(iconData[next], "snappy");
+      morph.morphTo(REMOTE_ICONS[next], "snappy");
     },
-    set(next: IconName): void {
+    set(next: RemoteIconName): void {
       current = next;
       host.dataset["icon"] = next;
-      morph.set(iconData[next]);
+      morph.set(REMOTE_ICONS[next]);
     },
     destroy(): void {
       morph.destroy();

@@ -16,7 +16,7 @@ import * as icons from "./icons.js";
 export type IconName = keyof typeof icons;
 
 /** Lucide's `IconNode` shape, structural so this module needs no lucide type. */
-type IconNode = ReadonlyArray<
+export type IconNode = ReadonlyArray<
   readonly [tag: string, attrs: Readonly<Record<string, string | number | undefined>>]
 >;
 
@@ -50,13 +50,19 @@ function element([tag, attrs]: readonly [
 }
 
 /**
- * The icon `name` as inline SVG. Throws on a name the kit does not export,
- * so a typo fails the page test instead of drawing an empty box.
+ * The icon `name` drawn from `nodes`, for apps that ship a subset of the
+ * kit: bundlers drop the icons the subset never names. Throws on a name
+ * the record does not carry, so a typo fails loudly instead of drawing
+ * an empty box.
  */
-export function iconSvg(name: IconName, options: IconSvgOptions = {}): string {
-  // Own keys only: a name the kit does not export must throw, never fall
-  // through to a prototype member ("constructor") and break mid-drawing.
-  const node = Object.hasOwn(icons, name) ? (icons[name] as IconNode) : undefined;
+export function iconSvgFrom(
+  nodes: Record<string, IconNode>,
+  name: string,
+  options: IconSvgOptions = {},
+): string {
+  // Own keys only: a missing name must throw, never fall through to a
+  // prototype member ("constructor") and break mid-drawing.
+  const node = Object.hasOwn(nodes, name) ? nodes[name] : undefined;
   if (node === undefined) {
     throw new Error(`unknown icon: ${name}`);
   }
@@ -72,4 +78,13 @@ export function iconSvg(name: IconName, options: IconSvgOptions = {}): string {
     ` stroke-linecap="round" stroke-linejoin="round"${accessibility}>` +
     `${title}${node.map(element).join("")}</svg>`
   );
+}
+
+/**
+ * The icon `name` as inline SVG, drawn from the whole kit. Throws on a
+ * name the kit does not export, so a typo fails the page test instead
+ * of drawing an empty box.
+ */
+export function iconSvg(name: IconName, options: IconSvgOptions = {}): string {
+  return iconSvgFrom(icons as unknown as Record<string, IconNode>, name, options);
 }

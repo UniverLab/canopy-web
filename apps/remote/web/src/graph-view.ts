@@ -10,6 +10,7 @@
 import type { GraphDocument } from "../../../../packages/plate/document.js";
 import { renderPlate } from "../../../../packages/plate/render.js";
 import type { PlateState } from "../../../../packages/plate/render.js";
+import { signOutButtonHtml } from "./chrome.js";
 import { specMark, statusChip } from "./graphs-list.js";
 import { icon } from "./icons-dom.js";
 import type { GraphState, GraphSpecRow, GraphSummary } from "./protocol.js";
@@ -19,6 +20,10 @@ export interface GraphViewArgs {
   header: string;
   /** The connection banner, "" while nothing is wrong. */
   banner: string;
+  /** The signed-in login the direct button names, or null. */
+  login: string | null;
+  /** The last sign-out failure, shown inline, or null. */
+  signOutError: string | null;
   id: string;
   name: string;
   summary: GraphSummary | null;
@@ -30,6 +35,7 @@ export interface GraphViewArgs {
   connected: boolean;
   orientation: "vertical" | "horizontal";
   onBack: () => void;
+  onSignOut: () => void;
 }
 
 /** The running spec row already scrolled into view; null until it changes. */
@@ -174,6 +180,10 @@ function paint(main: HTMLElement, args: GraphViewArgs): void {
     list.innerHTML = checklistHtml(args.state);
     scrollRunning(list, args.state);
   }
+  const signOutError = main.querySelector<HTMLElement>("#signout-error");
+  if (signOutError) {
+    signOutError.textContent = args.signOutError ?? "";
+  }
 }
 
 function viewHtml(args: GraphViewArgs): string {
@@ -192,6 +202,7 @@ function viewHtml(args: GraphViewArgs): string {
     `<div class="graph-stage" id="graph-stage"></div>` +
     `<h2>Checklist</h2>` +
     `<ol class="spec-list" id="spec-list"></ol>` +
+    signOutButtonHtml(args.login, args.signOutError) +
     `</main>`
   );
 }

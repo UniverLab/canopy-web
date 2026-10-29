@@ -8,7 +8,7 @@
 // buttons; the bytes table is exported so the session layer and the tests
 // share one definition.
 
-import { icon, mountMorphSlot, type IconName, type MorphSlot } from "./icons-dom.js";
+import { icon, mountMorphSlot, type RemoteIconName, type MorphSlot } from "./icons-dom.js";
 import type { ModifierState } from "./modifiers.js";
 
 export interface KeyDef {
@@ -18,7 +18,7 @@ export interface KeyDef {
   ariaLabel: string;
   bytes: readonly number[];
   /** The key drawn as an icon instead of the word in `label`. */
-  icon?: IconName;
+  icon?: RemoteIconName;
 }
 
 export const KEY_DEFS: readonly KeyDef[] = [
@@ -53,7 +53,7 @@ export function keyById(id: string): KeyDef | null {
 const latchSlots = new WeakMap<HTMLElement, MorphSlot>();
 
 /** One icon in a key: hidden from readers, the button carries the name. */
-function iconSlot(name: IconName): HTMLElement {
+function iconSlot(name: RemoteIconName): HTMLElement {
   const slot = document.createElement("span");
   slot.className = "icon-slot";
   slot.setAttribute("aria-hidden", "true");

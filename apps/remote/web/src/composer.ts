@@ -7,7 +7,7 @@
 // while the host has it, a check on ok and a red x on error.
 
 import { newReqId } from "./protocol.js";
-import { icon, mountMorphSlot, type IconName, type MorphSlot } from "./icons-dom.js";
+import { icon, mountMorphSlot, type RemoteIconName, type MorphSlot } from "./icons-dom.js";
 
 export interface ComposerCallbacks {
   onSend: (text: string, req: string) => void;
@@ -161,7 +161,7 @@ export class Composer {
   }
 
   /** The Send icon's current meaning; the error state paints it red. */
-  private setSendIcon(name: IconName): void {
+  private setSendIcon(name: RemoteIconName): void {
     this.sendSlot?.to(name);
     if (this.sendButton !== null) {
       this.sendButton.dataset["state"] = name === "x" ? "error" : name === "loader" ? "sending" : "ready";

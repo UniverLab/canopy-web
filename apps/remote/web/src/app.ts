@@ -8,14 +8,21 @@
 import { Composer } from "./composer.js";
 import { CatalogStore } from "./catalog.js";
 import { Builder } from "./builder.js";
+import {
+  renderConnBanner,
+  renderHostOptions,
+  renderTopbar,
+  signOutButtonHtml,
+  wireAccount,
+  wireConnActions,
+} from "./chrome.js";
 import { GraphRoute } from "./graph-route.js";
 import type { GraphStore } from "./graph-store.js";
-import { icon, mountMorphSlot, type IconName, type MorphSlot } from "./icons-dom.js";
+import { icon, mountMorphSlot, type RemoteIconName, type MorphSlot } from "./icons-dom.js";
 import { renderKeyBar, updateKeyBarLatches } from "./keys.js";
 import { keyBytesWithModifiers, ModifierLatches, textBytesWithModifiers } from "./modifiers.js";
 import { NewDialog } from "./new-dialog.js";
 import { defaultDeviceLabel } from "./pairing.js";
-import { connectFailMessage } from "./peer.js";
 import type { PromptDraft, SpawnRequest } from "./protocol.js";
 import type { OnlineHost } from "./relay.js";
 import type { ShelfHandle } from "./shelf-controller.js";
@@ -24,7 +31,6 @@ import { createXtermHandle, TerminalView } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
 import { readFitOnly, writeFitOnly } from "./terminal-prefs.js";
 import type { PairSubmit } from "./ui.js";
-import { REMOTE_BANNER_LINES, bannerSvg } from "../../../../packages/look/banner/banner.js";
 import { renderColophon } from "../../../../packages/look/colophon/footer.js";
 
 export interface ShellCallbacks {
@@ -35,6 +41,10 @@ export interface ShellCallbacks {
   onPairAgain: () => void;
   onOpenSession: (id: string) => void;
   onLeaveSession: () => void;
+  /** Sign out through POST /auth/logout, from the menu or a direct button. */
+  onSignOut: () => void;
+  /** Forget this device (pairing keys go too) after the shell's confirm. */
+  onForgetDevice: () => void;
   /** Key-bar bytes with the latches applied; the shell owns the latches. */
   onKeyPress: (bytes: Uint8Array) => void;
   /** Phone-keyboard bytes with the latches applied. */
@@ -68,6 +78,7 @@ export interface Shell {
   setPairedHosts: (hosts: { host_id: string; label: string }[]) => void;
   setPairError: (message: string | null) => void;
   setPairBusy: (busy: boolean) => void;
+  setSignOutError: (message: string | null) => void;
   ensureTerminal: (id: string, cols: number, rows: number) => void;
   writeTerminal: (text: string) => void;
   clearTerminal: () => void;
@@ -133,6 +144,8 @@ export function createShell(
   let draft = { code: "", hostId: "", label: "" };
   let pairError: string | null = null;
   let pairBusy = false;
+  let signOutError: string | null = null;
+  let accountOpen = false;
   let sessionId: string | null = null;
   let sessionName = "";
   let sessionCols = 0;
@@ -177,54 +190,16 @@ export function createShell(
     }
   };
 
-  const failed = () => connectionState.startsWith("failed:");
-  const unpaired = () => connectionState === `failed: ${connectFailMessage("unknown_device")}`;
   // A live link is the wifi arc; anything else (connecting, retrying,
   // failed) is the crossed-out one, and the conn chip's word says which.
-  const linkIcon = (): IconName => (connectionState === "connected" ? "wifi" : "wifiOff");
+  const linkIcon = (): RemoteIconName => (connectionState === "connected" ? "wifi" : "wifiOff");
 
-  // The remote's own art only: `renderHeaderBanner(app)` also carries graphs.
-  const header = (): string => `
-    <header class="topbar" data-conn="${esc(connectionState)}">
-      <button type="button" id="brand-home" class="brand-home" aria-label="Canopy remote, home">${bannerSvg(REMOTE_BANNER_LINES, "look-banner-header look-banner-header-remote", "Canopy remote")}</button>
-      ${login === null ? "" : `<span class="login chip">${esc(login)}</span>`}
-      ${hostLabel === "" ? "" : `<span class="host chip">` +
-        `<span class="icon-slot" id="conn-icon" data-morph="host" aria-hidden="true">${icon(linkIcon())}</span>` +
-        `${esc(hostLabel)}</span>`}
-      <span class="conn chip" role="status">${esc(connectionState)}</span>
-    </header>`;
-
-  const connBanner = (): string => {
-    if (!failed() && !connectionState.startsWith("retrying")) {
-      return "";
-    }
-    return (
-      `<p class="conn-banner" role="status">${esc(connectionState)} ` +
-      (failed() ? `<button type="button" id="conn-retry">Retry</button> ` : "") +
-      (unpaired() ? `<button type="button" id="conn-pair-again">Pair again</button>` : "") +
-      `</p>`
-    );
-  };
-
-  const wireConnBanner = () => {
-    root.querySelector("#conn-retry")?.addEventListener("click", () => callbacks.onRetry());
-    root.querySelector("#conn-pair-again")?.addEventListener("click", () => callbacks.onPairAgain());
-  };
-
-  const hostOptions = (): string => {
-    if (online.length === 0) {
-      return `<option value="" selected>No hosts online</option>`;
-    }
-    if (online.length === 1 && online[0]) {
-      return `<option value="${esc(online[0].host_id)}" selected>${esc(online[0].label)}</option>`;
-    }
-    const options = online.map(
-      (host) =>
-        `<option value="${esc(host.host_id)}"${host.host_id === draft.hostId ? " selected" : ""}>${esc(host.label)}</option>`,
-    );
-    const placeholder = draft.hostId === "" ? " selected" : "";
-    return [`<option value=""${placeholder}>Choose a host…</option>`, ...options].join("");
-  };
+  // The chrome paints from the shell's state: the topbar, the banner and
+  // the pair form's host options.
+  const header = (): string =>
+    renderTopbar({ login, hostLabel, connectionState, link: linkIcon(), signOutError, accountOpen });
+  const connBanner = (): string => renderConnBanner(connectionState);
+  const wireConnBanner = (): void => wireConnActions(root, callbacks);
 
   const renderSignIn = () => {
     root.innerHTML = `
@@ -254,7 +229,7 @@ export function createShell(
         </label>
         <label>Host
           <select id="pair-host" name="host"${pairBusy || online.length === 0 ? " disabled" : ""}>
-            ${hostOptions()}
+            ${renderHostOptions(online, draft.hostId)}
           </select>
         </label>
         <label>Device label
@@ -296,6 +271,7 @@ export function createShell(
       <h2>Choose a host</h2>
       <ul id="host-list">${rows}</ul>
       <p><button type="button" id="pair-new">Pair a new host</button></p>
+      ${signOutButtonHtml(login, signOutError)}
     </main>`;
     for (const button of root.querySelectorAll<HTMLButtonElement>("[data-connect]")) {
       button.addEventListener("click", () => {
@@ -320,7 +296,7 @@ export function createShell(
     button.hidden = !enabled;
     // A morph says the meaning changed; a repaint that leaves the sheet as
     // it was must not restart it.
-    const next: IconName = (shelf?.isOpen() ?? false) ? "folderOpen" : "folder";
+    const next: RemoteIconName = (shelf?.isOpen() ?? false) ? "folderOpen" : "folder";
     if (shelfIcon !== null && shelfIcon.name !== next) {
       shelfIcon.to(next);
     }
@@ -509,6 +485,13 @@ export function createShell(
     }
     mountHeaderIcon();
     root.querySelector("#brand-home")?.addEventListener("click", () => goHome());
+    wireAccount(root, {
+      onSignOut: () => callbacks.onSignOut(),
+      onForget: () => callbacks.onForgetDevice(),
+      onToggle: (open) => {
+        accountOpen = open;
+      },
+    });
   };
 
   // The home tabs, the graph route and the watch lifecycle live in the
@@ -537,6 +520,9 @@ export function createShell(
       banner: () => connBanner(),
       wireBanner: () => wireConnBanner(),
       onDisconnect: () => callbacks.onDisconnect(),
+      onSignOut: () => callbacks.onSignOut(),
+      login: () => login,
+      signOutError: () => signOutError,
       connectionState: () => connectionState,
       route: () => route,
     },
@@ -577,6 +563,7 @@ export function createShell(
     showSignIn(): void {
       leaveRoute();
       route = "signin";
+      accountOpen = false;
       render();
     },
     showPair(prefillCode?: string): void {
@@ -690,6 +677,12 @@ export function createShell(
       pairBusy = busy;
       if (route === "pair") {
         snapshotDraft();
+        render();
+      }
+    },
+    setSignOutError(message: string | null): void {
+      signOutError = message;
+      if (route !== "signin") {
         render();
       }
     },

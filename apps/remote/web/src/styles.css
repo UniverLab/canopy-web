@@ -70,17 +70,26 @@ body[data-view="graph"] .fondo {
 #app {
   position: relative;
   z-index: 1;
-  margin: 0 auto;
-  max-width: 48rem;
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
 }
 
+/* The app is full width so the colophon band runs edge to edge; only the
+ * header's inner row and the mains keep the 48 rem measure. The main
+ * grows, so the colophon sits at the page bottom on short screens. */
 main {
+  width: 100%;
+  max-width: 48rem;
+  margin: 0 auto;
+  flex: 1 0 auto;
   padding: 0 1rem 1rem;
   padding-left: max(1rem, env(safe-area-inset-left));
   padding-right: max(1rem, env(safe-area-inset-right));
+}
+
+#app > .look-colophon {
+  width: 100%;
 }
 
 h1,
@@ -195,6 +204,16 @@ label > textarea {
   position: sticky;
   top: 0;
   z-index: 5;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+/* The header's centred row; the bar itself stays full width. No overflow
+ * clip here: the account menu floats over the page below the header. */
+.topbar-inner {
+  width: 100%;
+  max-width: 48rem;
+  margin: 0 auto;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -202,9 +221,6 @@ label > textarea {
   row-gap: 0.4rem;
   padding: 0.6rem 1rem;
   padding-top: max(0.6rem, env(safe-area-inset-top));
-  background: var(--bg);
-  border-bottom: 1px solid var(--line);
-  overflow: hidden;
   white-space: nowrap;
 }
 
@@ -266,6 +282,88 @@ label > textarea {
 .topbar[data-conn="connected"] .host {
   background: var(--tint-ok);
   border-color: var(--tint-line);
+}
+
+/* The signed-in account: the login chip opens a menu with Sign out and
+ * Forget this device. A details disclosure, so it toggles and focuses
+ * without script; the summary keeps the chip look, without a marker. */
+.account {
+  position: relative;
+  min-width: 0;
+  flex-shrink: 1;
+  margin: 0;
+}
+
+.account > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.account > summary::-webkit-details-marker {
+  display: none;
+}
+
+.account-menu {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 12rem;
+  max-width: calc(100vw - 2rem);
+  padding: 0.75rem;
+  background: var(--surface-bg-raise);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  white-space: normal;
+}
+
+.account-name {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.4rem;
+  width: 100%;
+  text-align: left;
+}
+
+/* The direct control names the login too; the icon sits beside the words. */
+#signout {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.signout-error {
+  color: var(--ink);
+  background: var(--tint-error);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.signout-error:empty {
+  display: none;
+}
+
+.signout-error:not(:empty)::before {
+  content: "Error: ";
+  color: var(--err-label);
 }
 
 .conn-banner {

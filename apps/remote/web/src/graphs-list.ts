@@ -6,7 +6,7 @@
 // here pauses, continues or resets anything.
 
 import { icon } from "./icons-dom.js";
-import type { IconName } from "./icons-dom.js";
+import type { RemoteIconName } from "./icons-dom.js";
 import type { GraphSummary, SpecStatus } from "./protocol.js";
 
 /** The word the chip shows: a blocked graph reads blocked, not paused. */
@@ -17,7 +17,7 @@ export function graphStatusWord(summary: Pick<GraphSummary, "status" | "blocked"
   return summary.status === "pausing" ? "paused" : summary.status;
 }
 
-const STATUS_ICON: Record<string, IconName> = {
+const STATUS_ICON: Record<string, RemoteIconName> = {
   running: "loader",
   paused: "pause",
   failed: "x",
@@ -28,7 +28,7 @@ const STATUS_ICON: Record<string, IconName> = {
 /** The chip's icon: a spinner while it runs, an alert while it is blocked.
  * Own keys only — a host status like "constructor" must circle, never fall
  * through to a prototype member and break the whole list. */
-export function graphStatusIcon(word: string): IconName {
+export function graphStatusIcon(word: string): RemoteIconName {
   return Object.hasOwn(STATUS_ICON, word) ? STATUS_ICON[word] : "circle";
 }
 
@@ -46,7 +46,7 @@ export function statusChip(summary: Pick<GraphSummary, "status" | "blocked">): s
 
 /** One checklist mark: its icon and the word behind the icon. */
 export interface SpecMark {
-  icon: IconName;
+  icon: RemoteIconName;
   label: string;
 }
 

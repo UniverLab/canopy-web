@@ -25,6 +25,7 @@ describe("web/src/styles.css", () => {
       ".composer-error::before",
       ".sheet-error:not(:empty)::before",
       "#pair-error:not(:empty)::before",
+      ".signout-error:not(:empty)::before",
     ]) {
       expect(styles, selector).toContain(selector);
     }

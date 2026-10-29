@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * The remote's icon layer: static markup through the kit's iconSvg, and a
- * morph slot that changes an icon's meaning without moving its box.
+ * The remote's icon layer: static markup through the kit's iconSvgFrom over
+ * the remote's own subset, and a morph slot that changes an icon's meaning
+ * without moving its box.
  */
 import { afterEach, describe, expect, it } from "vitest";
 import { canonicalD } from "morphicons/dom";
@@ -16,7 +17,7 @@ describe("icon", () => {
 
   it("is the kit's iconSvg", () => {
     expect(icon("send")).toBe(iconSvg("send"));
-    expect(icon("copy", { size: 20 })).toContain(`width="20" height="20"`);
+    expect(icon("check", { size: 20 })).toContain(`width="20" height="20"`);
   });
 
   it("renders one svg, hidden from readers unless labelled", () => {
@@ -73,7 +74,7 @@ describe("mountMorphSlot", () => {
   });
 
   it("keeps the box through a morph", () => {
-    const { host, morph } = slot("copy");
+    const { host, morph } = slot("check");
     const before = host.querySelector("svg")?.getBoundingClientRect();
     morph.to("loader");
     const after = host.querySelector("svg")?.getBoundingClientRect();
