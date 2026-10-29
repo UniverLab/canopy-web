@@ -285,6 +285,65 @@ test("puts the Content textarea full width in its card", async ({ page }, testIn
   await testInfo.attach("builder-390x844", { body: shot, contentType: "image/png" });
 });
 
+test("builder picks sections by kind at 390x844", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator(".composer-builder").click();
+  await expect(page.locator("#builder-form")).toBeVisible();
+  // One Instruction section, no free title field.
+  await expect(page.locator(".section-kind")).toHaveValue("instruction");
+  await expect(page.locator(".section-title")).toHaveCount(0);
+  // Add section offers the six kinds; choosing appends that kind.
+  await expect(page.locator("#builder-add-section option")).toHaveCount(7);
+  await page.locator("#builder-add-section").selectOption("goal");
+  await expect(page.locator(".builder-section")).toHaveCount(2);
+  await expect(page.locator('.section-kind[data-index="1"]')).toHaveValue("goal");
+  // The kind selector and the textarea stack full width in the card, like
+  // the preset control spans the form; move/remove stay inside the page.
+  const measured = await page.evaluate(() => {
+    const card = document.querySelector(".builder-section") as HTMLElement;
+    const select = document.querySelector(".section-kind") as HTMLSelectElement;
+    const area = document.querySelector(".section-content") as HTMLTextAreaElement;
+    const preset = document.querySelector("#builder-preset") as HTMLSelectElement;
+    const add = document.querySelector("#builder-add-section") as HTMLSelectElement;
+    const cardStyle = getComputedStyle(card);
+    const cardContent =
+      card.clientWidth - parseFloat(cardStyle.paddingLeft) - parseFloat(cardStyle.paddingRight);
+    const selectBox = select.getBoundingClientRect();
+    const areaBox = area.getBoundingClientRect();
+    const presetBox = preset.getBoundingClientRect();
+    const addBox = add.getBoundingClientRect();
+    const form = document.querySelector("#builder-form") as HTMLElement;
+    const actions = [...document.querySelectorAll(".section-actions button")].map((button) => {
+      const box = button.getBoundingClientRect();
+      return { left: box.left, right: box.right };
+    });
+    return {
+      cardContent,
+      selectWidth: selectBox.width,
+      areaWidth: areaBox.width,
+      stacked: selectBox.bottom <= areaBox.top,
+      sameLeft: Math.abs(selectBox.left - areaBox.left),
+      presetWidth: presetBox.width,
+      addWidth: addBox.width,
+      formWidth: form.clientWidth,
+      actions,
+    };
+  });
+  expect(Math.abs(measured.selectWidth - measured.cardContent)).toBeLessThanOrEqual(1);
+  expect(Math.abs(measured.areaWidth - measured.cardContent)).toBeLessThanOrEqual(1);
+  expect(measured.stacked).toBe(true);
+  expect(measured.sameLeft).toBeLessThanOrEqual(1);
+  expect(Math.abs(measured.presetWidth - measured.formWidth)).toBeLessThanOrEqual(1);
+  expect(Math.abs(measured.addWidth - measured.formWidth)).toBeLessThanOrEqual(1);
+  for (const box of measured.actions) {
+    expect(box.left).toBeGreaterThanOrEqual(0);
+    expect(box.right).toBeLessThanOrEqual(390);
+  }
+  expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
+  const shot = await page.screenshot({ path: testInfo.outputPath("builder-kinds-390x844.png") });
+  await testInfo.attach("builder-kinds-390x844", { body: shot, contentType: "image/png" });
+});
+
 test("terminal pans when zoomed", async ({ page }) => {
   const fit = page.locator("#term-fit");
   await expect(fit).toHaveAttribute("aria-pressed", "false");

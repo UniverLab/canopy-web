@@ -139,12 +139,18 @@ describe("Prompt Builder send through the shell", () => {
     channel.sent.length = 0;
 
     shell.showBuilder();
-    const title = root.querySelector<HTMLInputElement>(".section-title");
-    if (!title) {
-      throw new Error("missing section title");
+    const kind = root.querySelector<HTMLSelectElement>(".section-kind");
+    if (!kind) {
+      throw new Error("missing section kind");
     }
-    title.value = "Goal";
-    title.dispatchEvent(new Event("input", { bubbles: true }));
+    kind.value = "goal";
+    kind.dispatchEvent(new Event("change", { bubbles: true }));
+    const content = root.querySelector<HTMLTextAreaElement>(".section-content");
+    if (!content) {
+      throw new Error("missing section content");
+    }
+    content.value = "ship it";
+    content.dispatchEvent(new Event("input", { bubbles: true }));
     root.querySelector<HTMLButtonElement>("#builder-send")?.click();
 
     expect(channel.sent).toHaveLength(1);
@@ -153,7 +159,7 @@ describe("Prompt Builder send through the shell", () => {
       t: "prompt",
       req: frame.req,
       id: "s1",
-      draft: { sections: [{ title: "Goal", content: "" }], skills: [] },
+      draft: { sections: [{ title: "goal", content: "ship it" }], skills: [] },
     });
     expect(root.querySelector(".sheet-overlay")).not.toBeNull();
 

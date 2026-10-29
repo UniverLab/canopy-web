@@ -2,12 +2,54 @@
 // The Prompt Builder draft: the model the sheet edits, the pure operations
 // that change it, the wire form sent to the host, and its sessionStorage
 // persistence. The host composes the final text (compose), so nothing here
-// knows canopy's prompt rules. Every storage access is wrapped: a browser
-// that denies sessionStorage must not break the sheet.
+// knows canopy's prompt rules beyond the section kinds below. Every storage
+// access is wrapped: a browser that denies sessionStorage must not break
+// the sheet.
+//
+// Section kinds (read from harness-canopy
+// src/domain/prompt_draft.rs at commit c33f0bc, file last touched in
+// e8d292a): `build_prompt_body` groups sections into goal, context,
+// instruction (+ preset), resources, constraints and tools (+ skills), in
+// that order. A section's kind is the prefix of its title — `instruction`,
+// `instruction_2`, … — matched by `section_matches` (exact or
+// `kind_` + suffix). The sheet edits the kind through a picker and the
+// wire titles are numbered per kind, so the host needs no change.
 
 import type { PromptDraft, PromptDraftSection } from "./protocol.js";
 
 export const DRAFT_STORAGE_KEY = "canopy.remote.prompt-draft.v1";
+
+/** The six section kinds `build_prompt_body` groups, in its group order. */
+export type SectionKind = "goal" | "context" | "instruction" | "resources" | "constraints" | "tools";
+
+export const SECTION_KINDS: readonly SectionKind[] = [
+  "goal",
+  "context",
+  "instruction",
+  "resources",
+  "constraints",
+  "tools",
+];
+
+/** The picker's label for a kind: capitalized (`tools` → `Tools`). */
+export function sectionLabel(kind: SectionKind): string {
+  return kind[0].toUpperCase() + kind.slice(1);
+}
+
+/**
+ * The kind a title names: the `section_matches` prefix rule (exact or
+ * `kind_` + suffix), case-insensitive, falling back to the TUI's default
+ * section, Instruction. Legacy free titles resolve through the same rule.
+ */
+export function kindFromTitle(title: string): SectionKind {
+  const text = title.trim().toLowerCase();
+  for (const kind of SECTION_KINDS) {
+    if (text === kind || text.startsWith(`${kind}_`)) {
+      return kind;
+    }
+  }
+  return "instruction";
+}
 
 export interface DraftStorage {
   getItem: (key: string) => string | null;
@@ -26,9 +68,8 @@ export function emptyDraft(): PromptDraft {
   return { sections: [], skills: [] };
 }
 
-export function addSection(draft: PromptDraft, section?: Partial<PromptDraftSection>): PromptDraft {
-  const next: PromptDraftSection = { title: section?.title ?? "", content: section?.content ?? "" };
-  return { ...draft, sections: [...draft.sections, next] };
+export function addSection(draft: PromptDraft, kind: SectionKind): PromptDraft {
+  return { ...draft, sections: [...draft.sections, { title: kind, content: "" }] };
 }
 
 export function removeSection(draft: PromptDraft, index: number): PromptDraft {
@@ -103,14 +144,30 @@ export function toggleSkill(draft: PromptDraft, name: string): PromptDraft {
 }
 
 export function isBlankSection(section: PromptDraftSection): boolean {
-  return section.title.trim() === "" && section.content.trim() === "";
+  return section.content.trim() === "";
 }
 
-// The wire form: fully empty sections are dropped, skills is always an
-// array, and an empty preset/project is omitted rather than sent as "".
+// The wire form: sections with no content are dropped (the host would drop
+// their empty content anyway), the survivors take titles numbered per kind
+// — the first keeps the bare kind, later ones take `_2`, `_3`, … — skills
+// is always an array, and an empty preset/project is omitted, never "".
 export function wireDraft(draft: PromptDraft): PromptDraft {
+  const counts = {} as Record<SectionKind, number>;
+  const sections = [];
+  for (const section of draft.sections) {
+    if (isBlankSection(section)) {
+      continue;
+    }
+    const kind = kindFromTitle(section.title);
+    const occurrence = (counts[kind] || 0) + 1;
+    counts[kind] = occurrence;
+    sections.push({
+      title: occurrence === 1 ? kind : `${kind}_${occurrence}`,
+      content: section.content,
+    });
+  }
   const wire: PromptDraft = {
-    sections: draft.sections.filter((section) => !isBlankSection(section)),
+    sections,
     skills: [...new Set(draft.skills.filter((name) => name !== ""))],
   };
   if (draft.preset !== undefined && draft.preset !== "") {

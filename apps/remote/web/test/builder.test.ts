@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Builder } from "../src/builder.js";
 import { CatalogStore } from "../src/catalog.js";
 import { DRAFT_STORAGE_KEY, saveDraft } from "../src/draft.js";
+import type { SectionKind } from "../src/draft.js";
 import type { PromptDraft } from "../src/protocol.js";
 import type { Catalog } from "../src/protocol.js";
 import { FakeStorage } from "./fakes.js";
@@ -25,8 +26,8 @@ const CATALOG: Catalog = {
 
 const STORED: PromptDraft = {
   sections: [
-    { title: "Goal", content: "ship it" },
-    { title: "Notes", content: "" },
+    { title: "goal", content: "ship it" },
+    { title: "instruction", content: "" },
   ],
   preset: "review",
   skills: ["tdd"],
@@ -54,16 +55,26 @@ describe("Builder", () => {
     builder.open(root);
   };
 
-  const setValue = (selector: string, value: string): void => {
-    const el = query<HTMLInputElement | HTMLTextAreaElement>(selector);
+  const setContent = (selector: string, value: string): void => {
+    const el = query<HTMLTextAreaElement>(selector);
     el.value = value;
     el.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+
+  const setKind = (index: number, kind: SectionKind): void => {
+    const el = query<HTMLSelectElement>(`.section-kind[data-index="${index}"]`);
+    el.value = kind;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
   };
 
   const select = (selector: string, value: string): void => {
     const el = query<HTMLSelectElement>(selector);
     el.value = value;
     el.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+
+  const addKind = (kind: SectionKind): void => {
+    select("#builder-add-section", kind);
   };
 
   const toggle = (name: string): void => {
@@ -77,8 +88,11 @@ describe("Builder", () => {
     box.dispatchEvent(new Event("change", { bubbles: true }));
   };
 
-  const titles = (): string[] =>
-    [...root.querySelectorAll<HTMLInputElement>(".section-title")].map((input) => input.value);
+  const kinds = (): string[] =>
+    [...root.querySelectorAll<HTMLSelectElement>(".section-kind")].map((select) => select.value);
+
+  const contents = (): string[] =>
+    [...root.querySelectorAll<HTMLTextAreaElement>(".section-content")].map((area) => area.value);
 
   const stored = (): PromptDraft | null => {
     const raw = storage.getItem(DRAFT_STORAGE_KEY);
@@ -116,19 +130,21 @@ describe("Builder", () => {
     document.body.innerHTML = "";
   });
 
-  it("opens with one empty section", () => {
+  it("opens with one Instruction section and no free title field", () => {
     open();
     expect(builder.isOpen).toBe(true);
     expect(root.querySelectorAll(".builder-section")).toHaveLength(1);
-    expect(titles()).toEqual([""]);
+    expect(kinds()).toEqual(["instruction"]);
+    expect(root.querySelectorAll(".section-title")).toHaveLength(0);
     expect(query<HTMLSelectElement>("#builder-preset").value).toBe("");
     expect(query<HTMLSelectElement>("#builder-project").value).toBe("");
   });
 
-  it("loads the saved draft, including preset preview and skills", () => {
+  it("loads the saved draft, including kinds, preset preview and skills", () => {
     saveDraft(STORED, storage);
     open();
-    expect(titles()).toEqual(["Goal", "Notes"]);
+    expect(kinds()).toEqual(["goal", "instruction"]);
+    expect(contents()).toEqual(["ship it", ""]);
     expect(query<HTMLSelectElement>("#builder-preset").value).toBe("review");
     expect(query("#builder-preset-preview").textContent).toBe("Review the diff.");
     expect(query<HTMLSelectElement>("#builder-project").value).toBe("demo");
@@ -137,41 +153,104 @@ describe("Builder", () => {
     expect(skills.map((box) => box.checked)).toEqual([true, false]);
   });
 
+  it("loads a legacy free-title draft with kinds derived from the titles", () => {
+    storage.setItem(
+      DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        sections: [
+          { title: "Goal", content: "ship it" },
+          { title: "Notes", content: "keep" },
+        ],
+        skills: [],
+      }),
+    );
+    open();
+    expect(kinds()).toEqual(["goal", "instruction"]);
+    expect(contents()).toEqual(["ship it", "keep"]);
+    expect(query<HTMLElement>("#builder-error").hidden).toBe(true);
+  });
+
   it("starts fresh with an error when the saved draft is unreadable", () => {
     storage.setItem(DRAFT_STORAGE_KEY, "{not json");
     open();
-    expect(titles()).toEqual([""]);
+    expect(kinds()).toEqual(["instruction"]);
     const error = query("#builder-error");
     expect(error.textContent).toBe("Saved draft was unreadable; started fresh.");
     expect((error as HTMLElement).hidden).toBe(false);
   });
 
-  it("adds, moves and removes sections", () => {
+  it("appends the kind chosen in the Add section menu", () => {
     open();
-    setValue(".section-title", "A");
-    query<HTMLButtonElement>("#builder-add-section").click();
-    expect(root.querySelectorAll(".builder-section")).toHaveLength(2);
-    setValue('.section-title[data-index="1"]', "B");
-    expect(titles()).toEqual(["A", "B"]);
+    const menu = query<HTMLSelectElement>("#builder-add-section");
+    expect(menu.value).toBe("");
+    expect([...menu.options].map((option) => option.value)).toEqual([
+      "",
+      "goal",
+      "context",
+      "instruction",
+      "resources",
+      "constraints",
+      "tools",
+    ]);
+    expect([...menu.options].map((option) => option.textContent)).toEqual([
+      "Choose kind…",
+      "Goal",
+      "Context",
+      "Instruction",
+      "Resources",
+      "Constraints",
+      "Tools",
+    ]);
 
-    query<HTMLButtonElement>('.section-down[data-index="0"]').click();
-    expect(titles()).toEqual(["B", "A"]);
-    expect(stored()?.sections.map((section) => section.title)).toEqual(["B", "A"]);
+    // Re-choosing the placeholder adds nothing.
+    select("#builder-add-section", "");
+    expect(root.querySelectorAll(".builder-section")).toHaveLength(1);
 
-    query<HTMLButtonElement>('.section-up[data-index="1"]').click();
-    expect(titles()).toEqual(["A", "B"]);
-
-    query<HTMLButtonElement>('.section-remove[data-index="0"]').click();
-    expect(titles()).toEqual(["B"]);
-    expect(stored()?.sections.map((section) => section.title)).toEqual(["B"]);
+    addKind("tools");
+    expect(kinds()).toEqual(["instruction", "tools"]);
+    expect(stored()?.sections.map((section) => section.title)).toEqual(["instruction", "tools"]);
+    // Choosing re-renders, so the menu is back at its placeholder.
+    expect(query<HTMLSelectElement>("#builder-add-section").value).toBe("");
   });
 
-  it("composes the wire draft and shows the text read-only", () => {
+  it("changes a section's kind through its selector", () => {
+    saveDraft(STORED, storage);
     open();
-    setValue(".section-title", "Goal");
-    setValue(".section-content", "ship it");
-    query<HTMLButtonElement>("#builder-add-section").click();
-    setValue('.section-title[data-index="1"]', "   ");
+    setKind(1, "constraints");
+    expect(kinds()).toEqual(["goal", "constraints"]);
+    expect(stored()?.sections.map((section) => section.title)).toEqual(["goal", "constraints"]);
+    // Content is untouched by the kind change.
+    expect(contents()).toEqual(["ship it", ""]);
+  });
+
+  it("adds, moves and removes sections", () => {
+    open();
+    setContent(".section-content", "A");
+    addKind("goal");
+    expect(root.querySelectorAll(".builder-section")).toHaveLength(2);
+    setContent('.section-content[data-index="1"]', "B");
+    expect(kinds()).toEqual(["instruction", "goal"]);
+
+    query<HTMLButtonElement>('.section-down[data-index="0"]').click();
+    expect(kinds()).toEqual(["goal", "instruction"]);
+    expect(contents()).toEqual(["B", "A"]);
+    expect(stored()?.sections.map((section) => section.title)).toEqual(["goal", "instruction"]);
+
+    query<HTMLButtonElement>('.section-up[data-index="1"]').click();
+    expect(kinds()).toEqual(["instruction", "goal"]);
+
+    query<HTMLButtonElement>('.section-remove[data-index="0"]').click();
+    expect(kinds()).toEqual(["goal"]);
+    expect(stored()?.sections.map((section) => section.title)).toEqual(["goal"]);
+  });
+
+  it("composes the wire draft with generated titles and shows the text read-only", () => {
+    open();
+    setContent(".section-content", "ship it");
+    addKind("instruction");
+    setContent('.section-content[data-index="1"]', "   ");
+    addKind("goal");
+    setContent('.section-content[data-index="2"]', "the goal");
     select("#builder-preset", "review");
     select("#builder-project", "demo");
     toggle("tdd");
@@ -179,7 +258,10 @@ describe("Builder", () => {
     query<HTMLButtonElement>("#builder-preview").click();
     expect(composed).toHaveLength(1);
     expect(composed[0]?.draft).toEqual({
-      sections: [{ title: "Goal", content: "ship it" }],
+      sections: [
+        { title: "instruction", content: "ship it" },
+        { title: "goal", content: "the goal" },
+      ],
       preset: "review",
       skills: ["tdd"],
       project: "demo",
@@ -199,7 +281,7 @@ describe("Builder", () => {
     query<HTMLButtonElement>("#builder-preview").click();
     builder.handleComposed(composed[0]?.req ?? "", "old text");
     expect(query<HTMLElement>("#builder-composed").hidden).toBe(false);
-    setValue(".section-title", "new");
+    setContent(".section-content", "new");
     expect(query<HTMLElement>("#builder-composed").hidden).toBe(true);
     expect(query("#builder-composed").textContent).toBe("");
     // A compose reply that lands after the edit is ignored.
@@ -207,16 +289,25 @@ describe("Builder", () => {
     expect(query<HTMLElement>("#builder-composed").hidden).toBe(true);
   });
 
+  it("drops a stale preview when a kind changes", () => {
+    open();
+    setContent(".section-content", "words");
+    query<HTMLButtonElement>("#builder-preview").click();
+    builder.handleComposed(composed[0]?.req ?? "", "old text");
+    setKind(0, "goal");
+    expect(query<HTMLElement>("#builder-composed").hidden).toBe(true);
+  });
+
   it("sends the draft to the open session and clears it on the matching ok", () => {
     open();
-    setValue(".section-title", "Goal");
-    setValue(".section-content", "ship it");
+    setKind(0, "goal");
+    setContent(".section-content", "ship it");
     select("#builder-project", "demo");
     toggle("docs");
     query<HTMLButtonElement>("#builder-send").click();
     expect(sends).toHaveLength(1);
     expect(sends[0]?.draft).toEqual({
-      sections: [{ title: "Goal", content: "ship it" }],
+      sections: [{ title: "goal", content: "ship it" }],
       skills: ["docs"],
       project: "demo",
     });
@@ -227,9 +318,9 @@ describe("Builder", () => {
     expect(builder.isOpen).toBe(false);
     expect(storage.getItem(DRAFT_STORAGE_KEY)).toBeNull();
 
-    // A new draft starts over.
+    // A new draft starts over with one Instruction section.
     open();
-    expect(titles()).toEqual([""]);
+    expect(kinds()).toEqual(["instruction"]);
     const skills = [...root.querySelectorAll<HTMLInputElement>(".builder-skill")];
     expect(skills.every((box) => !box.checked)).toBe(true);
     expect(query<HTMLSelectElement>("#builder-preset").value).toBe("");
@@ -238,8 +329,8 @@ describe("Builder", () => {
 
   it("keeps the draft across closing and reopening", () => {
     open();
-    setValue(".section-title", "Goal");
-    setValue(".section-content", "keep me");
+    setKind(0, "goal");
+    setContent(".section-content", "keep me");
     select("#builder-preset", "plan");
     expect(stored()?.preset).toBe("plan");
     query<HTMLButtonElement>("#builder-close").click();
@@ -247,7 +338,7 @@ describe("Builder", () => {
     expect(storage.getItem(DRAFT_STORAGE_KEY)).not.toBeNull();
 
     open();
-    expect(titles()).toEqual(["Goal"]);
+    expect(kinds()).toEqual(["goal"]);
     expect(query<HTMLTextAreaElement>(".section-content").value).toBe("keep me");
     expect(query<HTMLSelectElement>("#builder-preset").value).toBe("plan");
     expect(query("#builder-preset-preview").textContent).toBe("Plan it first.");
@@ -256,10 +347,10 @@ describe("Builder", () => {
   it("keeps the draft in memory even when storage denies writes", () => {
     storage.failWrites = true;
     open();
-    setValue(".section-title", "Goal");
+    setKind(0, "goal");
     query<HTMLButtonElement>("#builder-close").click();
     open();
-    expect(titles()).toEqual(["Goal"]);
+    expect(kinds()).toEqual(["goal"]);
     expect(storage.getItem(DRAFT_STORAGE_KEY)).toBeNull();
   });
 
@@ -275,7 +366,7 @@ describe("Builder", () => {
 
   it("shows unknown preset, skill and project errors beside their fields", () => {
     open();
-    setValue(".section-title", "Goal");
+    setContent(".section-content", "words");
     query<HTMLButtonElement>("#builder-preview").click();
     expect(builder.handleError("unknown preset: fast", composed[0]?.req ?? "", "unknown_preset")).toBe(
       true,
@@ -301,7 +392,7 @@ describe("Builder", () => {
     expect(builder.handleError("late", "no-such-req", "internal")).toBe(false);
     // The form keeps its draft on error.
     expect(builder.isOpen).toBe(true);
-    expect(titles()).toEqual(["Goal"]);
+    expect(kinds()).toEqual(["instruction"]);
   });
 
   it("keeps a draft preset and project the catalog no longer lists selectable", () => {

@@ -5,26 +5,32 @@
 // asks the host to compose (compose/composed) and shows the text
 // read-only; Send ships prompt{id,draft} to the open session. The host
 // owns the prompt rules; the browser only sends the draft.
+//
+// Each section picks one of the host's six kinds (draft.ts) instead of a
+// free title, so every section lands in a group the host can place.
 
 import { CatalogStore } from "./catalog.js";
 import {
+  SECTION_KINDS,
   addSection,
   classifyDraftError,
   clearDraft,
   emptyDraft,
+  kindFromTitle,
   loadDraft,
   moveSection,
   parseStoredDraft,
   readRawDraft,
   removeSection,
   saveDraft,
+  sectionLabel,
   setPreset,
   setProject,
   setSkill,
   updateSection,
   wireDraft,
 } from "./draft.js";
-import type { DraftStorage } from "./draft.js";
+import type { DraftStorage, SectionKind } from "./draft.js";
 import { newReqId } from "./protocol.js";
 import type { PromptDraft } from "./protocol.js";
 import { Sheet, esc } from "./sheet.js";
@@ -98,8 +104,9 @@ export class Builder {
       }
     }
     this.initialized = true;
+    // A new draft starts with one Instruction section, the TUI's default.
     if (this.state.draft.sections.length === 0) {
-      this.state.draft = addSection(this.state.draft);
+      this.state.draft = addSection(this.state.draft, "instruction");
     }
     this.body = this.sheet.mount(parent);
     this.render();
@@ -186,7 +193,12 @@ export class Builder {
         <section class="builder-sections">
           <h3>Sections</h3>
           <ol class="builder-section-list" id="builder-section-list">${this.sectionsHtml()}</ol>
-          <button type="button" id="builder-add-section">Add section</button>
+          <label>Add section
+            <select id="builder-add-section">
+              <option value="" selected>Choose kind…</option>
+              ${this.kindOptions()}
+            </select>
+          </label>
         </section>
         <label>Preset
           <select id="builder-preset">${this.presetOptions()}</select>
@@ -230,6 +242,12 @@ export class Builder {
     }
   }
 
+  private kindOptions(): string {
+    return SECTION_KINDS.map(
+      (kind) => `<option value="${kind}">${sectionLabel(kind)}</option>`,
+    ).join("");
+  }
+
   private sectionsHtml(): string {
     const sections = this.state.draft.sections;
     return sections
@@ -237,8 +255,8 @@ export class Builder {
         const last = index === sections.length - 1;
         return `
           <li class="builder-section" data-index="${index}">
-            <label>Title
-              <input class="section-title" data-index="${index}" autocomplete="off" value="${esc(section.title)}">
+            <label>Kind
+              <select class="section-kind" data-index="${index}">${this.kindOptions()}</select>
             </label>
             <label>Content
               <textarea class="section-content" data-index="${index}" rows="3">${esc(section.content)}</textarea>
@@ -337,8 +355,15 @@ export class Builder {
       ev.preventDefault();
       this.send();
     });
-    body.querySelector("#builder-add-section")?.addEventListener("click", () => {
-      this.state.draft = addSection(this.state.draft);
+    // The Add menu is a picker like the preset's: choosing a kind appends
+    // a section titled with that kind, and the re-render resets the menu.
+    // The menu's options constrain the value, so only "" needs a guard.
+    body.querySelector<HTMLSelectElement>("#builder-add-section")?.addEventListener("change", (ev) => {
+      const kind = (ev.target as HTMLSelectElement).value;
+      if (kind === "") {
+        return;
+      }
+      this.state.draft = addSection(this.state.draft, kind as SectionKind);
       this.save();
       this.invalidatePreview();
       this.render();
@@ -361,15 +386,18 @@ export class Builder {
         this.render();
       });
     }
-    for (const input of body.querySelectorAll<HTMLInputElement>(".section-title")) {
-      input.addEventListener("input", () => {
-        this.state.draft = updateSection(this.state.draft, Number(input.dataset.index), {
-          title: input.value,
-        });
+    // The kind selects carry no `selected` marker: happy-dom only honors
+    // it on the first options, so each select takes its kind — derived
+    // from the section's title — by assignment (in document order, the
+    // sections' order) and reports changes back through the same index.
+    body.querySelectorAll<HTMLSelectElement>(".section-kind").forEach((select, index) => {
+      select.value = kindFromTitle(this.state.draft.sections[index].title);
+      select.addEventListener("change", () => {
+        this.state.draft = updateSection(this.state.draft, index, { title: select.value });
         this.save();
         this.invalidatePreview();
       });
-    }
+    });
     for (const area of body.querySelectorAll<HTMLTextAreaElement>(".section-content")) {
       area.addEventListener("input", () => {
         this.state.draft = updateSection(this.state.draft, Number(area.dataset.index), {

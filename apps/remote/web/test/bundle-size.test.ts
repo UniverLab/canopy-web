@@ -31,6 +31,13 @@ const OUT = path.join(tmpdir(), "canopy-remote-bundle");
 const BASELINE = 123_270;
 /** The budget this spec allows the icon language to add. */
 const BUDGET = 25_600;
+/**
+ * Allowance for the builder-kinds spec (kind strings, prefix derivation and
+ * the section picker): measured +199-237 B gzip over the icon-era baseline.
+ * Bumped by the orchestrator on 2026-10-29 after the Implementer reported the
+ * 48-byte headroom made any implementation of that spec impossible.
+ */
+const FEATURE_BUDGET = 1_024;
 /** The budget the lazy editor chunk is allowed, gzip bytes of JS. */
 const EDITOR_BUDGET = 30_000;
 /** The budget the editor's own stylesheet is allowed, gzip bytes of CSS. */
@@ -99,7 +106,7 @@ describe("the remote's bundle", () => {
     rmSync(OUT, { recursive: true, force: true });
     const report = { baseline: BASELINE, js, editorJs, css, editorCss, main, added: main - BASELINE };
     // Keep the numbers in the failure message: a regression says by how much.
-    expect(main, JSON.stringify(report)).toBeLessThanOrEqual(BASELINE + BUDGET);
+    expect(main, JSON.stringify(report)).toBeLessThanOrEqual(BASELINE + BUDGET + FEATURE_BUDGET);
     expect(editorJs, JSON.stringify(report)).toBeLessThanOrEqual(EDITOR_BUDGET);
     expect(editorCss, JSON.stringify(report)).toBeLessThanOrEqual(EDITOR_CSS_BUDGET);
     // The app still ships the icons inline: no sprite chunk, no font request.

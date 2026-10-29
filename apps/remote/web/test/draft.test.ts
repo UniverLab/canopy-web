@@ -2,17 +2,20 @@
 import { describe, expect, it } from "vitest";
 import {
   DRAFT_STORAGE_KEY,
+  SECTION_KINDS,
   addSection,
   classifyDraftError,
   clearDraft,
   emptyDraft,
   isBlankSection,
+  kindFromTitle,
   loadDraft,
   moveSection,
   parseStoredDraft,
   readRawDraft,
   removeSection,
   saveDraft,
+  sectionLabel,
   setPreset,
   setProject,
   setSkill,
@@ -39,12 +42,16 @@ describe("draft operations", () => {
     expect(emptyDraft()).toEqual({ sections: [], skills: [] });
   });
 
-  it("adds sections without mutating the draft", () => {
+  it("adds sections titled with the given kind without mutating the draft", () => {
     const before = emptyDraft();
-    const after = addSection(before, { title: "Goal" });
-    expect(after.sections).toEqual([{ title: "Goal", content: "" }]);
+    const after = addSection(before, "goal");
+    expect(after.sections).toEqual([{ title: "goal", content: "" }]);
     expect(before.sections).toEqual([]);
-    expect(addSection(after).sections[1]).toEqual({ title: "", content: "" });
+    expect(addSection(after, "instruction").sections[1]).toEqual({
+      title: "instruction",
+      content: "",
+    });
+    expect(addSection(after, "tools").sections[1]).toEqual({ title: "tools", content: "" });
   });
 
   it("removes by index and ignores out-of-range indexes", () => {
@@ -71,6 +78,10 @@ describe("draft operations", () => {
     const next = updateSection(DRAFT, 0, { content: "ship it today" });
     expect(next.sections[0]).toEqual({ title: "Goal", content: "ship it today" });
     expect(next.sections[1]).toBe(DRAFT.sections[1]);
+    expect(updateSection(DRAFT, 0, { title: "tools" }).sections[0]).toEqual({
+      title: "tools",
+      content: "ship it",
+    });
     expect(updateSection(DRAFT, 5, { title: "x" })).toBe(DRAFT);
   });
 
@@ -93,23 +104,124 @@ describe("draft operations", () => {
   });
 });
 
-describe("wireDraft", () => {
-  it("drops fully empty sections and always sends a skills array", () => {
+describe("section kinds", () => {
+  it("covers the six host groups in build_prompt_body order", () => {
+    expect([...SECTION_KINDS]).toEqual([
+      "goal",
+      "context",
+      "instruction",
+      "resources",
+      "constraints",
+      "tools",
+    ]);
+    expect(SECTION_KINDS.map(sectionLabel)).toEqual([
+      "Goal",
+      "Context",
+      "Instruction",
+      "Resources",
+      "Constraints",
+      "Tools",
+    ]);
+  });
+
+  it("derives the kind from a title prefix, else Instruction", () => {
+    expect(kindFromTitle("goal")).toBe("goal");
+    expect(kindFromTitle("Goal")).toBe("goal");
+    expect(kindFromTitle("  instruction_2 ")).toBe("instruction");
+    expect(kindFromTitle("TOOLS")).toBe("tools");
+    expect(kindFromTitle("constraints_3")).toBe("constraints");
+    expect(kindFromTitle("Notes")).toBe("instruction");
+    expect(kindFromTitle("")).toBe("instruction");
+    expect(kindFromTitle("goals are nice")).toBe("instruction");
+  });
+
+  it("generates a bare title first, then _2, _3 per kind", () => {
+    for (const kind of SECTION_KINDS) {
+      const draft: PromptDraft = {
+        sections: [
+          { title: kind, content: "a" },
+          { title: kind, content: "b" },
+          { title: kind, content: "c" },
+        ],
+        skills: [],
+      };
+      expect(wireDraft(draft).sections.map((section) => section.title)).toEqual([
+        kind,
+        `${kind}_2`,
+        `${kind}_3`,
+      ]);
+    }
+  });
+
+  it("numbers each kind independently on the wire", () => {
     const draft: PromptDraft = {
       sections: [
-        { title: "Goal", content: "ship it" },
-        { title: "", content: "   " },
-        { title: " Notes ", content: "" },
+        { title: "instruction", content: "a" },
+        { title: "instruction", content: "b" },
+        { title: "goal", content: "c" },
+        { title: "instruction", content: "d" },
+        { title: "goal", content: "e" },
+      ],
+      skills: [],
+    };
+    expect(wireDraft(draft).sections).toEqual([
+      { title: "instruction", content: "a" },
+      { title: "instruction_2", content: "b" },
+      { title: "goal", content: "c" },
+      { title: "instruction_3", content: "d" },
+      { title: "goal_2", content: "e" },
+    ]);
+  });
+
+  it("numbers legacy free titles by their derived kind", () => {
+    const draft: PromptDraft = {
+      sections: [
+        { title: "Goal", content: "a" },
+        { title: "Notes", content: "b" },
+        { title: "goal_2", content: "c" },
+      ],
+      skills: [],
+    };
+    expect(wireDraft(draft).sections).toEqual([
+      { title: "goal", content: "a" },
+      { title: "instruction", content: "b" },
+      { title: "goal_2", content: "c" },
+    ]);
+  });
+});
+
+describe("wireDraft", () => {
+  it("drops content-empty sections and always sends a skills array", () => {
+    const draft: PromptDraft = {
+      sections: [
+        { title: "goal", content: "ship it" },
+        { title: "context", content: "   " },
+        { title: "instruction", content: "notes" },
       ],
       skills: [],
     };
     expect(wireDraft(draft)).toEqual({
       sections: [
-        { title: "Goal", content: "ship it" },
-        { title: " Notes ", content: "" },
+        { title: "goal", content: "ship it" },
+        { title: "instruction", content: "notes" },
       ],
       skills: [],
     });
+  });
+
+  it("numbers only the sections it keeps", () => {
+    const draft: PromptDraft = {
+      sections: [
+        { title: "instruction", content: "a" },
+        { title: "instruction", content: "  " },
+        { title: "instruction", content: "b" },
+      ],
+      skills: [],
+    };
+    expect(wireDraft(draft).sections.map((section) => section.title)).toEqual([
+      "instruction",
+      "instruction_2",
+    ]);
   });
 
   it("omits empty preset and project and dedupes skills", () => {
@@ -121,16 +233,20 @@ describe("wireDraft", () => {
     };
     expect(wireDraft(draft)).toEqual({ sections: [], skills: ["tdd"] });
     expect(wireDraft(DRAFT)).toEqual({
-      sections: DRAFT.sections,
+      sections: [
+        { title: "goal", content: "ship it" },
+        { title: "constraints", content: "no deps" },
+        { title: "instruction", content: "keep it small" },
+      ],
       preset: "review",
       skills: ["tdd", "docs"],
       project: "demo",
     });
   });
 
-  it("recognizes blank sections", () => {
-    expect(isBlankSection({ title: " ", content: "\n" })).toBe(true);
-    expect(isBlankSection({ title: "x", content: "" })).toBe(false);
+  it("recognizes blank sections by content alone", () => {
+    expect(isBlankSection({ title: "goal", content: " \n" })).toBe(true);
+    expect(isBlankSection({ title: "goal", content: "x" })).toBe(false);
   });
 });
 
