@@ -9,6 +9,8 @@ import type { Shell } from "./app.js";
 import type { CatalogStore } from "./catalog.js";
 import type { JoinedSnapshot } from "./channel.js";
 import type { GraphStore } from "./graph-store.js";
+import { parseHostMetrics } from "./metrics.js";
+import type { MetricsStore } from "./metrics-store.js";
 import {
   parseCatalog,
   parseComposed,
@@ -47,10 +49,12 @@ export interface FrameRouterDeps {
   shelf?: ShelfFrames;
   /** The watched graphs; absent in tests that do not exercise them. */
   graphs?: GraphStore;
+  /** The host metrics; absent in tests that do not exercise them. */
+  metrics?: MetricsStore;
 }
 
 export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
-  const { store, controller, shell, catalog, shelf, graphs } = deps;
+  const { store, controller, shell, catalog, shelf, graphs, metrics } = deps;
 
   function handleSnapshot(snapshot: JoinedSnapshot): void {
     shell.ensureTerminal(snapshot.id, snapshot.cols, snapshot.rows);
@@ -100,6 +104,13 @@ export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
     const graphState = parseGraphState(frame);
     if (graphState) {
       graphs?.handleGraphState(graphState);
+      return;
+    }
+    // Host metrics pushes while watched; a host that sends none changes
+    // nothing, and the strip stays hidden.
+    const hostMetrics = parseHostMetrics(frame);
+    if (hostMetrics) {
+      metrics?.handleFrame(hostMetrics);
       return;
     }
     const catalogReply = parseCatalog(frame);

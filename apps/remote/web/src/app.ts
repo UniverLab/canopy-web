@@ -15,6 +15,8 @@ import { GraphRoute } from "./graph-route.js";
 import type { GraphStore } from "./graph-store.js";
 import { icon, mountMorphSlot, type RemoteIconName, type MorphSlot } from "./icons-dom.js";
 import { renderKeyBar, updateKeyBarLatches } from "./keys.js";
+import { MetricsRoute } from "./metrics-route.js";
+import type { MetricsStore } from "./metrics-store.js";
 import { keyBytesWithModifiers, ModifierLatches, textBytesWithModifiers } from "./modifiers.js";
 import { NewDialog } from "./new-dialog.js";
 import { defaultDeviceLabel } from "./pairing.js";
@@ -54,6 +56,10 @@ export interface ShellCallbacks {
   onWatchGraph: (id: string) => void;
   /** Stop watching: back, switching tab or hiding the page. */
   onUnwatchGraph: () => void;
+  /** Watch the host's metrics while the strip or the SysInfo view shows. */
+  onWatchMetrics?: () => void;
+  /** Stop watching: hiding the page, entering the terminal, leaving. */
+  onUnwatchMetrics?: () => void;
 }
 
 export interface Shell {
@@ -93,9 +99,11 @@ export interface ShellDeps {
   shelf?: ShelfHandle;
   /** The watched graphs; without it the Graphs tab stays empty. */
   graphs?: GraphStore;
+  /** The host metrics; without it no strip and no SysInfo view. */
+  metrics?: MetricsStore | null;
 }
 
-type Route = "signin" | "pair" | "hosts" | "sessions" | "session" | "graph";
+type Route = "signin" | "pair" | "hosts" | "sessions" | "session" | "graph" | "metrics";
 
 function esc(text: string): string {
   return text
@@ -179,7 +187,15 @@ export function createShell(
   // The chrome paints from the shell's state: the topbar, the banner and
   // the pair form's host options.
   const header = (): string =>
-    renderTopbar({ login, hostLabel, connectionState, link: linkIcon(), signOutError, accountOpen });
+    renderTopbar({
+      login,
+      hostLabel,
+      connectionState,
+      link: linkIcon(),
+      signOutError,
+      accountOpen,
+      metricsStrip: metricsRoute.stripHtml(),
+    });
   const connBanner = (): string => renderConnBanner(connectionState);
   const wireConnBanner = (): void => wireConnActions(root, callbacks);
 
@@ -394,7 +410,7 @@ export function createShell(
   // The header banner goes home through the session-leave path; before
   // pairing there is no home to show, so it stays put.
   const goHome = (): void => {
-    if (route === "session" || route === "graph" || route === "sessions") {
+    if (route === "session" || route === "graph" || route === "sessions" || route === "metrics") {
       callbacks.onLeaveSession();
     }
   };
@@ -415,10 +431,13 @@ export function createShell(
       graphRoute.renderSessionsRoute();
     } else if (route === "graph") {
       graphRoute.mountGraph();
+    } else if (route === "metrics") {
+      metricsRoute.mount();
     } else {
       renderSession();
     }
     mountHeaderIcon();
+    metricsRoute.afterRender();
     root.querySelector("#brand-home")?.addEventListener("click", () => goHome());
     wireAccount(root, {
       onSignOut: () => callbacks.onSignOut(),
@@ -463,7 +482,29 @@ export function createShell(
       route: () => route,
     },
   );
+  const metricsRoute = new MetricsRoute(
+    root,
+    deps?.metrics ?? null,
+    {
+      onWatchMetrics: () => callbacks.onWatchMetrics?.(),
+      onUnwatchMetrics: () => callbacks.onUnwatchMetrics?.(),
+      onOpenMetrics: () => metricsRoute.openCurrent(route, sessionId),
+    },
+    {
+      openSession: (id) => callbacks.onOpenSession(id),
+      showReturn: (ret) => { route = ret; beginRoute(); render(); },
+      teardownSession: () => teardownSessionWidgets(),
+      showMetrics: () => { closeSheets(); route = "metrics"; beginRoute(); render(); },
+      chrome: () => ({
+        header: header(), banner: connBanner(), login, signOutError,
+        connected: connectionState === "connected",
+        onSignOut: () => callbacks.onSignOut(),
+      }),
+      route: () => route,
+    },
+  );
   graphRoute.start();
+  metricsRoute.start();
 
   const stopStore = store.subscribe(() => {
     if (route === "sessions") {
@@ -560,7 +601,7 @@ export function createShell(
     },
     setConnectionState(state: string): void {
       connectionState = state;
-      if (route === "sessions" || route === "session" || route === "graph") {
+      if (route === "sessions" || route === "session" || route === "graph" || route === "metrics") {
         // Never a full re-render here: it would drop the terminal and
         // the composer's draft. Only the header and the banner carry the
         // state, so patch them in place — the host chip's link icon too. The
@@ -586,6 +627,7 @@ export function createShell(
         }
         // The disconnect note hangs on the connection, not the frames.
         graphRoute.syncConnection();
+        metricsRoute.syncConnection();
       } else if (route !== "signin") {
         render();
       }
@@ -722,6 +764,7 @@ export function createShell(
     dispose(): void {
       globalThis.clearInterval(ticker);
       graphRoute.dispose();
+      metricsRoute.dispose();
       stopStore();
       stopShelf?.();
       closeSheets();

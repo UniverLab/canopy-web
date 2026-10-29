@@ -12,6 +12,7 @@ import { createChannelHandler } from "./channel.js";
 import { generateDeviceKey } from "./crypto.js";
 import type { DeviceKey } from "./crypto.js";
 import { GraphStore } from "./graph-store.js";
+import { MetricsStore } from "./metrics-store.js";
 import { mountCanopyBackground } from "../../../../packages/look/fondo/index.js";
 import { buildCatalog, buildCompose, buildList, buildSpawn, newReqId } from "./protocol.js";
 import { runPairing } from "./pairing.js";
@@ -72,6 +73,8 @@ async function main(): Promise<void> {
   // The watched graphs: the list the Graphs tab polls and the one open
   // graph's state, through the same connection.
   const graphs = new GraphStore({ send: (data) => manager?.send(data) ?? false });
+  // The host's system metrics behind the strip and the SysInfo view.
+  const metrics = new MetricsStore({ send: (data) => manager?.send(data) ?? false });
 
   const shell: Shell = createShell(
     root,
@@ -83,9 +86,12 @@ async function main(): Promise<void> {
       onRetry: () => manager?.retryNow(),
       onPairAgain: () => {
         catalog.clear();
+        // Unwatch while the channel is still open so the host sees it.
+        metrics.unwatch();
         manager?.stop();
         manager = null;
         graphs.reset();
+        metrics.reset();
         shell.showPair();
       },
       onOpenSession: (id) => {
@@ -121,8 +127,14 @@ async function main(): Promise<void> {
       onUnwatchGraph: () => {
         graphs.unwatch();
       },
+      onWatchMetrics: () => {
+        metrics.watch();
+      },
+      onUnwatchMetrics: () => {
+        metrics.unwatch();
+      },
     },
-    { catalog, shelf, graphs },
+    { catalog, shelf, graphs, metrics },
   );
 
   const controller = new SessionController({
@@ -138,15 +150,17 @@ async function main(): Promise<void> {
     shell.setPairedHosts(await listHosts());
   };
 
-  const router = createFrameRouter({ store, controller, shell, catalog, shelf, graphs });
+  const router = createFrameRouter({ store, controller, shell, catalog, shelf, graphs, metrics });
 
   function startSession(host: HostRecord): void {
     // Detach while the old connection is still open so the host sees it.
     controller.close();
+    metrics.unwatch();
     manager?.stop();
     catalog.clear();
     shelf.reset();
     graphs.reset();
+    metrics.reset();
     shell.setHostLabel(host.label);
     shell.setHostId(host.host_id);
     shell.showSessions();
@@ -167,6 +181,7 @@ async function main(): Promise<void> {
         next.send(buildList(newReqId()));
         controller.reattach();
         graphs.rewatch();
+        metrics.rewatch();
       }
     });
     next.onMessage((data) => frames.push(data));
@@ -229,11 +244,13 @@ async function main(): Promise<void> {
     // signed in — the peer, the relay socket, the caches — and, on
     // Forget, the pairing keys themselves. The keys stay otherwise.
     controller.close();
+    metrics.unwatch();
     manager?.stop();
     manager = null;
     catalog.clear();
     shelf.reset();
     graphs.reset();
+    metrics.reset();
     relay.close();
     if (forget) {
       try {
@@ -250,11 +267,13 @@ async function main(): Promise<void> {
   async function doDisconnect(): Promise<void> {
     // Detach while the connection is still open so the host sees it.
     controller.close();
+    metrics.unwatch();
     manager?.stop();
     manager = null;
     catalog.clear();
     shelf.reset();
     graphs.reset();
+    metrics.reset();
     const stored = await listHosts();
     await refreshPaired();
     if (stored.length === 0) {

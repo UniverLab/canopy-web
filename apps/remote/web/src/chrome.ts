@@ -28,6 +28,8 @@ export interface TopbarState {
   link: RemoteIconName;
   signOutError: string | null;
   accountOpen: boolean;
+  /** The host-metrics strip markup; "" until the first frame lands. */
+  metricsStrip?: string;
 }
 
 /** The Forget confirmation: keys go, pairing goes, the sign-out follows. */
@@ -75,6 +77,7 @@ export function renderTopbar(state: TopbarState): string {
     `<button type="button" id="brand-home" class="brand-home" aria-label="Canopy remote, home">${bannerSvg(REMOTE_BANNER_LINES, "look-banner-header look-banner-header-remote", "Canopy remote")}</button>` +
     (state.login === null ? "" : accountHtml(state.login, state.signOutError, state.accountOpen)) +
     host +
+    (state.metricsStrip ?? "") +
     `<span class="conn chip" role="status">${esc(state.connectionState)}</span>` +
     `</div></header>`
   );

@@ -10,6 +10,7 @@ import { CatalogStore } from "./catalog.js";
 import { createChannelHandler } from "./channel.js";
 import { b64encode } from "./crypto.js";
 import { GraphStore } from "./graph-store.js";
+import { MetricsStore } from "./metrics-store.js";
 import { mountCanopyBackground } from "../../../../packages/look/fondo/index.js";
 import { buildCatalog, buildList, buildSpawn, newReqId } from "./protocol.js";
 import type { GraphState, GraphSummary, NodeStatus, PromptDraft, SessionItem, ShelfItem } from "./protocol.js";
@@ -394,6 +395,59 @@ function main(): void {
 
   const fakeGraphs = createFakeGraphs(deliver);
 
+  // --- The host metrics fixture ---------------------------------------
+  // A watch is answered with a frame at once and then every interval,
+  // until unwatch. ?metrics=silent never answers, so the strip-hiding
+  // path has a host of its own.
+  const metricsSilent = new URLSearchParams(globalThis.location.search).get("metrics") === "silent";
+  let metricsCount = 0;
+  let metricsTimer: ReturnType<typeof globalThis.setInterval> | null = null;
+
+  const metricsFrame = (patch: Record<string, unknown> = {}): unknown => {
+    metricsCount += 1;
+    return {
+      t: "host.metrics",
+      sampled_at: Date.now(),
+      metrics: {
+        cpu_usage: 10 + ((metricsCount * 7) % 60),
+        cpu_temperature_c: 54,
+        cpu_temp_source: "coretemp",
+        memory_used_mb: 3200,
+        memory_total_mb: 8192,
+        gpu: {
+          usage: 40,
+          temperature_c: 62,
+          name: "GeForce GTX",
+          vram_used_mb: 1024,
+          vram_total_mb: 8192,
+        },
+        power: { watts: 65, limit_watts: 120, source: "gpu" },
+        ...patch,
+      },
+    };
+  };
+
+  const stopMetrics = (): void => {
+    if (metricsTimer !== null) {
+      globalThis.clearInterval(metricsTimer);
+      metricsTimer = null;
+    }
+  };
+
+  const startMetrics = (intervalSec: number): void => {
+    // A watch while already pushing changes nothing: the subscription is
+    // idempotent, so a duplicate watch never resets the pushed samples.
+    if (metricsTimer !== null) {
+      return;
+    }
+    if (metricsSilent) {
+      return;
+    }
+    deliver(metricsFrame());
+    const interval = Math.min(60, Math.max(5, Math.floor(intervalSec)));
+    metricsTimer = globalThis.setInterval(() => deliver(metricsFrame()), interval * 1000);
+  };
+
   const send = (data: string): boolean => {
     const frame = JSON.parse(data) as {
       t: string;
@@ -405,6 +459,7 @@ function main(): void {
       workdir?: string;
       name?: string;
       file_id?: string;
+      interval?: number;
       draft?: PromptDraft;
     };
     sent.push(frame);
@@ -414,6 +469,10 @@ function main(): void {
       deliver({ t: "catalog", req: frame.req, ...CATALOG });
     } else if (fakeGraphs.handle(frame)) {
       // graphs, graph_watch and graph_unwatch: answered by the fixtures.
+    } else if (frame.t === "host.metrics.watch") {
+      startMetrics(typeof frame.interval === "number" ? frame.interval : 10);
+    } else if (frame.t === "host.metrics.unwatch") {
+      stopMetrics();
     } else if (frame.t === "attach" && typeof frame.id === "string") {
       const full = b64(SMOKE_OUTPUT);
       deliver({ t: "snapshot", id: frame.id, cols: 80, rows: 24, seq, data: full.slice(0, 10) });
@@ -492,6 +551,7 @@ function main(): void {
   // the same way.
   const shelf = new ShelfController({ send, sessions: store });
   const graphs = new GraphStore({ send });
+  const metrics = new MetricsStore({ send });
 
   const shell = createShell(
     root,
@@ -533,8 +593,14 @@ function main(): void {
       onUnwatchGraph: () => {
         graphs.unwatch();
       },
+      onWatchMetrics: () => {
+        metrics.watch();
+      },
+      onUnwatchMetrics: () => {
+        metrics.unwatch();
+      },
     },
-    { catalog, shelf, graphs },
+    { catalog, shelf, graphs, metrics },
   );
 
   const controller = new SessionController({
@@ -555,7 +621,7 @@ function main(): void {
   });
 
   // The smoke test drives the same routing the app uses.
-  const router = createFrameRouter({ store, controller, shell, catalog, shelf, graphs });
+  const router = createFrameRouter({ store, controller, shell, catalog, shelf, graphs, metrics });
   const frames = createChannelHandler({
     onSnapshot: router.handleSnapshot,
     onFrame: router.handleFrame,
@@ -613,6 +679,9 @@ function main(): void {
     graphTick: () => {
       fakeGraphs.tick();
     },
+    pushMetrics: (patch?: Record<string, unknown>) => {
+      deliver(metricsFrame(patch ?? {}));
+    },
   };
 }
 
@@ -626,6 +695,8 @@ declare global {
       failNextPrompt: (code: string, message: string) => void;
       /** Advance the running graph fixture one step and push its state. */
       graphTick: () => void;
+      /** Push one metrics frame, with the patch merged over the fixture. */
+      pushMetrics: (patch?: Record<string, unknown>) => void;
     };
   }
 }

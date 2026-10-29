@@ -1565,3 +1565,160 @@ label > textarea {
     animation: none;
   }
 }
+
+/* --- The host-metrics strip and the SysInfo view ---------------------- */
+
+/* The strip reads as a chip and taps like a button; it wraps onto its
+ * own header row on a 360 px phone rather than squeezing the conn chip. */
+.topbar .metrics-strip {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--muted);
+  background: transparent;
+  min-height: 0;
+  min-width: 0;
+  flex-shrink: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.topbar .metrics-strip b {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.metrics-strip .m-sep,
+.metric-value .m-sep {
+  color: var(--muted);
+  padding: 0 0.3rem;
+}
+
+/* The TUI's alert ink: amber at warn, red at crit, dim for n/a. */
+#metrics-strip [data-level="warn"],
+.metrics-view [data-level="warn"] {
+  color: var(--attention);
+}
+
+#metrics-strip [data-level="crit"],
+.metrics-view [data-level="crit"] {
+  color: var(--err-label);
+}
+
+#metrics-strip [data-level="na"],
+.metrics-view [data-level="na"] {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/* A stale strip dims until the link is back. */
+.topbar:not([data-conn="connected"]) .metrics-strip {
+  opacity: 0.6;
+}
+
+.metrics-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.metrics-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.metrics-bar #metrics-back {
+  min-width: 2.75rem;
+}
+
+.metrics-title {
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.metrics-age {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.metrics-age[hidden] {
+  display: none;
+}
+
+.metrics-note {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.metrics-note[hidden] {
+  display: none;
+}
+
+.metrics-wait {
+  color: var(--muted);
+}
+
+.metric-section h2 {
+  margin: 0.75rem 0 0.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--surface-ink-dim);
+}
+
+.metric-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--tint-line);
+}
+
+.metric-label {
+  min-width: 3.2rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.metric-value {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.metric-value b {
+  font-weight: 600;
+}
+
+/* One history line: fixed box, currentColor stroke from the markup. */
+.spark {
+  width: 7.5rem;
+  height: 1.75rem;
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.metrics-hint {
+  margin: 0.4rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* The SysInfo view stages its sparklines: the honeycomb steps back. */
+body[data-view="metrics"] .fondo {
+  opacity: 0.15;
+}
