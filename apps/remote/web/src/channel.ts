@@ -111,6 +111,13 @@ export function createChannelHandler(handlers: ChannelHandlers): ChannelAssemble
         }
         return;
       }
+      // Output for the pending snapshot's session means the host moved
+      // on: a snapshot whose closing part never came is drawn as it stands
+      // rather than leaving the view on "Attaching…".
+      const row = typeof frame === "object" && frame !== null ? (frame as Record<string, unknown>) : null;
+      if (pending && row?.t === "out" && row.id === pending.id) {
+        flush();
+      }
       handlers.onFrame?.(frame);
     },
   };

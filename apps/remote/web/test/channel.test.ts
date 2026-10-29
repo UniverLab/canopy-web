@@ -40,6 +40,16 @@ describe("createChannelHandler", () => {
     expect(snapshots).toEqual([{ id: "s1", cols: 80, rows: 24, seq: 8, data: "zzz!" }]);
   });
 
+  it("draws a snapshot whose closing part never came once its session's output arrives", () => {
+    const { channel, snapshots, frames } = setup();
+    channel.push(JSON.stringify({ t: "snapshot", id: "s1", cols: 80, rows: 24, seq: 7, data: "aaa" }));
+    channel.push(JSON.stringify({ t: "out", id: "s2", seq: 1, data: "eA==" }));
+    expect(snapshots).toHaveLength(0);
+    channel.push(JSON.stringify({ t: "out", id: "s1", seq: 8, data: "eA==" }));
+    expect(snapshots).toEqual([{ id: "s1", cols: 80, rows: 24, seq: 7, data: "aaa" }]);
+    expect(frames).toHaveLength(2);
+  });
+
   it("passes other frames through and ignores invalid JSON", () => {
     const { channel, snapshots, frames } = setup();
     channel.push(JSON.stringify({ t: "out", id: "s1", seq: 9, data: "eA==" }));

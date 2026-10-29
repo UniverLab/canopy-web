@@ -11,6 +11,9 @@ import { icon } from "./icons-dom.js";
 export class SessionStore {
   private readonly items = new Map<string, SessionItem>();
   private readonly listeners = new Set<() => void>();
+  // False until the host's first sessions frame: an empty map before it
+  // means "not heard yet", not "no sessions".
+  private listed = false;
 
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
@@ -26,6 +29,7 @@ export class SessionStore {
   }
 
   replace(items: SessionItem[]): void {
+    this.listed = true;
     this.items.clear();
     for (const item of items) {
       this.items.set(item.id, item);
@@ -50,6 +54,10 @@ export class SessionStore {
       this.items.set(id, { ...item, status: "exited" });
       this.notify();
     }
+  }
+
+  loaded(): boolean {
+    return this.listed;
   }
 
   get(id: string): SessionItem | null {
@@ -95,6 +103,7 @@ export function renderSessions(
   nowMs: number,
   callbacks: SessionListCallbacks,
   shelf?: SessionListShelf,
+  loaded = true,
 ): void {
   const files = (id: string): string => {
     if (!shelf?.enabled) {
@@ -140,7 +149,7 @@ export function renderSessions(
   root.innerHTML =
     `<div class="sessions-head"><h2>Sessions</h2>` +
     `<button type="button" id="session-new">${icon("plus")}<span>New session</span></button></div>` +
-    (list ? `<p class="empty">No sessions on this host.</p>` : `<ul class="session-list">${shelfRow}${rows}</ul>`);
+    (list ? `<p class="empty">${loaded ? "No sessions on this host." : "Connecting to the host…"}</p>` : `<ul class="session-list">${shelfRow}${rows}</ul>`);
   root.querySelector("#session-new")?.addEventListener("click", () => callbacks.onNew());
   if (shelfOn) {
     root.querySelector("#host-shelf-row")?.addEventListener("click", () => shelf?.onOpenShelf());

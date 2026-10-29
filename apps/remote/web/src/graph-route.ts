@@ -33,6 +33,8 @@ export interface GraphRouteCallbacks {
 export interface GraphRouteHooks {
   /** The sessions the Sessions tab lists, newest interest first. */
   listSessions: () => SessionItem[];
+  /** Whether the host has answered `list` on this page yet. */
+  sessionsLoaded: () => boolean;
   /** Open a session from the Sessions tab (shell-owned). */
   openSession: (id: string) => void;
   /** Open the New dialog from the Sessions tab (shell-owned). */
@@ -164,6 +166,7 @@ export class GraphRoute {
         onNew: () => this.hooks.newSession(),
       },
       this.shelfListArgs(),
+      this.hooks.sessionsLoaded(),
     );
   }
 

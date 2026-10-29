@@ -523,6 +523,7 @@ export function createShell(
     },
     {
       listSessions: () => store.list(),
+      sessionsLoaded: () => store.loaded(),
       openSession: (id) => callbacks.onOpenSession(id),
       newSession: () => openNew(),
       render: () => render(),
