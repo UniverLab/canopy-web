@@ -8,14 +8,9 @@
 import { Composer } from "./composer.js";
 import { CatalogStore } from "./catalog.js";
 import { Builder } from "./builder.js";
-import {
-  renderConnBanner,
-  renderHostOptions,
-  renderTopbar,
-  signOutButtonHtml,
-  wireAccount,
-  wireConnActions,
-} from "./chrome.js";
+import { renderConnBanner, renderTopbar, wireAccount, wireConnActions } from "./chrome.js";
+import { renderHosts, renderPair, renderSignIn } from "./entry-views.js";
+import type { EntryViewHooks, PairDraft } from "./entry-views.js";
 import { GraphRoute } from "./graph-route.js";
 import type { GraphStore } from "./graph-store.js";
 import { icon, mountMorphSlot, type RemoteIconName, type MorphSlot } from "./icons-dom.js";
@@ -31,7 +26,6 @@ import { createXtermHandle, TerminalView } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
 import { readFitOnly, writeFitOnly } from "./terminal-prefs.js";
 import type { PairSubmit } from "./ui.js";
-import { renderColophon } from "../../../../packages/look/colophon/footer.js";
 
 export interface ShellCallbacks {
   onPair: (submit: PairSubmit) => void;
@@ -103,18 +97,6 @@ export interface ShellDeps {
 
 type Route = "signin" | "pair" | "hosts" | "sessions" | "session" | "graph";
 
-// The UniverLab colophon, on the sign-in and pair screens only — the
-// session view keeps the whole viewport for the terminal.
-const COLOPHON = renderColophon({
-  product: "Canopy remote",
-  exp: "EXP-001",
-  links: [
-    { label: "Canopy", href: "https://univerlab.org/canopy/" },
-    { label: "univerlab.org", href: "https://univerlab.org/" },
-    { label: "Source", href: "https://github.com/UniverLab/canopy-web" },
-  ],
-});
-
 function esc(text: string): string {
   return text
     .replace(/&/g, "&amp;")
@@ -141,7 +123,7 @@ export function createShell(
   let connectionState = "connecting";
   let online: OnlineHost[] = [];
   let paired: { host_id: string; label: string }[] = [];
-  let draft = { code: "", hostId: "", label: "" };
+  let draft: PairDraft = { code: "", hostId: "", label: "" };
   let pairError: string | null = null;
   let pairBusy = false;
   let signOutError: string | null = null;
@@ -201,87 +183,29 @@ export function createShell(
   const connBanner = (): string => renderConnBanner(connectionState);
   const wireConnBanner = (): void => wireConnActions(root, callbacks);
 
-  const renderSignIn = () => {
-    root.innerHTML = `
-    ${header()}
-    <main class="signin">
-      <h1>Canopy remote</h1>
-      <p>Sign in with GitHub to reach your hosts.</p>
-      <button type="button" class="primary" id="signin-go">Sign in with GitHub</button>
-      <p>Signing in shares your GitHub username and numeric id with this relay, kept in a 12-hour session cookie. Your sessions travel encrypted between your browser and your machine. <a href="https://univerlab.org/privacy/">Privacy</a></p>
-    </main>
-    ${COLOPHON}`;
-    root.querySelector("#signin-go")?.addEventListener("click", () => {
-      globalThis.location.href = "/auth/login";
-    });
-  };
-
-  const renderPair = () => {
-    root.innerHTML = `
-    ${header()}
-    <main class="pair">
-      <h2>Pair this browser</h2>
-      <p>Enter the pairing code shown by canopy.</p>
-      <form id="pair-form">
-        <label>Pairing code
-          <input id="pair-code" name="code" autocomplete="off" autocapitalize="characters"
-            spellcheck="false" value="${esc(draft.code)}"${pairBusy ? " disabled" : ""}>
-        </label>
-        <label>Host
-          <select id="pair-host" name="host"${pairBusy || online.length === 0 ? " disabled" : ""}>
-            ${renderHostOptions(online, draft.hostId)}
-          </select>
-        </label>
-        <label>Device label
-          <input id="pair-label" name="label" autocomplete="off" value="${esc(draft.label)}"${pairBusy ? " disabled" : ""}>
-        </label>
-        <p id="pair-error" role="alert">${pairError === null ? "" : esc(pairError)}</p>
-        <button type="submit"${pairBusy ? " disabled" : ""}>${pairBusy ? "Pairing…" : "Pair"}</button>
-      </form>
-    </main>
-    ${COLOPHON}`;
-    root.querySelector<HTMLFormElement>("#pair-form")?.addEventListener("submit", (ev) => {
-      ev.preventDefault();
-      snapshotDraft();
-      if (online.length === 0 || draft.hostId === "") {
-        pairError = online.length === 0 ? "No hosts online" : "Choose a host";
-        render();
-        return;
-      }
-      if (draft.code.trim() === "") {
-        pairError = "Enter the pairing code";
-        render();
-        return;
-      }
+  // The three screens before a terminal exists read and change the shell's
+  // state through these hooks; a pairing complaint repaints the form and a
+  // pair submit clears the old error before the shell takes over.
+  const entryViews: EntryViewHooks = {
+    header: () => header(),
+    login: () => login,
+    signOutError: () => signOutError,
+    online: () => online,
+    paired: () => paired,
+    draft: () => draft,
+    snapshotDraft: () => snapshotDraft(),
+    pairError: () => pairError,
+    pairBusy: () => pairBusy,
+    setPairError: (message) => {
+      pairError = message;
+      render();
+    },
+    onPair: (submit) => {
       pairError = null;
-      callbacks.onPair({ hostId: draft.hostId, code: draft.code, label: draft.label });
-    });
-  };
-
-  const renderHosts = () => {
-    const rows = paired
-      .map(
-        (host) => `<li><span>${esc(host.label)}</span>
-          <button type="button" data-connect="${esc(host.host_id)}">Connect</button></li>`,
-      )
-      .join("");
-    root.innerHTML = `
-    ${header()}
-    <main class="hosts">
-      <h2>Choose a host</h2>
-      <ul id="host-list">${rows}</ul>
-      <p><button type="button" id="pair-new">Pair a new host</button></p>
-      ${signOutButtonHtml(login, signOutError)}
-    </main>`;
-    for (const button of root.querySelectorAll<HTMLButtonElement>("[data-connect]")) {
-      button.addEventListener("click", () => {
-        const hostId = button.getAttribute("data-connect");
-        if (hostId) {
-          callbacks.onConnect(hostId);
-        }
-      });
-    }
-    root.querySelector("#pair-new")?.addEventListener("click", () => callbacks.onPairAgain());
+      callbacks.onPair(submit);
+    },
+    onConnect: (hostId) => callbacks.onConnect(hostId),
+    onPairAgain: () => callbacks.onPairAgain(),
   };
 
   // The Files badge lives in the session bar; every shelf change either
@@ -450,11 +374,20 @@ export function createShell(
     }
   };
 
+  // A fresh screen starts clean: the last sign-out failure and the open
+  // account menu belong to the screen that showed them, and a menu that
+  // auto-opened over a failure must not follow the user onto the terminal.
+  const beginRoute = (): void => {
+    signOutError = null;
+    accountOpen = false;
+  };
+
   const openGraph = (id: string, name: string) => {
     closeSheets();
     teardownSessionWidgets();
     sessionId = null;
     route = "graph";
+    beginRoute();
     graphRoute.open(id, name);
   };
 
@@ -466,16 +399,18 @@ export function createShell(
     }
   };
 
-  const render = () => {
+  // Declared rather than assigned so the entry views' hooks can call it
+  // from above: a pairing complaint repaints through setPairError.
+  function render(): void {
     // The view name on <body> lets the stylesheet dim the honeycomb
     // behind the terminal (body[data-view="session"]).
     document.body.dataset.view = route;
     if (route === "signin") {
-      renderSignIn();
+      renderSignIn(root, entryViews);
     } else if (route === "pair") {
-      renderPair();
+      renderPair(root, entryViews);
     } else if (route === "hosts") {
-      renderHosts();
+      renderHosts(root, entryViews);
     } else if (route === "sessions") {
       graphRoute.renderSessionsRoute();
     } else if (route === "graph") {
@@ -492,7 +427,7 @@ export function createShell(
         accountOpen = open;
       },
     });
-  };
+  }
 
   // The home tabs, the graph route and the watch lifecycle live in the
   // graph route; the shell only lends it render() and the route setters.
@@ -514,6 +449,7 @@ export function createShell(
       openGraph: (id, name) => openGraph(id, name),
       leaveToSessions: () => {
         route = "sessions";
+        beginRoute();
         render();
       },
       header: () => header(),
@@ -563,7 +499,7 @@ export function createShell(
     showSignIn(): void {
       leaveRoute();
       route = "signin";
-      accountOpen = false;
+      beginRoute();
       render();
     },
     showPair(prefillCode?: string): void {
@@ -571,6 +507,7 @@ export function createShell(
       route = "pair";
       pairError = null;
       pairBusy = false;
+      beginRoute();
       draft = {
         code: prefillCode ?? draft.code,
         hostId: online.length === 1 && online[0] ? online[0].host_id : draft.hostId,
@@ -581,11 +518,13 @@ export function createShell(
     showHosts(): void {
       leaveRoute();
       route = "hosts";
+      beginRoute();
       render();
     },
     showSessions(): void {
       leaveRoute();
       route = "sessions";
+      beginRoute();
       render();
     },
     showSession(id: string, name: string): void {
@@ -594,6 +533,7 @@ export function createShell(
       sessionId = id;
       sessionName = name;
       route = "session";
+      beginRoute();
       render();
     },
     showNew(): void {
@@ -682,8 +622,22 @@ export function createShell(
     },
     setSignOutError(message: string | null): void {
       signOutError = message;
-      if (route !== "signin") {
-        render();
+      if (route === "signin") {
+        return;
+      }
+      // Patch the error slots in place: a full repaint to show one line
+      // would tear the session view's terminal down with it (and reset the
+      // graph view's scroll), while the user is still signed in.
+      for (const el of root.querySelectorAll<HTMLElement>(".signout-error")) {
+        el.textContent = message ?? "";
+      }
+      if (message !== null) {
+        // The menu is where the session view keeps its only sign-out
+        // control, so a failure opens it rather than hiding its text.
+        const details = root.querySelector<HTMLDetailsElement>("#account");
+        if (details !== null && !details.open) {
+          details.open = true;
+        }
       }
     },
     ensureTerminal(id: string, cols: number, rows: number): void {

@@ -6,6 +6,26 @@ import { FORGET_MESSAGE } from "../src/chrome.js";
 import { renderGraphView, updateGraphView } from "../src/graph-view.js";
 import type { GraphViewArgs } from "../src/graph-view.js";
 import { SessionStore } from "../src/sessions.js";
+import type { TerminalHandle } from "../src/terminal.js";
+
+/** Just enough xterm to prove the session view keeps its terminal. */
+class StubTerminal implements TerminalHandle {
+  written: string[] = [];
+  write = (text: string): void => {
+    this.written.push(text);
+  };
+  clear = (): void => {};
+  focus = (): void => {};
+  scrollToBottom = (): void => {};
+  isAtBottom = (): boolean => true;
+  onUserInput = (): (() => void) => () => {};
+  onScroll = (): (() => void) => () => {};
+  onReady = (callback: () => void): (() => void) => {
+    callback();
+    return () => {};
+  };
+  dispose = (): void => {};
+}
 
 describe("sign out", () => {
   let root: HTMLDivElement;
@@ -51,7 +71,9 @@ describe("sign out", () => {
       onWatchGraph: () => {},
       onUnwatchGraph: () => {},
     };
-    shell = createShell(root, new SessionStore(), callbacks);
+    shell = createShell(root, new SessionStore(), callbacks, {
+      terminalFactory: () => new StubTerminal(),
+    });
     shell.setLogin("octo");
   });
 
@@ -113,6 +135,35 @@ describe("sign out", () => {
     expect(query("#account").hasAttribute("open")).toBe(true);
     shell.setSignOutError(null);
     expect(query("#signout-error").textContent).toBe("");
+  });
+
+  it("keeps the session terminal mounted when a sign-out fails", () => {
+    shell.showSession("s1", "smoke");
+    shell.ensureTerminal("s1", 80, 24);
+    const pane = query<HTMLElement>("#term-pane");
+    const mounted = pane.children.length;
+    shell.setSignOutError("Could not reach the relay");
+    // Same node, same content: a failure must not repaint the view away.
+    expect(root.contains(pane)).toBe(true);
+    expect(query("#term-pane")).toBe(pane);
+    expect(pane.children).toHaveLength(mounted);
+    // The only sign-out control on the session view, so the error and the
+    // menu both show, with no terminal space lost to a permanent button.
+    expect(query("#signout-error-menu").textContent).toBe("Could not reach the relay");
+    expect(query("#account").hasAttribute("open")).toBe(true);
+    expect(root.querySelector("main #signout")).toBeNull();
+    shell.setSignOutError(null);
+    expect(query("#signout-error-menu").textContent).toBe("");
+  });
+
+  it("drops a stale failure when the next screen loads", () => {
+    shell.setPairedHosts([{ host_id: "h1", label: "demo host" }]);
+    shell.showHosts();
+    shell.setSignOutError("Could not sign out (500)");
+    expect(query("#signout-error").textContent).toBe("Could not sign out (500)");
+    shell.showSessions();
+    expect(root.querySelector("#signout-error")?.textContent).toBe("");
+    expect(query("#account").hasAttribute("open")).toBe(false);
   });
 
   it("keeps the menu's open state across re-renders", () => {

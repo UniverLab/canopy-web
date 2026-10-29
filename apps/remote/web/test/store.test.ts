@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { generateDeviceKey, signOffer } from "../src/crypto.js";
 import {
+  clearDevice,
   deleteHost,
   getHost,
   listHosts,
@@ -68,5 +69,16 @@ describe("host storage", () => {
     await saveHost({ host_id: "a", host_spki: "old", label: "Old" });
     await saveHost({ host_id: "a", host_spki: "new", label: "New" });
     expect(await getHost("a")).toEqual({ host_id: "a", host_spki: "new", label: "New" });
+  });
+});
+
+describe("forget this device", () => {
+  it("drops the device key and every paired host", async () => {
+    await saveDeviceKey(await generateDeviceKey());
+    await saveHost({ host_id: "a", host_spki: "spki-a", label: "A" });
+    expect(await loadDeviceKey()).not.toBeNull();
+    await clearDevice();
+    expect(await loadDeviceKey()).toBeNull();
+    expect(await listHosts()).toEqual([]);
   });
 });
