@@ -38,6 +38,14 @@ html[data-surface='tui'] {
   --stage-line: #1f1f1f;
   --stage-ink: #e6e6e6;
 
+  /* The install command field: one raised surface for every host it sits
+   * on — a card (#050505) and the page (#012624) — so the field reads as
+   * a copyable field at a glance (2.13:1 on a card, 1.68:1 on the page),
+   * the outline stays visible against both, and the command rides at full
+   * ink (9.28:1 on the field). */
+  --command-bg: #454545;
+  --command-line: #787878;
+
   /* The meaning tints: every other block is tinted by what it means.
    * All five colours share the same lightness (7.6 %) and differ only in
    * hue — a teal family plus a complementary red pair — so every tinted

@@ -217,13 +217,19 @@ li.row:last-child { border-bottom: 0; }
   border-radius: 50%;
   background: var(--nc, var(--canopy));
 }
-.row-install { display: inline-flex; gap: 0.5rem; align-items: center; margin-left: auto; min-width: 0; }
+/* The command field and its Copy button share one height: each stretches
+ * to the other's, so the pair reads as a single control on every host
+ * (index rows, datasheet, publish, share panel) — the field painted with
+ * the raised command tokens, the command at full ink. */
+.row-install { display: inline-flex; gap: 0.5rem; align-items: stretch; margin-left: auto; min-width: 0; }
 .row-install code {
+  display: flex;
+  align-items: center;
   padding: 0.35rem 0.6rem;
-  background: var(--stage-bg);
-  border: 1px solid var(--stage-line);
+  background: var(--command-bg);
+  border: 1px solid var(--command-line);
   border-radius: var(--radius-ctl);
-  color: var(--stage-ink);
+  color: var(--surface-ink);
   font-family: var(--font-mono);
   font-size: 0.78rem;
   line-height: 1.5;
@@ -820,13 +826,19 @@ li.row:last-child { border-bottom: 0; }
   border-radius: 50%;
   background: var(--nc, var(--canopy));
 }
-.row-install { display: inline-flex; gap: 0.5rem; align-items: center; margin-left: auto; min-width: 0; }
+/* The command field and its Copy button share one height: each stretches
+ * to the other's, so the pair reads as a single control on every host
+ * (index rows, datasheet, publish, share panel) — the field painted with
+ * the raised command tokens, the command at full ink. */
+.row-install { display: inline-flex; gap: 0.5rem; align-items: stretch; margin-left: auto; min-width: 0; }
 .row-install code {
+  display: flex;
+  align-items: center;
   padding: 0.35rem 0.6rem;
-  background: var(--stage-bg);
-  border: 1px solid var(--stage-line);
+  background: var(--command-bg);
+  border: 1px solid var(--command-line);
   border-radius: var(--radius-ctl);
-  color: var(--stage-ink);
+  color: var(--surface-ink);
   font-family: var(--font-mono);
   font-size: 0.78rem;
   line-height: 1.5;
@@ -1432,13 +1444,19 @@ li.row:last-child { border-bottom: 0; }
   border-radius: 50%;
   background: var(--nc, var(--canopy));
 }
-.row-install { display: inline-flex; gap: 0.5rem; align-items: center; margin-left: auto; min-width: 0; }
+/* The command field and its Copy button share one height: each stretches
+ * to the other's, so the pair reads as a single control on every host
+ * (index rows, datasheet, publish, share panel) — the field painted with
+ * the raised command tokens, the command at full ink. */
+.row-install { display: inline-flex; gap: 0.5rem; align-items: stretch; margin-left: auto; min-width: 0; }
 .row-install code {
+  display: flex;
+  align-items: center;
   padding: 0.35rem 0.6rem;
-  background: var(--stage-bg);
-  border: 1px solid var(--stage-line);
+  background: var(--command-bg);
+  border: 1px solid var(--command-line);
   border-radius: var(--radius-ctl);
-  color: var(--stage-ink);
+  color: var(--surface-ink);
   font-family: var(--font-mono);
   font-size: 0.78rem;
   line-height: 1.5;
@@ -2051,13 +2069,19 @@ li.row:last-child { border-bottom: 0; }
   border-radius: 50%;
   background: var(--nc, var(--canopy));
 }
-.row-install { display: inline-flex; gap: 0.5rem; align-items: center; margin-left: auto; min-width: 0; }
+/* The command field and its Copy button share one height: each stretches
+ * to the other's, so the pair reads as a single control on every host
+ * (index rows, datasheet, publish, share panel) — the field painted with
+ * the raised command tokens, the command at full ink. */
+.row-install { display: inline-flex; gap: 0.5rem; align-items: stretch; margin-left: auto; min-width: 0; }
 .row-install code {
+  display: flex;
+  align-items: center;
   padding: 0.35rem 0.6rem;
-  background: var(--stage-bg);
-  border: 1px solid var(--stage-line);
+  background: var(--command-bg);
+  border: 1px solid var(--command-line);
   border-radius: var(--radius-ctl);
-  color: var(--stage-ink);
+  color: var(--surface-ink);
   font-family: var(--font-mono);
   font-size: 0.78rem;
   line-height: 1.5;
@@ -2657,13 +2681,19 @@ li.row:last-child { border-bottom: 0; }
   border-radius: 50%;
   background: var(--nc, var(--canopy));
 }
-.row-install { display: inline-flex; gap: 0.5rem; align-items: center; margin-left: auto; min-width: 0; }
+/* The command field and its Copy button share one height: each stretches
+ * to the other's, so the pair reads as a single control on every host
+ * (index rows, datasheet, publish, share panel) — the field painted with
+ * the raised command tokens, the command at full ink. */
+.row-install { display: inline-flex; gap: 0.5rem; align-items: stretch; margin-left: auto; min-width: 0; }
 .row-install code {
+  display: flex;
+  align-items: center;
   padding: 0.35rem 0.6rem;
-  background: var(--stage-bg);
-  border: 1px solid var(--stage-line);
+  background: var(--command-bg);
+  border: 1px solid var(--command-line);
   border-radius: var(--radius-ctl);
-  color: var(--stage-ink);
+  color: var(--surface-ink);
   font-family: var(--font-mono);
   font-size: 0.78rem;
   line-height: 1.5;
@@ -3255,13 +3285,19 @@ li.row:last-child { border-bottom: 0; }
   border-radius: 50%;
   background: var(--nc, var(--canopy));
 }
-.row-install { display: inline-flex; gap: 0.5rem; align-items: center; margin-left: auto; min-width: 0; }
+/* The command field and its Copy button share one height: each stretches
+ * to the other's, so the pair reads as a single control on every host
+ * (index rows, datasheet, publish, share panel) — the field painted with
+ * the raised command tokens, the command at full ink. */
+.row-install { display: inline-flex; gap: 0.5rem; align-items: stretch; margin-left: auto; min-width: 0; }
 .row-install code {
+  display: flex;
+  align-items: center;
   padding: 0.35rem 0.6rem;
-  background: var(--stage-bg);
-  border: 1px solid var(--stage-line);
+  background: var(--command-bg);
+  border: 1px solid var(--command-line);
   border-radius: var(--radius-ctl);
-  color: var(--stage-ink);
+  color: var(--surface-ink);
   font-family: var(--font-mono);
   font-size: 0.78rem;
   line-height: 1.5;

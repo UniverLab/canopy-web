@@ -74,6 +74,44 @@ describe("the tokens on the Canopy surface", () => {
   });
 });
 
+describe("the install command field", () => {
+  const css = readFileSync(TOKENS, "utf8");
+  const field = token(css, "command-bg");
+  const line = token(css, "command-line");
+  const ink = token(css, "surface-ink");
+  const card = token(css, "surface-panel");
+  const page = token(css, "surface-bg");
+
+  // The site ships one colour scheme (dark), so the "both schemes" pair is
+  // the pair the field is painted on: a card and the page. A future light
+  // scheme joins this list, it does not replace it.
+  const hosts: Array<[string, string]> = [
+    ["a card", card],
+    ["the page", page],
+  ];
+
+  it.each(hosts)("keeps the field on %s at 1.5:1 or better", (_label, host) => {
+    expect(contrast(field, host)).toBeGreaterThanOrEqual(1.5);
+  });
+
+  it("keeps the command ink on the field at 7:1 or better", () => {
+    expect(contrast(ink, field)).toBeGreaterThanOrEqual(7);
+  });
+
+  it("keeps the field's outline visible on the field and on its host", () => {
+    expect(contrast(line, field)).toBeGreaterThanOrEqual(2);
+    for (const [, host] of hosts) {
+      expect(contrast(line, host)).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("pins the field's ratios: 2.13:1 on a card, 1.68:1 on the page, 9.3:1 for the ink", () => {
+    expect(contrast(field, card)).toBeCloseTo(2.13, 1);
+    expect(contrast(field, page)).toBeCloseTo(1.68, 1);
+    expect(contrast(ink, field)).toBeCloseTo(9.3, 1);
+  });
+});
+
 describe("the Worker serves the look kit", () => {
   const config = readFileSync(WRANGLER, "utf8");
 

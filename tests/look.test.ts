@@ -123,6 +123,13 @@ describe("the look tokens", () => {
   ])("defines the stage-and-tint token %s", (declaration) => {
     expect(tokens).toContain(declaration);
   });
+
+  it.each([
+    ["--command-bg: #454545"],
+    ["--command-line: #787878"],
+  ])("defines the install-field token %s", (declaration) => {
+    expect(tokens).toContain(declaration);
+  });
 });
 
 describe("bannerSvg", () => {

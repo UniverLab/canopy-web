@@ -9,7 +9,9 @@
  * datasheet — the vertical plate under 640 px, the horizontal one above —
  * and no horizontal page scroll at 390 px.
  * The datasheet INSTALL row shows its whole command wrapped in its box
- * while the home index rows keep their one-line command.
+ * while the home index rows keep their one-line command — the command a
+ * raised field (command surface, visible outline, full ink) at the Copy
+ * button's height.
  * Three pages (home, a graph, a node) at the two reference sizes, plus a
  * community page whose 300-character command proves the runs section wraps
  * inside its block at 390 px, and a missing document; a screenshot per page
@@ -206,6 +208,23 @@ for (const viewport of VIEWPORTS) {
         await expect(indexCode).toBeVisible();
         const whiteSpace = await indexCode.evaluate((el) => getComputedStyle(el).whiteSpace);
         expect(whiteSpace).toBe("nowrap");
+        // And the command reads as a field of its own: the raised command
+        // surface, its visible outline, the command at full ink.
+        const painted = await indexCode.evaluate((el) => {
+          const style = getComputedStyle(el);
+          return { background: style.backgroundColor, border: style.borderColor, ink: style.color };
+        });
+        expect(painted.background).toBe("rgb(69, 69, 69)");
+        expect(painted.border).toBe("rgb(120, 120, 120)");
+        expect(painted.ink).toBe("rgb(237, 255, 254)");
+        // The field and its Copy button line up at one height.
+        const heights = await page.evaluate(() => {
+          const row = document.querySelector("ol.index > li.row .row-install");
+          const box = (selector: string): number =>
+            row?.querySelector(selector)?.getBoundingClientRect().height ?? 0;
+          return { code: box("code"), copy: box(".copy") };
+        });
+        expect(Math.abs(heights.code - heights.copy)).toBeLessThanOrEqual(1);
       } else {
         // The plate is the black stage; the datasheet sits on the same panel.
         const painted = await page.evaluate(() => ({
