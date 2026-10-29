@@ -103,8 +103,9 @@ function escapeHtml(value: string): string {
  * fallback advances, no line box, no gaps between rows. Adjacent cells of
  * one kind merge into one rect, which keeps the graphs banner under 6 KB.
  * Each line is a `<g class="look-banner-line">` filled with its
- * `BANNER_GRADIENT` stop, as a presentation attribute: the remote's CSP is
- * `style-src 'self'`, so a `style` attribute would be refused. The class
+ * `BANNER_GRADIENT` stop, as a presentation attribute: presentation
+ * attributes sit outside the style directives entirely, so the ink
+ * survives whatever the relay's CSP allows xterm. The class
  * and the accessible name are the caller's own constants; an unnamed art
  * is decorative and hidden from assistive tech. banner.css sizes the SVG;
  * `viewBox` keeps the cells square.

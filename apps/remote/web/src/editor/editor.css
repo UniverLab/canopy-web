@@ -5,9 +5,10 @@
  *
  * This file is loaded as a real stylesheet by the editor's lazy chunk
  * (`import "./editor.css"` in editor.ts), never as an inline `<style>`:
- * the remote's CSP is `style-src 'self'`, which refuses inline styles, so
- * an injected `<style>` would leave the editor unpainted in production
- * (the catalogue can inject one because its pages carry no CSP).
+ * the remote's CSP allows inline styles solely for xterm.js (see
+ * SECURITY_HEADERS in worker/src/protocol.ts), and the exception stays in
+ * the terminal (the catalogue can inject one because its pages carry no
+ * CSP).
  *
  * The canvas colours are the plate's own palette literals — no hex is
  * invented here; `web/test/editor-styles.test.ts` holds them to PALETTE.

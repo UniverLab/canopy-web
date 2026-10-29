@@ -92,7 +92,7 @@ describe("the remote's bundle", () => {
     const js = gzipOf(assets, ".js");
     const css = gzipOf(assets, ".css");
     // The editor's stylesheet is its own asset, linked when its chunk loads
-    // (an inline <style> would be refused by `style-src 'self'`): count it
+    // (inline <style> on the remote is xterm's exception alone): count it
     // against the editor's budget, never the main bundle's.
     const editorCssFiles = filesOf(assets, ".css").filter((name) =>
       readFileSync(path.join(assets, name), "utf8").includes(EDITOR_CSS_MARKER),

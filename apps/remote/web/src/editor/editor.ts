@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
  * The remote editor's entry, loaded as a lazy chunk behind `/editor`:
- * its stylesheet rides this chunk as a real file (`style-src 'self'`
- * refuses inline styles on the remote), it mounts the shell into `#app`,
+ * its stylesheet rides this chunk as a real file (inline styles on the
+ * remote are xterm's exception alone), it mounts the shell into `#app`,
  * and hands it to the app. A construction failure writes its reason into
  * the page instead of leaving it silent.
  */

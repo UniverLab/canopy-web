@@ -21,8 +21,8 @@
  * inspector's Make-ensemble button reads.
  *
  * The paint (fills, strokes, port and edge classes) lives in editor.css:
- * the remote's CSP is `style-src 'self'`, so an inline `<style>` in this
- * SVG would be refused and the graph would draw as bare black boxes.
+ * the remote allows an inline `<style>` solely for xterm.js, so this SVG
+ * builds none and the graph never depends on the exception.
  */
 import { classOf, type EdgeClass } from "../../../../../packages/plate/document.js";
 import {
@@ -147,8 +147,8 @@ export class Canvas {
       host.prepend(svg);
     }
     this.svg = svg;
-    // The paint rules live in editor.css: an inline `<style>` here would be
-    // refused by the remote's `style-src 'self'` and the graph would vanish.
+    // The paint rules live in editor.css: an inline `<style>` here would
+    // lean on xterm's CSP exception to no purpose.
     svg.innerHTML = `<g class="world"></g>`;
     this.world = svg.querySelector("g.world") as SVGGElement;
     svg.addEventListener("pointerdown", (event) => this.down(event));

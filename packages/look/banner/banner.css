@@ -61,9 +61,9 @@
 }
 
 /* The eleven lines' ink lives in `fill` attributes on the SVG groups
- * (banner.ts); banner.css only sizes the art. No colours here, because
- * the remote's CSP (`style-src 'self'`) refuses inline styles but allows
- * presentation attributes, and the gradient must survive. */
+ * (banner.ts); banner.css only sizes the art. No colours here: `fill`
+ * presentation attributes sit outside the style directives entirely, so
+ * the gradient survives whatever the relay's CSP allows xterm. */
 
 /* In the remote's topbar the banner takes its own row on a phone (275 px
  * wide, below), so a long login wraps to the row below instead of pushing

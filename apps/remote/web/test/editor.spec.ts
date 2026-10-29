@@ -279,10 +279,10 @@ test("wires by tapping an output port and then an input port", async ({ browser 
 });
 
 /**
- * The remote's CSP is `style-src 'self'`, so an inline `<style>` is refused
- * and the graph would paint as bare black boxes — visibly fine in this dev
- * server, unpainted in production. The paint must come from editor.css, the
- * stylesheet the editor chunk links.
+ * The remote allows an inline `<style>` solely for xterm.js (see
+ * SECURITY_HEADERS in worker/src/protocol.ts), so the editor keeps its
+ * paint in editor.css, the stylesheet the editor chunk links, and the
+ * exception never spreads past the terminal.
  */
 test("paints the graph from a stylesheet, never an inline style", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });

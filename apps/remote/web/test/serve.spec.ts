@@ -99,9 +99,9 @@ test("sign-in wears the header banner and a one-row colophon at 1280x900", async
   const box = await banner.boundingBox();
   expect(box).not.toBeNull();
   expect(Math.abs((box?.height ?? 0) - 80)).toBeLessThanOrEqual(5);
-  // The teal gradient survives the app's `style-src 'self'` CSP: the ink
-  // is a `fill` presentation attribute (or banner.css), never an inline
-  // style the header refuses. A refused style would log here.
+  // The teal gradient survives the relay's CSP: the ink is a `fill`
+  // presentation attribute (or banner.css), never an inline style. A
+  // refused load would log here.
   const inks = await page
     .locator(".topbar .look-banner-line")
     .evaluateAll((groups) => groups.map((group) => getComputedStyle(group).fill));
@@ -140,7 +140,7 @@ test("sign-in never scrolls sideways at 390x844", async ({ page }) => {
   expect(width.scroll).toBeLessThanOrEqual(width.view);
 });
 
-test("the graph editor paints under the real `style-src 'self'` on /editor", async ({
+test("the graph editor paints under the relay's real CSP on /editor", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -166,8 +166,9 @@ test("the graph editor paints under the real `style-src 'self'` on /editor", asy
   await page.locator('#editor-chooser [data-cond="pass"]').click();
   await expect(page.locator("#editor-canvas g.edge")).toHaveCount(1);
 
-  // The editor ships its paint in a stylesheet; an inline <style> here is
-  // exactly what this CSP refuses and would leave the graph black on black.
+  // The editor ships its paint in a stylesheet, never an inline <style>;
+  // the count below holds the no-inline rule (inline styles on the remote
+  // are xterm's exception alone).
   await expect(page.locator("style")).toHaveCount(0);
   const paint = await page.evaluate(() => {
     const of = (selector: string, property: string): string => {

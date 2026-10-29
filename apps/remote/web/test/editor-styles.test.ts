@@ -2,12 +2,11 @@
 /**
  * The remote editor's stylesheet against the remote's CSP.
  *
- * The relay serves every response with `style-src 'self'`, which refuses
- * inline `<style>` elements and style attributes: the editor therefore
- * loads `editor.css` as a real stylesheet from its lazy chunk. An injected
- * `<style>` still looks right in `vite dev` (no CSP there) and leaves the
- * graph unpainted in production, so the rule is held here as well as by the
- * browser tests.
+ * The relay allows inline styles solely for xterm.js (the measured
+ * inventory lives on SECURITY_HEADERS in worker/src/protocol.ts): the
+ * editor keeps the stricter rule and loads `editor.css` as a real
+ * stylesheet from its lazy chunk, so the exception never spreads past the
+ * terminal. The rule is held here as well as by the browser tests.
  *
  * The canvas paints in the plate's palette; the colours are literals in the
  * CSS, so PALETTE is the source they are held to (as look.test.ts does for
@@ -29,9 +28,9 @@ describe("web/src/editor/editor.css", () => {
   it("loads as a stylesheet from the editor chunk, never as an inline style", () => {
     const entry = readFileSync(resolveFromRoot(`${EDITOR_DIR}/editor.ts`), "utf8");
     expect(entry).toContain('import "./editor.css";');
-    // No source file may build an inline <style>: `style-src 'self'` refuses
-    // it. Comments are stripped first — they explain the rule, they are not
-    // the thing it forbids.
+    // No source file may build an inline <style>: the relay allows them
+    // solely for xterm.js. Comments are stripped first — they explain the
+    // rule, they are not the thing it forbids.
     const code = (source: string): string =>
       source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
     for (const name of readdirSync(resolveFromRoot(EDITOR_DIR)).filter((entry) => entry.endsWith(".ts"))) {
