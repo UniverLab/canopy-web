@@ -449,10 +449,26 @@ describe("the scheduled indexer", () => {
     expect(kv.putOptions.some((option) => option.key.startsWith("pattern"))).toBe(false);
     expect((await storedIndex(kv)).entries.length).toBe(12);
 
-    // Later runs only pay the one read that proves them gone.
+    // Later runs only pay the reads that prove them gone, and write nothing
+    // but the meta.
     kv.putOptions.length = 0;
     await run([officialSnapshotStub(), emptySearchStub()], { kv, authenticated: true });
     expect(kv.putOptions.map((option) => option.key)).toEqual(["index:meta"]);
+  });
+
+  it("sweeps an orphaned per-page patterns key behind a missing index key", async () => {
+    const kv = new FakeKV();
+    // A run that wrote the per-page keys but stopped before `patterns:v1`
+    // would leave exactly this: no index key, one orphan, one fingerprint.
+    await kv.put("pattern:v1:orphan", JSON.stringify({ title: "Orphan" }));
+    await kv.put(HASHES_KEY, JSON.stringify({ "pattern:v1:orphan": "def" }));
+
+    await run([officialSnapshotStub(), emptySearchStub()], { kv, authenticated: true });
+
+    expect(await kv.get("pattern:v1:orphan")).toBeNull();
+    expect((await kv.list({ prefix: "pattern:v1:" })).keys).toEqual([]);
+    const hashes = JSON.parse((await kv.get(HASHES_KEY)) as string) as Record<string, string>;
+    expect("pattern:v1:orphan" in hashes).toBe(false);
   });
 
   it("skips a blocked document, records its key and deletes a stale one", async () => {

@@ -638,21 +638,23 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
 
   // The retired patterns keys, swept once: runs before the pages moved
   // into the Worker left `patterns:v1` plus one `pattern:v1:*` key per
-  // page. The first run that finds the index key deletes it and every
-  // per-page key; later runs only pay the one read that proves them gone.
-  // Deletes never count as writes, like the vanished-document sweep below.
+  // page. The per-page keys are listed on every run — a run that wrote
+  // them but stopped before the index key would otherwise orphan them
+  // behind a missing `patterns:v1` — and the index key goes when it is
+  // there. Deletes never count as writes, like the vanished-document
+  // sweep below.
   const stalePatterns = await options.index.get(PATTERNS_KEY).catch(() => null);
   if (stalePatterns !== null) {
     await writer.remove(PATTERNS_KEY);
-    let patternCursor: string | undefined;
-    do {
-      const listed = await options.index.list({ prefix: PATTERN_PREFIX, cursor: patternCursor });
-      for (const key of listed.keys) {
-        await writer.remove(key.name);
-      }
-      patternCursor = listed.list_complete ? undefined : listed.cursor;
-    } while (patternCursor !== undefined);
   }
+  let patternCursor: string | undefined;
+  do {
+    const listed = await options.index.list({ prefix: PATTERN_PREFIX, cursor: patternCursor });
+    for (const key of listed.keys) {
+      await writer.remove(key.name);
+    }
+    patternCursor = listed.list_complete ? undefined : listed.cursor;
+  } while (patternCursor !== undefined);
 
   // The removal list, one key per entry, so the request path can answer a
   // block without reading the whole file. Only a list that was actually
