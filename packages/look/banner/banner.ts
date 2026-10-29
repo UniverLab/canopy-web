@@ -113,17 +113,17 @@ export function bannerSvg(lines: readonly string[], className: string, label?: s
   const width = Math.max(1, ...lines.map((line) => line.length));
   const height = lines.length || 1;
   const art = lines
-    .map(
-      (line, y) =>
-        `<g class="look-banner-line" fill="${bannerColor(y, lines.length)}">` +
-        line.replace(
-          /█+|░+/g,
-          (cells: string, x: number) =>
-            `<rect x="${x}" y="${y}" width="${cells.length}" height="1"` +
-            `${cells[0] === "░" ? ' fill-opacity=".35"' : ""}/>`,
-        ) +
-        `</g>`,
-    )
+    .map((line, y) => {
+      // Runs only: a replace would leave the art's own spaces behind as
+      // text nodes between the rects, so the matches build the row alone.
+      let rects = "";
+      for (const run of line.matchAll(/█+|░+/g)) {
+        rects +=
+          `<rect x="${run.index}" y="${y}" width="${run[0].length}" height="1"` +
+          `${run[0][0] === "░" ? ' fill-opacity=".35"' : ""}/>`;
+      }
+      return `<g class="look-banner-line" fill="${bannerColor(y, lines.length)}">${rects}</g>`;
+    })
     .join("");
   return `<svg viewBox="0 0 ${width} ${height}" shape-rendering="crispEdges" class="${className}"${label === undefined ? ` aria-hidden="true"` : ` role="img" aria-label="${label}"`}>${art}</svg>`;
 }

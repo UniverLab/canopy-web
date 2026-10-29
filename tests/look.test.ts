@@ -135,6 +135,9 @@ describe("bannerSvg", () => {
     expect(svg).toContain(`shape-rendering="crispEdges"`);
     const widths = rects(svg).map((rect) => Number(/width="(\d+)"/.exec(rect)?.[1]));
     expect(widths.reduce((sum, width) => sum + width, 0)).toBe(5);
+    // The space is a cell with no rect — and no text node either: only
+    // rects may sit between the tags, never the art's own characters.
+    expect(svg.replace(/<[^>]*>/g, "")).toBe("");
   });
 
   it("merges adjacent cells of one kind into one rect, shade runs too", () => {
@@ -159,8 +162,8 @@ describe("bannerSvg", () => {
   });
 
   it("keeps the graphs banner under 6 KB", () => {
-    const svg = bannerSvg(GRAPHS_BANNER_LINES, "look-banner-header");
-    expect(Buffer.byteLength(svg)).toBeLessThan(6144);
+    // The exact bytes the graphs header ships, not a shorter variant.
+    expect(Buffer.byteLength(renderHeaderBanner("graphs"))).toBeLessThan(6144);
   });
 });
 
