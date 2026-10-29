@@ -10,19 +10,18 @@
  * every document and indexing the official repository in the same run. It
  * writes the catalogue into KV — `index:v1` (entries, no full documents),
  * one `doc:v1:*` key per document plus its README, one `blocked:v1:*` key
- * per blocked entry, and `index:meta` with the run's accounting. The
- * official `patterns/` directory lands in `patterns:v1` plus one
- * `pattern:v1:*` key per page; a malformed page or a figure that fails the
- * graph schema is skipped with a reason in the run's invalid list, never a
- * failed run. A blocked document or repository is never written to
- * `doc:v1:*`, and a stale `doc:v1:*` key is deleted. The request path then
- * serves everything from KV and never spends GitHub quota on traffic.
+ * per blocked entry, and `index:meta` with the run's accounting. (The
+ * pattern pages are bundled with the Worker, not indexed; the write phase
+ * only sweeps the `patterns:v1` keys runs before the move left behind.)
+ * A blocked document or repository is never written to `doc:v1:*`, and a
+ * stale `doc:v1:*` key is deleted. The request path then serves everything
+ * from KV and never spends GitHub quota on traffic.
  *
  * The run is budgeted: 45 outbound subrequests, which is the Workers Free
  * plan's 50 minus a margin. An authenticated run reads each repository's
- * whole catalogue — every document, README, pattern page and figure — in one
- * GitHub GraphQL request, so the official repository costs one subrequest
- * and the machine-generated discovery search the rest; without a token it
+ * whole catalogue — every document and README — in one GitHub GraphQL
+ * request, so the official repository costs one subrequest and the
+ * machine-generated discovery search the rest; without a token it
  * falls back to the REST path. When the budget, a rate limit or a failed
  * discovery page stops the run early, the previous entries of the
  * repositories it could not visit are carried over, so a short run never
@@ -39,8 +38,8 @@
  * a day while the cron wakes 96 times. Each content key's SHA-256 digest
  * lives in `index:hashes:v1` (hashes.ts), so a run puts a key only when its
  * value differs — an unchanged catalogue costs one write, `index:meta` — and
- * `index:v1` and `patterns:v1` are fingerprinted without `built_at`, which
- * therefore marks when their content last changed.
+ * `index:v1` is fingerprinted without `built_at`, which therefore marks
+ * when its content last changed.
  */
 import type { DocumentKind, JsonValue } from "../../../src/schema.js";
 import {
@@ -63,12 +62,6 @@ import {
   loadDocumentWithReason,
 } from "./documents.js";
 import { OFFICIAL_OWNER, OFFICIAL_REPO } from "./lib.js";
-import {
-  type PatternEntry,
-  type StoredPattern,
-  PatternsHalt,
-  fetchOfficialPatterns,
-} from "./patterns.js";
 import {
   REPOS_KEY,
   hitOf,
@@ -94,7 +87,6 @@ import {
   PATTERN_PREFIX,
   PATTERNS_KEY,
   docKey,
-  patternKey,
   readIndex,
   type IndexEntry,
   type IndexInvalid,
@@ -235,10 +227,6 @@ interface RunState {
   graphql: boolean;
   entries: IndexEntry[];
   documents: Map<string, StoredDoc>;
-  patterns: PatternEntry[];
-  patternDocs: Map<string, StoredPattern>;
-  /** True once the official `patterns/` directory read end to end. */
-  patternsComplete: boolean;
   invalid: IndexInvalid[];
   /** The entries `blocked.json` held at the start of this run. */
   blocked: BlockedEntry[];
@@ -330,10 +318,10 @@ async function indexOfficialRest(state: RunState): Promise<void> {
 }
 
 /**
- * Index the official repository from one GraphQL answer: the removal list,
- * every document and README, and every pattern page with its figure, all in
- * the run's second subrequest. Returns whether the removal list was readable,
- * so the caller keeps the previous blocks when it was not.
+ * Index the official repository from one GraphQL answer: the removal list
+ * and every document and README, all in the run's second subrequest.
+ * Returns whether the removal list was readable, so the caller keeps the
+ * previous blocks when it was not.
  */
 async function indexOfficialSnapshot(state: RunState): Promise<boolean> {
   const snapshot = await fetchSnapshot(state.github, OFFICIAL_OWNER, OFFICIAL_REPO, state.log);
@@ -356,10 +344,6 @@ async function indexOfficialSnapshot(state: RunState): Promise<boolean> {
   for (const item of catalogue.documents) {
     await indexSource(state, item.source, true, () => documentOfSnapshot(item, state.log));
   }
-  state.invalid.push(...catalogue.patterns.invalid);
-  state.patterns = catalogue.patterns.entries;
-  state.patternDocs = catalogue.patterns.documents;
-  state.patternsComplete = catalogue.patterns.complete;
   return catalogue.blocked !== null;
 }
 
@@ -479,9 +463,6 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
     graphql: options.authenticated,
     entries: [],
     documents: new Map(),
-    patterns: [],
-    patternDocs: new Map(),
-    patternsComplete: false,
     invalid: [],
     blocked: [],
     visited: new Set(),
@@ -532,31 +513,6 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
       throw error;
     }
     state.visited.add(officialKey);
-
-    // The REST path reads the pattern pages after the documents, one file per
-    // call. A halt (a rate limit mid-read) or a spent budget stops the run like
-    // any other stop — truncated with carry-over, the catalogue still
-    // committed — and the previous patterns stay because this run never read
-    // them end to end; an unreadable directory keeps them too instead of
-    // emptying them. The snapshot path already holds them.
-    if (!options.authenticated) {
-      const patternsInvalid = state.invalid.length;
-      try {
-        const read = await fetchOfficialPatterns(state.github, state.log);
-        state.invalid.push(...read.invalid);
-        if (read.complete) {
-          state.patterns = read.entries;
-          state.patternDocs = read.documents;
-          state.patternsComplete = true;
-        }
-      } catch (error) {
-        state.invalid.length = patternsInvalid;
-        if (error instanceof PatternsHalt) {
-          throw new StopRun(error.reason);
-        }
-        throw error;
-      }
-    }
 
     let page = 1;
     const queue: RepoHit[] = [];
@@ -680,25 +636,19 @@ export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
   }
   await writer.put(REPOS_KEY, serializeRepoState(INDEXER_VERSION, repoState));
 
-  // The pattern pages, only from a run that read them end to end: a short
-  // run keeps the previous `patterns:v1` and its keys untouched.
-  if (state.patternsComplete) {
-    for (const [slug, stored] of state.patternDocs) {
-      await writer.put(patternKey(slug), JSON.stringify(stored));
-    }
-    await writer.putByContent(
-      PATTERNS_KEY,
-      JSON.stringify({ entries: state.patterns }),
-      JSON.stringify({ built_at: builtAt, entries: state.patterns }),
-    );
-    const livePatterns = new Set([...state.patternDocs.keys()].map((slug) => patternKey(slug)));
+  // The retired patterns keys, swept once: runs before the pages moved
+  // into the Worker left `patterns:v1` plus one `pattern:v1:*` key per
+  // page. The first run that finds the index key deletes it and every
+  // per-page key; later runs only pay the one read that proves them gone.
+  // Deletes never count as writes, like the vanished-document sweep below.
+  const stalePatterns = await options.index.get(PATTERNS_KEY).catch(() => null);
+  if (stalePatterns !== null) {
+    await writer.remove(PATTERNS_KEY);
     let patternCursor: string | undefined;
     do {
       const listed = await options.index.list({ prefix: PATTERN_PREFIX, cursor: patternCursor });
       for (const key of listed.keys) {
-        if (!livePatterns.has(key.name)) {
-          await writer.remove(key.name);
-        }
+        await writer.remove(key.name);
       }
       patternCursor = listed.list_complete ? undefined : listed.cursor;
     } while (patternCursor !== undefined);

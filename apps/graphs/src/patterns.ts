@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * The lab's pattern pages: `patterns/<slug>.md` in the official repository.
+ * The lab's pattern pages: `apps/graphs/patterns/<slug>.md` in this
+ * repository, editorial content of the graphs site.
  *
  * Each page is front matter plus a markdown body, with a sibling
- * `patterns/<slug>.figure.json` — a harness-free graph document the plate
+ * `<slug>.figure.json` — a harness-free graph document the plate
  * renderer draws. The front matter carries exactly six keys:
  *
  *   title: <one line>
@@ -14,25 +15,20 @@
  *   sources: one `- title:` / `url:` pair per source, at least one
  *
  * `parsePatternFile` is a small strict parser for that shape — no YAML
- * dependency. Anything off-shape is `null`, and the indexer skips the page,
- * records why in the run's invalid list, and never fails the run.
- * `fetchOfficialPatterns` reads the whole `patterns/` directory from `main`
- * in the official repository only; a rate limit halts with `PatternsHalt`
- * so the indexer can stop the run like any other stop.
+ * dependency. Anything off-shape is `null`. `patternFromTexts` parses one
+ * page with its figure into the card and the stored page, reporting a
+ * malformed page, a missing figure and a figure that fails the graph
+ * schema as `invalid` with a reason.
+ *
+ * The pages are bundled at build time (`npm run build:patterns`
+ * validates every page with these same rules and writes the committed
+ * `patterns-data.generated.ts`), so a malformed page fails the build —
+ * it is never dropped silently at runtime.
  */
 import type { DocumentKind, JsonValue } from "../../../src/schema.js";
-import type { GitHub, Log } from "./github.js";
-import { isApiError } from "./github.js";
-import {
-  decodeBase64,
-  isArray,
-  isRecord,
-  isString,
-  parseJson,
-  readJson,
-} from "./json.js";
-import { OFFICIAL_REPOSITORY, SLUG_RE } from "./lib.js";
-import type { IndexInvalid } from "./store.js";
+import type { Log } from "./github.js";
+import { isRecord, parseJson } from "./json.js";
+import { SLUG_RE } from "./lib.js";
 import { isValidDocument } from "./validate.js";
 
 /** The three statuses a pattern page carries, in list order. */
@@ -274,37 +270,7 @@ export function parsePatternFile(text: string): ParsedPattern | null {
   };
 }
 
-/** Thrown past a rate limit: the indexer stops the run, like any other stop. */
-export class PatternsHalt {
-  readonly reason: string;
-  constructor(reason: string) {
-    this.reason = reason;
-  }
-}
-
-/** What one full read of the official `patterns/` directory proved. */
-export interface PatternsRead {
-  entries: PatternEntry[];
-  documents: Map<string, StoredPattern>;
-  invalid: IndexInvalid[];
-  /**
-   * False when the directory itself could not be read (so the previous
-   * patterns stay); a missing directory reads as complete and empty.
-   */
-  complete: boolean;
-}
-
-function contentsUrl(path: string): string {
-  return `https://api.github.com/repos/${OFFICIAL_REPOSITORY}/contents/${path}?ref=main`;
-}
-
-type FileText =
-  | { kind: "text"; text: string }
-  | { kind: "absent" }
-  | { kind: "halt"; reason: string }
-  | { kind: "error"; reason: string };
-
-/** One figure file as a transport found it. */
+/** One figure file as the reader found it. */
 export type FigureText =
   | { kind: "text"; text: string }
   | { kind: "absent" }
@@ -316,10 +282,10 @@ export type PatternLoad =
   | { kind: "invalid"; reason: string };
 
 /**
- * Parse one page and its figure into the card and the stored page. The REST
- * reader and the GraphQL snapshot both call this, so a malformed page, a
- * missing figure and a figure that fails the graph schema are reported the
- * same way on either transport. The figure name comes from the page's own
+ * Parse one page and its figure into the card and the stored page. The
+ * build and the request path both call this, so a malformed page, a
+ * missing figure and a figure that fails the graph schema are reported
+ * the same way in either. The figure name comes from the page's own
  * front matter, so the caller only says how to read a named file.
  */
 export async function patternFromTexts(
@@ -370,104 +336,4 @@ export async function patternFromTexts(
       figure: figureJson.value,
     },
   };
-}
-
-/** One file from the official repo at `main`, through the contents API. */
-async function readOfficialFile(github: GitHub, path: string, log: Log): Promise<FileText> {
-  const response = await github.get(contentsUrl(path), "contents");
-  if (isApiError(response)) {
-    if (response.kind === "rate-limit") {
-      return { kind: "halt", reason: `rate-limited reading patterns/${path}` };
-    }
-    if (response.kind === "not-found") {
-      return { kind: "absent" };
-    }
-    return { kind: "error", reason: `github ${response.kind}` };
-  }
-  const body = await readJson(response);
-  const content = body.ok && isRecord(body.value) ? body.value["content"] : undefined;
-  const text = decodeBase64(content);
-  if (text === null) {
-    log(`patterns: ${path} has no readable inline content`);
-    return { kind: "error", reason: "unreadable file" };
-  }
-  return { kind: "text", text };
-}
-
-/** The `patterns/*.md` slugs in a contents listing; anything else is none. */
-function patternSlugs(value: unknown): string[] {
-  if (!isArray(value)) {
-    return [];
-  }
-  return value.flatMap((entry) => {
-    if (!isRecord(entry) || entry["type"] !== "file") {
-      return [];
-    }
-    const name = entry["name"];
-    if (!isString(name) || !name.endsWith(".md") || name === "README.md") {
-      return [];
-    }
-    const slug = name.slice(0, -".md".length);
-    return SLUG_RE.test(slug) ? [slug] : [];
-  });
-}
-
-/**
- * Read every pattern page from the official repository's `main`: the
- * directory listing, each `<slug>.md`, and the figure its front matter
- * names. A malformed page, an unreadable file or a figure that fails the
- * graph schema skips that page with a reason in `invalid`, never a failed
- * run; only a rate limit halts. No other repository's patterns are read.
- */
-export async function fetchOfficialPatterns(github: GitHub, log: Log): Promise<PatternsRead> {
-  const entries: PatternEntry[] = [];
-  const documents = new Map<string, StoredPattern>();
-  const invalid: IndexInvalid[] = [];
-  const listing = await github.get(contentsUrl("patterns"), "contents");
-  if (isApiError(listing)) {
-    if (listing.kind === "rate-limit") {
-      throw new PatternsHalt("rate-limited listing the official patterns");
-    }
-    if (listing.kind === "not-found") {
-      return { entries, documents, invalid, complete: true };
-    }
-    log(`patterns: listing failed: ${listing.kind}; keeping the previous patterns`);
-    return { entries, documents, invalid, complete: false };
-  }
-  const body = await readJson(listing);
-  if (!body.ok) {
-    log("patterns: listing did not parse as JSON; keeping the previous patterns");
-    return { entries, documents, invalid, complete: false };
-  }
-  for (const slug of patternSlugs(body.value)) {
-    const page = await readOfficialFile(github, `patterns/${slug}.md`, log);
-    if (page.kind === "halt") {
-      throw new PatternsHalt(page.reason);
-    }
-    if (page.kind === "absent") {
-      log(`patterns: dropped ${slug}: the page vanished after the listing`);
-      continue;
-    }
-    if (page.kind !== "text") {
-      invalid.push({ repo: OFFICIAL_REPOSITORY, slug, reason: page.reason });
-      continue;
-    }
-    const loaded = await patternFromTexts(slug, page.text, async (name) => {
-      const found = await readOfficialFile(github, `patterns/${name}`, log);
-      if (found.kind === "halt") {
-        throw new PatternsHalt(found.reason);
-      }
-      if (found.kind === "text") {
-        return { kind: "text", text: found.text };
-      }
-      return found.kind === "absent" ? { kind: "absent" } : { kind: "error", reason: found.reason };
-    }, log);
-    if (loaded.kind === "invalid") {
-      invalid.push({ repo: OFFICIAL_REPOSITORY, slug, reason: loaded.reason });
-      continue;
-    }
-    entries.push(loaded.entry);
-    documents.set(slug, loaded.stored);
-  }
-  return { entries, documents, invalid, complete: true };
 }

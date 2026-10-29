@@ -8,15 +8,15 @@
  * calls per folder — the listing, the document, the README — which is how
  * a scheduled run used to stop halfway through the official repository.
  * GitHub's GraphQL API answers the whole folder tree in one POST, so this
- * module asks for exactly that: the three top-level folders (`graphs/`,
- * `nodes/`, `patterns/`) and `blocked.json`, three entry levels deep, with
- * every blob's text.
+ * module asks for exactly that: the two top-level folders (`graphs/`
+ * and `nodes/`) and `blocked.json`, three entry levels deep, with every
+ * blob's text. (The pattern pages used to ride in the same answer from a
+ * third folder; they are bundled with the Worker now, and no longer read.)
  *
  * What comes back is decoded into the same shapes the REST path builds:
- * `snapshotSources` yields one document folder per slug, `patternsOfSnapshot`
- * yields the pattern cards and their stored pages, and both hand their texts
- * to the shared parsers in `documents.ts` and `patterns.ts`. Only the
- * transport differs, so a document reads identically either way.
+ * `snapshotSources` yields one document folder per slug and hands its
+ * texts to the shared parser in `documents.ts`. Only the transport
+ * differs, so a document reads identically either way.
  *
  * A partial answer never fails silently: a `errors` array on a folder whose
  * document file did not arrive marks that document `graphql error`, a missing
@@ -37,21 +37,14 @@ import {
 import type { ApiError, GitHub, GraphQLResult, Log } from "./github.js";
 import { isApiError } from "./github.js";
 import { isArray, isNumber, isRecord, isString, stringField } from "./json.js";
-import { OFFICIAL_OWNER, OFFICIAL_REPO, OFFICIAL_REPOSITORY, SLUG_RE } from "./lib.js";
-import {
-  type PatternEntry,
-  type PatternsRead,
-  type StoredPattern,
-  patternFromTexts,
-} from "./patterns.js";
-import type { IndexInvalid } from "./store.js";
+import { OFFICIAL_OWNER, OFFICIAL_REPO } from "./lib.js";
 
 /**
  * The one query the catalogue makes: the repository's accounting, its
  * default branch, and the tree at `HEAD:` three levels deep — the folders,
- * their document folders, and the files inside those. Nothing outside the
- * three folders is requested, so a repository's other content costs no
- * bandwidth.
+ * their document folders, and the files inside those. Only the two
+ * document folders are decoded, so a repository's other content costs no
+ * more than its ride in the answer.
  */
 export const REPOSITORY_QUERY = `query RepositoryCatalogue($owner: String!, $name: String!) {
   repository(owner: $owner, name: $name) {
@@ -91,7 +84,7 @@ export const REPOSITORY_QUERY = `query RepositoryCatalogue($owner: String!, $nam
 }`;
 
 /** The folders the index reads; nothing else is asked for. */
-export const SNAPSHOT_DIRS = ["graphs", "nodes", "patterns"] as const;
+export const SNAPSHOT_DIRS = ["graphs", "nodes"] as const;
 
 /** The removal list's path at the repository root. */
 export const BLOCKED_FILE = "blocked.json";
@@ -273,73 +266,14 @@ export function blockedOfSnapshot(snapshot: Snapshot): BlockedEntry[] | null {
   return parseBlockedList(file.text);
 }
 
-/** The slug a `patterns/<slug>.md` file name carries, or null for any other name. */
-function pageSlug(name: string): string | null {
-  if (!name.endsWith(".md") || name === "README.md") {
-    return null;
-  }
-  const slug = name.slice(0, -".md".length);
-  return SLUG_RE.test(slug) ? slug : null;
-}
-
-/**
- * Read every pattern page out of the snapshot's `patterns/` folder. The
- * folder rides in the same answer as the documents, so the whole pattern
- * set — pages and figures — costs no extra subrequest. A missing folder
- * reads as complete and empty, exactly as a 404 on the REST listing does.
- */
-export async function patternsOfSnapshot(
-  dir: SnapshotDir | undefined,
-  log: Log,
-): Promise<PatternsRead> {
-  const entries: PatternEntry[] = [];
-  const documents = new Map<string, StoredPattern>();
-  const invalid: IndexInvalid[] = [];
-  if (dir === undefined) {
-    return { entries, documents, invalid, complete: true };
-  }
-  for (const file of dir.files.values()) {
-    const slug = pageSlug(file.name);
-    if (slug === null) {
-      continue;
-    }
-    if (!file.present) {
-      invalid.push({ repo: OFFICIAL_REPOSITORY, slug, reason: "missing file" });
-      continue;
-    }
-    if (file.text === null) {
-      invalid.push({ repo: OFFICIAL_REPOSITORY, slug, reason: "blob not text" });
-      continue;
-    }
-    const loaded = await patternFromTexts(slug, file.text, async (name) => {
-      const figure = dir.files.get(name);
-      if (figure === undefined || !figure.present) {
-        return { kind: "absent" };
-      }
-      if (figure.text === null) {
-        return { kind: "error", reason: "blob not text" };
-      }
-      return { kind: "text", text: figure.text };
-    }, log);
-    if (loaded.kind === "invalid") {
-      invalid.push({ repo: OFFICIAL_REPOSITORY, slug, reason: loaded.reason });
-      continue;
-    }
-    entries.push(loaded.entry);
-    documents.set(slug, loaded.stored);
-  }
-  return { entries, documents, invalid, complete: true };
-}
-
 /** Everything one official answer gives the index. */
 export interface OfficialCatalogue {
   /** The removal list, or null when `blocked.json` was not readable. */
   blocked: BlockedEntry[] | null;
   documents: SnapshotSource[];
-  patterns: PatternsRead;
 }
 
-/** Decode the official snapshot into the removal list, documents and patterns. */
+/** Decode the official snapshot into the removal list and the documents. */
 export async function officialCatalogueOf(
   snapshot: Snapshot,
   log: Log,
@@ -348,10 +282,8 @@ export async function officialCatalogueOf(
   if (blocked === null) {
     log("snapshot: blocked.json unreadable; keeping the previous blocks");
   }
-  const patterns = snapshot.tree?.dirs.get("patterns");
   return {
     blocked,
     documents: snapshotSources(snapshot, OFFICIAL_OWNER, OFFICIAL_REPO),
-    patterns: await patternsOfSnapshot(patterns, log),
   };
 }

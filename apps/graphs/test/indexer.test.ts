@@ -18,7 +18,7 @@ import {
   runIndexer,
 } from "../src/indexer.js";
 import { HASHES_KEY } from "../src/hashes.js";
-import { createStore, docKey, patternKey, resetIndexMemo, type IndexEntry } from "../src/store.js";
+import { createStore, docKey, resetIndexMemo, type IndexEntry } from "../src/store.js";
 import { blockedDocKey, blockedRepoKey, type BlockedEntry } from "../src/blocked.js";
 import {
   FakeCache,
@@ -39,12 +39,10 @@ import {
 import {
   OFFICIAL_GRAPH_SLUGS,
   OFFICIAL_NODE_SLUGS,
-  PATTERN_SLUGS,
   communitySnapshotStub,
   emptySearchStub,
   graphqlStub,
   officialSnapshotStub,
-  patternPage,
   snapshotBody,
 } from "./graphql-fixture.js";
 
@@ -188,10 +186,10 @@ describe("the scheduled indexer", () => {
     expect(meta.authenticated).toBe(false);
     expect(meta.stopped).toBeNull();
     expect(meta.invalid).toEqual([]);
-    // Removal list (1) + official (4: graphs, nodes, repo, patterns) + two
+    // Removal list (1) + official (3: graphs, nodes, repo) + two
     // search pages (2) + one tree, document and README per repository
     // (101 x 3): every call counted.
-    expect(meta.calls).toBe(5 + 2 + 101 * 3);
+    expect(meta.calls).toBe(4 + 2 + 101 * 3);
     expect(fake.calls.length).toBe(meta.calls);
     const searches = fake.calls.filter((url) => url.includes("search/repositories"));
     expect(searches.length).toBe(2);
@@ -288,9 +286,9 @@ describe("the scheduled indexer", () => {
       JSON.stringify({ document: { name: "Old two" }, readme: "old two readme" }),
     );
 
-    // Removal list (1) + official (4: graphs, nodes, repo, patterns) +
-    // search (1) + one full repository (tree, document, README): the ninth
-    // call spends the budget of 9, and the second repository is never
+    // Removal list (1) + official (3: graphs, nodes, repo) +
+    // search (1) + one full repository (tree, document, README): the eighth
+    // call spends the budget of 8, and the second repository is never
     // visited.
     const { meta, fake } = await run(
       [
@@ -303,14 +301,14 @@ describe("the scheduled indexer", () => {
         ...repoStubs("one", 4),
         ...repoStubs("two", 6),
       ],
-      { kv, budget: 9, authenticated: false },
+      { kv, budget: 8, authenticated: false },
     );
 
-    expect(meta.calls).toBe(9);
-    expect(meta.subrequests).toBe(9);
-    expect(fake.calls.length).toBe(9);
+    expect(meta.calls).toBe(8);
+    expect(meta.subrequests).toBe(8);
+    expect(fake.calls.length).toBe(8);
     expect(meta.truncated).toBe(true);
-    expect(meta.stopped).toBe("budget of 9 subrequests reached");
+    expect(meta.stopped).toBe("budget of 8 subrequests reached");
     const index = await storedIndex(kv);
     expect(index.entries.map((entry) => `${entry["repo"]}/${entry["slug"]}`).sort()).toEqual([
       "one/flow",
@@ -376,7 +374,7 @@ describe("the scheduled indexer", () => {
     const { meta } = await run(stubs, { kv, authenticated: false, budget: TEST_BUDGET });
 
     expect(meta.truncated).toBe(true);
-    expect(meta.calls).toBe(5 + 10 + 1000);
+    expect(meta.calls).toBe(4 + 10 + 1000);
     const index = await storedIndex(kv);
     // The visited repository had no documents, so its previous entry is
     // gone; the repository beyond the cap was never proven gone, so its
@@ -428,6 +426,33 @@ describe("the scheduled indexer", () => {
     expect(await kv.get(docKey("graph", "acme", "one", "gone"))).toBeNull();
     expect(await kv.get(docKey("graph", "acme", "vanished", "x"))).toBeNull();
     expect(await kv.get(docKey("graph", "acme", "one", "flow"))).not.toBeNull();
+  });
+
+  it("sweeps the retired patterns keys once and never writes them again", async () => {
+    const kv = new FakeKV();
+    await kv.put("patterns:v1", JSON.stringify({ built_at: "2026-10-26T00:00:00.000Z", entries: [] }));
+    await kv.put("pattern:v1:retired", JSON.stringify({ title: "Retired" }));
+    await kv.put(HASHES_KEY, JSON.stringify({ "patterns:v1": "abc", "pattern:v1:retired": "def" }));
+    kv.putOptions.length = 0;
+
+    await run([officialSnapshotStub(), emptySearchStub()], { kv, authenticated: true });
+
+    // The first run after the move deletes the retired keys and forgets
+    // their fingerprints; the catalogue itself still lands, and no run
+    // ever writes a patterns key again.
+    expect(await kv.get("patterns:v1")).toBeNull();
+    expect(await kv.get("pattern:v1:retired")).toBeNull();
+    expect((await kv.list({ prefix: "pattern:v1:" })).keys).toEqual([]);
+    const hashes = JSON.parse((await kv.get(HASHES_KEY)) as string) as Record<string, string>;
+    expect("patterns:v1" in hashes).toBe(false);
+    expect("pattern:v1:retired" in hashes).toBe(false);
+    expect(kv.putOptions.some((option) => option.key.startsWith("pattern"))).toBe(false);
+    expect((await storedIndex(kv)).entries.length).toBe(12);
+
+    // Later runs only pay the one read that proves them gone.
+    kv.putOptions.length = 0;
+    await run([officialSnapshotStub(), emptySearchStub()], { kv, authenticated: true });
+    expect(kv.putOptions.map((option) => option.key)).toEqual(["index:meta"]);
   });
 
   it("skips a blocked document, records its key and deletes a stale one", async () => {
@@ -683,10 +708,10 @@ describe("the scheduled indexer", () => {
     expect(fake.calls.length).toBe(45);
     expect(meta.truncated).toBe(true);
     expect(meta.stopped).toBe("budget of 45 subrequests reached");
-    // Official (5, patterns listed) + search + thirteen full repositories
-    // (3 calls each) spend exactly 45; the fourteenth repository's tree is
-    // the call the budget refuses, so it is never visited and nothing of
-    // it is written.
+    // Official (4) + search + thirteen full repositories (3 calls each)
+    // spend 44; the fourteenth repository's tree is the 45th call, and its
+    // document is the call the budget refuses, so it is never visited and
+    // nothing of it is written.
     expect(meta.documents).toBe(13);
     expect(meta.repos_seen).toBe(14);
   });
@@ -749,18 +774,10 @@ describe("the GraphQL snapshot run", () => {
     ) as { document: { name: string } };
     expect(node.document.name).toBe("hello-node");
 
-    // Every pattern page, figures included, again from the same answer.
-    const patterns = JSON.parse((await kv.get("patterns:v1")) as string) as {
-      entries: Array<{ slug: string; title: string }>;
-    };
-    expect(patterns.entries.map((entry) => entry.slug).sort()).toEqual([...PATTERN_SLUGS].sort());
-    const page = JSON.parse(
-      (await kv.get(patternKey("pattern-alpha"))) as string,
-    ) as { title: string; body: string; sources: unknown[]; figure: { name: string } };
-    expect(page.title).toBe("Page pattern-alpha");
-    expect(page.body.trim()).toBe("The pattern-alpha page.");
-    expect(page.sources).toHaveLength(1);
-    expect(page.figure.name).toBe("hello-graph");
+    // The pattern pages are bundled with the Worker, not indexed: the run
+    // writes no patterns keys at all.
+    expect(await kv.get("patterns:v1")).toBeNull();
+    expect((await kv.list({ prefix: "pattern:v1:" })).keys).toEqual([]);
   });
 
   it("reads each community repository in one GraphQL request", async () => {
@@ -809,44 +826,6 @@ describe("the GraphQL snapshot run", () => {
       { repo: "UniverLab/canopy-graphs", slug: "graph-dropped", reason: "graphql error" },
       { repo: "UniverLab/canopy-graphs", slug: "node-dropped", reason: "graphql error" },
     ]);
-  });
-
-  it("reports the same pattern reasons from a snapshot as from REST", async () => {
-    const body = snapshotBody({
-      blocked: "[]",
-      patterns: [
-        { slug: "pattern-alpha", page: patternPage("pattern-alpha"), figure: VALID_GRAPH_TEXT },
-        { slug: "pattern-bravo", page: "no front matter here", figure: VALID_GRAPH_TEXT },
-        {
-          slug: "pattern-charlie",
-          page: patternPage("pattern-charlie"),
-          figure: VALID_GRAPH_TEXT,
-          figureName: "somewhere-else.figure.json",
-        },
-        { slug: "pattern-delta", page: patternPage("pattern-delta"), figure: "{not json" },
-        {
-          slug: "pattern-echo",
-          page: patternPage("pattern-echo"),
-          figure: JSON.stringify({ not: "a document" }),
-        },
-      ],
-    });
-    const { meta, kv } = await run(
-      [graphqlStub("canopy-graphs", body), emptySearchStub()],
-      { authenticated: true },
-    );
-
-    expect(meta.invalid).toEqual([
-      { repo: "UniverLab/canopy-graphs", slug: "pattern-bravo", reason: "malformed front matter" },
-      { repo: "UniverLab/canopy-graphs", slug: "pattern-charlie", reason: "missing figure" },
-      { repo: "UniverLab/canopy-graphs", slug: "pattern-delta", reason: "unparseable figure JSON" },
-      { repo: "UniverLab/canopy-graphs", slug: "pattern-echo", reason: "figure failed the graph schema" },
-    ]);
-    const patterns = JSON.parse((await kv.get("patterns:v1")) as string) as {
-      entries: Array<{ slug: string }>;
-    };
-    expect(patterns.entries.map((entry) => entry.slug)).toEqual(["pattern-alpha"]);
-    expect(await kv.get(patternKey("pattern-bravo"))).toBeNull();
   });
 
   it("calls an entry that vanished without an errors array a missing file", async () => {
@@ -971,30 +950,21 @@ describe("the write budget", () => {
     return JSON.parse(text as string) as Record<string, string>;
   }
 
-  /** The `patterns:v1` timestamp as the run left it. */
-  async function storedPatternsBuilt(kv: FakeKV): Promise<string> {
-    const text = await kv.get("patterns:v1");
-    expect(text).not.toBeNull();
-    return (JSON.parse(text as string) as { built_at: string }).built_at;
-  }
-
   it("writes every key on the first run against an empty KV", async () => {
     const { meta, kv } = await run(officialTable(), { authenticated: true });
 
-    // 12 documents, index:v1, 10 pattern pages, patterns:v1, the visit
-    // ledger, index:meta, and the fingerprint map itself: every key is new,
-    // so nothing is skipped.
+    // 12 documents, index:v1, the visit ledger, index:meta, and the
+    // fingerprint map itself: every key is new, so nothing is skipped.
     const puts = kv.putOptions.map((option) => option.key);
-    expect(puts).toHaveLength(27);
+    expect(puts).toHaveLength(16);
     expect(meta.kv_skipped).toBe(0);
-    expect(meta.kv_writes).toBe(26);
+    expect(meta.kv_writes).toBe(15);
     expect(puts).toContain(docKey("graph", "UniverLab", "canopy-graphs", "graph-alpha"));
-    expect(puts).toContain(patternKey("pattern-alpha"));
     expect(puts).toContain("index:repos:v1");
     expect(puts).toContain(HASHES_KEY);
     // Every content key carries a fingerprint; `index:meta` does not, since it
     // moves on every run.
-    expect(Object.keys(await storedHashes(kv))).toHaveLength(25);
+    expect(Object.keys(await storedHashes(kv))).toHaveLength(14);
   });
 
   it("costs exactly one put when the catalogue did not move", async () => {
@@ -1003,20 +973,18 @@ describe("the write budget", () => {
     const kv = new FakeKV();
     const first = await run(officialTable(), { kv, authenticated: true, now: clock });
     const firstBuilt = (await storedIndex(kv)).built_at;
-    const firstPatternsBuilt = await storedPatternsBuilt(kv);
-    expect(first.meta.kv_writes).toBe(26);
+    expect(first.meta.kv_writes).toBe(15);
 
     kv.putOptions.length = 0;
     const second = await run(officialTable(), { kv, authenticated: true, now: clock });
 
-    // The only write an unchanged run issues is its own accounting, and both
-    // listings keep the `built_at` of the run that last changed them.
+    // The only write an unchanged run issues is its own accounting, and the
+    // listing keeps the `built_at` of the run that last changed it.
     expect(kv.putOptions.map((option) => option.key)).toEqual(["index:meta"]);
     expect(second.meta.kv_writes).toBe(1);
     expect(second.meta.kv_skipped).toBe(first.meta.kv_writes - 1);
     expect(second.meta.built_at).not.toBe(first.meta.built_at);
     expect((await storedIndex(kv)).built_at).toBe(firstBuilt);
-    expect(await storedPatternsBuilt(kv)).toBe(firstPatternsBuilt);
   });
 
   it("rewrites only the document one changed README touches", async () => {
@@ -1078,8 +1046,8 @@ describe("the write budget", () => {
     const { meta } = await run(officialTable(), { kv, authenticated: true });
 
     expect(meta.kv_skipped).toBe(0);
-    expect(meta.kv_writes).toBe(26);
-    expect(kv.putOptions).toHaveLength(27);
+    expect(meta.kv_writes).toBe(15);
+    expect(kv.putOptions).toHaveLength(16);
   });
 });
 

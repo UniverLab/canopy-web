@@ -405,6 +405,21 @@ export function publishOfficial(repo: string): string {
   );
 }
 
+/**
+ * The Publish page's Official follow-up: the pattern pages are editorial
+ * content of this site, authored in this repo under
+ * `apps/graphs/patterns/` — one `<slug>.md` plus its `<slug>.figure.json`
+ * — and proposed by pull request there. Rendered with the directory and
+ * both file shapes as inline code.
+ */
+export const PUBLISH_PATTERNS_BODY =
+  "The pattern pages (/patterns) are editorial content of this site, not installable documents. " +
+  "They are authored in this repo under apps/graphs/patterns/ — one <slug>.md plus its " +
+  "<slug>.figure.json — and proposed by pull request there.";
+
+/** The code spans the patterns paragraph sets as inline code. */
+export const PUBLISH_PATTERNS_SPANS = ["apps/graphs/patterns/", "<slug>.md", "<slug>.figure.json"];
+
 /** The home twin's pointer to the Publish page, over its label and href. */
 export function homePublishLine(label: string, href: string): string {
   return `Share your own: [${label}](${href})`;

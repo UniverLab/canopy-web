@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * The lab's pattern pages: front-matter parsing, figure validation and the
- * indexer's skip-and-record rule, the patterns index build, card ordering,
- * the plates on cards and pages, the experiment notice, the Implemented-by
- * rows, the document back-link, the body sanitizer, and llms.txt plus the
- * markdown twin. Page tests seed a fresh KV through the indexer, like the
- * catalogue page tests, with an empty upstream — no page may reach GitHub.
+ * The lab's pattern pages, served from the bundled set: front-matter
+ * parsing, the bundled build (every page parses, every figure validates),
+ * card ordering, the plates on cards and pages, the experiment notice, the
+ * Implemented-by rows, the document back-link, the body sanitizer, and
+ * llms.txt plus the markdown twin. Route tests seed a fresh KV through the
+ * indexer with the shared catalogue stubs, like the catalogue page tests —
+ * the bundled patterns arrive with the Worker, and no page may reach
+ * GitHub. Pattern-specific expectations are computed from the bundled set,
+ * so the suite follows `apps/graphs/patterns/` without retyping it.
  */
 import { describe, expect, it } from "vitest";
 import { NOT_PAGE, handlePage } from "../src/pages/routes.js";
@@ -18,34 +21,30 @@ import {
   PATTERN_MISSING_REF,
   PATTERN_SOURCES_HEADING,
 } from "../src/pages/copy.js";
-import { parsePatternFile, type StoredPattern } from "../src/patterns.js";
-import { patternPage } from "../src/pages/patterns.js";
+import {
+  comparePatterns,
+  implementingPatterns,
+  parsePatternFile,
+  patternFromTexts,
+  type FigureText,
+  type PatternMeta,
+  type PatternRef,
+  type StoredPattern,
+} from "../src/patterns.js";
+import { bundledPatterns } from "../src/patterns-bundled.js";
+import { BUNDLED_PATTERNS, PATTERNS_BUILT_AT } from "../src/patterns-data.generated.js";
+import { SLUG_RE } from "../src/lib.js";
+import { isValidDocument } from "../src/validate.js";
+import { escapeHtml } from "../src/pages/md.js";
+import { patternsIndexPage, patternPage } from "../src/pages/patterns.js";
 import { createGitHub } from "../src/github.js";
 import { runIndexer } from "../src/indexer.js";
-import { patternKey, resetIndexMemo } from "../src/store.js";
-import { FakeCache, FakeKV, dirBody, fakeFetch, fileBody, type Stub } from "./fakes.js";
-import { INVALID_GRAPH_TEXT } from "./documents-fixture.js";
-import { FIVE_NODE_GRAPH_TEXT } from "./pages-fixture.js";
+import { createStore, resetIndexMemo } from "../src/store.js";
+import { FakeCache, FakeKV, fakeFetch, fileBody, type Stub } from "./fakes.js";
+import { VALID_GRAPH_TEXT, VALID_NODE_TEXT } from "./documents-fixture.js";
 import { REPO_DIR, officialStubs } from "./stubs.js";
 
 const ORIGIN = "https://graphs.univerlab.org";
-const PATTERNS_DIR = `${REPO_DIR}/contents/patterns`;
-
-/** A three-node figure with one fail edge back: the plate tests' subject. */
-const FIGURE_TEXT = JSON.stringify({
-  format_version: 6,
-  name: "gated-check",
-  nodes: [
-    { name: "implement", kind: "agent", position: 1, config: {} },
-    { name: "gate", kind: "check", position: 2, config: {} },
-    { name: "commit", kind: "agent", position: 3, config: {} },
-  ],
-  edges: [
-    { from_node: "implement", to_node: "gate", condition: "pass" },
-    { from_node: "gate", to_node: "commit", condition: "pass" },
-    { from_node: "gate", to_node: "implement", condition: "fail" },
-  ],
-});
 
 interface PatternPage {
   slug: string;
@@ -75,41 +74,106 @@ function patternText(page: PatternPage): string {
   return ["---", ...front, "---", "", page.body ?? `# ${page.slug}`, ``].join("\n");
 }
 
-/** The listing plus the page and figure files for these slugs. */
-function patternStubs(
-  pages: PatternPage[],
-  figures: Record<string, string> = {},
-): Stub[] {
-  const files = [
-    { name: "README.md", type: "file" },
-    ...pages.map((page) => ({ name: `${page.slug}.md`, type: "file" })),
-  ];
-  const stubs: Stub[] = [
-    { url: PATTERNS_DIR, status: 200, body: dirBody(files) },
-  ];
-  for (const page of pages) {
-    const figure = page.figure ?? `${page.slug}.figure.json`;
-    stubs.push({
-      url: `${PATTERNS_DIR}/${page.slug}.md`,
-      status: 200,
-      body: fileBody(`patterns/${page.slug}.md`, patternText({ ...page, figure })),
-    });
-    stubs.push({
-      url: `${PATTERNS_DIR}/${figure}`,
-      status: 200,
-      body: fileBody(`patterns/${figure}`, figures[figure] ?? FIGURE_TEXT),
-    });
+const GATED_PAGE: PatternPage = {
+  slug: "gated-check",
+  title: "Gated check",
+  summary: "Shell checks decide pass or fail, never an LLM judge.",
+  status: "standard",
+  implements: ["graph:hello-graph", "node:hello-node", "graph:missing-thing"],
+  figure: "gated-check.figure.json",
+  sources: [{ title: "Building effective agents", url: "https://example.com/agents" }],
+  body: "# Gated check\n\nA graph the pattern tests render, with **one fail edge**.\n",
+};
+
+/** The front matter of every bundled page; throws when a page misparses. */
+function bundledMetas(): Array<{ slug: string; meta: PatternMeta }> {
+  return BUNDLED_PATTERNS.map((bundled) => {
+    const parsed = parsePatternFile(bundled.page);
+    if (parsed === null) {
+      throw new Error(`bundled ${bundled.slug} does not parse`);
+    }
+    return { slug: bundled.slug, meta: parsed.meta };
+  });
+}
+
+/** Every `implements` ref the bundled set names, deduplicated in first-seen order. */
+function bundledRefs(): PatternRef[] {
+  const refs: PatternRef[] = [];
+  const seen = new Set<string>();
+  for (const { meta } of bundledMetas()) {
+    for (const ref of meta.implements) {
+      const key = `${ref.kind}:${ref.slug}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        refs.push(ref);
+      }
+    }
   }
-  return stubs;
+  return refs;
+}
+
+/** One valid document text renamed to the slug it is seeded under. */
+function docText(kind: "graph" | "node", slug: string): string {
+  const parsed = JSON.parse(kind === "graph" ? VALID_GRAPH_TEXT : VALID_NODE_TEXT) as Record<string, unknown>;
+  return JSON.stringify({ ...parsed, name: slug });
+}
+
+/**
+ * The official stubs with extra documents seeded, so bundled `implements`
+ * refs resolve to catalogue rows: the listings grow the slugs, and each
+ * slug answers its renamed document.
+ */
+function catalogueStubs(extra: PatternRef[]): Stub[] {
+  const graphs = extra.filter((doc) => doc.kind === "graph").map((doc) => doc.slug);
+  const nodes = extra.filter((doc) => doc.kind === "node").map((doc) => doc.slug);
+  const extended = officialStubs().map((stub) => {
+    if (stub.url.endsWith("/contents/graphs") && graphs.length > 0) {
+      return {
+        ...stub,
+        body: [...(stub.body as unknown[]), ...graphs.map((slug) => ({ name: slug, path: slug, type: "dir", size: 0 }))],
+      };
+    }
+    if (stub.url.endsWith("/contents/nodes") && nodes.length > 0) {
+      return {
+        ...stub,
+        body: [...(stub.body as unknown[]), ...nodes.map((slug) => ({ name: slug, path: slug, type: "dir", size: 0 }))],
+      };
+    }
+    return stub;
+  });
+  const files = extra.flatMap((doc): Stub[] => {
+    const file = doc.kind === "graph" ? "graph.json" : "node.json";
+    const base = `${REPO_DIR}/contents/${doc.kind}s/${doc.slug}`;
+    return [
+      { url: `${base}/${file}`, status: 200, body: fileBody(`${doc.kind}s/${doc.slug}/${file}`, docText(doc.kind, doc.slug)) },
+      { url: `${base}/README.md`, status: 404, body: {} },
+    ];
+  });
+  return [...extended, ...files];
+}
+
+/**
+ * The catalogue stubs with every bundled `implements` ref seeded as an
+ * official document but the last, so pages render known rows for the
+ * seeded refs and the not-in-the-catalogue line for the missing one.
+ */
+function refsStubs(): { stubs: Stub[]; seeded: PatternRef[]; missing: PatternRef } {
+  const refs = bundledRefs();
+  if (refs.length === 0) {
+    throw new Error("the bundled set names no implements refs");
+  }
+  const missing = refs[refs.length - 1];
+  const seeded = refs.slice(0, -1);
+  return { stubs: catalogueStubs(seeded), seeded, missing };
 }
 
 /** Seed a fresh KV by running the indexer over the stub table. */
-async function seeded(stubsToSeed: Stub[]): Promise<{ kv: FakeKV; meta: { invalid: unknown[] } }> {
+async function seeded(stubsToSeed: Stub[]): Promise<FakeKV> {
   const fake = fakeFetch(stubsToSeed);
   const kv = new FakeKV();
   const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
-  const meta = await runIndexer({ github, index: kv, authenticated: false });
-  return { kv, meta };
+  await runIndexer({ github, index: kv, authenticated: false });
+  return kv;
 }
 
 async function call(
@@ -117,7 +181,7 @@ async function call(
   options: { stubs?: Stub[]; accept?: string } = {},
 ): Promise<Response> {
   resetIndexMemo();
-  const { kv } = await seeded(options.stubs ?? officialStubs());
+  const kv = await seeded(options.stubs ?? officialStubs());
   const fake = fakeFetch([]);
   const headers = new Headers();
   if (options.accept !== undefined) {
@@ -133,20 +197,59 @@ async function call(
   return answer as unknown as Response;
 }
 
-const GATED_PAGE: PatternPage = {
-  slug: "gated-check",
-  title: "Gated check",
-  summary: "Shell checks decide pass or fail, never an LLM judge.",
-  status: "standard",
-  implements: ["graph:hello-graph", "node:hello-node", "graph:missing-thing"],
-  figure: "gated-check.figure.json",
-  sources: [{ title: "Building effective agents", url: "https://example.com/agents" }],
-  body: "# Gated check\n\nA graph the pattern tests render, with **one fail edge**.\n",
-};
+describe("the bundled set", () => {
+  it("holds every page the build validated: slugs unique, ordered, well-formed", async () => {
+    const { entries, documents } = await bundledPatterns();
+    expect(BUNDLED_PATTERNS.length).toBeGreaterThan(0);
+    expect(entries.length).toBe(BUNDLED_PATTERNS.length);
+    expect(documents.size).toBe(BUNDLED_PATTERNS.length);
+    const slugs = BUNDLED_PATTERNS.map((bundled) => bundled.slug);
+    expect(new Set(slugs).size).toBe(slugs.length);
+    expect([...slugs].sort()).toEqual(slugs);
+    for (const slug of slugs) {
+      expect(SLUG_RE.test(slug), slug).toBe(true);
+      expect(documents.has(slug), slug).toBe(true);
+    }
+    expect(PATTERNS_BUILT_AT).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+  });
 
-function gatedStubs(): Stub[] {
-  return [...officialStubs(), ...patternStubs([GATED_PAGE])];
-}
+  it("parses every bundled page with its bundled figure", async () => {
+    const figures = new Map(BUNDLED_PATTERNS.map((bundled) => [bundled.figureName, bundled.figure]));
+    for (const bundled of BUNDLED_PATTERNS) {
+      const figure = (name: string): Promise<FigureText> => {
+        const text = figures.get(name);
+        return Promise.resolve(text === undefined ? { kind: "absent" } : { kind: "text", text });
+      };
+      const loaded = await patternFromTexts(bundled.slug, bundled.page, figure, () => undefined);
+      expect(loaded.kind, bundled.slug).toBe("pattern");
+    }
+  });
+
+  it("validates every bundled figure against the graph schema", async () => {
+    const { entries } = await bundledPatterns();
+    expect(entries.length).toBeGreaterThan(0);
+    for (const entry of entries) {
+      expect(isValidDocument("graph", entry.figure), entry.slug).toBe(true);
+    }
+  });
+
+  it("serves the bundled set through the store, with or without KV", async () => {
+    const seededKv = await seeded(officialStubs());
+    for (const kv of [seededKv, new FakeKV(), undefined]) {
+      resetIndexMemo();
+      const store = createStore(kv);
+      const patterns = await store.getPatterns();
+      expect(patterns?.entries.length).toBe(BUNDLED_PATTERNS.length);
+      expect(patterns?.built_at).toBe(PATTERNS_BUILT_AT);
+      const cards = new Map((patterns?.entries ?? []).map((entry) => [entry.slug, entry]));
+      for (const bundled of BUNDLED_PATTERNS) {
+        const stored = await store.getPattern(bundled.slug);
+        expect(stored?.title, bundled.slug).toBe(cards.get(bundled.slug)?.title);
+      }
+      expect(await store.getPattern("no-such-pattern")).toBeNull();
+    }
+  });
+});
 
 describe("front matter parsing", () => {
   it("parses a valid page: all six keys plus the body", () => {
@@ -215,175 +318,50 @@ describe("front matter parsing", () => {
   });
 });
 
-describe("figure validation and the skip", () => {
-  it("skips a page whose figure fails the graph schema, recording why", async () => {
-    const { kv, meta } = await seeded([
-      ...officialStubs(),
-      ...patternStubs(
-        [{ ...GATED_PAGE }, { slug: "broken-figure", figure: "broken-figure.figure.json" }],
-        { "broken-figure.figure.json": INVALID_GRAPH_TEXT },
-      ),
-    ]);
-    expect(meta.invalid).toEqual([
-      { repo: "UniverLab/canopy-graphs", slug: "broken-figure", reason: "figure failed the graph schema" },
-    ]);
-    const patterns = JSON.parse((await kv.get("patterns:v1")) as string) as {
-      entries: Array<{ slug: string }>;
-    };
-    expect(patterns.entries.map((entry) => entry.slug)).toEqual(["gated-check"]);
-    expect(await kv.get(patternKey("broken-figure"))).toBeNull();
-    expect(await kv.get(patternKey("gated-check"))).not.toBeNull();
-  });
-
-  it("skips malformed pages, unparseable figures and missing figure files", async () => {
-    const { meta } = await seeded([
-      ...officialStubs(),
-      { url: PATTERNS_DIR, status: 200, body: dirBody([
-        { name: "malformed.md", type: "file" },
-        { name: "garbled.md", type: "file" },
-        { name: "ghost.md", type: "file" },
-      ]) },
-      { url: `${PATTERNS_DIR}/malformed.md`, status: 200, body: fileBody("patterns/malformed.md", "no fences here\n") },
-      { url: `${PATTERNS_DIR}/garbled.md`, status: 200, body: fileBody("patterns/garbled.md", patternText({ slug: "garbled", figure: "garbled.figure.json" })) },
-      { url: `${PATTERNS_DIR}/garbled.figure.json`, status: 200, body: fileBody("patterns/garbled.figure.json", "this is not json") },
-      { url: `${PATTERNS_DIR}/ghost.md`, status: 200, body: fileBody("patterns/ghost.md", patternText({ slug: "ghost", figure: "ghost.figure.json" })) },
-      { url: `${PATTERNS_DIR}/ghost.figure.json`, status: 404, body: {} },
-    ]);
-    // The run still lands: three reasons recorded, nothing thrown.
-    expect(meta.invalid).toEqual([
-      { repo: "UniverLab/canopy-graphs", slug: "malformed", reason: "malformed front matter" },
-      { repo: "UniverLab/canopy-graphs", slug: "garbled", reason: "unparseable figure JSON" },
-      { repo: "UniverLab/canopy-graphs", slug: "ghost", reason: "missing figure" },
-    ]);
-  });
-});
-
-describe("the patterns index build", () => {
-  it("writes the patterns index and one key per page, body and figure kept", async () => {
-    const { kv } = await seeded(gatedStubs());
-    const patterns = JSON.parse((await kv.get("patterns:v1")) as string) as {
-      built_at: string;
-      entries: Array<{ slug: string; title: string; status: string; figure: { name: string } }>;
-    };
-    expect(patterns.built_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-    expect(patterns.entries).toHaveLength(1);
-    expect(patterns.entries[0]?.slug).toBe("gated-check");
-    expect(patterns.entries[0]?.figure.name).toBe("gated-check");
-    const stored = JSON.parse((await kv.get(patternKey("gated-check"))) as string) as {
-      title: string;
-      body: string;
-      sources: Array<{ title: string }>;
-      figure: { name: string };
-    };
-    expect(stored.title).toBe("Gated check");
-    expect(stored.body).toContain("**one fail edge**");
-    expect(stored.sources).toEqual([{ title: "Building effective agents", url: "https://example.com/agents" }]);
-    expect(stored.figure.name).toBe("gated-check");
-  });
-
-  it("deletes the key of a pattern that disappeared", async () => {
-    const kv = new FakeKV();
-    await kv.put(patternKey("retired"), JSON.stringify({
-      title: "Retired",
-      summary: "",
-      status: "standard",
-      implements: [],
-      sources: [],
-      body: "",
-      figure: {},
-    }));
-    const fake = fakeFetch(gatedStubs());
-    const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
-    await runIndexer({ github, index: kv, authenticated: false });
-    expect(await kv.get(patternKey("retired"))).toBeNull();
-    expect(await kv.get(patternKey("gated-check"))).not.toBeNull();
-  });
-
-  it("reads only the official repository's patterns", async () => {
-    const fake = fakeFetch([
-      ...officialStubs(),
-      ...patternStubs([GATED_PAGE]),
-      {
-        url: "search/repositories",
-        status: 200,
-        body: {
-          total_count: 1,
-          items: [{ name: "things", owner: { login: "acme" }, default_branch: "main", stargazers_count: 1 }],
-        },
-      },
-      // A community repository carrying its own patterns directory: the run
-      // indexes its documents and never looks at its patterns.
-      { url: "repos/acme/things/git/trees/main", status: 200, body: { tree: [{ path: "graphs/flow/graph.json", type: "blob" }] } },
-      { url: "repos/acme/things/contents/graphs/flow/graph.json", status: 200, body: fileBody("graphs/flow/graph.json", FIVE_NODE_GRAPH_TEXT) },
-      { url: "repos/acme/things/contents/graphs/flow/README.md", status: 404, body: {} },
-    ]);
-    const kv = new FakeKV();
-    const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
-    await runIndexer({ github, index: kv, authenticated: false });
-    expect(fake.calls.some((url) => url.includes("repos/acme/things/contents/patterns"))).toBe(false);
-    expect(fake.calls.filter((url) => url.includes("/contents/patterns"))).toHaveLength(3);
-  });
-
-  it("keeps the previous patterns when the directory cannot be read", async () => {
-    const kv = new FakeKV();
-    await kv.put("patterns:v1", JSON.stringify({ built_at: "t", entries: [] }));
-    await kv.put(patternKey("kept"), JSON.stringify({
-      title: "Kept",
-      summary: "",
-      status: "standard",
-      implements: [],
-      sources: [],
-      body: "",
-      figure: {},
-    }));
-    const stubs = [...officialStubs(), { url: PATTERNS_DIR, status: 500, body: {} }];
-    const fake = fakeFetch(stubs);
-    const github = createGitHub({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
-    resetIndexMemo();
-    await runIndexer({ github, index: kv, authenticated: false });
-    expect(await kv.get(patternKey("kept"))).not.toBeNull();
-    expect(JSON.parse((await kv.get("patterns:v1")) as string)).toEqual({ built_at: "t", entries: [] });
-  });
-});
-
 describe("card ordering", () => {
   it("lists standard first, then in use, then experiment", async () => {
-    const stubs = [
-      ...officialStubs(),
-      ...patternStubs([
-        { slug: "z-experiment", title: "Z experiment", status: "experiment" },
-        { slug: "a-use", title: "A use", status: "in use" },
-        { slug: "m-standard", title: "M standard", status: "standard" },
-        { slug: "b-standard", title: "B standard", status: "standard" },
-      ]),
-    ];
-    const html = await (await call("/patterns", { stubs })).text();
-    const order = ["B standard", "M standard", "A use", "Z experiment"].map((title) =>
-      html.indexOf(`<span class="card-title">${title}</span>`)
+    const { entries } = await bundledPatterns();
+    const ordered = [...entries].sort(comparePatterns);
+    const html = await (await call("/patterns")).text();
+    expect(html.match(/<li class="card">/g)).toHaveLength(ordered.length);
+    const positions = ordered.map((entry) =>
+      html.indexOf(`<span class="card-title">${escapeHtml(entry.title)}</span>`)
     );
-    for (const position of order) {
+    for (const position of positions) {
       expect(position).toBeGreaterThan(-1);
     }
-    expect(order).toEqual([...order].sort((a, b) => a - b));
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
   });
 });
 
 describe("the plates", () => {
   it("draws every card's figure small and non-interactive", async () => {
-    const html = await (await call("/patterns", { stubs: gatedStubs() })).text();
+    const { entries } = await bundledPatterns();
+    const html = await (await call("/patterns")).text();
     expect(html).toContain(`<ol class="cards">`);
-    expect(html).toContain(`<li class="card">`);
-    expect(html).toContain(`<a class="card-link" href="/patterns/gated-check">`);
-    expect(html).toContain(`<span class="card-title">Gated check</span>`);
-    expect(html).toContain(`<span class="badge-status status-standard">standard</span>`);
-    // The thumbnail: both orientations like a full plate, one shape per
-    // figure node, the fail edge dashed, the token stilled, out of the
-    // pointer's way.
+    // Every card: its link, title, badge and summary, and one thumbnail.
+    for (const entry of entries) {
+      expect(html).toContain(`<a class="card-link" href="/patterns/${entry.slug}">`);
+      expect(html).toContain(`<span class="card-title">${escapeHtml(entry.title)}</span>`);
+      expect(html).toContain(`<span class="card-summary">${escapeHtml(entry.summary)}</span>`);
+      expect(html).toContain(
+        `<span class="badge-status status-${entry.status.replace(" ", "-")}">${entry.status}</span>`,
+      );
+    }
     const thumbs = html.match(/<figure class="plate thumb" aria-hidden="true">/g) ?? [];
-    expect(thumbs).toHaveLength(1);
-    expect(html).toContain(`<g class="node shape-agent" data-name="implement"`);
-    expect(html).toContain(`<g class="node shape-check" data-name="gate"`);
-    expect(html).toContain(`<g class="node shape-agent" data-name="commit"`);
+    expect(thumbs).toHaveLength(entries.length);
+    // Every figure node drawn twice — both orientations like a full
+    // plate — the token stilled, out of the pointer's way. Fail edges
+    // render dashed; ensembles add their own, so only presence is pinned.
+    let nodes = 0;
+    let fails = 0;
+    for (const entry of entries) {
+      const figure = entry.figure as { nodes?: unknown[]; edges?: Array<{ condition?: string }> };
+      nodes += figure.nodes?.length ?? 0;
+      fails += figure.edges?.filter((edge) => edge.condition === "fail").length ?? 0;
+    }
+    expect(html.match(/<g class="node /g) ?? []).toHaveLength(nodes * 2);
+    expect(fails).toBeGreaterThan(0);
     expect(html).toContain(`class="edge fail"`);
     expect(html).toContain(`stroke-dasharray:1.4 1.1`);
     expect(html).toMatch(/figure\.thumb \{[^}]*pointer-events: none;/);
@@ -391,15 +369,24 @@ describe("the plates", () => {
   });
 
   it("opens the page with the figure's full plate, both orientations", async () => {
-    const html = await (await call("/patterns/gated-check", { stubs: gatedStubs() })).text();
+    const { entries } = await bundledPatterns();
+    const ordered = [...entries].sort(comparePatterns);
+    const withFail = ordered.find((one) => {
+      const edges = (one.figure as { edges?: Array<{ condition?: string }> }).edges ?? [];
+      return edges.some((edge) => edge.condition === "fail");
+    });
+    expect(withFail, "a bundled figure with a fail edge").toBeDefined();
+    const entry = withFail ?? ordered[0];
+    const figure = entry.figure as { nodes?: Array<{ name?: string }> };
+    const html = await (await call(`/patterns/${entry.slug}`)).text();
     expect(html).toContain(`<figure class="plate">`);
     expect(html).toContain(`<svg class="plate-svg plate-h"`);
     expect(html).toContain(`<svg class="plate-svg plate-v"`);
     // One shape per figure node in each orientation, the fail edge dashed.
-    for (const name of ["implement", "gate", "commit"]) {
-      expect(html.match(new RegExp(`data-name="${name}"`, "g"))?.length).toBeGreaterThanOrEqual(2);
+    for (const node of figure.nodes ?? []) {
+      expect(html.match(new RegExp(`data-name="${node.name ?? ""}"`, "g"))?.length).toBeGreaterThanOrEqual(2);
     }
-    expect((html.match(/class="edge fail"/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    expect(html).toContain(`class="edge fail"`);
     // The shape comes first: plate, then badge, body, sources, Implemented-by.
     const order = ["<figure", `<span class="badge-status`, `<div class="readme">`, "Sources</span>", `${IMPLEMENTED_BY_HEADING}</span>`]
       .map((part) => html.indexOf(part));
@@ -408,115 +395,163 @@ describe("the plates", () => {
   });
 
   it("answers an empty list with the empty line, and the header links it", async () => {
-    const html = await (await call("/patterns", { stubs: officialStubs() })).text();
-    expect(html).toContain(PATTERNS_EMPTY);
-    expect(html).not.toContain(`<li class="card">`);
+    const empty = patternsIndexPage([]);
+    expect(empty.html).toContain(PATTERNS_EMPTY);
+    expect(empty.html).not.toContain(`<li class="card">`);
+    const html = await (await call("/patterns")).text();
     const header = html.slice(html.indexOf(`<header class="site-header">`), html.indexOf(`</header>`));
     expect(header).toMatch(/<a href="\/patterns" aria-label="Patterns" title="Patterns"><svg[\s\S]*?<\/svg><span>Patterns<\/span><\/a>/);
   });
 
   it("links the list from the home page", async () => {
-    const html = await (await call("/", { stubs: gatedStubs() })).text();
+    const html = await (await call("/")).text();
     expect(html).toContain(`<h2 class="kicker">Patterns</h2>`);
     expect(html).toContain(`<a href="/patterns">Patterns</a>`);
-    const twin = await (await call("/", { stubs: gatedStubs(), accept: "text/markdown" })).text();
+    const twin = await (await call("/", { accept: "text/markdown" })).text();
     expect(twin).toContain(`## Patterns`);
     expect(twin).toContain(`[Patterns](/patterns)`);
   });
 });
 
 describe("the experiment notice", () => {
-  const tried: PatternPage = {
-    slug: "tried",
-    title: "Tried",
-    status: "experiment",
-    implements: [],
-    figure: "tried.figure.json",
-  };
-
   it("marks an experiment page as not yet proven in the lab", async () => {
-    const stubs = [...officialStubs(), ...patternStubs([tried])];
-    const html = await (await call("/patterns/tried", { stubs })).text();
+    const { entries } = await bundledPatterns();
+    const tried = entries.find((entry) => entry.status === "experiment");
+    expect(tried, "the bundled set holds an experiment").toBeDefined();
+    const slug = tried?.slug ?? "missing";
+    const html = await (await call(`/patterns/${slug}`)).text();
     expect(html).toContain(`<span class="badge-status status-experiment">experiment</span>`);
     expect(html).toContain(EXPERIMENT_NOTICE);
-    const carded = await (await call("/patterns", { stubs })).text();
+    const carded = await (await call("/patterns")).text();
     expect(carded).toContain(`<span class="badge-status status-experiment">experiment</span>`);
-    const twin = await (await call("/patterns/tried", { stubs, accept: "text/markdown" })).text();
+    const twin = await (await call(`/patterns/${slug}`, { accept: "text/markdown" })).text();
     expect(twin).toContain(`Status: experiment`);
     expect(twin).toContain(EXPERIMENT_NOTICE);
   });
 
   it("marks no notice on a standard page", async () => {
-    const html = await (await call("/patterns/gated-check", { stubs: gatedStubs() })).text();
+    const { entries } = await bundledPatterns();
+    const steady = entries.find((entry) => entry.status === "standard");
+    expect(steady, "the bundled set holds a standard").toBeDefined();
+    const html = await (await call(`/patterns/${steady?.slug ?? "missing"}`)).text();
     expect(html).toContain(`<span class="badge-status status-standard">standard</span>`);
     expect(html).not.toContain(EXPERIMENT_NOTICE);
   });
 });
 
 describe("Implemented by", () => {
-  it("renders a known graph and node as catalogue rows, with the graph's plate", async () => {
-    const html = await (await call("/patterns/gated-check", { stubs: gatedStubs() })).text();
+  it("renders seeded graphs and nodes as catalogue rows, with the graphs' plates", async () => {
+    const { stubs, seeded } = refsStubs();
+    const { entries } = await bundledPatterns();
+    const keys = new Set(seeded.map((ref) => `${ref.kind}:${ref.slug}`));
+    const subject = entries.find((entry) =>
+      entry.implements.some((ref) => ref.kind === "graph" && keys.has(`graph:${ref.slug}`)) &&
+      entry.implements.some((ref) => ref.kind === "node" && keys.has(`node:${ref.slug}`))
+    );
+    expect(subject, "a bundled pattern implements a seeded graph and node").toBeDefined();
+    if (subject === undefined) {
+      return;
+    }
+    const html = await (await call(`/patterns/${subject.slug}`, { stubs })).text();
     expect(html).toContain(`${IMPLEMENTED_BY_HEADING}</span>`);
-    // The catalogue's index rows: name linked, Official badge, install
-    // command with Copy — for the graph and the node alike.
-    expect(html).toContain(`<a class="row-name" href="/g/hello-graph">hello-graph</a>`);
-    expect(html).toContain(`<a class="row-name" href="/n/hello-node">hello-node</a>`);
-    expect(html).toContain(`<code>canopy graph install hello-graph</code>`);
-    expect(html).toContain(`<code>canopy node install hello-node</code>`);
-    expect(html).toContain(`data-copy="canopy graph install hello-graph"`);
-    expect(html).toContain(`data-copy="canopy node install hello-node"`);
-    // The graph's own small plate rides in its row; the node draws none.
+    // The catalogue's index rows: name linked, install command with Copy —
+    // for every seeded ref of the page.
+    for (const ref of subject.implements.filter((ref) => keys.has(`${ref.kind}:${ref.slug}`))) {
+      const prefix = ref.kind === "graph" ? "/g" : "/n";
+      const command = `canopy ${ref.kind} install ${ref.slug}`;
+      expect(html).toContain(`<a class="row-name" href="${prefix}/${ref.slug}">${ref.slug}</a>`);
+      expect(html).toContain(`<code>${command}</code>`);
+      expect(html).toContain(`data-copy="${command}"`);
+    }
+    // Each seeded graph row carries the graph's own small plate; nodes
+    // draw none.
     const rows = html.slice(html.indexOf(`${IMPLEMENTED_BY_HEADING}</span>`));
-    expect(rows).toContain(`<figure class="plate thumb" aria-hidden="true">`);
-    expect(rows).toContain(`>build</text>`);
+    const graphs = subject.implements.filter((ref) => ref.kind === "graph" && keys.has(`graph:${ref.slug}`));
+    expect(rows.match(/<figure class="plate thumb" aria-hidden="true">/g) ?? []).toHaveLength(graphs.length);
+    const names = (JSON.parse(VALID_GRAPH_TEXT) as { nodes: Array<{ name: string }> }).nodes;
+    expect(rows).toContain(`>${names[0]?.name ?? ""}</text>`);
   });
 
   it("lists a missing ref as text with the not-in-the-catalogue line", async () => {
-    const html = await (await call("/patterns/gated-check", { stubs: gatedStubs() })).text();
-    expect(html).toContain(`<span class="row-name">graph:missing-thing</span>`);
+    const { stubs, seeded, missing } = refsStubs();
+    const { entries } = await bundledPatterns();
+    const subject = entries.find((entry) =>
+      entry.implements.some((ref) => ref.kind === missing.kind && ref.slug === missing.slug)
+    );
+    expect(subject, "a bundled pattern implements the missing ref").toBeDefined();
+    if (subject === undefined) {
+      return;
+    }
+    const keys = new Set(seeded.map((ref) => `${ref.kind}:${ref.slug}`));
+    const prefix = missing.kind === "graph" ? "/g" : "/n";
+    const html = await (await call(`/patterns/${subject.slug}`, { stubs })).text();
+    expect(html).toContain(`<span class="row-name">${missing.kind}:${missing.slug}</span>`);
     expect(html).toContain(PATTERN_MISSING_REF);
-    expect(html).not.toContain(`href="/g/missing-thing"`);
-    const twin = await (await call("/patterns/gated-check", { stubs: gatedStubs(), accept: "text/markdown" })).text();
-    expect(twin).toContain(`- graph:missing-thing — ${PATTERN_MISSING_REF}`);
-    expect(twin).toContain(`[hello-graph](/g/hello-graph)`);
+    expect(html).not.toContain(`href="${prefix}/${missing.slug}"`);
+    // ... while the seeded refs beside it stay linked rows.
+    for (const ref of subject.implements.filter((ref) => keys.has(`${ref.kind}:${ref.slug}`))) {
+      const refPrefix = ref.kind === "graph" ? "/g" : "/n";
+      expect(html).toContain(`<a class="row-name" href="${refPrefix}/${ref.slug}">`);
+    }
+    const twin = await (await call(`/patterns/${subject.slug}`, { stubs, accept: "text/markdown" })).text();
+    expect(twin).toContain(`- ${missing.kind}:${missing.slug} — ${PATTERN_MISSING_REF}`);
   });
 
   it("says so when nothing implements the pattern yet", async () => {
-    const stubs = [...officialStubs(), ...patternStubs([{ slug: "quiet", figure: "quiet.figure.json" }])];
-    const html = await (await call("/patterns/quiet", { stubs })).text();
+    const { entries } = await bundledPatterns();
+    const quiet = entries.find((entry) => entry.implements.length === 0);
+    expect(quiet, "the bundled set holds a pattern nothing implements").toBeDefined();
+    const html = await (await call(`/patterns/${quiet?.slug ?? "missing"}`)).text();
     expect(html).toContain(PATTERNS_NO_IMPLEMENTS);
   });
 });
 
 describe("the back-link", () => {
   it("links an implemented document page back to its patterns", async () => {
-    const html = await (await call("/g/hello-graph", { stubs: gatedStubs() })).text();
-    expect(html).toContain(`<dt>Patterns</dt><dd><a href="/patterns/gated-check">Gated check</a></dd>`);
-    const node = await (await call("/n/hello-node", { stubs: gatedStubs() })).text();
-    expect(node).toContain(`<a href="/patterns/gated-check">Gated check</a>`);
-    const twin = await (await call("/g/hello-graph", { stubs: gatedStubs(), accept: "text/markdown" })).text();
-    expect(twin).toContain(`- Patterns: [Gated check](/patterns/gated-check)`);
+    const { stubs, seeded } = refsStubs();
+    const { entries } = await bundledPatterns();
+    const ref = seeded.find((one) => one.kind === "graph") ?? seeded.find((one) => one.kind === "node");
+    if (ref === undefined) {
+      throw new Error("the bundled set names no implements refs");
+    }
+    const prefix = ref.kind === "graph" ? "/g" : "/n";
+    const backlinks = implementingPatterns(entries, ref.kind, ref.slug);
+    expect(backlinks.length).toBeGreaterThan(0);
+    const html = await (await call(`${prefix}/${ref.slug}`, { stubs })).text();
+    expect(html).toContain(`<dt>Patterns</dt>`);
+    for (const pattern of backlinks) {
+      expect(html).toContain(`<a href="/patterns/${pattern.slug}">${escapeHtml(pattern.title)}</a>`);
+    }
+    const twin = await (await call(`${prefix}/${ref.slug}`, { stubs, accept: "text/markdown" })).text();
+    expect(twin).toContain(
+      `- Patterns: ${backlinks.map((pattern) => `[${pattern.title}](/patterns/${pattern.slug})`).join(", ")}`,
+    );
   });
 
   it("adds no Patterns line where no pattern implements the document", async () => {
-    const html = await (await call("/g/hello-graph", { stubs: officialStubs() })).text();
+    const { entries } = await bundledPatterns();
+    expect(implementingPatterns(entries, "graph", "hello-graph")).toEqual([]);
+    const html = await (await call("/g/hello-graph")).text();
     expect(html).not.toContain(`<dt>Patterns</dt>`);
-    const twin = await (await call("/g/hello-graph", { stubs: officialStubs(), accept: "text/markdown" })).text();
+    const twin = await (await call("/g/hello-graph", { accept: "text/markdown" })).text();
     expect(twin).not.toContain(`- Patterns:`);
   });
 });
 
 describe("the body sanitizer", () => {
   it("lets no raw HTML from the body through", async () => {
-    const evil: PatternPage = {
-      slug: "evil",
-      figure: "evil.figure.json",
+    const { documents } = await bundledPatterns();
+    expect(BUNDLED_PATTERNS.length).toBeGreaterThan(0);
+    const first = BUNDLED_PATTERNS[0];
+    const stored = documents.get(first.slug);
+    if (stored === undefined) {
+      throw new Error(`the bundled set holds no ${first.slug} page`);
+    }
+    const html = patternPage({
+      ...stored,
       body: "# evil\n\n<script>alert(1)</script>\n\n<img src=x onerror=\"alert(2)\">\n",
-    };
-    const html = await (await call("/patterns/evil", {
-      stubs: [...officialStubs(), ...patternStubs([evil])],
-    })).text();
-    const body = html.slice(html.indexOf(`<div class="readme">`), html.indexOf(`</main>`));
+    }, []).html;
+    const body = html.slice(html.indexOf(`<div class="readme">`));
     expect(body).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
     expect(body).toContain("&lt;img src=x onerror=");
     expect(body).not.toContain("<img");
@@ -524,17 +559,21 @@ describe("the body sanitizer", () => {
   });
 
   it("renders sources as links, and degrades an unsafe URL to text", async () => {
-    const page: PatternPage = {
-      slug: "linked",
-      figure: "linked.figure.json",
+    const { documents } = await bundledPatterns();
+    expect(BUNDLED_PATTERNS.length).toBeGreaterThan(0);
+    const first = BUNDLED_PATTERNS[0];
+    const stored = documents.get(first.slug);
+    if (stored === undefined) {
+      throw new Error(`the bundled set holds no ${first.slug} page`);
+    }
+    const page = {
+      ...stored,
       sources: [
         { title: "Good", url: "https://example.com/good" },
         { title: "Bad", url: "javascript:alert(1)" },
       ],
     };
-    const html = await (await call("/patterns/linked", {
-      stubs: [...officialStubs(), ...patternStubs([page])],
-    })).text();
+    const html = patternPage(page, []).html;
     expect(html).toContain(`${PATTERN_SOURCES_HEADING}</span>`);
     expect(html).toContain(
       `<a href="https://example.com/good" target="_blank" rel="nofollow noopener noreferrer">Good</a>`,
@@ -543,10 +582,7 @@ describe("the body sanitizer", () => {
     expect(html).toContain(`<li>Bad</li>`);
     // The twin degrades the same URL to text: it generates this link
     // itself, so it never hands agents a target the page would refuse.
-    const twin = await (await call("/patterns/linked", {
-      stubs: [...officialStubs(), ...patternStubs([page])],
-      accept: "text/markdown",
-    })).text();
+    const twin = patternPage(page, []).markdown;
     expect(twin).toContain(`- [Good](https://example.com/good)`);
     expect(twin).not.toContain(`javascript:`);
     expect(twin.split("\n")).toContain(`- Bad`);
@@ -560,13 +596,15 @@ describe("the body's leading title", () => {
     status: "standard",
     implements: [],
     sources: [],
-    figure: JSON.parse(FIGURE_TEXT),
+    figure: {},
     body: "",
   };
 
   /** The rendered readme div of one body: the section under test. */
   function readme(body: string): string {
-    const html = patternPage({ ...pattern, body }, []).html;
+    expect(BUNDLED_PATTERNS.length).toBeGreaterThan(0);
+    const figure = JSON.parse(BUNDLED_PATTERNS[0].figure) as StoredPattern["figure"];
+    const html = patternPage({ ...pattern, figure, body }, []).html;
     return /<div class="readme">[\s\S]*?<\/div>/.exec(html)?.[0] ?? "";
   }
 
@@ -592,57 +630,93 @@ describe("the body's leading title", () => {
 });
 
 describe("llms.txt and the twin", () => {
-  it("lists patterns under a Patterns heading", async () => {
-    const llms = await (await call("/llms.txt", { stubs: gatedStubs() })).text();
+  it("lists every bundled pattern under a Patterns heading", async () => {
+    const { entries } = await bundledPatterns();
+    const llms = await (await call("/llms.txt")).text();
     expect(llms).toContain(`## Patterns`);
-    expect(llms).toContain(`Gated check\tShell checks decide pass or fail, never an LLM judge.\t/patterns/gated-check`);
+    for (const entry of entries) {
+      expect(llms).toContain(`${entry.title}\t${entry.summary}\t/patterns/${entry.slug}`);
+    }
     // Documents keep their lines above the patterns section.
     expect(llms.indexOf("hello-graph")).toBeLessThan(llms.indexOf("## Patterns"));
   });
 
   it("carries the figure as a fenced JSON block in the twin, no HTML", async () => {
-    const twin = await (await call("/patterns/gated-check", {
-      stubs: gatedStubs(),
-      accept: "text/markdown",
-    })).text();
+    const { entries, documents } = await bundledPatterns();
+    const entry = entries.find((one) => !(documents.get(one.slug)?.body.includes("<") ?? true));
+    expect(entry, "a bundled body without angle brackets").toBeDefined();
+    if (entry === undefined) {
+      return;
+    }
+    const stored = documents.get(entry.slug);
+    if (stored === undefined) {
+      throw new Error(`the bundled set holds no ${entry.slug} page`);
+    }
+    const twin = await (await call(`/patterns/${entry.slug}`, { accept: "text/markdown" })).text();
     expect(twin).toContain(`## Figure`);
     expect(twin).toContain("```json");
-    expect(twin).toContain(`"name": "gated-check"`);
+    const name = (entry.figure as { name?: string }).name ?? "";
+    expect(name).not.toBe("");
+    expect(twin).toContain(`"name": "${name}"`);
     expect(twin).toContain(`## ${PATTERN_SOURCES_HEADING}`);
-    expect(twin).toContain(`- [Building effective agents](https://example.com/agents)`);
+    for (const source of stored.sources) {
+      expect(twin).toContain(`- [${source.title}](${source.url})`);
+    }
     expect(twin).toContain(`## ${IMPLEMENTED_BY_HEADING}`);
     expect(twin).not.toContain("<");
   });
 
   it("serves the list twin too", async () => {
-    const twin = await (await call("/patterns", { stubs: gatedStubs(), accept: "text/markdown" })).text();
+    const { entries } = await bundledPatterns();
+    const twin = await (await call("/patterns", { accept: "text/markdown" })).text();
     expect(twin).toContain(`# Patterns`);
-    expect(twin).toContain(`[Gated check](/patterns/gated-check)`);
+    for (const entry of entries) {
+      expect(twin).toContain(`[${entry.title}](/patterns/${entry.slug})`);
+    }
     expect(twin).not.toContain("<");
   });
 });
 
 describe("routing", () => {
-  it("answers the cold start with the indexing 503", async () => {
+  it("renders the list from the bundle on a cold KV", async () => {
     resetIndexMemo();
     const kv = new FakeKV();
     const fake = fakeFetch([]);
-    for (const path of ["/patterns", "/patterns/gated-check"]) {
-      const answer = await handlePage(new Request(`${ORIGIN}${path}`), { INDEX: kv }, {
-        fetchImpl: fake.fetchImpl,
-        cache: new FakeCache(),
-      });
-      expect(answer).not.toBe(NOT_PAGE);
-      const response = answer as unknown as Response;
-      expect(response.status, path).toBe(503);
-      expect(await response.text(), path).toContain(INDEXING_HEADING);
+    const answer = await handlePage(new Request(`${ORIGIN}/patterns`), { INDEX: kv }, {
+      fetchImpl: fake.fetchImpl,
+      cache: new FakeCache(),
+    });
+    expect(answer).not.toBe(NOT_PAGE);
+    const response = answer as unknown as Response;
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    for (const bundled of BUNDLED_PATTERNS) {
+      expect(html).toContain(`href="/patterns/${bundled.slug}"`);
     }
+    expect(fake.calls, "no page may reach upstream").toEqual([]);
+  });
+
+  it("answers a pattern page on a cold KV with the indexing 503", async () => {
+    resetIndexMemo();
+    const kv = new FakeKV();
+    const fake = fakeFetch([]);
+    expect(BUNDLED_PATTERNS.length).toBeGreaterThan(0);
+    const first = BUNDLED_PATTERNS[0];
+    const answer = await handlePage(new Request(`${ORIGIN}/patterns/${first.slug}`), { INDEX: kv }, {
+      fetchImpl: fake.fetchImpl,
+      cache: new FakeCache(),
+    });
+    expect(answer).not.toBe(NOT_PAGE);
+    const response = answer as unknown as Response;
+    expect(response.status).toBe(503);
+    expect(await response.text()).toContain(INDEXING_HEADING);
   });
 
   it("answers a missing pattern and a bad slug with the calm 404", async () => {
-    const missing = await call("/patterns/nope", { stubs: gatedStubs() });
+    expect(BUNDLED_PATTERNS.map((bundled) => bundled.slug)).not.toContain("no-such-pattern");
+    const missing = await call("/patterns/no-such-pattern");
     expect(missing.status).toBe(404);
-    const bad = await call("/patterns/Not_A_Slug", { stubs: gatedStubs() });
+    const bad = await call("/patterns/Not_A_Slug");
     expect(bad.status).toBe(404);
     expect(await bad.text()).toContain("Not found");
   });

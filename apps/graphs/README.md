@@ -90,8 +90,8 @@ absent when not: counts are never zero-filled.
 
 A Cron Trigger rebuilds the catalogue every 15 minutes (`*/15 * * * *`, in
 `wrangler.toml`) into KV: one entry per listed document, its validated JSON
-and README, the removal list, and the pattern pages with their figures. The
-request path reads only KV, so traffic never spends GitHub quota.
+and README, and the removal list. The request path reads only KV (plus the
+bundled pattern pages below), so traffic never spends GitHub quota.
 
 The Worker runs on the Workers **Free** plan: one invocation may spend **50
 subrequests**, and a Cache API lookup or store is one of them. The indexer
@@ -102,20 +102,20 @@ GraphQL and the discovery search.
 
 | Run | Transport | Cost of the official repository |
 |---|---|---|
-| `GITHUB_TOKEN` set | one `POST https://api.github.com/graphql` per repository | 1 subrequest for every document, README, pattern page and figure |
+| `GITHUB_TOKEN` set | one `POST https://api.github.com/graphql` per repository | 1 subrequest for every document and README |
 | no token | REST contents and raw URLs | 2–4 calls per folder, so the budget may stop it early |
 
 KV has a budget too, and it is the tighter one: the Free plan allows **1,000
 KV writes a day** per account, while the cron wakes 96 times. So the indexer
 fingerprints what it writes — one SHA-256 digest per key in `index:hashes:v1`
 (`src/hashes.ts`) — and skips any put whose value is unchanged;
-`index:v1` and `patterns:v1` are fingerprinted without their `built_at`, so
+`index:v1` is fingerprinted without its `built_at`, so
 an untouched catalogue keeps its timestamp and a whole run costs **one write**
 (`index:meta`, which shows `kv_writes` and `kv_skipped` at
 `/api/index-status`).
 
-The GraphQL query asks for the three top-level folders (`graphs/`, `nodes/`,
-`patterns/`) and `blocked.json`, three entry levels deep, and nothing else in
+The GraphQL query asks for the two top-level folders (`graphs/`, `nodes/`)
+and `blocked.json`, three entry levels deep, and nothing else in
 the repository. The scheduled transport is built with `cache: null`, so the
 cron path never touches the Cache API — the request path keeps its cache
 exactly as before.
@@ -138,6 +138,23 @@ hit at no cost; the official repository is still read in full on every run.
 `GET /api/index-status` shows `repos_visited` (visited this run),
 `repos_unchanged` (skipped) and `repos_pending` (left for later runs), and
 `truncated` is true while any repository is still pending.
+
+## Pattern pages
+
+The `/patterns` pages are editorial content of this site, authored in this
+repo under `apps/graphs/patterns/`: one `<slug>.md` (front matter plus a
+markdown body) plus the `<slug>.figure.json` its `figure:` key names — a
+harness-free graph document the plate renderer draws. The front matter
+carries exactly six keys (`title`, `summary`, `status`, `implements`,
+`figure`, `sources`); the strict shape lives in `src/patterns.ts`.
+
+`npm run build:patterns` validates every page with those same rules and
+regenerates the committed `src/patterns-data.generated.ts` the pages
+render from. A malformed page, a missing figure, or a figure that fails
+the graph schema fails the build — patterns are never fetched from
+GitHub and never touch the indexer's quota. `tests/patterns-build.test.ts`
+fails when the generated module is stale, so editing a page without
+rebuilding is caught.
 
 ## Agent discovery
 

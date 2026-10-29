@@ -1849,6 +1849,19 @@ exports[`route snapshots > renders /llms.txt with one line per document 1`] = `
 
 hello-graph	Five nodes with one fail edge, for the drawing test.	hello-graph
 hello-node	Example catalogue node: drafts an implementation plan.	hello-node
+
+## Patterns
+
+Adversarial review	Review the work with models of different families, one told to break it, and back the verdict with deterministic checks.	/patterns/adversarial-review
+Deterministic gates	Shell checks decide pass or fail, never an LLM judge, and a failure carries its reason into the next prompt.	/patterns/deterministic-gates
+Cross-platform check	The reviewer runs on a different vendor from the implementer, so one family's blind spots and one quota ceiling cannot stall the graph.	/patterns/cross-platform-check
+Deterministic commit	A check node commits with the spec's own Conventional Commit subject, and a model never writes the commit.	/patterns/deterministic-commit
+Event intake	A graph that fires on a watched file, turning outside events into specs while nobody is watching.	/patterns/event-intake
+Parallel proposers	Several cheap models draft the same spec in parallel, then one implementer builds on the best ideas.	/patterns/parallel-proposers
+Resilient members	Cascade and round-robin ensembles give one node a fallback ladder or a rotation across providers, so a quota death is not a failed run.	/patterns/resilient-members
+Auditor fixes	The auditor repairs what it finds, instead of writing change requests for another model to read.	/patterns/reviewer-fixes
+Review panel	An experiment, each reviewer owns one axis, security, performance, maintainability, or project patterns, and every axis must pass.	/patterns/review-panel
+Task router	An experiment, a router judges the task by kind or complexity and sends it to a model suited to it.	/patterns/task-router
 "
 `;
 

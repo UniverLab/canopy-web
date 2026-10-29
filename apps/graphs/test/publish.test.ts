@@ -29,6 +29,7 @@ import {
   PUBLISH_LEDE,
   PUBLISH_NODE_FIELDS,
   PUBLISH_OFFICIAL_HEADING,
+  PUBLISH_PATTERNS_SPANS,
   PUBLISH_PLACE_HEADING,
   PUBLISH_REPORT_HEADING,
   PUBLISH_SHARE_HEADING,
@@ -198,6 +199,22 @@ describe("the page states the code's own values", () => {
       `Official documents live in [${OFFICIAL_REPOSITORY}](${OFFICIAL_HREF}).`,
     );
     expect(twin).toContain("the quickest way to start a graphs repo");
+  });
+
+  it("says the pattern pages are authored in this repo under apps/graphs/patterns/", async () => {
+    const html = await (await call("/publish")).text();
+    const official = html.slice(html.indexOf(PUBLISH_OFFICIAL_HEADING));
+    expect(official).toContain("The pattern pages (/patterns) are editorial content of this site");
+    for (const span of PUBLISH_PATTERNS_SPANS) {
+      expect(official).toContain(`<code>${escapeHtml(span)}</code>`);
+    }
+    expect(official).toContain("proposed by pull request there");
+    const twin = await (await call("/publish.md")).text();
+    expect(twin).toContain("The pattern pages (/patterns) are editorial content of this site");
+    for (const span of PUBLISH_PATTERNS_SPANS) {
+      expect(twin).toContain(`\`${span}\``);
+    }
+    expect(twin).toContain("proposed by pull request there");
   });
 
   it("explains reporting and removal: anyone reports, maintainers decide, authors appeal", async () => {

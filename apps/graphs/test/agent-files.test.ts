@@ -9,6 +9,7 @@ import worker, { createWorker } from "../src/index.js";
 import { AGENT_LINK_HEADER } from "../src/agent-files.js";
 import { createGitHub } from "../src/github.js";
 import { runIndexer } from "../src/indexer.js";
+import { BUNDLED_PATTERNS } from "../src/patterns-data.generated.js";
 import { resetIndexMemo } from "../src/store.js";
 import { FakeCache, FakeKV, fakeFetch, type Stub } from "./fakes.js";
 import { REPO_DIR, officialStubs, searchStubs } from "./stubs.js";
@@ -79,26 +80,28 @@ describe("sitemap.xml", () => {
     expect(body).toContain("<loc>https://graphs.univerlab.org/g/acme/things/flow</loc>");
   });
 
-  it("lists every indexed pattern page", async () => {
-    const kv = await seeded(datedStubs());
-    await kv.put("patterns:v1", JSON.stringify({
-      built_at: "2026-10-27T00:00:00Z",
-      entries: [{ slug: "gated-check", title: "Gated check", summary: "", status: "standard", implements: [], figure: {} }],
-    }));
-    resetIndexMemo();
-    const body = await (await call("/sitemap.xml", kv)).text();
-    expect(body).toContain("<loc>https://graphs.univerlab.org/patterns/gated-check</loc>");
+  it("lists every bundled pattern page", async () => {
+    const body = await (await call("/sitemap.xml", await seeded(datedStubs()))).text();
+    expect(BUNDLED_PATTERNS.length).toBeGreaterThan(0);
+    for (const bundled of BUNDLED_PATTERNS) {
+      expect(body).toContain(`<loc>https://graphs.univerlab.org/patterns/${bundled.slug}</loc>`);
+    }
   });
 
-  it("lists only the five fixed URLs with an empty or missing index", async () => {
+  it("lists the fixed URLs plus every bundled pattern with an empty or missing index", async () => {
     const empty = new FakeKV();
     resetIndexMemo();
     await empty.put("index:v1", JSON.stringify({ built_at: "2026-10-27T00:00:00Z", entries: [] }));
     for (const kv of [empty, undefined]) {
       const body = await (await call("/sitemap.xml", kv)).text();
-      expect(body.match(/<loc>/g)).toHaveLength(5);
+      // Patterns ride with the Worker, so they outlive the index; only the
+      // catalogue documents come and go with it.
+      expect(body.match(/<loc>/g)).toHaveLength(5 + BUNDLED_PATTERNS.length);
       for (const path of ["/", "/search", "/publish", "/patterns", "/llms.txt"]) {
         expect(body).toContain(`<loc>https://graphs.univerlab.org${path}</loc>`);
+      }
+      for (const bundled of BUNDLED_PATTERNS) {
+        expect(body).toContain(`<loc>https://graphs.univerlab.org/patterns/${bundled.slug}</loc>`);
       }
       expect(body).not.toContain("<lastmod>");
     }

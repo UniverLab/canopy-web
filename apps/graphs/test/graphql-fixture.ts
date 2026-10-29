@@ -5,11 +5,13 @@
  * what GitHub actually returns.
  *
  * The official fixture holds the whole repository at once — 3 graphs, 9
- * nodes, 10 pattern pages with their figures and a `blocked.json` — which is
- * exactly the run the REST path could not finish inside the free plan's 50
- * subrequests. `snapshotBody` builds the same shape for any repository, so a
- * test can make one folder unreadable, drop a blob's text or omit the root
- * tree without inventing a second fixture language.
+ * nodes and a `blocked.json` — which is exactly the run the REST path
+ * could not finish inside the free plan's 50 subrequests. (The pattern
+ * pages used to ride in the same answer; they are bundled with the Worker
+ * now, so the fixture carries no `patterns/` folder.) `snapshotBody`
+ * builds the same shape for any repository, so a test can make one folder
+ * unreadable, drop a blob's text or omit the root tree without inventing a
+ * second fixture language.
  */
 import { type Stub } from "./fakes.js";
 import { VALID_GRAPH_TEXT, VALID_NODE_TEXT } from "./documents-fixture.js";
@@ -30,14 +32,6 @@ export interface SnapshotDoc {
   present?: boolean;
 }
 
-/** One pattern folder in the fixture: the page and the figure it names. */
-export interface SnapshotPattern {
-  slug: string;
-  page: string;
-  figure: string;
-  figureName?: string;
-}
-
 /** What one repository's answer should hold. */
 export interface SnapshotOptions {
   stars?: number | null;
@@ -47,7 +41,6 @@ export interface SnapshotOptions {
   blocked?: string | null;
   graphs?: SnapshotDoc[];
   nodes?: SnapshotDoc[];
-  patterns?: SnapshotPattern[];
   /** The `errors` array of a partial answer, one message per entry. */
   errors?: string[];
 }
@@ -74,18 +67,9 @@ function documentFolders(file: string, docs: SnapshotDoc[]): unknown[] {
   );
 }
 
-/** One `patterns/<slug>.md` plus the figure its front matter names. */
-function patternFolders(patterns: SnapshotPattern[]): unknown[] {
-  return patterns.flatMap((pattern) => [
-    blob(`${pattern.slug}.md`, pattern.page),
-    blob(pattern.figureName ?? `${pattern.slug}.figure.json`, pattern.figure),
-  ]);
-}
-
 /**
  * Build one `repository { object(expression: "HEAD:") }` answer. A folder
- * only appears when the fixture names it, so a repository with no `patterns/`
- * looks exactly like one GitHub does not have.
+ * only appears when the fixture names it.
  */
 export function snapshotBody(options: SnapshotOptions = {}): unknown {
   const entries: unknown[] = [];
@@ -94,9 +78,6 @@ export function snapshotBody(options: SnapshotOptions = {}): unknown {
   }
   if (options.nodes !== undefined) {
     entries.push(tree("nodes", documentFolders("node.json", options.nodes)));
-  }
-  if (options.patterns !== undefined) {
-    entries.push(tree("patterns", patternFolders(options.patterns)));
   }
   if (options.blocked !== undefined && options.blocked !== null) {
     entries.push(blob("blocked.json", options.blocked));
@@ -147,39 +128,6 @@ export const OFFICIAL_NODE_SLUGS = [
   "node-india",
 ];
 
-/** The ten pattern pages the official fixture holds, figures included. */
-export const PATTERN_SLUGS = [
-  "pattern-alpha",
-  "pattern-bravo",
-  "pattern-charlie",
-  "pattern-delta",
-  "pattern-echo",
-  "pattern-foxtrot",
-  "pattern-golf",
-  "pattern-hotel",
-  "pattern-india",
-  "pattern-juliet",
-];
-
-/** One well-formed pattern page naming its own figure. */
-export function patternPage(slug: string): string {
-  return [
-    "---",
-    `title: Page ${slug}`,
-    `summary: What ${slug} describes.`,
-    "status: standard",
-    "implements: []",
-    `figure: ${slug}.figure.json`,
-    "sources:",
-    "  - title: Canopy docs",
-    "    url: https://univerlab.org/canopy/",
-    "---",
-    "",
-    `The ${slug} page.`,
-    "",
-  ].join("\n");
-}
-
 /** The whole official repository as one GraphQL answer. */
 export function officialSnapshotBody(overrides: SnapshotOptions = {}): unknown {
   return snapshotBody({
@@ -196,11 +144,6 @@ export function officialSnapshotBody(overrides: SnapshotOptions = {}): unknown {
       slug,
       text: VALID_NODE_TEXT,
       readme: `# ${slug}\n`,
-    })),
-    patterns: PATTERN_SLUGS.map((slug) => ({
-      slug,
-      page: patternPage(slug),
-      figure: VALID_GRAPH_TEXT,
     })),
     ...overrides,
   });

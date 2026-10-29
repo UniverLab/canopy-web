@@ -27,6 +27,8 @@ import {
   PUBLISH_LEDE,
   PUBLISH_NODE_FIELDS,
   PUBLISH_OFFICIAL_HEADING,
+  PUBLISH_PATTERNS_BODY,
+  PUBLISH_PATTERNS_SPANS,
   PUBLISH_PLACE_HEADING,
   PUBLISH_PLACE_README,
   PUBLISH_REPORT_BODY,
@@ -227,11 +229,13 @@ export function publishPage(): Page {
         paraLinks(publishOfficial(OFFICIAL_REPOSITORY), [
           { label: OFFICIAL_REPOSITORY, href: OFFICIAL_HREF },
         ]),
+        para(PUBLISH_PATTERNS_BODY, PUBLISH_PATTERNS_SPANS),
       ],
       markdown: [
         mdLinks(publishOfficial(OFFICIAL_REPOSITORY), [
           { label: OFFICIAL_REPOSITORY, href: OFFICIAL_HREF },
         ]),
+        mdPara(PUBLISH_PATTERNS_BODY, PUBLISH_PATTERNS_SPANS),
       ],
     },
     {
