@@ -76,7 +76,7 @@ function remoteStatusText(): string {
 /** How pairing works, as static text: no fetch, no session. */
 function howToPairText(): string {
   return (
-    `To pair: sign in at ${ORIGIN}/auth/login, run \`canopy remote link\` on the host, ` +
+    `To pair: sign in at ${ORIGIN}/auth/login, run \`canopy remote pair\` on the host, ` +
     `open ${ORIGIN}/pair#<code>. Browser and host derive the secret on both ends while ` +
     `the relay only forwards frames; after pairing the session channel is end-to-end ` +
     `and the relay cannot read it.`

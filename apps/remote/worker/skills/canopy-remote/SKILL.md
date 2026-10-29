@@ -28,7 +28,7 @@ GitHub account and forwards opaque envelopes; it never reads them.
 
 1. The browser opens `/auth/login` and signs in with GitHub (identity only,
    no scope). It keeps an HMAC-signed `cr_session` cookie, 12 hours.
-2. The host links with `canopy remote link`, which prints a short pairing
+2. The host runs `canopy remote pair`, which prints a short pairing
    code. The browser opens `/pair#<code>`.
 3. Browser and host run the pairing handshake through the relay. The pairing
    secret is derived on both ends; the relay only forwards the frames.

@@ -68,7 +68,7 @@ describe("buildTools", () => {
       expect(statusText).toContain(line);
     }
     const pairingText = await pairing.execute({}, {});
-    for (const line of ["pair", "code", "end-to-end"]) {
+    for (const line of ["canopy remote pair", "code", "end-to-end"]) {
       expect(pairingText).toContain(line);
     }
     expect(fetchSpy).not.toHaveBeenCalled();

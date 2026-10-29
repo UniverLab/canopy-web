@@ -69,6 +69,7 @@ describe("llms.txt", () => {
     for (const line of [
       "Canopy remote",
       "GitHub",
+      "canopy remote pair",
       "/pair#<code>",
       "end to end",
       "/ws/device",
@@ -233,6 +234,7 @@ describe("the Agent Skills index", () => {
     expectSecurityHeaders(response);
     const body = await response.text();
     expect(body).toContain("name: canopy-remote");
+    expect(body).toContain("canopy remote pair");
     expect(await digestOf(body)).toBe(skill.digest);
   });
 
