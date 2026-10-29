@@ -24,7 +24,7 @@ import { createXtermHandle, TerminalView } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
 import { readFitOnly, writeFitOnly } from "./terminal-prefs.js";
 import type { PairSubmit } from "./ui.js";
-import { renderHeaderBanner } from "../../../../packages/look/banner/banner.js";
+import { REMOTE_BANNER_LINES, bannerSvg } from "../../../../packages/look/banner/banner.js";
 import { renderColophon } from "../../../../packages/look/colophon/footer.js";
 
 export interface ShellCallbacks {
@@ -183,9 +183,10 @@ export function createShell(
   // failed) is the crossed-out one, and the conn chip's word says which.
   const linkIcon = (): IconName => (connectionState === "connected" ? "wifi" : "wifiOff");
 
+  // The remote's own art only: `renderHeaderBanner(app)` also carries graphs.
   const header = (): string => `
     <header class="topbar" data-conn="${esc(connectionState)}">
-      <button type="button" id="brand-home" class="brand-home" aria-label="Canopy remote, home">${renderHeaderBanner("remote")}</button>
+      <button type="button" id="brand-home" class="brand-home" aria-label="Canopy remote, home">${bannerSvg(REMOTE_BANNER_LINES, "look-banner-header look-banner-header-remote", "Canopy remote")}</button>
       ${login === null ? "" : `<span class="login chip">${esc(login)}</span>`}
       ${hostLabel === "" ? "" : `<span class="host chip">` +
         `<span class="icon-slot" id="conn-icon" data-morph="host" aria-hidden="true">${icon(linkIcon())}</span>` +

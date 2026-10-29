@@ -78,9 +78,12 @@ export const BANNER_GRADIENT: readonly string[] = [
  * The colour of art line `index` in a `count`-line banner: an exact port
  * of `gradient_rgb` — `round(index / count * 4)` over the five stops, so
  * the ten-line canopy banner runs stops [0,0,1,1,2,2,2,3,3,4] and the
- * eleven-line headers [0,0,1,1,1,2,2,3,3,3,4].
+ * eleven-line headers [0,0,1,1,1,2,2,3,3,3,4]. The default count is the
+ * house banner's ten lines, spelled as a number rather than
+ * `BANNER_LINES.length` so an app that never draws the house banner
+ * tree-shakes its art out of its bundle.
  */
-export function bannerColor(index: number, count: number = BANNER_LINES.length): string {
+export function bannerColor(index: number, count = 10): string {
   const stop = Math.min(4, Math.round((index / count) * 4));
   return BANNER_GRADIENT[stop] ?? "#52fff6";
 }
@@ -93,38 +96,68 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
+/**
+ * Draw art lines as one inline SVG on a fixed cell grid — one square per
+ * character, `█` a full cell, `░` the same fill at 35% opacity (the TUI's
+ * shade), a space nothing — so the banner never depends on a font: no
+ * fallback advances, no line box, no gaps between rows. Adjacent cells of
+ * one kind merge into one rect, which keeps the graphs banner under 6 KB.
+ * Each line is a `<g class="look-banner-line">` filled with its
+ * `BANNER_GRADIENT` stop, as a presentation attribute: the remote's CSP is
+ * `style-src 'self'`, so a `style` attribute would be refused. The class
+ * and the accessible name are the caller's own constants; an unnamed art
+ * is decorative and hidden from assistive tech. banner.css sizes the SVG;
+ * `viewBox` keeps the cells square.
+ */
+export function bannerSvg(lines: readonly string[], className: string, label?: string): string {
+  const width = Math.max(1, ...lines.map((line) => line.length));
+  const height = lines.length || 1;
+  const art = lines
+    .map(
+      (line, y) =>
+        `<g class="look-banner-line" fill="${bannerColor(y, lines.length)}">` +
+        line.replace(
+          /█+|░+/g,
+          (cells: string, x: number) =>
+            `<rect x="${x}" y="${y}" width="${cells.length}" height="1"` +
+            `${cells[0] === "░" ? ' fill-opacity=".35"' : ""}/>`,
+        ) +
+        `</g>`,
+    )
+    .join("");
+  return `<svg viewBox="0 0 ${width} ${height}" shape-rendering="crispEdges" class="${className}"${label === undefined ? ` aria-hidden="true"` : ` role="img" aria-label="${label}"`}>${art}</svg>`;
+}
+
 /** The apps that wear the banner: the word under the art. */
 export type BannerApp = "remote" | "graphs";
 
 /**
- * Render the banner: the ten art lines in a `pre` hidden from assistive
- * tech (one colour per line, in the lightest stop's company only for
- * the app word), a visually hidden "Canopy" for readers, and the app
- * name in the mono face, as the TUI prints its title.
+ * Render the banner: the ten art lines as an SVG hidden from assistive
+ * tech, a visually hidden "Canopy" for readers, and the app name in the
+ * mono face, as the TUI prints its title. banner.css paints the app word
+ * (`#52fff6`); no style attribute, so the remote's CSP stays happy.
  */
 export function renderBanner(app: BannerApp): string {
-  const art = BANNER_LINES.map(
-    (line, index) => `<span style="color:${bannerColor(index)}">${escapeHtml(line)}</span>`,
-  ).join("\n");
   return [
     `<div class="look-banner">`,
-    `<pre class="look-banner-art" aria-hidden="true">${art}</pre>`,
+    bannerSvg(BANNER_LINES, "look-banner-art"),
     `<span class="look-banner-vh">Canopy</span>`,
-    `<p class="look-banner-app" style="color:#52fff6">${escapeHtml(app)}</p>`,
+    `<p class="look-banner-app">${escapeHtml(app)}</p>`,
     `</div>`,
     ``,
   ].join("\n");
 }
 
 /**
- * Render the header banner: the app's own DOS Rebel art in a `pre`
- * hidden from assistive tech, one span per line. banner.css paints the
- * lines with the teal gradient, never a style attribute: the remote's
- * CSP refuses inline styles. The header link around it carries the
- * app's accessible name.
+ * Render the header banner: the app's own DOS Rebel art as an SVG with
+ * the app's accessible name, one `<g class="look-banner-line">` per line.
+ * banner.css sets each class's width (80 px tall on desktop, 48 px on a
+ * phone) and keeps the cells square; the wrapping link or button carries
+ * the home label. An app that needs only its own art (the remote, whose
+ * bundle budget is tight) can call `bannerSvg` with its lines directly:
+ * anything this function references ships in the importing bundle.
  */
 export function renderHeaderBanner(app: BannerApp): string {
   const lines = app === "graphs" ? GRAPHS_BANNER_LINES : REMOTE_BANNER_LINES;
-  const art = lines.map((line) => `<span>${escapeHtml(line)}</span>`).join("\n");
-  return `<pre class="look-banner-header" aria-hidden="true">${art}</pre>`;
+  return bannerSvg(lines, `look-banner-header look-banner-header-${app}`, `Canopy ${app}`);
 }

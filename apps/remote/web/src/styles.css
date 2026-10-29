@@ -196,8 +196,10 @@ label > textarea {
   top: 0;
   z-index: 5;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
+  row-gap: 0.4rem;
   padding: 0.6rem 1rem;
   padding-top: max(0.6rem, env(safe-area-inset-top));
   background: var(--bg);

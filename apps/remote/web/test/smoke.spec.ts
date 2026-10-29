@@ -209,16 +209,20 @@ for (const viewport of [
 
   test(`links home from the header banner at ${viewport.label}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    // The header banner: eleven art lines, named for assistive tech, and
-    // no header link points at the Canopy landing.
+    // The header banner: an SVG on a fixed grid, one line group per art
+    // line, named for assistive tech; no header link points at the
+    // Canopy landing.
     const home = page.locator(".topbar #brand-home");
     await expect(home).toHaveAttribute("aria-label", "Canopy remote, home");
-    await expect(home.locator(".look-banner-header span")).toHaveCount(11);
+    const banner = home.locator("svg.look-banner-header");
+    await expect(banner).toHaveAttribute("role", "img");
+    await expect(banner).toHaveAttribute("aria-label", "Canopy remote");
+    await expect(home.locator(".look-banner-line")).toHaveCount(11);
     await expect(page.locator(".topbar a[href*='univerlab.org/canopy']")).toHaveCount(0);
-    // About 40 px tall on desktop, 28 px on the phone.
-    const art = await page.locator(".topbar .look-banner-header").boundingBox();
+    // About 80 px tall on desktop, 48 px on the phone.
+    const art = await banner.boundingBox();
     expect(art).not.toBeNull();
-    expect(Math.abs((art?.height ?? 0) - (viewport.width < 640 ? 28 : 40))).toBeLessThanOrEqual(5);
+    expect(Math.abs((art?.height ?? 0) - (viewport.width < 640 ? 48 : 80))).toBeLessThanOrEqual(5);
     // No body banner anywhere; the sessions start under the header.
     await expect(page.locator("main .look-banner")).toHaveCount(0);
     // From the session, the banner goes home to the sessions list.
@@ -235,27 +239,33 @@ for (const viewport of [
   });
 }
 
-test("keeps the connection chip in the header with a long login at 390x844", async ({
+test("puts the banner on its own row and keeps the connection chip at 390x844", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  // The banner takes half the header's width, so a long GitHub login must
-  // give way with an ellipsis instead of pushing the connection state out.
+  // The banner owns the header's first row (275 px on a phone), so a long
+  // GitHub login wraps below it with the connection state — the state
+  // keeps its right edge inside the bar instead of being pushed out.
   const boxes = await page.evaluate(() => {
     const login = document.querySelector(".topbar .login") as HTMLElement;
     login.textContent = "a-very-long-github-username-1234567890";
     const bar = document.querySelector(".topbar") as HTMLElement;
     const conn = bar.querySelector(".conn") as HTMLElement;
+    const banner = bar.querySelector(".look-banner-header") as HTMLElement;
     return {
       overflow: bar.scrollWidth - bar.clientWidth,
       barRight: Math.round(bar.getBoundingClientRect().right),
       connRight: Math.round(conn.getBoundingClientRect().right),
+      bannerBottom: Math.round(banner.getBoundingClientRect().bottom),
+      loginTop: Math.round(login.getBoundingClientRect().top),
       loginWidth: Math.round(login.getBoundingClientRect().width),
+      rowWidth: Math.round(bar.clientWidth),
     };
   });
   expect(boxes.overflow).toBeLessThanOrEqual(0);
   expect(boxes.connRight).toBeLessThanOrEqual(boxes.barRight);
-  expect(boxes.loginWidth).toBeLessThan(boxes.barRight / 2);
+  expect(boxes.loginTop).toBeGreaterThanOrEqual(boxes.bannerBottom);
+  expect(boxes.loginWidth).toBeLessThanOrEqual(boxes.rowWidth);
 });
 
 test("puts the Content textarea full width in its card", async ({ page }, testInfo) => {
@@ -312,9 +322,18 @@ for (const viewport of [
     await expect(icon).toHaveAttribute("data-icon", "send");
     // The terminal reports its row height once it has measured itself, and
     // the composer below it settles a moment later. Measuring before that
-    // would blame the session's own fit for an icon-sized move.
-    const before = await settledBox(page, ".composer-send .icon-slot");
-    expect(before).not.toBeNull();
+    // would blame the session's own fit for an icon-sized move. The box is
+    // page-relative: the header banner makes a 900 px page scroll when the
+    // composer takes focus, and that scroll is not the icon moving.
+    const inPage = (): Promise<{ x: number; y: number; width: number; height: number }> =>
+      page.evaluate(() => {
+        const slot = document.querySelector(".composer-send .icon-slot") as HTMLElement;
+        const box = slot.getBoundingClientRect();
+        return { x: box.x, y: box.y + window.scrollY, width: box.width, height: box.height };
+      });
+    const settled = await settledBox(page, ".composer-send .icon-slot");
+    expect(settled).not.toBeNull();
+    const before = await inPage();
 
     // Send → (loader while the frame is out) → check on the host's ok.
     await page.locator(".composer-input").fill("do the thing");
@@ -322,7 +341,7 @@ for (const viewport of [
     await expect(icon).toHaveAttribute("data-icon", "check", { timeout: 10_000 });
     await expect(page.locator(".composer-ok")).toContainText("Sent");
     await expect(page.locator(".composer-ok svg.icon")).toBeVisible();
-    expect(await icon.boundingBox()).toEqual(before);
+    expect(await inPage()).toEqual(before);
     const sentShot = await page.screenshot({ path: testInfo.outputPath(`morph-sent-${viewport.label}.png`) });
     await testInfo.attach(`morph-sent-${viewport.label}`, { body: sentShot, contentType: "image/png" });
 
@@ -332,7 +351,7 @@ for (const viewport of [
     await send.click();
     await expect(icon).toHaveAttribute("data-icon", "x", { timeout: 10_000 });
     expect(await icon.evaluate((el) => getComputedStyle(el).color)).toBe("rgb(255, 107, 107)");
-    expect(await icon.boundingBox()).toEqual(before);
+    expect(await inPage()).toEqual(before);
     const errorShot = await page.screenshot({ path: testInfo.outputPath(`morph-error-${viewport.label}.png`) });
     await testInfo.attach(`morph-error-${viewport.label}`, { body: errorShot, contentType: "image/png" });
 

@@ -105,9 +105,10 @@ a:hover { text-decoration-thickness: 2px; }
 }
 .band-top {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.6rem 1rem;
 }
 .banner-home {
   display: inline-flex;
@@ -539,13 +540,12 @@ details.run-prompt summary .run-where { color: var(--surface-ink); }
 details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
 /* Under 520 px the header's four links show their icon alone, so the row
- * fits a 320 px screen: the label leaves the layout but stays in the
- * accessibility tree through the link's aria-label and title, and each
- * link is a 44 px square target (the 639 block below adds the height).
- * The threshold leaves room for the banner at its phone scale (58 mono
- * columns, about 114 px): the four labelled links need 354 px beside it,
- * so between 480 and 519 px the labels would push Source past the edge
- * and the band's overflow would cut it off. */
+ * stays one line on a small screen: the label leaves the layout but stays
+ * in the accessibility tree through the link's aria-label and title, and
+ * each link is a 44 px square target (the 639 block below adds the
+ * height). The banner is 253 px wide under 640 px (banner.css); the four
+ * labelled links need about 330 px beside it, so above 519 px the band-top
+ * wraps them onto a second row inside the band's height. */
 @media (max-width: 519px) {
   .site-nav { gap: 0.25rem; }
   .site-nav a { min-width: 44px; justify-content: center; }

@@ -223,7 +223,8 @@ describe("createShell", () => {
       show();
       const home = root.querySelector("#brand-home");
       expect(home?.getAttribute("aria-label")).toBe("Canopy remote, home");
-      expect(home?.querySelectorAll(".look-banner-header span")).toHaveLength(11);
+      expect(home?.querySelectorAll(".look-banner-line")).toHaveLength(11);
+      expect(home?.querySelector(".look-banner-header")?.getAttribute("role")).toBe("img");
       expect(root.querySelector(".look-banner")).toBeNull();
     }
     // The sign-in screen carries the header too, above its heading.

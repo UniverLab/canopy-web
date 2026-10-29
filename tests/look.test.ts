@@ -14,6 +14,7 @@ import {
   GRAPHS_BANNER_LINES,
   REMOTE_BANNER_LINES,
   bannerColor,
+  bannerSvg,
   renderBanner,
   renderHeaderBanner,
 } from "../packages/look/banner/banner.js";
@@ -124,6 +125,45 @@ describe("the look tokens", () => {
   });
 });
 
+describe("bannerSvg", () => {
+  const rects = (svg: string): string[] => svg.match(/<rect [^>]*\/>/g) ?? [];
+
+  it("draws one cell per character on a fixed grid", () => {
+    const svg = bannerSvg(["██░ ██"], "look-banner-art");
+    // Six columns, one row; the space is a cell with no rect.
+    expect(svg).toContain(`viewBox="0 0 6 1"`);
+    expect(svg).toContain(`shape-rendering="crispEdges"`);
+    const widths = rects(svg).map((rect) => Number(/width="(\d+)"/.exec(rect)?.[1]));
+    expect(widths.reduce((sum, width) => sum + width, 0)).toBe(5);
+  });
+
+  it("merges adjacent cells of one kind into one rect, shade runs too", () => {
+    const svg = bannerSvg(["█████░░███"], "look-banner-art");
+    const cells = rects(svg);
+    expect(cells).toHaveLength(3);
+    expect(cells[0]).toContain(`x="0" y="0" width="5"`);
+    expect(cells[1]).toContain(`x="5" y="0" width="2" height="1" fill-opacity=".35"`);
+    expect(cells[2]).toContain(`x="7" y="0" width="3"`);
+    expect(cells[0]).not.toContain("fill-opacity");
+  });
+
+  it("fills each line with its gradient stop, as a presentation attribute", () => {
+    const svg = bannerSvg(GRAPHS_BANNER_LINES, "look-banner-art");
+    const fills = [...svg.matchAll(/<g class="look-banner-line" fill="(#[0-9a-f]{6})">/g)].map(
+      (match) => match[1],
+    );
+    const stops = [0, 0, 1, 1, 1, 2, 2, 3, 3, 3, 4];
+    expect(fills).toEqual(stops.map((stop) => BANNER_GRADIENT[stop]));
+    // A style attribute is refused by the remote's CSP: fills never use one.
+    expect(svg).not.toContain("style=");
+  });
+
+  it("keeps the graphs banner under 6 KB", () => {
+    const svg = bannerSvg(GRAPHS_BANNER_LINES, "look-banner-header");
+    expect(Buffer.byteLength(svg)).toBeLessThan(6144);
+  });
+});
+
 describe("the house banner", () => {
   it("is the ten DOS Rebel art lines, byte-identical to banner.rs", () => {
     expect(BANNER_LINES).toHaveLength(10);
@@ -148,20 +188,21 @@ describe("the house banner", () => {
     );
   });
 
-  it("renders the art hidden from assistive tech with a reader Canopy", () => {
+  it("renders the art as an SVG hidden from assistive tech, with a reader Canopy", () => {
     const html = renderBanner("remote");
-    expect(html).toContain(`<pre class="look-banner-art" aria-hidden="true">`);
+    expect(html).toContain(`class="look-banner-art"`);
+    expect(html).toContain(`aria-hidden="true"`);
     expect(html).toContain(`<span class="look-banner-vh">Canopy</span>`);
-    // Ten coloured lines, joined by newlines, never trimmed.
-    const spans = html.match(/<span style="color:#[0-9a-f]{6}">/g) ?? [];
-    expect(spans).toHaveLength(10);
+    // One group per art line, ten of them, each with its gradient stop.
+    expect(html.match(/<g class="look-banner-line"/g) ?? []).toHaveLength(10);
+    expect(html).not.toContain("style=");
   });
 
   it("names the app under the art, and only the app differs", () => {
     const remote = renderBanner("remote");
     const graphs = renderBanner("graphs");
-    expect(remote).toContain(`<p class="look-banner-app" style="color:#52fff6">remote</p>`);
-    expect(graphs).toContain(`<p class="look-banner-app" style="color:#52fff6">graphs</p>`);
+    expect(remote).toContain(`<p class="look-banner-app">remote</p>`);
+    expect(graphs).toContain(`<p class="look-banner-app">graphs</p>`);
     expect(graphs.replaceAll("graphs", "remote")).toBe(remote);
   });
 });
@@ -190,29 +231,47 @@ describe("the header banners", () => {
     }
   });
 
-  it("renders one hidden pre per app with eleven spans and no inline style", () => {
+  it("renders one named SVG per app with eleven line groups and no inline style", () => {
     for (const app of ["graphs", "remote"] as const) {
       const html = renderHeaderBanner(app);
-      expect(html).toContain(`<pre class="look-banner-header" aria-hidden="true">`);
-      expect(html.match(/<span>/g) ?? []).toHaveLength(11);
-      // A style attribute is refused by the remote's CSP: the ink is CSS.
+      expect(html).toMatch(
+        new RegExp(`^<svg [^>]*class="look-banner-header look-banner-header-${app}"`),
+      );
+      expect(html).toContain(`role="img"`);
+      expect(html).toContain(`aria-label="Canopy ${app}"`);
+      expect(html.match(/<g class="look-banner-line"/g) ?? []).toHaveLength(11);
+      // A style attribute is refused by the remote's CSP: the ink is fill.
       expect(html).not.toContain("style=");
     }
     expect(renderHeaderBanner("graphs")).not.toBe(renderHeaderBanner("remote"));
   });
 
-  it("paints the header lines from banner.css with the gradient's stops", () => {
+  it("sizes the header art in banner.css to about 80 px, 48 px on a phone", () => {
     const css = readFileSync(path.join(KIT, "banner", "banner.css"), "utf8");
-    const painted = new Map<number, string>();
-    for (const rule of css.matchAll(
-      /\.look-banner-header span:nth-child\((\d+)\) \{ color: (#[0-9a-f]{6}); \}/g,
-    )) {
-      painted.set(Number(rule[1]), rule[2] as string);
+    const width = (name: string): number => {
+      const match = new RegExp(`\\.${name} \\{\\s*width: (\\d+)px;`).exec(css);
+      if (match?.[1] === undefined) {
+        throw new Error(`width for .${name} not found in banner.css`);
+      }
+      return Number(match[1]);
+    };
+    const cases: Array<[string, number, number, number]> = [
+      ["look-banner-header-graphs", 58, 421, 253],
+      ["look-banner-header-remote", 63, 458, 275],
+    ];
+    for (const [name, cells, desktop, phone] of cases) {
+      expect(width(name)).toBe(desktop);
+      // Eleven square cells: 421/58 × 11 = 80 px, 253/58 × 11 = 48 px.
+      expect(Math.round((desktop * 11) / cells)).toBe(80);
+      expect(Math.abs((phone * 11) / cells - 48)).toBeLessThanOrEqual(1);
     }
-    const stops = [0, 0, 1, 1, 1, 2, 2, 3, 3, 3, 4];
-    expect([...painted.entries()].sort((a, b) => a[0] - b[0])).toEqual(
-      stops.map((stop, index) => [index + 1, BANNER_GRADIENT[stop]]),
+    // The phone widths live in the one ≤639 px block.
+    expect(css).toMatch(
+      /@media \(max-width: 639px\) \{[\s\S]*?\.look-banner-header-graphs \{\s*width: 253px;[\s\S]*?\.look-banner-header-remote \{\s*width: 275px;/,
     );
+    // No font and no per-line colour rules any more: fills ride on the SVG.
+    expect(css).not.toContain("font-size");
+    expect(css).not.toContain("nth-child");
   });
 });
 

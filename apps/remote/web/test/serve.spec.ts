@@ -76,22 +76,39 @@ test("sign-in wears the header banner and a one-row colophon at 1280x900", async
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
+  const refused: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") {
+      refused.push(message.text());
+    }
+  });
   await page.goto("/");
   // Unauthenticated, so the sign-in screen — with the header above it.
   await expect(page.locator("main.signin")).toBeVisible();
   const home = page.locator(".topbar #brand-home");
   await expect(home).toHaveAttribute("aria-label", "Canopy remote, home");
-  await expect(home.locator(".look-banner-header span")).toHaveCount(11);
+  // The SVG banner: one line group per art line, named for assistive tech.
+  const banner = home.locator("svg.look-banner-header");
+  await expect(banner).toHaveAttribute("role", "img");
+  await expect(banner).toHaveAttribute("aria-label", "Canopy remote");
+  await expect(banner).toHaveAttribute("shape-rendering", "crispEdges");
+  await expect(home.locator(".look-banner-line")).toHaveCount(11);
   await expect(page.locator(".topbar a[href*='univerlab.org/canopy']")).toHaveCount(0);
   await expect(page.locator("main.signin .look-banner")).toHaveCount(0);
+  // About 80 px tall at desktop width, from the viewBox's square cells.
+  const box = await banner.boundingBox();
+  expect(box).not.toBeNull();
+  expect(Math.abs((box?.height ?? 0) - 80)).toBeLessThanOrEqual(5);
   // The teal gradient survives the app's `style-src 'self'` CSP: the ink
-  // comes from banner.css, not from a style attribute the header refuses.
+  // is a `fill` presentation attribute (or banner.css), never an inline
+  // style the header refuses. A refused style would log here.
   const inks = await page
-    .locator(".topbar .look-banner-header span")
-    .evaluateAll((spans) => spans.map((span) => getComputedStyle(span).color));
+    .locator(".topbar .look-banner-line")
+    .evaluateAll((groups) => groups.map((group) => getComputedStyle(group).fill));
   expect(inks).toHaveLength(11);
   expect(inks[0]).toBe("rgb(82, 255, 246)");
   expect(inks[10]).toBe("rgb(0, 102, 97)");
+  expect(refused.filter((text) => text.includes("Content Security Policy"))).toEqual([]);
   const tops = await page
     .locator("footer.look-colophon nav a")
     .evaluateAll((links) => links.map((link) => (link as HTMLElement).offsetTop));

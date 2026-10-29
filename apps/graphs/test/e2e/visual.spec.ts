@@ -2,11 +2,12 @@
 /**
  * The catalogue as a technical index, checked in a browser against the
  * fixture Worker: the Canopy surface, the three faces loaded from the kit,
- * the honeycomb mounted inside the header band only, the header banner
- * home link with its Publish/Source links, dense index rows instead of
- * cards, each document page as a plate beside its datasheet — the vertical
- * plate under 640 px, the horizontal one above — and no horizontal page
- * scroll at 390 px.
+ * the honeycomb mounted inside the header band only, the header banner as
+ * an SVG on a fixed grid (about 80 px tall on desktop, 48 px on a phone,
+ * no sideways scroll at 360 px) with its Publish/Source links, dense index
+ * rows instead of cards, each document page as a plate beside its
+ * datasheet — the vertical plate under 640 px, the horizontal one above —
+ * and no horizontal page scroll at 390 px.
  * The datasheet INSTALL row shows its whole command wrapped in its box
  * while the home index rows keep their one-line command.
  * Three pages (home, a graph, a node) at the two reference sizes, plus a
@@ -48,6 +49,14 @@ for (const viewport of VIEWPORTS) {
   for (const target of PAGES) {
     test(`${target.label} at ${viewport.width}x${viewport.height}`, async ({ page }, testInfo) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      // A refused inline style (or any CSP breach) logs here; the banner's
+      // ink must arrive as fill attributes or banner.css, never `style=`.
+      const refused: string[] = [];
+      page.on("console", (message) => {
+        if (message.type() === "error") {
+          refused.push(message.text());
+        }
+      });
       await page.goto(target.path, { waitUntil: "load" });
 
       // The Canopy surface, named on <html> and painted on <body>.
@@ -71,7 +80,6 @@ for (const viewport of VIEWPORTS) {
           loaded: [...new Set(registered.filter((face) => face.status === "loaded").map((face) => face.family))].sort(),
           heading: getComputedStyle(document.querySelector("h1") ?? document.body).fontFamily,
           body: getComputedStyle(document.body).fontFamily,
-          banner: getComputedStyle(document.querySelector(".banner-home pre") ?? document.body).fontFamily,
         };
       });
       expect(faces.status).toBe("loaded");
@@ -79,11 +87,10 @@ for (const viewport of VIEWPORTS) {
       // All three are registered by the kit, and each has a face actually loaded.
       expect(faces.families).toEqual(expect.arrayContaining(kit));
       expect(faces.loaded).toEqual(expect.arrayContaining(kit));
-      // And the page applies them by role: mono to the UI and the header
-      // banner, the display face only to document names, the body face to
-      // the text.
+      // And the page applies them by role: mono to the UI, the display face
+      // only to document names, the body face to the text. The banner is an
+      // SVG, so no face applies to it at all.
       expect(faces.body).toContain("Sometype Mono");
-      expect(faces.banner).toContain("Sometype Mono");
       expect(faces.heading).toContain(target.label === "home" ? "Sometype Mono" : "Old Standard TT");
 
       // The live honeycomb is mounted inside the header band only: its box
@@ -120,25 +127,33 @@ for (const viewport of VIEWPORTS) {
         expect(fondo.box.y + fondo.box.height).toBeLessThanOrEqual(header.y + header.height + 1);
       }
 
-      // The header banner links home: the graphs art, eleven lines, and
-      // no header link points at the Canopy landing any more.
+      // The header banner links home: the graphs art as an SVG on a fixed
+      // grid, and no header link points at the Canopy landing any more.
       const home = page.locator("header .banner-home");
       await expect(home).toHaveAttribute("href", "/");
       await expect(home).toHaveAttribute("aria-label", "Canopy graphs, home");
-      await expect(home.locator("pre.look-banner-header")).toBeVisible();
-      await expect(home.locator(".look-banner-header span")).toHaveCount(11);
+      const art = home.locator("svg.look-banner-header");
+      await expect(art).toBeVisible();
+      await expect(art).toHaveAttribute("role", "img");
+      await expect(art).toHaveAttribute("aria-label", "Canopy graphs");
+      await expect(home.locator(".look-banner-line")).toHaveCount(11);
       await expect(page.locator("header a[href*='univerlab.org/canopy']")).toHaveCount(0);
-      // About 40 px tall on desktop, 28 px on the phone.
-      const art = await page.locator("header .look-banner-header").boundingBox();
-      expect(art).not.toBeNull();
-      expect(Math.abs((art?.height ?? 0) - (viewport.width < 640 ? 28 : 40))).toBeLessThanOrEqual(5);
-      // The teal gradient comes from banner.css — never a style attribute,
-      // which the remote's CSP refuses — so the art is teal, not flat ink.
+      // About 80 px tall on desktop, 48 px on the phone, and never wider
+      // than the header row.
+      const box = await art.boundingBox();
+      expect(box).not.toBeNull();
+      expect(Math.abs((box?.height ?? 0) - (viewport.width < 640 ? 48 : 80))).toBeLessThanOrEqual(5);
+      expect((box?.width ?? 0) + (box?.x ?? 0)).toBeLessThanOrEqual(viewport.width);
+      // The teal gradient is a `fill` presentation attribute — never a
+      // style attribute, which this page's CSP would refuse — so the art
+      // is teal, not flat ink.
       const inks = await page
-        .locator("header .look-banner-header span")
-        .evaluateAll((spans) => spans.map((span) => getComputedStyle(span).color));
+        .locator("header .look-banner-line")
+        .evaluateAll((groups) => groups.map((group) => getComputedStyle(group).fill));
+      expect(inks).toHaveLength(11);
       expect(inks[0]).toBe("rgb(82, 255, 246)");
       expect(inks[10]).toBe("rgb(0, 102, 97)");
+      expect(refused.filter((text) => text.includes("Content Security Policy"))).toEqual([]);
       await expect(page.locator("header nav.site-nav a[href='/editor']")).toHaveText("Editor");
       await expect(page.locator("header nav.site-nav a[href='/publish']")).toHaveText("Publish");
       await expect(page.locator("header nav.site-nav a[href='/patterns']")).toHaveText("Patterns");
@@ -469,6 +484,29 @@ test("the header fits the banner and its four links at 480x900", async ({ page }
   });
   expect(fit.clipped).toBeLessThanOrEqual(0);
   expect(fit.lastRight).toBeLessThanOrEqual(fit.view);
+});
+
+test("the banner fits a 360 px phone beside its four icons", async ({ page }) => {
+  // The narrowest phone: the banner's 253 px plus the band's gutters, and
+  // the four icon-only links under it — no sideways scroll.
+  await page.setViewportSize({ width: 360, height: 740 });
+  await page.goto("/", { waitUntil: "load" });
+  const fit = await page.evaluate(() => {
+    const banner = document.querySelector(".banner-home .look-banner-header") as HTMLElement;
+    const box = banner.getBoundingClientRect();
+    const el = document.scrollingElement ?? document.documentElement;
+    return {
+      overflow: el.scrollWidth - el.clientWidth,
+      left: Math.round(box.left),
+      right: Math.round(box.right),
+      height: Math.round(box.height),
+      view: window.innerWidth,
+    };
+  });
+  expect(fit.overflow).toBeLessThanOrEqual(1);
+  expect(fit.left).toBeGreaterThanOrEqual(0);
+  expect(fit.right).toBeLessThanOrEqual(fit.view);
+  expect(Math.abs(fit.height - 48)).toBeLessThanOrEqual(5);
 });
 
 test("the colophon wraps without sideways scroll at 390x844", async ({ page }) => {

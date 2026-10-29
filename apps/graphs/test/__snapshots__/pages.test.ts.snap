@@ -64,9 +64,10 @@ a:hover { text-decoration-thickness: 2px; }
 }
 .band-top {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.6rem 1rem;
 }
 .banner-home {
   display: inline-flex;
@@ -498,13 +499,12 @@ details.run-prompt summary .run-where { color: var(--surface-ink); }
 details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
 /* Under 520 px the header's four links show their icon alone, so the row
- * fits a 320 px screen: the label leaves the layout but stays in the
- * accessibility tree through the link's aria-label and title, and each
- * link is a 44 px square target (the 639 block below adds the height).
- * The threshold leaves room for the banner at its phone scale (58 mono
- * columns, about 114 px): the four labelled links need 354 px beside it,
- * so between 480 and 519 px the labels would push Source past the edge
- * and the band's overflow would cut it off. */
+ * stays one line on a small screen: the label leaves the layout but stays
+ * in the accessibility tree through the link's aria-label and title, and
+ * each link is a 44 px square target (the 639 block below adds the
+ * height). The banner is 253 px wide under 640 px (banner.css); the four
+ * labelled links need about 330 px beside it, so above 519 px the band-top
+ * wraps them onto a second row inside the band's height. */
 @media (max-width: 519px) {
   .site-nav { gap: 0.25rem; }
   .site-nav a { min-width: 44px; justify-content: center; }
@@ -543,17 +543,7 @@ details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 <div class="fondo" id="fondo" aria-hidden="true"></div>
 <div class="band">
 <div class="band-top">
-<a class="banner-home" href="/" aria-label="Canopy graphs, home"><pre class="look-banner-header" aria-hidden="true"><span>                                        █████             </span>
-<span>                                       ░░███              </span>
-<span>  ███████ ████████   ██████   ████████  ░███████    █████ </span>
-<span> ███░░███░░███░░███ ░░░░░███ ░░███░░███ ░███░░███  ███░░  </span>
-<span>░███ ░███ ░███ ░░░   ███████  ░███ ░███ ░███ ░███ ░░█████ </span>
-<span>░███ ░███ ░███      ███░░███  ░███ ░███ ░███ ░███  ░░░░███</span>
-<span>░░███████ █████    ░░████████ ░███████  ████ █████ ██████ </span>
-<span> ░░░░░███░░░░░      ░░░░░░░░  ░███░░░  ░░░░ ░░░░░ ░░░░░░  </span>
-<span> ███ ░███                     ░███                        </span>
-<span>░░██████                      █████                       </span>
-<span> ░░░░░░                      ░░░░░                        </span></pre></a>
+<a class="banner-home" href="/" aria-label="Canopy graphs, home"><svg viewBox="0 0 58 11" shape-rendering="crispEdges" class="look-banner-header look-banner-header-graphs" role="img" aria-label="Canopy graphs"><g class="look-banner-line" fill="#52fff6">                                        <rect x="40" y="0" width="5" height="1"/>             </g><g class="look-banner-line" fill="#52fff6">                                       <rect x="39" y="1" width="2" height="1" fill-opacity=".35"/><rect x="41" y="1" width="3" height="1"/>              </g><g class="look-banner-line" fill="#1ffff3">  <rect x="2" y="2" width="7" height="1"/> <rect x="10" y="2" width="8" height="1"/>   <rect x="21" y="2" width="6" height="1"/>   <rect x="30" y="2" width="8" height="1"/>  <rect x="40" y="2" width="1" height="1" fill-opacity=".35"/><rect x="41" y="2" width="7" height="1"/>    <rect x="52" y="2" width="5" height="1"/> </g><g class="look-banner-line" fill="#1ffff3"> <rect x="1" y="3" width="3" height="1"/><rect x="4" y="3" width="2" height="1" fill-opacity=".35"/><rect x="6" y="3" width="3" height="1"/><rect x="9" y="3" width="2" height="1" fill-opacity=".35"/><rect x="11" y="3" width="3" height="1"/><rect x="14" y="3" width="2" height="1" fill-opacity=".35"/><rect x="16" y="3" width="3" height="1"/> <rect x="20" y="3" width="5" height="1" fill-opacity=".35"/><rect x="25" y="3" width="3" height="1"/> <rect x="29" y="3" width="2" height="1" fill-opacity=".35"/><rect x="31" y="3" width="3" height="1"/><rect x="34" y="3" width="2" height="1" fill-opacity=".35"/><rect x="36" y="3" width="3" height="1"/> <rect x="40" y="3" width="1" height="1" fill-opacity=".35"/><rect x="41" y="3" width="3" height="1"/><rect x="44" y="3" width="2" height="1" fill-opacity=".35"/><rect x="46" y="3" width="3" height="1"/>  <rect x="51" y="3" width="3" height="1"/><rect x="54" y="3" width="2" height="1" fill-opacity=".35"/>  </g><g class="look-banner-line" fill="#1ffff3"><rect x="0" y="4" width="1" height="1" fill-opacity=".35"/><rect x="1" y="4" width="3" height="1"/> <rect x="5" y="4" width="1" height="1" fill-opacity=".35"/><rect x="6" y="4" width="3" height="1"/> <rect x="10" y="4" width="1" height="1" fill-opacity=".35"/><rect x="11" y="4" width="3" height="1"/> <rect x="15" y="4" width="3" height="1" fill-opacity=".35"/>   <rect x="21" y="4" width="7" height="1"/>  <rect x="30" y="4" width="1" height="1" fill-opacity=".35"/><rect x="31" y="4" width="3" height="1"/> <rect x="35" y="4" width="1" height="1" fill-opacity=".35"/><rect x="36" y="4" width="3" height="1"/> <rect x="40" y="4" width="1" height="1" fill-opacity=".35"/><rect x="41" y="4" width="3" height="1"/> <rect x="45" y="4" width="1" height="1" fill-opacity=".35"/><rect x="46" y="4" width="3" height="1"/> <rect x="50" y="4" width="2" height="1" fill-opacity=".35"/><rect x="52" y="4" width="5" height="1"/> </g><g class="look-banner-line" fill="#00e0d4"><rect x="0" y="5" width="1" height="1" fill-opacity=".35"/><rect x="1" y="5" width="3" height="1"/> <rect x="5" y="5" width="1" height="1" fill-opacity=".35"/><rect x="6" y="5" width="3" height="1"/> <rect x="10" y="5" width="1" height="1" fill-opacity=".35"/><rect x="11" y="5" width="3" height="1"/>      <rect x="20" y="5" width="3" height="1"/><rect x="23" y="5" width="2" height="1" fill-opacity=".35"/><rect x="25" y="5" width="3" height="1"/>  <rect x="30" y="5" width="1" height="1" fill-opacity=".35"/><rect x="31" y="5" width="3" height="1"/> <rect x="35" y="5" width="1" height="1" fill-opacity=".35"/><rect x="36" y="5" width="3" height="1"/> <rect x="40" y="5" width="1" height="1" fill-opacity=".35"/><rect x="41" y="5" width="3" height="1"/> <rect x="45" y="5" width="1" height="1" fill-opacity=".35"/><rect x="46" y="5" width="3" height="1"/>  <rect x="51" y="5" width="4" height="1" fill-opacity=".35"/><rect x="55" y="5" width="3" height="1"/></g><g class="look-banner-line" fill="#00e0d4"><rect x="0" y="6" width="2" height="1" fill-opacity=".35"/><rect x="2" y="6" width="7" height="1"/> <rect x="10" y="6" width="5" height="1"/>    <rect x="19" y="6" width="2" height="1" fill-opacity=".35"/><rect x="21" y="6" width="8" height="1"/> <rect x="30" y="6" width="1" height="1" fill-opacity=".35"/><rect x="31" y="6" width="7" height="1"/>  <rect x="40" y="6" width="4" height="1"/> <rect x="45" y="6" width="5" height="1"/> <rect x="51" y="6" width="6" height="1"/> </g><g class="look-banner-line" fill="#00a9a0"> <rect x="1" y="7" width="5" height="1" fill-opacity=".35"/><rect x="6" y="7" width="3" height="1"/><rect x="9" y="7" width="5" height="1" fill-opacity=".35"/>      <rect x="20" y="7" width="8" height="1" fill-opacity=".35"/>  <rect x="30" y="7" width="1" height="1" fill-opacity=".35"/><rect x="31" y="7" width="3" height="1"/><rect x="34" y="7" width="3" height="1" fill-opacity=".35"/>  <rect x="39" y="7" width="4" height="1" fill-opacity=".35"/> <rect x="44" y="7" width="5" height="1" fill-opacity=".35"/> <rect x="50" y="7" width="6" height="1" fill-opacity=".35"/>  </g><g class="look-banner-line" fill="#00a9a0"> <rect x="1" y="8" width="3" height="1"/> <rect x="5" y="8" width="1" height="1" fill-opacity=".35"/><rect x="6" y="8" width="3" height="1"/>                     <rect x="30" y="8" width="1" height="1" fill-opacity=".35"/><rect x="31" y="8" width="3" height="1"/>                        </g><g class="look-banner-line" fill="#00a9a0"><rect x="0" y="9" width="2" height="1" fill-opacity=".35"/><rect x="2" y="9" width="6" height="1"/>                      <rect x="30" y="9" width="5" height="1"/>                       </g><g class="look-banner-line" fill="#006661"> <rect x="1" y="10" width="6" height="1" fill-opacity=".35"/>                      <rect x="29" y="10" width="5" height="1" fill-opacity=".35"/>                        </g></svg></a>
 <nav class="site-nav" aria-label="Catalogue">
 <a href="/editor" aria-label="Editor" title="Editor"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span>Editor</span></a>
 <a href="/publish" aria-label="Publish" title="Publish"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg><span>Publish</span></a>
@@ -677,9 +667,10 @@ a:hover { text-decoration-thickness: 2px; }
 }
 .band-top {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.6rem 1rem;
 }
 .banner-home {
   display: inline-flex;
@@ -1111,13 +1102,12 @@ details.run-prompt summary .run-where { color: var(--surface-ink); }
 details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
 /* Under 520 px the header's four links show their icon alone, so the row
- * fits a 320 px screen: the label leaves the layout but stays in the
- * accessibility tree through the link's aria-label and title, and each
- * link is a 44 px square target (the 639 block below adds the height).
- * The threshold leaves room for the banner at its phone scale (58 mono
- * columns, about 114 px): the four labelled links need 354 px beside it,
- * so between 480 and 519 px the labels would push Source past the edge
- * and the band's overflow would cut it off. */
+ * stays one line on a small screen: the label leaves the layout but stays
+ * in the accessibility tree through the link's aria-label and title, and
+ * each link is a 44 px square target (the 639 block below adds the
+ * height). The banner is 253 px wide under 640 px (banner.css); the four
+ * labelled links need about 330 px beside it, so above 519 px the band-top
+ * wraps them onto a second row inside the band's height. */
 @media (max-width: 519px) {
   .site-nav { gap: 0.25rem; }
   .site-nav a { min-width: 44px; justify-content: center; }
@@ -1156,17 +1146,7 @@ details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 <div class="fondo" id="fondo" aria-hidden="true"></div>
 <div class="band">
 <div class="band-top">
-<a class="banner-home" href="/" aria-label="Canopy graphs, home"><pre class="look-banner-header" aria-hidden="true"><span>                                        █████             </span>
-<span>                                       ░░███              </span>
-<span>  ███████ ████████   ██████   ████████  ░███████    █████ </span>
-<span> ███░░███░░███░░███ ░░░░░███ ░░███░░███ ░███░░███  ███░░  </span>
-<span>░███ ░███ ░███ ░░░   ███████  ░███ ░███ ░███ ░███ ░░█████ </span>
-<span>░███ ░███ ░███      ███░░███  ░███ ░███ ░███ ░███  ░░░░███</span>
-<span>░░███████ █████    ░░████████ ░███████  ████ █████ ██████ </span>
-<span> ░░░░░███░░░░░      ░░░░░░░░  ░███░░░  ░░░░ ░░░░░ ░░░░░░  </span>
-<span> ███ ░███                     ░███                        </span>
-<span>░░██████                      █████                       </span>
-<span> ░░░░░░                      ░░░░░                        </span></pre></a>
+<a class="banner-home" href="/" aria-label="Canopy graphs, home"><svg viewBox="0 0 58 11" shape-rendering="crispEdges" class="look-banner-header look-banner-header-graphs" role="img" aria-label="Canopy graphs"><g class="look-banner-line" fill="#52fff6">                                        <rect x="40" y="0" width="5" height="1"/>             </g><g class="look-banner-line" fill="#52fff6">                                       <rect x="39" y="1" width="2" height="1" fill-opacity=".35"/><rect x="41" y="1" width="3" height="1"/>              </g><g class="look-banner-line" fill="#1ffff3">  <rect x="2" y="2" width="7" height="1"/> <rect x="10" y="2" width="8" height="1"/>   <rect x="21" y="2" width="6" height="1"/>   <rect x="30" y="2" width="8" height="1"/>  <rect x="40" y="2" width="1" height="1" fill-opacity=".35"/><rect x="41" y="2" width="7" height="1"/>    <rect x="52" y="2" width="5" height="1"/> </g><g class="look-banner-line" fill="#1ffff3"> <rect x="1" y="3" width="3" height="1"/><rect x="4" y="3" width="2" height="1" fill-opacity=".35"/><rect x="6" y="3" width="3" height="1"/><rect x="9" y="3" width="2" height="1" fill-opacity=".35"/><rect x="11" y="3" width="3" height="1"/><rect x="14" y="3" width="2" height="1" fill-opacity=".35"/><rect x="16" y="3" width="3" height="1"/> <rect x="20" y="3" width="5" height="1" fill-opacity=".35"/><rect x="25" y="3" width="3" height="1"/> <rect x="29" y="3" width="2" height="1" fill-opacity=".35"/><rect x="31" y="3" width="3" height="1"/><rect x="34" y="3" width="2" height="1" fill-opacity=".35"/><rect x="36" y="3" width="3" height="1"/> <rect x="40" y="3" width="1" height="1" fill-opacity=".35"/><rect x="41" y="3" width="3" height="1"/><rect x="44" y="3" width="2" height="1" fill-opacity=".35"/><rect x="46" y="3" width="3" height="1"/>  <rect x="51" y="3" width="3" height="1"/><rect x="54" y="3" width="2" height="1" fill-opacity=".35"/>  </g><g class="look-banner-line" fill="#1ffff3"><rect x="0" y="4" width="1" height="1" fill-opacity=".35"/><rect x="1" y="4" width="3" height="1"/> <rect x="5" y="4" width="1" height="1" fill-opacity=".35"/><rect x="6" y="4" width="3" height="1"/> <rect x="10" y="4" width="1" height="1" fill-opacity=".35"/><rect x="11" y="4" width="3" height="1"/> <rect x="15" y="4" width="3" height="1" fill-opacity=".35"/>   <rect x="21" y="4" width="7" height="1"/>  <rect x="30" y="4" width="1" height="1" fill-opacity=".35"/><rect x="31" y="4" width="3" height="1"/> <rect x="35" y="4" width="1" height="1" fill-opacity=".35"/><rect x="36" y="4" width="3" height="1"/> <rect x="40" y="4" width="1" height="1" fill-opacity=".35"/><rect x="41" y="4" width="3" height="1"/> <rect x="45" y="4" width="1" height="1" fill-opacity=".35"/><rect x="46" y="4" width="3" height="1"/> <rect x="50" y="4" width="2" height="1" fill-opacity=".35"/><rect x="52" y="4" width="5" height="1"/> </g><g class="look-banner-line" fill="#00e0d4"><rect x="0" y="5" width="1" height="1" fill-opacity=".35"/><rect x="1" y="5" width="3" height="1"/> <rect x="5" y="5" width="1" height="1" fill-opacity=".35"/><rect x="6" y="5" width="3" height="1"/> <rect x="10" y="5" width="1" height="1" fill-opacity=".35"/><rect x="11" y="5" width="3" height="1"/>      <rect x="20" y="5" width="3" height="1"/><rect x="23" y="5" width="2" height="1" fill-opacity=".35"/><rect x="25" y="5" width="3" height="1"/>  <rect x="30" y="5" width="1" height="1" fill-opacity=".35"/><rect x="31" y="5" width="3" height="1"/> <rect x="35" y="5" width="1" height="1" fill-opacity=".35"/><rect x="36" y="5" width="3" height="1"/> <rect x="40" y="5" width="1" height="1" fill-opacity=".35"/><rect x="41" y="5" width="3" height="1"/> <rect x="45" y="5" width="1" height="1" fill-opacity=".35"/><rect x="46" y="5" width="3" height="1"/>  <rect x="51" y="5" width="4" height="1" fill-opacity=".35"/><rect x="55" y="5" width="3" height="1"/></g><g class="look-banner-line" fill="#00e0d4"><rect x="0" y="6" width="2" height="1" fill-opacity=".35"/><rect x="2" y="6" width="7" height="1"/> <rect x="10" y="6" width="5" height="1"/>    <rect x="19" y="6" width="2" height="1" fill-opacity=".35"/><rect x="21" y="6" width="8" height="1"/> <rect x="30" y="6" width="1" height="1" fill-opacity=".35"/><rect x="31" y="6" width="7" height="1"/>  <rect x="40" y="6" width="4" height="1"/> <rect x="45" y="6" width="5" height="1"/> <rect x="51" y="6" width="6" height="1"/> </g><g class="look-banner-line" fill="#00a9a0"> <rect x="1" y="7" width="5" height="1" fill-opacity=".35"/><rect x="6" y="7" width="3" height="1"/><rect x="9" y="7" width="5" height="1" fill-opacity=".35"/>      <rect x="20" y="7" width="8" height="1" fill-opacity=".35"/>  <rect x="30" y="7" width="1" height="1" fill-opacity=".35"/><rect x="31" y="7" width="3" height="1"/><rect x="34" y="7" width="3" height="1" fill-opacity=".35"/>  <rect x="39" y="7" width="4" height="1" fill-opacity=".35"/> <rect x="44" y="7" width="5" height="1" fill-opacity=".35"/> <rect x="50" y="7" width="6" height="1" fill-opacity=".35"/>  </g><g class="look-banner-line" fill="#00a9a0"> <rect x="1" y="8" width="3" height="1"/> <rect x="5" y="8" width="1" height="1" fill-opacity=".35"/><rect x="6" y="8" width="3" height="1"/>                     <rect x="30" y="8" width="1" height="1" fill-opacity=".35"/><rect x="31" y="8" width="3" height="1"/>                        </g><g class="look-banner-line" fill="#00a9a0"><rect x="0" y="9" width="2" height="1" fill-opacity=".35"/><rect x="2" y="9" width="6" height="1"/>                      <rect x="30" y="9" width="5" height="1"/>                       </g><g class="look-banner-line" fill="#006661"> <rect x="1" y="10" width="6" height="1" fill-opacity=".35"/>                      <rect x="29" y="10" width="5" height="1" fill-opacity=".35"/>                        </g></svg></a>
 <nav class="site-nav" aria-label="Catalogue">
 <a href="/editor" aria-label="Editor" title="Editor"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span>Editor</span></a>
 <a href="/publish" aria-label="Publish" title="Publish"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg><span>Publish</span></a>
@@ -1299,9 +1279,10 @@ a:hover { text-decoration-thickness: 2px; }
 }
 .band-top {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.6rem 1rem;
 }
 .banner-home {
   display: inline-flex;
@@ -1733,13 +1714,12 @@ details.run-prompt summary .run-where { color: var(--surface-ink); }
 details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
 /* Under 520 px the header's four links show their icon alone, so the row
- * fits a 320 px screen: the label leaves the layout but stays in the
- * accessibility tree through the link's aria-label and title, and each
- * link is a 44 px square target (the 639 block below adds the height).
- * The threshold leaves room for the banner at its phone scale (58 mono
- * columns, about 114 px): the four labelled links need 354 px beside it,
- * so between 480 and 519 px the labels would push Source past the edge
- * and the band's overflow would cut it off. */
+ * stays one line on a small screen: the label leaves the layout but stays
+ * in the accessibility tree through the link's aria-label and title, and
+ * each link is a 44 px square target (the 639 block below adds the
+ * height). The banner is 253 px wide under 640 px (banner.css); the four
+ * labelled links need about 330 px beside it, so above 519 px the band-top
+ * wraps them onto a second row inside the band's height. */
 @media (max-width: 519px) {
   .site-nav { gap: 0.25rem; }
   .site-nav a { min-width: 44px; justify-content: center; }
@@ -1778,17 +1758,7 @@ details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 <div class="fondo" id="fondo" aria-hidden="true"></div>
 <div class="band">
 <div class="band-top">
-<a class="banner-home" href="/" aria-label="Canopy graphs, home"><pre class="look-banner-header" aria-hidden="true"><span>                                        █████             </span>
-<span>                                       ░░███              </span>
-<span>  ███████ ████████   ██████   ████████  ░███████    █████ </span>
-<span> ███░░███░░███░░███ ░░░░░███ ░░███░░███ ░███░░███  ███░░  </span>
-<span>░███ ░███ ░███ ░░░   ███████  ░███ ░███ ░███ ░███ ░░█████ </span>
-<span>░███ ░███ ░███      ███░░███  ░███ ░███ ░███ ░███  ░░░░███</span>
-<span>░░███████ █████    ░░████████ ░███████  ████ █████ ██████ </span>
-<span> ░░░░░███░░░░░      ░░░░░░░░  ░███░░░  ░░░░ ░░░░░ ░░░░░░  </span>
-<span> ███ ░███                     ░███                        </span>
-<span>░░██████                      █████                       </span>
-<span> ░░░░░░                      ░░░░░                        </span></pre></a>
+<a class="banner-home" href="/" aria-label="Canopy graphs, home"><svg viewBox="0 0 58 11" shape-rendering="crispEdges" class="look-banner-header look-banner-header-graphs" role="img" aria-label="Canopy graphs"><g class="look-banner-line" fill="#52fff6">                                        <rect x="40" y="0" width="5" height="1"/>             </g><g class="look-banner-line" fill="#52fff6">                                       <rect x="39" y="1" width="2" height="1" fill-opacity=".35"/><rect x="41" y="1" width="3" height="1"/>              </g><g class="look-banner-line" fill="#1ffff3">  <rect x="2" y="2" width="7" height="1"/> <rect x="10" y="2" width="8" height="1"/>   <rect x="21" y="2" width="6" height="1"/>   <rect x="30" y="2" width="8" height="1"/>  <rect x="40" y="2" width="1" height="1" fill-opacity=".35"/><rect x="41" y="2" width="7" height="1"/>    <rect x="52" y="2" width="5" height="1"/> </g><g class="look-banner-line" fill="#1ffff3"> <rect x="1" y="3" width="3" height="1"/><rect x="4" y="3" width="2" height="1" fill-opacity=".35"/><rect x="6" y="3" width="3" height="1"/><rect x="9" y="3" width="2" height="1" fill-opacity=".35"/><rect x="11" y="3" width="3" height="1"/><rect x="14" y="3" width="2" height="1" fill-opacity=".35"/><rect x="16" y="3" width="3" height="1"/> <rect x="20" y="3" width="5" height="1" fill-opacity=".35"/><rect x="25" y="3" width="3" height="1"/> <rect x="29" y="3" width="2" height="1" fill-opacity=".35"/><rect x="31" y="3" width="3" height="1"/><rect x="34" y="3" width="2" height="1" fill-opacity=".35"/><rect x="36" y="3" width="3" height="1"/> <rect x="40" y="3" width="1" height="1" fill-opacity=".35"/><rect x="41" y="3" width="3" height="1"/><rect x="44" y="3" width="2" height="1" fill-opacity=".35"/><rect x="46" y="3" width="3" height="1"/>  <rect x="51" y="3" width="3" height="1"/><rect x="54" y="3" width="2" height="1" fill-opacity=".35"/>  </g><g class="look-banner-line" fill="#1ffff3"><rect x="0" y="4" width="1" height="1" fill-opacity=".35"/><rect x="1" y="4" width="3" height="1"/> <rect x="5" y="4" width="1" height="1" fill-opacity=".35"/><rect x="6" y="4" width="3" height="1"/> <rect x="10" y="4" width="1" height="1" fill-opacity=".35"/><rect x="11" y="4" width="3" height="1"/> <rect x="15" y="4" width="3" height="1" fill-opacity=".35"/>   <rect x="21" y="4" width="7" height="1"/>  <rect x="30" y="4" width="1" height="1" fill-opacity=".35"/><rect x="31" y="4" width="3" height="1"/> <rect x="35" y="4" width="1" height="1" fill-opacity=".35"/><rect x="36" y="4" width="3" height="1"/> <rect x="40" y="4" width="1" height="1" fill-opacity=".35"/><rect x="41" y="4" width="3" height="1"/> <rect x="45" y="4" width="1" height="1" fill-opacity=".35"/><rect x="46" y="4" width="3" height="1"/> <rect x="50" y="4" width="2" height="1" fill-opacity=".35"/><rect x="52" y="4" width="5" height="1"/> </g><g class="look-banner-line" fill="#00e0d4"><rect x="0" y="5" width="1" height="1" fill-opacity=".35"/><rect x="1" y="5" width="3" height="1"/> <rect x="5" y="5" width="1" height="1" fill-opacity=".35"/><rect x="6" y="5" width="3" height="1"/> <rect x="10" y="5" width="1" height="1" fill-opacity=".35"/><rect x="11" y="5" width="3" height="1"/>      <rect x="20" y="5" width="3" height="1"/><rect x="23" y="5" width="2" height="1" fill-opacity=".35"/><rect x="25" y="5" width="3" height="1"/>  <rect x="30" y="5" width="1" height="1" fill-opacity=".35"/><rect x="31" y="5" width="3" height="1"/> <rect x="35" y="5" width="1" height="1" fill-opacity=".35"/><rect x="36" y="5" width="3" height="1"/> <rect x="40" y="5" width="1" height="1" fill-opacity=".35"/><rect x="41" y="5" width="3" height="1"/> <rect x="45" y="5" width="1" height="1" fill-opacity=".35"/><rect x="46" y="5" width="3" height="1"/>  <rect x="51" y="5" width="4" height="1" fill-opacity=".35"/><rect x="55" y="5" width="3" height="1"/></g><g class="look-banner-line" fill="#00e0d4"><rect x="0" y="6" width="2" height="1" fill-opacity=".35"/><rect x="2" y="6" width="7" height="1"/> <rect x="10" y="6" width="5" height="1"/>    <rect x="19" y="6" width="2" height="1" fill-opacity=".35"/><rect x="21" y="6" width="8" height="1"/> <rect x="30" y="6" width="1" height="1" fill-opacity=".35"/><rect x="31" y="6" width="7" height="1"/>  <rect x="40" y="6" width="4" height="1"/> <rect x="45" y="6" width="5" height="1"/> <rect x="51" y="6" width="6" height="1"/> </g><g class="look-banner-line" fill="#00a9a0"> <rect x="1" y="7" width="5" height="1" fill-opacity=".35"/><rect x="6" y="7" width="3" height="1"/><rect x="9" y="7" width="5" height="1" fill-opacity=".35"/>      <rect x="20" y="7" width="8" height="1" fill-opacity=".35"/>  <rect x="30" y="7" width="1" height="1" fill-opacity=".35"/><rect x="31" y="7" width="3" height="1"/><rect x="34" y="7" width="3" height="1" fill-opacity=".35"/>  <rect x="39" y="7" width="4" height="1" fill-opacity=".35"/> <rect x="44" y="7" width="5" height="1" fill-opacity=".35"/> <rect x="50" y="7" width="6" height="1" fill-opacity=".35"/>  </g><g class="look-banner-line" fill="#00a9a0"> <rect x="1" y="8" width="3" height="1"/> <rect x="5" y="8" width="1" height="1" fill-opacity=".35"/><rect x="6" y="8" width="3" height="1"/>                     <rect x="30" y="8" width="1" height="1" fill-opacity=".35"/><rect x="31" y="8" width="3" height="1"/>                        </g><g class="look-banner-line" fill="#00a9a0"><rect x="0" y="9" width="2" height="1" fill-opacity=".35"/><rect x="2" y="9" width="6" height="1"/>                      <rect x="30" y="9" width="5" height="1"/>                       </g><g class="look-banner-line" fill="#006661"> <rect x="1" y="10" width="6" height="1" fill-opacity=".35"/>                      <rect x="29" y="10" width="5" height="1" fill-opacity=".35"/>                        </g></svg></a>
 <nav class="site-nav" aria-label="Catalogue">
 <a href="/editor" aria-label="Editor" title="Editor"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span>Editor</span></a>
 <a href="/publish" aria-label="Publish" title="Publish"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg><span>Publish</span></a>
@@ -1928,9 +1898,10 @@ a:hover { text-decoration-thickness: 2px; }
 }
 .band-top {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.6rem 1rem;
 }
 .banner-home {
   display: inline-flex;
@@ -2362,13 +2333,12 @@ details.run-prompt summary .run-where { color: var(--surface-ink); }
 details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
 /* Under 520 px the header's four links show their icon alone, so the row
- * fits a 320 px screen: the label leaves the layout but stays in the
- * accessibility tree through the link's aria-label and title, and each
- * link is a 44 px square target (the 639 block below adds the height).
- * The threshold leaves room for the banner at its phone scale (58 mono
- * columns, about 114 px): the four labelled links need 354 px beside it,
- * so between 480 and 519 px the labels would push Source past the edge
- * and the band's overflow would cut it off. */
+ * stays one line on a small screen: the label leaves the layout but stays
+ * in the accessibility tree through the link's aria-label and title, and
+ * each link is a 44 px square target (the 639 block below adds the
+ * height). The banner is 253 px wide under 640 px (banner.css); the four
+ * labelled links need about 330 px beside it, so above 519 px the band-top
+ * wraps them onto a second row inside the band's height. */
 @media (max-width: 519px) {
   .site-nav { gap: 0.25rem; }
   .site-nav a { min-width: 44px; justify-content: center; }
@@ -2407,17 +2377,7 @@ details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 <div class="fondo" id="fondo" aria-hidden="true"></div>
 <div class="band">
 <div class="band-top">
-<a class="banner-home" href="/" aria-label="Canopy graphs, home"><pre class="look-banner-header" aria-hidden="true"><span>                                        █████             </span>
-<span>                                       ░░███              </span>
-<span>  ███████ ████████   ██████   ████████  ░███████    █████ </span>
-<span> ███░░███░░███░░███ ░░░░░███ ░░███░░███ ░███░░███  ███░░  </span>
-<span>░███ ░███ ░███ ░░░   ███████  ░███ ░███ ░███ ░███ ░░█████ </span>
-<span>░███ ░███ ░███      ███░░███  ░███ ░███ ░███ ░███  ░░░░███</span>
-<span>░░███████ █████    ░░████████ ░███████  ████ █████ ██████ </span>
-<span> ░░░░░███░░░░░      ░░░░░░░░  ░███░░░  ░░░░ ░░░░░ ░░░░░░  </span>
-<span> ███ ░███                     ░███                        </span>
-<span>░░██████                      █████                       </span>
-<span> ░░░░░░                      ░░░░░                        </span></pre></a>
+<a class="banner-home" href="/" aria-label="Canopy graphs, home"><svg viewBox="0 0 58 11" shape-rendering="crispEdges" class="look-banner-header look-banner-header-graphs" role="img" aria-label="Canopy graphs"><g class="look-banner-line" fill="#52fff6">                                        <rect x="40" y="0" width="5" height="1"/>             </g><g class="look-banner-line" fill="#52fff6">                                       <rect x="39" y="1" width="2" height="1" fill-opacity=".35"/><rect x="41" y="1" width="3" height="1"/>              </g><g class="look-banner-line" fill="#1ffff3">  <rect x="2" y="2" width="7" height="1"/> <rect x="10" y="2" width="8" height="1"/>   <rect x="21" y="2" width="6" height="1"/>   <rect x="30" y="2" width="8" height="1"/>  <rect x="40" y="2" width="1" height="1" fill-opacity=".35"/><rect x="41" y="2" width="7" height="1"/>    <rect x="52" y="2" width="5" height="1"/> </g><g class="look-banner-line" fill="#1ffff3"> <rect x="1" y="3" width="3" height="1"/><rect x="4" y="3" width="2" height="1" fill-opacity=".35"/><rect x="6" y="3" width="3" height="1"/><rect x="9" y="3" width="2" height="1" fill-opacity=".35"/><rect x="11" y="3" width="3" height="1"/><rect x="14" y="3" width="2" height="1" fill-opacity=".35"/><rect x="16" y="3" width="3" height="1"/> <rect x="20" y="3" width="5" height="1" fill-opacity=".35"/><rect x="25" y="3" width="3" height="1"/> <rect x="29" y="3" width="2" height="1" fill-opacity=".35"/><rect x="31" y="3" width="3" height="1"/><rect x="34" y="3" width="2" height="1" fill-opacity=".35"/><rect x="36" y="3" width="3" height="1"/> <rect x="40" y="3" width="1" height="1" fill-opacity=".35"/><rect x="41" y="3" width="3" height="1"/><rect x="44" y="3" width="2" height="1" fill-opacity=".35"/><rect x="46" y="3" width="3" height="1"/>  <rect x="51" y="3" width="3" height="1"/><rect x="54" y="3" width="2" height="1" fill-opacity=".35"/>  </g><g class="look-banner-line" fill="#1ffff3"><rect x="0" y="4" width="1" height="1" fill-opacity=".35"/><rect x="1" y="4" width="3" height="1"/> <rect x="5" y="4" width="1" height="1" fill-opacity=".35"/><rect x="6" y="4" width="3" height="1"/> <rect x="10" y="4" width="1" height="1" fill-opacity=".35"/><rect x="11" y="4" width="3" height="1"/> <rect x="15" y="4" width="3" height="1" fill-opacity=".35"/>   <rect x="21" y="4" width="7" height="1"/>  <rect x="30" y="4" width="1" height="1" fill-opacity=".35"/><rect x="31" y="4" width="3" height="1"/> <rect x="35" y="4" width="1" height="1" fill-opacity=".35"/><rect x="36" y="4" width="3" height="1"/> <rect x="40" y="4" width="1" height="1" fill-opacity=".35"/><rect x="41" y="4" width="3" height="1"/> <rect x="45" y="4" width="1" height="1" fill-opacity=".35"/><rect x="46" y="4" width="3" height="1"/> <rect x="50" y="4" width="2" height="1" fill-opacity=".35"/><rect x="52" y="4" width="5" height="1"/> </g><g class="look-banner-line" fill="#00e0d4"><rect x="0" y="5" width="1" height="1" fill-opacity=".35"/><rect x="1" y="5" width="3" height="1"/> <rect x="5" y="5" width="1" height="1" fill-opacity=".35"/><rect x="6" y="5" width="3" height="1"/> <rect x="10" y="5" width="1" height="1" fill-opacity=".35"/><rect x="11" y="5" width="3" height="1"/>      <rect x="20" y="5" width="3" height="1"/><rect x="23" y="5" width="2" height="1" fill-opacity=".35"/><rect x="25" y="5" width="3" height="1"/>  <rect x="30" y="5" width="1" height="1" fill-opacity=".35"/><rect x="31" y="5" width="3" height="1"/> <rect x="35" y="5" width="1" height="1" fill-opacity=".35"/><rect x="36" y="5" width="3" height="1"/> <rect x="40" y="5" width="1" height="1" fill-opacity=".35"/><rect x="41" y="5" width="3" height="1"/> <rect x="45" y="5" width="1" height="1" fill-opacity=".35"/><rect x="46" y="5" width="3" height="1"/>  <rect x="51" y="5" width="4" height="1" fill-opacity=".35"/><rect x="55" y="5" width="3" height="1"/></g><g class="look-banner-line" fill="#00e0d4"><rect x="0" y="6" width="2" height="1" fill-opacity=".35"/><rect x="2" y="6" width="7" height="1"/> <rect x="10" y="6" width="5" height="1"/>    <rect x="19" y="6" width="2" height="1" fill-opacity=".35"/><rect x="21" y="6" width="8" height="1"/> <rect x="30" y="6" width="1" height="1" fill-opacity=".35"/><rect x="31" y="6" width="7" height="1"/>  <rect x="40" y="6" width="4" height="1"/> <rect x="45" y="6" width="5" height="1"/> <rect x="51" y="6" width="6" height="1"/> </g><g class="look-banner-line" fill="#00a9a0"> <rect x="1" y="7" width="5" height="1" fill-opacity=".35"/><rect x="6" y="7" width="3" height="1"/><rect x="9" y="7" width="5" height="1" fill-opacity=".35"/>      <rect x="20" y="7" width="8" height="1" fill-opacity=".35"/>  <rect x="30" y="7" width="1" height="1" fill-opacity=".35"/><rect x="31" y="7" width="3" height="1"/><rect x="34" y="7" width="3" height="1" fill-opacity=".35"/>  <rect x="39" y="7" width="4" height="1" fill-opacity=".35"/> <rect x="44" y="7" width="5" height="1" fill-opacity=".35"/> <rect x="50" y="7" width="6" height="1" fill-opacity=".35"/>  </g><g class="look-banner-line" fill="#00a9a0"> <rect x="1" y="8" width="3" height="1"/> <rect x="5" y="8" width="1" height="1" fill-opacity=".35"/><rect x="6" y="8" width="3" height="1"/>                     <rect x="30" y="8" width="1" height="1" fill-opacity=".35"/><rect x="31" y="8" width="3" height="1"/>                        </g><g class="look-banner-line" fill="#00a9a0"><rect x="0" y="9" width="2" height="1" fill-opacity=".35"/><rect x="2" y="9" width="6" height="1"/>                      <rect x="30" y="9" width="5" height="1"/>                       </g><g class="look-banner-line" fill="#006661"> <rect x="1" y="10" width="6" height="1" fill-opacity=".35"/>                      <rect x="29" y="10" width="5" height="1" fill-opacity=".35"/>                        </g></svg></a>
 <nav class="site-nav" aria-label="Catalogue">
 <a href="/editor" aria-label="Editor" title="Editor"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span>Editor</span></a>
 <a href="/publish" aria-label="Publish" title="Publish"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg><span>Publish</span></a>
@@ -2544,9 +2504,10 @@ a:hover { text-decoration-thickness: 2px; }
 }
 .band-top {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.6rem 1rem;
 }
 .banner-home {
   display: inline-flex;
@@ -2978,13 +2939,12 @@ details.run-prompt summary .run-where { color: var(--surface-ink); }
 details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
 /* Under 520 px the header's four links show their icon alone, so the row
- * fits a 320 px screen: the label leaves the layout but stays in the
- * accessibility tree through the link's aria-label and title, and each
- * link is a 44 px square target (the 639 block below adds the height).
- * The threshold leaves room for the banner at its phone scale (58 mono
- * columns, about 114 px): the four labelled links need 354 px beside it,
- * so between 480 and 519 px the labels would push Source past the edge
- * and the band's overflow would cut it off. */
+ * stays one line on a small screen: the label leaves the layout but stays
+ * in the accessibility tree through the link's aria-label and title, and
+ * each link is a 44 px square target (the 639 block below adds the
+ * height). The banner is 253 px wide under 640 px (banner.css); the four
+ * labelled links need about 330 px beside it, so above 519 px the band-top
+ * wraps them onto a second row inside the band's height. */
 @media (max-width: 519px) {
   .site-nav { gap: 0.25rem; }
   .site-nav a { min-width: 44px; justify-content: center; }
@@ -3023,17 +2983,7 @@ details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 <div class="fondo" id="fondo" aria-hidden="true"></div>
 <div class="band">
 <div class="band-top">
-<a class="banner-home" href="/" aria-label="Canopy graphs, home"><pre class="look-banner-header" aria-hidden="true"><span>                                        █████             </span>
-<span>                                       ░░███              </span>
-<span>  ███████ ████████   ██████   ████████  ░███████    █████ </span>
-<span> ███░░███░░███░░███ ░░░░░███ ░░███░░███ ░███░░███  ███░░  </span>
-<span>░███ ░███ ░███ ░░░   ███████  ░███ ░███ ░███ ░███ ░░█████ </span>
-<span>░███ ░███ ░███      ███░░███  ░███ ░███ ░███ ░███  ░░░░███</span>
-<span>░░███████ █████    ░░████████ ░███████  ████ █████ ██████ </span>
-<span> ░░░░░███░░░░░      ░░░░░░░░  ░███░░░  ░░░░ ░░░░░ ░░░░░░  </span>
-<span> ███ ░███                     ░███                        </span>
-<span>░░██████                      █████                       </span>
-<span> ░░░░░░                      ░░░░░                        </span></pre></a>
+<a class="banner-home" href="/" aria-label="Canopy graphs, home"><svg viewBox="0 0 58 11" shape-rendering="crispEdges" class="look-banner-header look-banner-header-graphs" role="img" aria-label="Canopy graphs"><g class="look-banner-line" fill="#52fff6">                                        <rect x="40" y="0" width="5" height="1"/>             </g><g class="look-banner-line" fill="#52fff6">                                       <rect x="39" y="1" width="2" height="1" fill-opacity=".35"/><rect x="41" y="1" width="3" height="1"/>              </g><g class="look-banner-line" fill="#1ffff3">  <rect x="2" y="2" width="7" height="1"/> <rect x="10" y="2" width="8" height="1"/>   <rect x="21" y="2" width="6" height="1"/>   <rect x="30" y="2" width="8" height="1"/>  <rect x="40" y="2" width="1" height="1" fill-opacity=".35"/><rect x="41" y="2" width="7" height="1"/>    <rect x="52" y="2" width="5" height="1"/> </g><g class="look-banner-line" fill="#1ffff3"> <rect x="1" y="3" width="3" height="1"/><rect x="4" y="3" width="2" height="1" fill-opacity=".35"/><rect x="6" y="3" width="3" height="1"/><rect x="9" y="3" width="2" height="1" fill-opacity=".35"/><rect x="11" y="3" width="3" height="1"/><rect x="14" y="3" width="2" height="1" fill-opacity=".35"/><rect x="16" y="3" width="3" height="1"/> <rect x="20" y="3" width="5" height="1" fill-opacity=".35"/><rect x="25" y="3" width="3" height="1"/> <rect x="29" y="3" width="2" height="1" fill-opacity=".35"/><rect x="31" y="3" width="3" height="1"/><rect x="34" y="3" width="2" height="1" fill-opacity=".35"/><rect x="36" y="3" width="3" height="1"/> <rect x="40" y="3" width="1" height="1" fill-opacity=".35"/><rect x="41" y="3" width="3" height="1"/><rect x="44" y="3" width="2" height="1" fill-opacity=".35"/><rect x="46" y="3" width="3" height="1"/>  <rect x="51" y="3" width="3" height="1"/><rect x="54" y="3" width="2" height="1" fill-opacity=".35"/>  </g><g class="look-banner-line" fill="#1ffff3"><rect x="0" y="4" width="1" height="1" fill-opacity=".35"/><rect x="1" y="4" width="3" height="1"/> <rect x="5" y="4" width="1" height="1" fill-opacity=".35"/><rect x="6" y="4" width="3" height="1"/> <rect x="10" y="4" width="1" height="1" fill-opacity=".35"/><rect x="11" y="4" width="3" height="1"/> <rect x="15" y="4" width="3" height="1" fill-opacity=".35"/>   <rect x="21" y="4" width="7" height="1"/>  <rect x="30" y="4" width="1" height="1" fill-opacity=".35"/><rect x="31" y="4" width="3" height="1"/> <rect x="35" y="4" width="1" height="1" fill-opacity=".35"/><rect x="36" y="4" width="3" height="1"/> <rect x="40" y="4" width="1" height="1" fill-opacity=".35"/><rect x="41" y="4" width="3" height="1"/> <rect x="45" y="4" width="1" height="1" fill-opacity=".35"/><rect x="46" y="4" width="3" height="1"/> <rect x="50" y="4" width="2" height="1" fill-opacity=".35"/><rect x="52" y="4" width="5" height="1"/> </g><g class="look-banner-line" fill="#00e0d4"><rect x="0" y="5" width="1" height="1" fill-opacity=".35"/><rect x="1" y="5" width="3" height="1"/> <rect x="5" y="5" width="1" height="1" fill-opacity=".35"/><rect x="6" y="5" width="3" height="1"/> <rect x="10" y="5" width="1" height="1" fill-opacity=".35"/><rect x="11" y="5" width="3" height="1"/>      <rect x="20" y="5" width="3" height="1"/><rect x="23" y="5" width="2" height="1" fill-opacity=".35"/><rect x="25" y="5" width="3" height="1"/>  <rect x="30" y="5" width="1" height="1" fill-opacity=".35"/><rect x="31" y="5" width="3" height="1"/> <rect x="35" y="5" width="1" height="1" fill-opacity=".35"/><rect x="36" y="5" width="3" height="1"/> <rect x="40" y="5" width="1" height="1" fill-opacity=".35"/><rect x="41" y="5" width="3" height="1"/> <rect x="45" y="5" width="1" height="1" fill-opacity=".35"/><rect x="46" y="5" width="3" height="1"/>  <rect x="51" y="5" width="4" height="1" fill-opacity=".35"/><rect x="55" y="5" width="3" height="1"/></g><g class="look-banner-line" fill="#00e0d4"><rect x="0" y="6" width="2" height="1" fill-opacity=".35"/><rect x="2" y="6" width="7" height="1"/> <rect x="10" y="6" width="5" height="1"/>    <rect x="19" y="6" width="2" height="1" fill-opacity=".35"/><rect x="21" y="6" width="8" height="1"/> <rect x="30" y="6" width="1" height="1" fill-opacity=".35"/><rect x="31" y="6" width="7" height="1"/>  <rect x="40" y="6" width="4" height="1"/> <rect x="45" y="6" width="5" height="1"/> <rect x="51" y="6" width="6" height="1"/> </g><g class="look-banner-line" fill="#00a9a0"> <rect x="1" y="7" width="5" height="1" fill-opacity=".35"/><rect x="6" y="7" width="3" height="1"/><rect x="9" y="7" width="5" height="1" fill-opacity=".35"/>      <rect x="20" y="7" width="8" height="1" fill-opacity=".35"/>  <rect x="30" y="7" width="1" height="1" fill-opacity=".35"/><rect x="31" y="7" width="3" height="1"/><rect x="34" y="7" width="3" height="1" fill-opacity=".35"/>  <rect x="39" y="7" width="4" height="1" fill-opacity=".35"/> <rect x="44" y="7" width="5" height="1" fill-opacity=".35"/> <rect x="50" y="7" width="6" height="1" fill-opacity=".35"/>  </g><g class="look-banner-line" fill="#00a9a0"> <rect x="1" y="8" width="3" height="1"/> <rect x="5" y="8" width="1" height="1" fill-opacity=".35"/><rect x="6" y="8" width="3" height="1"/>                     <rect x="30" y="8" width="1" height="1" fill-opacity=".35"/><rect x="31" y="8" width="3" height="1"/>                        </g><g class="look-banner-line" fill="#00a9a0"><rect x="0" y="9" width="2" height="1" fill-opacity=".35"/><rect x="2" y="9" width="6" height="1"/>                      <rect x="30" y="9" width="5" height="1"/>                       </g><g class="look-banner-line" fill="#006661"> <rect x="1" y="10" width="6" height="1" fill-opacity=".35"/>                      <rect x="29" y="10" width="5" height="1" fill-opacity=".35"/>                        </g></svg></a>
 <nav class="site-nav" aria-label="Catalogue">
 <a href="/editor" aria-label="Editor" title="Editor"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span>Editor</span></a>
 <a href="/publish" aria-label="Publish" title="Publish"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg><span>Publish</span></a>
@@ -3152,9 +3102,10 @@ a:hover { text-decoration-thickness: 2px; }
 }
 .band-top {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.6rem 1rem;
 }
 .banner-home {
   display: inline-flex;
@@ -3586,13 +3537,12 @@ details.run-prompt summary .run-where { color: var(--surface-ink); }
 details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
 /* Under 520 px the header's four links show their icon alone, so the row
- * fits a 320 px screen: the label leaves the layout but stays in the
- * accessibility tree through the link's aria-label and title, and each
- * link is a 44 px square target (the 639 block below adds the height).
- * The threshold leaves room for the banner at its phone scale (58 mono
- * columns, about 114 px): the four labelled links need 354 px beside it,
- * so between 480 and 519 px the labels would push Source past the edge
- * and the band's overflow would cut it off. */
+ * stays one line on a small screen: the label leaves the layout but stays
+ * in the accessibility tree through the link's aria-label and title, and
+ * each link is a 44 px square target (the 639 block below adds the
+ * height). The banner is 253 px wide under 640 px (banner.css); the four
+ * labelled links need about 330 px beside it, so above 519 px the band-top
+ * wraps them onto a second row inside the band's height. */
 @media (max-width: 519px) {
   .site-nav { gap: 0.25rem; }
   .site-nav a { min-width: 44px; justify-content: center; }
@@ -3631,17 +3581,7 @@ details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 <div class="fondo" id="fondo" aria-hidden="true"></div>
 <div class="band">
 <div class="band-top">
-<a class="banner-home" href="/" aria-label="Canopy graphs, home"><pre class="look-banner-header" aria-hidden="true"><span>                                        █████             </span>
-<span>                                       ░░███              </span>
-<span>  ███████ ████████   ██████   ████████  ░███████    █████ </span>
-<span> ███░░███░░███░░███ ░░░░░███ ░░███░░███ ░███░░███  ███░░  </span>
-<span>░███ ░███ ░███ ░░░   ███████  ░███ ░███ ░███ ░███ ░░█████ </span>
-<span>░███ ░███ ░███      ███░░███  ░███ ░███ ░███ ░███  ░░░░███</span>
-<span>░░███████ █████    ░░████████ ░███████  ████ █████ ██████ </span>
-<span> ░░░░░███░░░░░      ░░░░░░░░  ░███░░░  ░░░░ ░░░░░ ░░░░░░  </span>
-<span> ███ ░███                     ░███                        </span>
-<span>░░██████                      █████                       </span>
-<span> ░░░░░░                      ░░░░░                        </span></pre></a>
+<a class="banner-home" href="/" aria-label="Canopy graphs, home"><svg viewBox="0 0 58 11" shape-rendering="crispEdges" class="look-banner-header look-banner-header-graphs" role="img" aria-label="Canopy graphs"><g class="look-banner-line" fill="#52fff6">                                        <rect x="40" y="0" width="5" height="1"/>             </g><g class="look-banner-line" fill="#52fff6">                                       <rect x="39" y="1" width="2" height="1" fill-opacity=".35"/><rect x="41" y="1" width="3" height="1"/>              </g><g class="look-banner-line" fill="#1ffff3">  <rect x="2" y="2" width="7" height="1"/> <rect x="10" y="2" width="8" height="1"/>   <rect x="21" y="2" width="6" height="1"/>   <rect x="30" y="2" width="8" height="1"/>  <rect x="40" y="2" width="1" height="1" fill-opacity=".35"/><rect x="41" y="2" width="7" height="1"/>    <rect x="52" y="2" width="5" height="1"/> </g><g class="look-banner-line" fill="#1ffff3"> <rect x="1" y="3" width="3" height="1"/><rect x="4" y="3" width="2" height="1" fill-opacity=".35"/><rect x="6" y="3" width="3" height="1"/><rect x="9" y="3" width="2" height="1" fill-opacity=".35"/><rect x="11" y="3" width="3" height="1"/><rect x="14" y="3" width="2" height="1" fill-opacity=".35"/><rect x="16" y="3" width="3" height="1"/> <rect x="20" y="3" width="5" height="1" fill-opacity=".35"/><rect x="25" y="3" width="3" height="1"/> <rect x="29" y="3" width="2" height="1" fill-opacity=".35"/><rect x="31" y="3" width="3" height="1"/><rect x="34" y="3" width="2" height="1" fill-opacity=".35"/><rect x="36" y="3" width="3" height="1"/> <rect x="40" y="3" width="1" height="1" fill-opacity=".35"/><rect x="41" y="3" width="3" height="1"/><rect x="44" y="3" width="2" height="1" fill-opacity=".35"/><rect x="46" y="3" width="3" height="1"/>  <rect x="51" y="3" width="3" height="1"/><rect x="54" y="3" width="2" height="1" fill-opacity=".35"/>  </g><g class="look-banner-line" fill="#1ffff3"><rect x="0" y="4" width="1" height="1" fill-opacity=".35"/><rect x="1" y="4" width="3" height="1"/> <rect x="5" y="4" width="1" height="1" fill-opacity=".35"/><rect x="6" y="4" width="3" height="1"/> <rect x="10" y="4" width="1" height="1" fill-opacity=".35"/><rect x="11" y="4" width="3" height="1"/> <rect x="15" y="4" width="3" height="1" fill-opacity=".35"/>   <rect x="21" y="4" width="7" height="1"/>  <rect x="30" y="4" width="1" height="1" fill-opacity=".35"/><rect x="31" y="4" width="3" height="1"/> <rect x="35" y="4" width="1" height="1" fill-opacity=".35"/><rect x="36" y="4" width="3" height="1"/> <rect x="40" y="4" width="1" height="1" fill-opacity=".35"/><rect x="41" y="4" width="3" height="1"/> <rect x="45" y="4" width="1" height="1" fill-opacity=".35"/><rect x="46" y="4" width="3" height="1"/> <rect x="50" y="4" width="2" height="1" fill-opacity=".35"/><rect x="52" y="4" width="5" height="1"/> </g><g class="look-banner-line" fill="#00e0d4"><rect x="0" y="5" width="1" height="1" fill-opacity=".35"/><rect x="1" y="5" width="3" height="1"/> <rect x="5" y="5" width="1" height="1" fill-opacity=".35"/><rect x="6" y="5" width="3" height="1"/> <rect x="10" y="5" width="1" height="1" fill-opacity=".35"/><rect x="11" y="5" width="3" height="1"/>      <rect x="20" y="5" width="3" height="1"/><rect x="23" y="5" width="2" height="1" fill-opacity=".35"/><rect x="25" y="5" width="3" height="1"/>  <rect x="30" y="5" width="1" height="1" fill-opacity=".35"/><rect x="31" y="5" width="3" height="1"/> <rect x="35" y="5" width="1" height="1" fill-opacity=".35"/><rect x="36" y="5" width="3" height="1"/> <rect x="40" y="5" width="1" height="1" fill-opacity=".35"/><rect x="41" y="5" width="3" height="1"/> <rect x="45" y="5" width="1" height="1" fill-opacity=".35"/><rect x="46" y="5" width="3" height="1"/>  <rect x="51" y="5" width="4" height="1" fill-opacity=".35"/><rect x="55" y="5" width="3" height="1"/></g><g class="look-banner-line" fill="#00e0d4"><rect x="0" y="6" width="2" height="1" fill-opacity=".35"/><rect x="2" y="6" width="7" height="1"/> <rect x="10" y="6" width="5" height="1"/>    <rect x="19" y="6" width="2" height="1" fill-opacity=".35"/><rect x="21" y="6" width="8" height="1"/> <rect x="30" y="6" width="1" height="1" fill-opacity=".35"/><rect x="31" y="6" width="7" height="1"/>  <rect x="40" y="6" width="4" height="1"/> <rect x="45" y="6" width="5" height="1"/> <rect x="51" y="6" width="6" height="1"/> </g><g class="look-banner-line" fill="#00a9a0"> <rect x="1" y="7" width="5" height="1" fill-opacity=".35"/><rect x="6" y="7" width="3" height="1"/><rect x="9" y="7" width="5" height="1" fill-opacity=".35"/>      <rect x="20" y="7" width="8" height="1" fill-opacity=".35"/>  <rect x="30" y="7" width="1" height="1" fill-opacity=".35"/><rect x="31" y="7" width="3" height="1"/><rect x="34" y="7" width="3" height="1" fill-opacity=".35"/>  <rect x="39" y="7" width="4" height="1" fill-opacity=".35"/> <rect x="44" y="7" width="5" height="1" fill-opacity=".35"/> <rect x="50" y="7" width="6" height="1" fill-opacity=".35"/>  </g><g class="look-banner-line" fill="#00a9a0"> <rect x="1" y="8" width="3" height="1"/> <rect x="5" y="8" width="1" height="1" fill-opacity=".35"/><rect x="6" y="8" width="3" height="1"/>                     <rect x="30" y="8" width="1" height="1" fill-opacity=".35"/><rect x="31" y="8" width="3" height="1"/>                        </g><g class="look-banner-line" fill="#00a9a0"><rect x="0" y="9" width="2" height="1" fill-opacity=".35"/><rect x="2" y="9" width="6" height="1"/>                      <rect x="30" y="9" width="5" height="1"/>                       </g><g class="look-banner-line" fill="#006661"> <rect x="1" y="10" width="6" height="1" fill-opacity=".35"/>                      <rect x="29" y="10" width="5" height="1" fill-opacity=".35"/>                        </g></svg></a>
 <nav class="site-nav" aria-label="Catalogue">
 <a href="/editor" aria-label="Editor" title="Editor"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span>Editor</span></a>
 <a href="/publish" aria-label="Publish" title="Publish"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg><span>Publish</span></a>

@@ -1,8 +1,9 @@
-/* The house banner's dress: centred art over the app word. The art
- * keeps its figlet columns at any width (`white-space: pre`, never
- * wrapped), and `font-size` shrinks it to fit 390 px without a sideways
- * scroll. The visually hidden "Canopy" follows the catalogue's `.sr-only`
- * pattern, owned here because the remote has no such class. */
+/* The house banner's dress: centred art over the app word. The art is an
+ * SVG on a fixed cell grid (banner.ts), never text: no font advances, no
+ * line box, so the rows meet with no gaps and the columns keep their
+ * alignment at any size. The visually hidden "Canopy" follows the
+ * catalogue's `.sr-only` pattern, owned here because the remote has no
+ * such class. */
 
 .look-banner {
   display: flex;
@@ -13,11 +14,10 @@
 }
 
 .look-banner-art {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: min(14px, calc((100vw - 32px) / 36));
-  line-height: 1;
-  white-space: pre;
+  display: block;
+  width: 600px;
+  max-width: 100%;
+  height: auto;
 }
 
 .look-banner-app {
@@ -25,6 +25,7 @@
   font-family: var(--font-mono);
   font-weight: 700;
   letter-spacing: 0.08em;
+  color: #52fff6;
 }
 
 .look-banner-vh {
@@ -39,44 +40,48 @@
   border: 0;
 }
 
-/* The header banner: the app's own art at the header's scale — eleven
- * lines at 4 px (about 40 px tall) on desktop, 2.8 px (about 28 px) on
- * a phone, and a smaller step under 360 px so the row never overflows.
- * Same art as the generator's, scaled by CSS only. */
+/* The header banner: the app's own art, square cells from its viewBox,
+ * about 80 px tall on desktop and 48 px on a phone. The widths are fixed
+ * so the eleven lines never stretch: 7.26 px per cell for graphs' 58
+ * columns, 7.27 px for the remote's 63, and 4.36 px under 640 px. They
+ * fit a 360 px phone beside the band's gutters (253/275 < 328); the
+ * remote puts the banner on its own row under 640 px. */
 .look-banner-header {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: 4px;
-  line-height: 1;
-  white-space: pre;
+  display: block;
+  height: auto;
+  max-width: 100%;
 }
 
-/* The eleven lines' ink, light at the top to dark at the bottom: one rule
- * per line, the five stops `bannerColor` picks in order —
- * [0,0,1,1,1,2,2,3,3,3,4] over BANNER_GRADIENT. The colours live here,
- * not in a style attribute, because the remote's CSP (`style-src 'self'`)
- * refuses inline styles and would paint the art a flat ink.
- * tests/look.test.ts holds these to BANNER_GRADIENT. */
-.look-banner-header span:nth-child(1) { color: #52fff6; }
-.look-banner-header span:nth-child(2) { color: #52fff6; }
-.look-banner-header span:nth-child(3) { color: #1ffff3; }
-.look-banner-header span:nth-child(4) { color: #1ffff3; }
-.look-banner-header span:nth-child(5) { color: #1ffff3; }
-.look-banner-header span:nth-child(6) { color: #00e0d4; }
-.look-banner-header span:nth-child(7) { color: #00e0d4; }
-.look-banner-header span:nth-child(8) { color: #00a9a0; }
-.look-banner-header span:nth-child(9) { color: #00a9a0; }
-.look-banner-header span:nth-child(10) { color: #00a9a0; }
-.look-banner-header span:nth-child(11) { color: #006661; }
+.look-banner-header-graphs {
+  width: 421px;
+}
 
+.look-banner-header-remote {
+  width: 458px;
+}
+
+/* The eleven lines' ink lives in `fill` attributes on the SVG groups
+ * (banner.ts); banner.css only sizes the art. No colours here, because
+ * the remote's CSP (`style-src 'self'`) refuses inline styles but allows
+ * presentation attributes, and the gradient must survive. */
+
+/* In the remote's topbar the banner takes its own row on a phone (275 px
+ * wide, below), so a long login wraps to the row below instead of pushing
+ * the connection state out of the header. */
 @media (max-width: 639px) {
-  .look-banner-header {
-    font-size: 2.8px;
+  .topbar .brand-home {
+    flex-basis: 100%;
   }
-}
 
-@media (max-width: 359px) {
-  .look-banner-header {
-    font-size: 2.2px;
+  .look-banner-art {
+    width: 360px;
+  }
+
+  .look-banner-header-graphs {
+    width: 253px;
+  }
+
+  .look-banner-header-remote {
+    width: 275px;
   }
 }

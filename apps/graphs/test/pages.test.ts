@@ -326,7 +326,9 @@ describe("the page shell", () => {
     // The header banner links home, and nothing in the header points at
     // the Canopy landing any more — that link lives in the colophon only.
     expect(html).toContain(`<a class="banner-home" href="/" aria-label="Canopy graphs, home">`);
-    expect(html).toContain(`<pre class="look-banner-header" aria-hidden="true">`);
+    expect(html).toContain(`class="look-banner-header look-banner-header-graphs"`);
+    expect(html).toContain(`viewBox="0 0 58 11"`);
+    expect(html).toContain(`role="img" aria-label="Canopy graphs"`);
     const header = html.slice(html.indexOf(`<header class="site-header">`), html.indexOf(`</header>`));
     expect(header).not.toContain("univerlab.org/canopy");
     expect(html).toContain(`<footer class="look-colophon">`);
