@@ -69,7 +69,7 @@ describe("sitemap.xml", () => {
     expect(response.headers.get("content-type")).toBe("application/xml; charset=utf-8");
     const body = await response.text();
     expect(body).toContain(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`);
-    for (const path of ["/", "/search", "/publish", "/patterns", "/llms.txt", "/g/hello-graph", "/n/hello-node"]) {
+    for (const path of ["/", "/search", "/publish", "/patterns", "/llms.txt", "/auth.md", "/g/hello-graph", "/n/hello-node"]) {
       expect(body).toContain(`<loc>https://graphs.univerlab.org${path}</loc>`);
     }
     expect(body).toContain("<lastmod>2026-10-27</lastmod>");
@@ -96,8 +96,8 @@ describe("sitemap.xml", () => {
       const body = await (await call("/sitemap.xml", kv)).text();
       // Patterns ride with the Worker, so they outlive the index; only the
       // catalogue documents come and go with it.
-      expect(body.match(/<loc>/g)).toHaveLength(5 + BUNDLED_PATTERNS.length);
-      for (const path of ["/", "/search", "/publish", "/patterns", "/llms.txt"]) {
+      expect(body.match(/<loc>/g)).toHaveLength(6 + BUNDLED_PATTERNS.length);
+      for (const path of ["/", "/search", "/publish", "/patterns", "/llms.txt", "/auth.md"]) {
         expect(body).toContain(`<loc>https://graphs.univerlab.org${path}</loc>`);
       }
       for (const bundled of BUNDLED_PATTERNS) {

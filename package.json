@@ -8,9 +8,10 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "npm run build:patterns && npm run build:look && npm run build:remote-web && npm run build:editor",
+    "build": "npm run build:patterns && npm run build:skills-index && npm run build:look && npm run build:remote-web && npm run build:editor",
     "build:look": "node scripts/build-look.mjs",
     "build:patterns": "tsx scripts/build-patterns.mjs",
+    "build:skills-index": "node scripts/build-skills-index.mjs",
     "build:remote-web": "vite build --config apps/remote/web/vite.config.ts",
     "build:editor": "node scripts/build-editor.mjs",
     "lint": "eslint .",

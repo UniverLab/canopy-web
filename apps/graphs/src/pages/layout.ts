@@ -40,6 +40,7 @@ import { renderColophon } from "../../../../packages/look/colophon/footer.js";
 import { iconSvg } from "../../../../packages/look/icon-svg.js";
 import { escapeHtml } from "./md.js";
 import { copyScript, fondoHost, fondoScript, lookCss, lookLinks } from "./look.js";
+import { webmcpScript } from "./webmcp.js";
 
 /** What one route renders: HTML for browsers, markdown for agents. */
 export interface Page {
@@ -163,6 +164,9 @@ function htmlDocument(page: Page): string {
     `</script>`,
     `<script>`,
     copyScript(),
+    `</script>`,
+    `<script>`,
+    webmcpScript(),
     `</script>`,
     ...(page.scripts ?? []).map((src) => `<script src="${src}" defer></script>`),
     `</body>`,

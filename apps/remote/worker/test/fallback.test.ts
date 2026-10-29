@@ -77,11 +77,8 @@ describe("the SPA fallback", () => {
 describe("honest 404s", () => {
   it.each([
     "/.well-known",
-    "/.well-known/api-catalog",
     "/.well-known/other",
-    "/llms.txt",
     "/llms.txt/",
-    "/sitemap.xml",
     "/sitemap.xml/",
   ])(
     "answers %s with a 404, never the SPA",

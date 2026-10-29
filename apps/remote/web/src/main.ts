@@ -27,6 +27,7 @@ import type { HostRecord } from "./store.js";
 import { consumePairFragment } from "./ui.js";
 import type { PairSubmit } from "./ui.js";
 import "./styles.css";
+import "./webmcp.js";
 
 async function ensureDeviceKey(): Promise<DeviceKey> {
   const existing = await loadDeviceKey();

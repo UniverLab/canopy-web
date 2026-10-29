@@ -3,9 +3,10 @@ import { defineConfig } from "@playwright/test";
 
 // Serves the built web app from the Workers runtime (`wrangler dev` with the
 // production wrangler.toml, assets binding included) and asserts the join:
-// assets on `/`, SPA fallback on `/pair`, Worker-only answers on `/auth/*`,
-// and the shared security headers. Kept next to playwright.config.ts, which
-// it mirrors; run via `npm run test:remote-serve`.
+// the Worker on `/` (Link header, markdown negotiation), SPA fallback on
+// `/pair`, Worker-only answers on `/auth/*`, and the shared security
+// headers. Kept next to playwright.config.ts, which it mirrors; run via
+// `npm run test:remote-serve`.
 export default defineConfig({
   testDir: "./test",
   testMatch: "serve.spec.ts",

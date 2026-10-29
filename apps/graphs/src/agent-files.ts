@@ -9,10 +9,12 @@
  *   GET /api/openapi.json            OpenAPI 3.1 description of the JSON API
  *
  * `answer()` in index.ts checks this module first, before `/api`: the
- * OpenAPI document never reaches the API router. Every other
- * `/.well-known/*` path falls through to the install redirector's 404.
- * Like the pages and the API, everything reads the scheduled index in
- * KV (store.ts) and never calls GitHub.
+ * OpenAPI document never reaches the API router. The discovery files
+ * that name what an agent can use (the ARD manifest, the skills index,
+ * auth.md) live in agent-discovery.ts, checked right after this module;
+ * every other `/.well-known/*` path falls through to the install
+ * redirector's 404. Like the pages and the API, everything reads the
+ * scheduled index in KV (store.ts) and never calls GitHub.
  *
  * This module is deliberately not `discovery.ts`: that name already holds
  * per-repository document discovery (the git-trees walk the indexer runs).
@@ -52,11 +54,12 @@ export const ROBOTS_BODY = [
   "# Training is not granted: the documents are authored by third parties on GitHub.",
   "Content-Signal: search=yes, ai-input=yes, ai-train=no",
   "Sitemap: https://graphs.univerlab.org/sitemap.xml",
+  "Agentmap: https://graphs.univerlab.org/.well-known/ai-catalog.json",
   "",
 ].join("\n");
 
 /** The fixed sitemap entries: present even with an empty or missing index. */
-const SITEMAP_FIXED_PATHS = ["/", "/search", "/publish", "/patterns", "/llms.txt"];
+const SITEMAP_FIXED_PATHS = ["/", "/search", "/publish", "/patterns", "/llms.txt", "/auth.md"];
 
 /** The catalogue origin, for absolute sitemap URLs and linkset hrefs. */
 function origin(): string {
@@ -74,11 +77,11 @@ function escapeXml(text: string): string {
 }
 
 /**
- * The sitemap: the five fixed URLs plus the page URL of every graph, node
+ * The sitemap: the six fixed URLs plus the page URL of every graph, node
  * and pattern in the indexes, each with `lastmod` when the index entry
  * carries an `updated` date. It reads the indexes the pages already read
  * and makes no GitHub call; an empty or missing index still lists the
- * fixed five.
+ * fixed six.
  */
 async function sitemapBody(env: AgentEnv): Promise<string> {
   const urls: Array<{ loc: string; lastmod: string | null }> = SITEMAP_FIXED_PATHS.map((path) => ({

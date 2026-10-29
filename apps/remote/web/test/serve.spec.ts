@@ -22,8 +22,22 @@ test("serves the app on / with the shared security headers", async ({
     expect(header, `missing header ${name}`).toBeTruthy();
     expect(header).toContain(value);
   }
+  // The Worker serves /, not the asset alone: the agent Link header rides
+  // on the document the scanner reads.
+  const link = response?.headers()["link"] ?? "";
+  expect(link).toContain('</llms.txt>; rel="describedby"');
+  expect(link).toContain('</.well-known/api-catalog>; rel="api-catalog"');
   await expect(page.locator("#app")).toBeAttached();
   await expect(page).toHaveTitle("Canopy remote");
+});
+
+test("answers / with markdown when asked", async ({ request }) => {
+  const response = await request.get("/", { headers: { accept: "text/markdown" } });
+  expect(response.status()).toBe(200);
+  expect(response.headers()["content-type"]).toContain("text/markdown");
+  const body = await response.text();
+  expect(body).toContain("Canopy remote");
+  expect(body).toContain("end to end");
 });
 
 test("falls back to the app on /pair", async ({ page }) => {
@@ -53,10 +67,30 @@ test("serves robots.txt as static text that keeps crawlers out", async ({
   expect(body).toContain("Content-Signal: search=no, ai-input=no, ai-train=no");
 });
 
-test("answers agent probes with 404 JSON, never the SPA", async ({
+test("serves the discovery files with their content types", async ({
   request,
 }) => {
-  for (const path of ["/llms.txt", "/llms.txt/", "/sitemap.xml", "/sitemap.xml/", "/.well-known/api-catalog"]) {
+  const files: Array<[string, string]> = [
+    ["/llms.txt", "text/plain"],
+    ["/sitemap.xml", "application/xml"],
+    ["/.well-known/api-catalog", "application/linkset+json"],
+    ["/.well-known/ai-catalog.json", "application/json"],
+    ["/.well-known/agent-skills/index.json", "application/json"],
+    ["/.well-known/agent-skills/canopy-remote/SKILL.md", "text/markdown"],
+  ];
+  for (const [path, contentType] of files) {
+    const response = await request.get(path);
+    expect(response.status(), path).toBe(200);
+    expect(response.headers()["content-type"], path).toContain(contentType);
+  }
+  const sitemap = await (await request.get("/sitemap.xml")).text();
+  expect(sitemap).toContain("<loc>https://remote.univerlab.org/</loc>");
+});
+
+test("answers unknown probes with 404 JSON, never the SPA", async ({
+  request,
+}) => {
+  for (const path of ["/llms.txt/", "/sitemap.xml/", "/.well-known/other"]) {
     const response = await request.get(path);
     expect(response.status(), path).toBe(404);
     expect(response.headers()["content-type"], path).toContain("application/json");

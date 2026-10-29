@@ -16,10 +16,13 @@ same GitHub account, and forward opaque signaling messages between them.
 | `GET /ws/host` | upgrades a host socket into the user's room (GitHub token + id + label) |
 | `GET /turn` | `{iceServers}`: Cloudflare TURN credentials plus STUN |
 
-Anything else is the SPA fallback: extensionless paths serve the app's
-`index.html`, while agent probes and file paths no built asset holds answer
-`404` (see Static assets below); a defined path with the wrong method
-answers `405`. Every response carries the relay's security headers
+Anything else is the discovery files or the SPA fallback: `/llms.txt`,
+`/sitemap.xml` and the well-known catalogue, ARD manifest and skills are
+static documents (see Static assets below), extensionless paths serve the
+app's `index.html` — or the markdown service summary when asked — while
+unknown well-known probes and file paths no built asset holds answer `404`;
+a defined path with the wrong method answers `405`. Every response carries
+the relay's security headers
 (CSP, `Referrer-Policy: no-referrer`, `X-Content-Type-Options: nosniff`).
 
 One Durable Object (`UserRoom`) per GitHub user id forwards envelopes
@@ -71,11 +74,16 @@ globals.
 The Worker serves the built browser app (`apps/remote/web/dist`) through the
 `[assets]` binding in `wrangler.toml`: `/` and any extensionless path serve
 the app (the Worker fetches `index.html` through the `ASSETS` binding, so
-`/pair` keeps working), while agent probes (`/.well-known/*`, `/llms.txt`,
-`/sitemap.xml`) and file paths no built asset holds answer `404`. `/auth/*`,
-`/ws/*`, `/turn` and `/.well-known/*` always reach the Worker code
-(`run_worker_first`). Responses built by the Worker get the security headers
-from `src/protocol.ts`; asset responses get the identical headers from the
+`/pair` keeps working, with the agent Link header on the document), while
+unknown well-known probes and file paths no built asset holds answer `404`.
+`/`, `/auth/*`, `/ws/*`, `/turn` and `/.well-known/*` always reach the
+Worker code (`run_worker_first`) — `/` rides with the Worker so the document
+carries the Link header and answers markdown when asked. The discovery files
+(`/llms.txt`, `/sitemap.xml`, the API catalogue, the ARD manifest, the Agent
+Skills index and the skills) are static documents the Worker embeds; there is
+no MCP card (canopy mcp is a local stdio server, and a card needs a remote
+URL). Responses built by the Worker get the security headers from
+`src/protocol.ts`; asset responses get the identical headers from the
 `_headers` file in `apps/remote/web/public/`, which the deploy workflow keeps
 in sync by running `npm run build:remote-web` before `wrangler deploy`.
 

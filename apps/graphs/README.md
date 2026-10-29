@@ -164,13 +164,23 @@ discovery dialect as univerlab.org (same robots wording, same `Link` shape):
 | Route | Answer |
 |---|---|
 | `GET /robots.txt` | crawl the catalogue, skip `/i/`; `Content-Signal` grants search and input, not training (third parties authored the documents) |
-| `GET /sitemap.xml` | `/`, `/search`, `/publish`, `/llms.txt` plus every indexed document's page, from the scheduled index — never GitHub |
+| `GET /sitemap.xml` | `/`, `/search`, `/publish`, `/patterns`, `/llms.txt`, `/auth.md` plus every indexed document's page, from the scheduled index — never GitHub |
 | `GET /.well-known/api-catalog` | RFC 9727 linkset: the OpenAPI description, the Publish docs, the index status |
+| `GET /.well-known/ai-catalog.json` | ARD manifest: the catalogue, the skills index, `llms.txt`, the OpenAPI description |
+| `GET /.well-known/agent-skills/index.json` | the `canopy-graph-design` skill, with its URL and digest |
+| `GET /auth.md` | reads need nothing; publishing and reporting ride on a GitHub account, never a catalogue credential |
 
 Every HTML page carries
 `Link: </llms.txt>; rel="describedby"; type="text/plain", </.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json"`,
-and every other `/.well-known/*` path answers `404`. The four files live in
-`src/agent-files.ts`, checked before the API router.
+registers the `search_catalogue`, `get_graph` and `get_node` WebMCP tools,
+and every other `/.well-known/*` path answers `404`. The files live in
+`src/agent-files.ts` and `src/agent-discovery.ts`, checked before the API
+router. There is no MCP card: canopy mcp is a local stdio server, and a
+card needs a remote URL. `npm run build:skills-index` validates every skill
+in `skills/` (vendored from the skills repo) with the discovery rules and
+regenerates the committed `src/skills-data.generated.ts`;
+`tests/skills-build.test.ts` fails when the module is stale, so editing a
+skill without rebuilding is caught.
 
 ## Drafts (share without a repository)
 

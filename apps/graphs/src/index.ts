@@ -42,6 +42,7 @@ import {
   parseTarget,
 } from "./lib.js";
 import { handleAgentFiles, NOT_AGENT_FILE } from "./agent-files.js";
+import { handleDiscoveryFiles, NOT_DISCOVERY } from "./agent-discovery.js";
 import { handleApi, type ApiEnv } from "./api.js";
 import { handlePage, NOT_PAGE } from "./pages/routes.js";
 import { createGitHub, type CacheLike } from "./github.js";
@@ -186,6 +187,10 @@ async function answer(req: Request, env: Env, deps: WorkerDeps): Promise<Respons
   const agentFile = await handleAgentFiles(req, env);
   if (agentFile !== NOT_AGENT_FILE) {
     return agentFile;
+  }
+  const discoveryFile = handleDiscoveryFiles(req);
+  if (discoveryFile !== NOT_DISCOVERY) {
+    return discoveryFile;
   }
   if (url.pathname.startsWith("/api")) {
     const result = await handleApi(req, env, apiDeps);

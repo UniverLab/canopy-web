@@ -18,15 +18,20 @@ routes = [{ pattern = "remote.univerlab.org/*", zone_name = "univerlab.org" }]
 # so the page and its WebSocket share remote.univerlab.org. Paths matching
 # `run_worker_first` always reach the Worker code first; everything else
 # tries the assets first and an asset miss falls through to the Worker,
-# which serves index.html for extensionless navigation (the SPA fallback)
-# and answers 404 for agent probes (/.well-known/*, /llms.txt,
-# /sitemap.xml) and for file paths no built asset holds. There is
-# deliberately no `not_found_handling`: the fallback lives in the Worker
-# so unknown files 404 honestly instead of claiming to exist with 200 HTML.
+# which serves the agent discovery files (/llms.txt, /sitemap.xml, the
+# well-known catalogue, ARD manifest and skills), serves index.html for
+# extensionless navigation (the SPA fallback, or the markdown summary when
+# asked) and answers 404 for unknown well-known probes and for file paths
+# no built asset holds. There is deliberately no `not_found_handling`: the
+# fallback lives in the Worker so unknown files 404 honestly instead of
+# claiming to exist with 200 HTML.
 [assets]
 directory = "../web/dist"
 binding = "ASSETS"
-run_worker_first = ["/auth/*", "/ws/*", "/turn", "/.well-known/*"]
+# "/" rides with the Worker even though an asset holds it: the document the
+# scanner reads must carry the agent Link header and answer markdown when
+# asked, and only the Worker adds either. The bytes stay the asset's.
+run_worker_first = ["/", "/auth/*", "/ws/*", "/turn", "/.well-known/*"]
 
 # One room per GitHub user id. The room uses the WebSocket hibernation API
 # with per-socket attachments only — it never touches the storage API.
