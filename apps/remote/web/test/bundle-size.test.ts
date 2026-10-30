@@ -13,6 +13,11 @@
  * stylesheet rather than an inline `<style>`. The main bundle must not
  * grow for the editor.
  *
+ * The guest app rides its own lazy chunk behind `/g/`, partitioned out by
+ * its IndexedDB name ("canopy-remote-guests") and weighed against its own
+ * 6 KB budget; it shares the main stylesheet, so CSS needs no partition.
+ * The main bundle must not grow for the guest either.
+ *
  * The build goes to a temporary directory, never over apps/remote/web/dist.
  */
 import { gzipSync } from "node:zlib";
@@ -45,6 +50,8 @@ const FEATURE_BUDGET = 1_024;
  * headroom made any implementation of the spec impossible.
  */
 const METRICS_BUDGET = 4_096;
+/** The budget the lazy guest chunk is allowed, gzip bytes of JS. */
+const GUEST_BUDGET = 6_144;
 /** The budget the lazy editor chunk is allowed, gzip bytes of JS. */
 const EDITOR_BUDGET = 30_000;
 /** The budget the editor's own stylesheet is allowed, gzip bytes of CSS. */
@@ -53,6 +60,8 @@ const EDITOR_CSS_BUDGET = 4_000;
 const EDITOR_MARKER = "spec is not connected";
 /** The one class only the editor's stylesheet carries. */
 const EDITOR_CSS_MARKER = ".remote-editor";
+/** The one string only the guest chunk ships. */
+const GUEST_MARKER = "canopy-remote-guests";
 
 function filesOf(dir: string, extension: string): string[] {
   const names = readdirSync(dir, { recursive: true }) as string[];
@@ -96,6 +105,19 @@ describe("the remote's bundle", () => {
     for (const name of editorFiles) {
       editorJs += gzipSync(readFileSync(path.join(assets, name))).length;
     }
+    // The guest chunk split: exactly the files carrying the marker.
+    const guestFiles = filesOf(assets, ".js").filter((name) =>
+      readFileSync(path.join(assets, name), "utf8").includes(GUEST_MARKER),
+    );
+    expect(guestFiles.length, "the guest must ride its own lazy chunk").toBeGreaterThan(0);
+    expect(
+      guestFiles.filter((name) => editorFiles.includes(name)),
+      "the guest must not share the editor chunk",
+    ).toEqual([]);
+    let guestJs = 0;
+    for (const name of guestFiles) {
+      guestJs += gzipSync(readFileSync(path.join(assets, name))).length;
+    }
     const js = gzipOf(assets, ".js");
     const css = gzipOf(assets, ".css");
     // The editor's stylesheet is its own asset, linked when its chunk loads
@@ -109,13 +131,23 @@ describe("the remote's bundle", () => {
     for (const name of editorCssFiles) {
       editorCss += gzipSync(readFileSync(path.join(assets, name))).length;
     }
-    const main = js - editorJs + css - editorCss;
+    const main = js - editorJs - guestJs + css - editorCss;
     rmSync(OUT, { recursive: true, force: true });
-    const report = { baseline: BASELINE, js, editorJs, css, editorCss, main, added: main - BASELINE };
+    const report = {
+      baseline: BASELINE,
+      js,
+      editorJs,
+      guestJs,
+      css,
+      editorCss,
+      main,
+      added: main - BASELINE,
+    };
     // Keep the numbers in the failure message: a regression says by how much.
     expect(main, JSON.stringify(report)).toBeLessThanOrEqual(
       BASELINE + BUDGET + FEATURE_BUDGET + METRICS_BUDGET,
     );
+    expect(guestJs, JSON.stringify(report)).toBeLessThanOrEqual(GUEST_BUDGET);
     expect(editorJs, JSON.stringify(report)).toBeLessThanOrEqual(EDITOR_BUDGET);
     expect(editorCss, JSON.stringify(report)).toBeLessThanOrEqual(EDITOR_CSS_BUDGET);
     // The app still ships the icons inline: no sprite chunk, no font request.

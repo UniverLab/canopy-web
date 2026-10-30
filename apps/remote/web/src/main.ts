@@ -57,6 +57,13 @@ async function main(): Promise<void> {
   if (fondo) {
     mountCanopyBackground(fondo, "/look/fondo/assets/");
   }
+  // A guest link rides its own chunk with the owner's honeycomb behind it:
+  // no pairing, no host picker — the link names the room and the host.
+  if (globalThis.location?.pathname.startsWith("/g/") === true) {
+    const { mountGuest } = await import("./guest.js");
+    await mountGuest(root);
+    return;
+  }
   const prefill = consumePairFragment();
   const login = await fetchLogin();
 

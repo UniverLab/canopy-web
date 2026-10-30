@@ -32,7 +32,7 @@ interface Harness {
   hostSend: (frame: unknown) => void;
 }
 
-function setup(): Harness {
+function setup(onForbidden?: (id: string | null) => void): Harness {
   const channel = new FakeDataChannel("canopy-session-v1", { ordered: true });
   const store = new SessionStore();
   const catalog = new CatalogStore();
@@ -83,7 +83,7 @@ function setup(): Harness {
     }),
     onExited: (_id, code) => shell.showSessionExited(code),
   });
-  const router = createFrameRouter({ store, controller, shell, catalog });
+  const router = createFrameRouter({ store, controller, shell, catalog, onForbidden });
   const frames = createChannelHandler({
     onSnapshot: router.handleSnapshot,
     onFrame: router.handleFrame,
@@ -156,6 +156,26 @@ describe("createFrameRouter", () => {
     expect(h.sheetErrors).toEqual([
       { message: "host is gone", req: "r10", code: "delivery_failed" },
     ]);
+  });
+
+  it("routes a denied guest attach to onForbidden, past the composer", () => {
+    const denied: (string | null)[] = [];
+    const h = setup((id) => denied.push(id));
+    h.hostSend({ t: "error", code: "forbidden", id: "s9" });
+    expect(denied).toEqual(["s9"]);
+    expect(h.errors).toEqual([]);
+    expect(h.sheetErrors).toEqual([]);
+  });
+
+  it("falls a forbidden frame through to the generic error without a guest handler", () => {
+    const h = setup();
+    // With a message the owner flow sees a plain error, as before.
+    h.hostSend({ t: "error", code: "forbidden", id: "s9", message: "no grant" });
+    expect(h.errors).toEqual([{ message: "no grant", req: null }]);
+    // Without one the frame parses to nothing and lands nowhere.
+    h.hostSend({ t: "error", code: "forbidden", id: "s9" });
+    expect(h.errors).toHaveLength(1);
+    expect(h.sheetErrors).toHaveLength(1);
   });
 
   it("caches the catalog and routes spawned and composed to the shell", () => {

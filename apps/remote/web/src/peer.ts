@@ -23,6 +23,9 @@ export function connectFailMessage(reason: string): string {
   if (reason === "busy") {
     return "Too many devices connected";
   }
+  if (reason === "forbidden") {
+    return "This host is not shared with you";
+  }
   return `Connection failed (${reason})`;
 }
 
@@ -58,7 +61,9 @@ function asAnswer(body: unknown): AnswerBody | null {
   return { sdp: row.sdp, sig: row.sig };
 }
 
-function asIceCandidate(body: unknown): RTCIceCandidateInit | null {
+// Shared with the guest peer: the trickle, refuse and farewell bodies are
+// identical for both roles; only the offer and the answer differ.
+export function asIceCandidate(body: unknown): RTCIceCandidateInit | null {
   if (typeof body !== "object" || body === null) {
     return null;
   }
@@ -77,7 +82,7 @@ function asIceCandidate(body: unknown): RTCIceCandidateInit | null {
   };
 }
 
-function asConnectFail(body: unknown): string | null {
+export function asConnectFail(body: unknown): string | null {
   if (typeof body !== "object" || body === null) {
     return null;
   }
@@ -88,7 +93,7 @@ function asConnectFail(body: unknown): string | null {
   return row.reason;
 }
 
-function isBye(body: unknown): boolean {
+export function isBye(body: unknown): boolean {
   return (
     typeof body === "object" &&
     body !== null &&
@@ -96,7 +101,7 @@ function isBye(body: unknown): boolean {
   );
 }
 
-async function loadIceServers(fetchTurn: TurnFetcher): Promise<RTCIceServer[]> {
+export async function loadIceServers(fetchTurn: TurnFetcher): Promise<RTCIceServer[]> {
   const res = await fetchTurn("/turn");
   if (!res.ok) {
     throw new Error("Could not load TURN credentials");

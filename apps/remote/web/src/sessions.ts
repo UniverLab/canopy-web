@@ -96,7 +96,8 @@ function esc(text: string): string {
 
 // nowMs is injected so tests pin the relative times. The shelf argument
 // is optional: without it (or without hello.features "shelf") the list
-// carries no file affordance at all.
+// carries no file affordance at all. The guest list is the same rows with
+// no New button: a guest joins what the owner granted, never spawns.
 export function renderSessions(
   root: HTMLElement,
   items: SessionItem[],
@@ -104,6 +105,7 @@ export function renderSessions(
   callbacks: SessionListCallbacks,
   shelf?: SessionListShelf,
   loaded = true,
+  guest = false,
 ): void {
   const files = (id: string): string => {
     if (!shelf?.enabled) {
@@ -146,10 +148,18 @@ export function renderSessions(
       `<span class="session-files-count">${shelf.hostCount}</span></span></button></li>`
     : "";
   const list = items.length === 0 && shelfRow === "";
+  const heading = guest ? "Shared sessions" : "Sessions";
+  const empty = loaded
+    ? guest
+      ? "No sessions shared with you."
+      : "No sessions on this host."
+    : "Connecting to the host…";
+  const newButton = guest
+    ? ""
+    : `<button type="button" id="session-new">${icon("plus")}<span>New session</span></button>`;
   root.innerHTML =
-    `<div class="sessions-head"><h2>Sessions</h2>` +
-    `<button type="button" id="session-new">${icon("plus")}<span>New session</span></button></div>` +
-    (list ? `<p class="empty">${loaded ? "No sessions on this host." : "Connecting to the host…"}</p>` : `<ul class="session-list">${shelfRow}${rows}</ul>`);
+    `<div class="sessions-head"><h2>${heading}</h2>${newButton}</div>` +
+    (list ? `<p class="empty">${empty}</p>` : `<ul class="session-list">${shelfRow}${rows}</ul>`);
   root.querySelector("#session-new")?.addEventListener("click", () => callbacks.onNew());
   if (shelfOn) {
     root.querySelector("#host-shelf-row")?.addEventListener("click", () => shelf?.onOpenShelf());

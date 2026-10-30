@@ -165,6 +165,7 @@ describe("HostPeer", () => {
     ["unknown_device", "This browser is no longer paired"],
     ["stale", "Clock skew: check this device's time"],
     ["busy", "Too many devices connected"],
+    ["forbidden", "This host is not shared with you"],
   ])("fails with connect_fail %s", async (reason, message) => {
     const setup = await setupPeer();
     const pending = setup.peer.connect();

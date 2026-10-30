@@ -109,4 +109,39 @@ describe("renderSessions", () => {
     const { root } = render([item({ name: "<img src=x>" })]);
     expect(root.querySelector(".session-name")?.innerHTML).toBe("&lt;img src=x&gt;");
   });
+
+  it("renders the guest list with no New button", () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    const opened: string[] = [];
+    renderSessions(
+      root,
+      [item()],
+      NOW,
+      {
+        onOpen: (id) => opened.push(id),
+        onNew: () => {},
+      },
+      undefined,
+      true,
+      true,
+    );
+    expect(root.querySelector(".sessions-head h2")?.textContent).toBe("Shared sessions");
+    expect(root.querySelector("#session-new")).toBeNull();
+    root.querySelector<HTMLButtonElement>('[data-session="s1"]')?.click();
+    expect(opened).toEqual(["s1"]);
+  });
+
+  it("tells a guest what an empty grant means", () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    const callbacks = {
+      onOpen: () => {},
+      onNew: () => {},
+    };
+    renderSessions(root, [], NOW, callbacks, undefined, true, true);
+    expect(root.querySelector("p.empty")?.textContent).toBe("No sessions shared with you.");
+    renderSessions(root, [], NOW, callbacks, undefined, false, true);
+    expect(root.querySelector("p.empty")?.textContent).toBe("Connecting to the host…");
+  });
 });

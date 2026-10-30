@@ -48,6 +48,14 @@ test("falls back to the app on /pair", async ({ page }) => {
   await expect(page).toHaveTitle("Canopy remote");
 });
 
+test("falls back to the app on a guest link", async ({ page }) => {
+  const response = await page.goto("/g/7/0123456789abcdef");
+  expect(response?.status()).toBe(200);
+  const html = await page.content();
+  expect(html).toContain('<div id="app">');
+  await expect(page).toHaveTitle("Canopy remote");
+});
+
 test("answers /auth/me with 401 JSON without a session", async ({ request }) => {
   const response = await request.get("/auth/me");
   expect(response.status()).toBe(401);

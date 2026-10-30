@@ -1,18 +1,26 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
  * One UserRoom per GitHub user: it forwards opaque signaling envelopes
- * between that user's devices and hosts and remembers nothing past the
- * sockets. State lives only in per-socket attachments plus two instance
- * fields; when the last socket closes, nothing of the user remains.
+ * between that user's devices, guests and hosts and remembers nothing
+ * past the sockets. State lives only in per-socket attachments plus two
+ * instance fields; when the last socket closes, nothing of the user
+ * remains. Guests are another user's browsers, admitted through the
+ * `guest_of` door: they route like devices but never see the hosts list,
+ * never pair, and every one is announced to the hosts — with its GitHub
+ * identity — so the hub can authorize it. The relay itself authorizes
+ * nothing.
  */
 import {
   FRAME_MAX_BYTES,
   MAX_DEVICES,
+  MAX_GUESTS,
   PAIR_INIT_MAX,
   PAIR_INIT_WINDOW_MS,
   RELAY_HOST_ID_HEADER,
   RELAY_LABEL_HEADER,
+  RELAY_LOGIN_HEADER,
   RELAY_ROLE_HEADER,
+  RELAY_UID_HEADER,
   applySecurityHeaders,
   type HostItem,
   type RelayErrorCode,
@@ -65,6 +73,23 @@ function hostsFrame(items: HostItem[]): string {
   return JSON.stringify({ from: "relay", body: { t: "hosts", items } });
 }
 
+/** A forwarded uid header, or null when it is missing or malformed. */
+function parseUid(value: string | null): number | null {
+  if (value === null || !/^[1-9][0-9]*$/.test(value)) {
+    return null;
+  }
+  const uid = Number(value);
+  return Number.isSafeInteger(uid) ? uid : null;
+}
+
+/** A guest's announcement to the hosts: who this conn belongs to. */
+function identityFrame(kind: "device_identity" | "device_left", attachment: RoomAttachment): string {
+  return JSON.stringify({
+    from: "relay",
+    body: { t: kind, conn: attachment.conn, role: attachment.role, login: attachment.login, uid: attachment.uid },
+  });
+}
+
 export class UserRoom {
   nextConn = 1;
   pairInit: number[] = [];
@@ -76,23 +101,25 @@ export class UserRoom {
       return json({ error: "upgrade_required" }, 426);
     }
     const role = request.headers.get(RELAY_ROLE_HEADER);
-    if (role !== "device" && role !== "host") {
+    if (role !== "device" && role !== "host" && role !== "guest") {
       return json({ error: "bad_request" }, 400);
     }
     const hostId = request.headers.get(RELAY_HOST_ID_HEADER);
     if (role === "host" && hostId === null) {
       return json({ error: "bad_request" }, 400);
     }
+    // A guest without an identity is useless to the hub, which authorizes
+    // from it: fail closed before accepting.
+    const login = request.headers.get(RELAY_LOGIN_HEADER);
+    const uid = parseUid(request.headers.get(RELAY_UID_HEADER));
+    if (role === "guest" && (login === null || uid === null)) {
+      return json({ error: "bad_request" }, 400);
+    }
     if (role === "device" && this.deviceCount() >= MAX_DEVICES) {
-      const pair = new WebSocketPair();
-      const refused = pair[1];
-      // Through the hibernation API like every other socket: the runtime
-      // only delivers the close on an accepted socket. It carries no
-      // attachment, so it is invisible to counts and broadcasts, and its
-      // close removes it again.
-      this.state.acceptWebSocket(refused);
-      refused.close(4008, "too_many_devices");
-      return upgradeResponse(pair[0]);
+      return this.refuse("too_many_devices");
+    }
+    if (role === "guest" && this.guestCount() >= MAX_GUESTS) {
+      return this.refuse("too_many_guests");
     }
     if (role === "host") {
       this.closeHost(hostId as string);
@@ -109,12 +136,37 @@ export class UserRoom {
       attachment.host_id = hostId as string;
       attachment.label = request.headers.get(RELAY_LABEL_HEADER) ?? "";
     }
+    if (role === "guest") {
+      attachment.login = login as string;
+      attachment.uid = uid as number;
+    }
     server.serializeAttachment(attachment);
     if (role === "device") {
       server.send(hostsFrame(this.hostItems()));
-    } else {
+    } else if (role === "host") {
       this.broadcastHosts();
+      // A host that (re)connected missed every earlier announcement: hand
+      // it the guests it must already be authorizing.
+      for (const guest of this.guestAttachments()) {
+        server.send(identityFrame("device_identity", guest));
+      }
+    } else {
+      // Guests never see the hosts list; the hosts see the guest instead.
+      this.broadcastToHosts(identityFrame("device_identity", attachment));
     }
+    return upgradeResponse(pair[0]);
+  }
+
+  /** A 101 whose server side is already closing: the room is full. */
+  private refuse(reason: string): Response {
+    const pair = new WebSocketPair();
+    const refused = pair[1];
+    // Through the hibernation API like every other socket: the runtime
+    // only delivers the close on an accepted socket. It carries no
+    // attachment, so it is invisible to counts and broadcasts, and its
+    // close removes it again.
+    this.state.acceptWebSocket(refused);
+    refused.close(4008, reason);
     return upgradeResponse(pair[0]);
   }
 
@@ -143,6 +195,18 @@ export class UserRoom {
       socket.send(errorFrame("bad_frame"));
       return;
     }
+    if (to === "relay") {
+      // Reserved address, and the loop guard for the identity notices: an
+      // old hub answers an unknown notice with an error addressed here,
+      // which must die quietly instead of bouncing back forever.
+      return;
+    }
+    // Guests never pair: pairing binds a device to the owner's hub, and a
+    // guest's key must never land in that registry.
+    if (this.isPairInit(body) && socket.deserializeAttachment()?.role === "guest") {
+      socket.send(errorFrame("forbidden"));
+      return;
+    }
     if (this.isPairInit(body)) {
       const now = Date.now();
       this.pairInit = this.pairInit.filter((stamp) => now - stamp < PAIR_INIT_WINDOW_MS);
@@ -156,14 +220,20 @@ export class UserRoom {
   }
 
   webSocketClose(socket: RoomSocket): void {
-    if (socket.deserializeAttachment()?.role === "host") {
-      this.broadcastHosts();
-    }
+    this.onSocketGone(socket);
   }
 
   webSocketError(socket: RoomSocket): void {
-    if (socket.deserializeAttachment()?.role === "host") {
+    this.onSocketGone(socket);
+  }
+
+  /** A closed socket leaves the hosts list, or a guest leaves the hub. */
+  private onSocketGone(socket: RoomSocket): void {
+    const attachment = socket.deserializeAttachment();
+    if (attachment?.role === "host") {
       this.broadcastHosts();
+    } else if (attachment?.role === "guest") {
+      this.broadcastToHosts(identityFrame("device_left", attachment));
     }
   }
 
@@ -185,6 +255,29 @@ export class UserRoom {
       }
     }
     return count;
+  }
+
+  /** How many guest sockets are currently attached. */
+  private guestCount(): number {
+    let count = 0;
+    for (const socket of this.state.getWebSockets()) {
+      if (socket.deserializeAttachment()?.role === "guest") {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  /** Every attached guest's attachment, for a (re)connected host. */
+  private guestAttachments(): RoomAttachment[] {
+    const guests: RoomAttachment[] = [];
+    for (const socket of this.state.getWebSockets()) {
+      const attachment = socket.deserializeAttachment();
+      if (attachment?.role === "guest") {
+        guests.push(attachment);
+      }
+    }
+    return guests;
   }
 
   /** Close the attached socket holding `hostId`, if any. */
@@ -210,11 +303,20 @@ export class UserRoom {
     return items;
   }
 
-  /** Push the hosts list to every attached device. */
+  /** Push the hosts list to every attached device. Guests never see it. */
   private broadcastHosts(): void {
     const frame = hostsFrame(this.hostItems());
     for (const socket of this.state.getWebSockets()) {
       if (socket.deserializeAttachment()?.role === "device") {
+        socket.send(frame);
+      }
+    }
+  }
+
+  /** Push one prebuilt frame to every attached host. */
+  private broadcastToHosts(frame: string): void {
+    for (const socket of this.state.getWebSockets()) {
+      if (socket.deserializeAttachment()?.role === "host") {
         socket.send(frame);
       }
     }
@@ -227,7 +329,9 @@ export class UserRoom {
       socket.send(errorFrame("no_target"));
       return;
     }
-    if (sender.role === "device" && to.startsWith("h:")) {
+    // Guests ride the same d:<conn> addresses as devices; the hub tells
+    // them apart by the device_identity notice, not the address.
+    if ((sender.role === "device" || sender.role === "guest") && to.startsWith("h:")) {
       const target = this.findHost(to.slice(2));
       if (target !== null) {
         target.send(JSON.stringify({ from: `d:${sender.conn}`, body }));
@@ -254,11 +358,11 @@ export class UserRoom {
     return null;
   }
 
-  /** The attached device socket holding `conn`, if any. */
+  /** The attached device or guest socket holding `conn`, if any. */
   private findDevice(conn: string): RoomSocket | null {
     for (const socket of this.state.getWebSockets()) {
       const attachment = socket.deserializeAttachment();
-      if (attachment?.role === "device" && attachment.conn === conn) {
+      if ((attachment?.role === "device" || attachment?.role === "guest") && attachment.conn === conn) {
         return socket;
       }
     }

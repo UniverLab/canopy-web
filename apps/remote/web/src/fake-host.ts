@@ -10,6 +10,7 @@ import { CatalogStore } from "./catalog.js";
 import { createChannelHandler } from "./channel.js";
 import { b64encode } from "./crypto.js";
 import { GraphStore } from "./graph-store.js";
+import { createGuestSession } from "./guest.js";
 import { MetricsStore } from "./metrics-store.js";
 import { mountCanopyBackground } from "../../../../packages/look/fondo/index.js";
 import { buildCatalog, buildList, buildSpawn, newReqId } from "./protocol.js";
@@ -335,8 +336,12 @@ function main(): void {
     },
   ];
 
+  // Deliveries land in the owner's channel handler — or the guest
+  // session's, once guest mode repoints them. Late-bound because guest
+  // mode returns before the owner's wiring exists.
+  let deliverInto: (raw: string) => void = () => {};
   const deliver = (frame: unknown): void => {
-    frames.push(JSON.stringify(frame));
+    deliverInto(JSON.stringify(frame));
   };
 
   // The shelf: three images for the smoke session, one on the host's
@@ -448,6 +453,15 @@ function main(): void {
     metricsTimer = globalThis.setInterval(() => deliver(metricsFrame()), interval * 1000);
   };
 
+  // Guest mode (?screen=guest): the hub's grant over the sessions the
+  // owner holds, enforced the way the hub enforces it — the list carries
+  // only granted ids and any other attach is forbidden. `grant=none`
+  // names no session, so the guest is untrusted: an empty list and every
+  // attach denied.
+  const fakeParams = new URLSearchParams(globalThis.location.search);
+  const guestGrant: string[] | null =
+    fakeParams.get("screen") === "guest" ? (fakeParams.get("grant")?.split(",") ?? ["smoke"]) : null;
+
   const send = (data: string): boolean => {
     const frame = JSON.parse(data) as {
       t: string;
@@ -464,7 +478,25 @@ function main(): void {
     };
     sent.push(frame);
     if (frame.t === "list") {
-      deliver({ t: "sessions", req: frame.req, items: sessionItems() });
+      if (guestGrant === null) {
+        deliver({ t: "sessions", req: frame.req, items: sessionItems() });
+      } else {
+        // The owner holds smoke and secret; the grant decides what the
+        // guest's list carries.
+        const held = [
+          ...sessionItems(),
+          {
+            id: "secret",
+            name: "secret",
+            cli: "muse",
+            model: "spark",
+            workdir: "/home/u/secret",
+            status: "running",
+            last_output_at: null,
+          },
+        ];
+        deliver({ t: "sessions", req: frame.req, items: held.filter((item) => guestGrant.includes(item.id)) });
+      }
     } else if (frame.t === "catalog") {
       deliver({ t: "catalog", req: frame.req, ...CATALOG });
     } else if (fakeGraphs.handle(frame)) {
@@ -474,16 +506,20 @@ function main(): void {
     } else if (frame.t === "host.metrics.unwatch") {
       stopMetrics();
     } else if (frame.t === "attach" && typeof frame.id === "string") {
-      const full = b64(SMOKE_OUTPUT);
-      deliver({ t: "snapshot", id: frame.id, cols: 80, rows: 24, seq, data: full.slice(0, 10) });
-      deliver({ t: "snapshot_more", id: frame.id, data: full.slice(10), last: true });
-      const attached = frame.id;
-      if (pushedFor === null) {
-        pushedFor = attached;
-        globalThis.setTimeout(() => {
-          const item = putShelfFile(pushedShelfImage(), attached, "muse", 0);
-          deliver({ t: "shelf_added", item });
-        }, 2000);
+      if (guestGrant !== null && !guestGrant.includes(frame.id)) {
+        deliver({ t: "error", code: "forbidden", id: frame.id });
+      } else {
+        const full = b64(SMOKE_OUTPUT);
+        deliver({ t: "snapshot", id: frame.id, cols: 80, rows: 24, seq, data: full.slice(0, 10) });
+        deliver({ t: "snapshot_more", id: frame.id, data: full.slice(10), last: true });
+        const attached = frame.id;
+        if (pushedFor === null) {
+          pushedFor = attached;
+          globalThis.setTimeout(() => {
+            const item = putShelfFile(pushedShelfImage(), attached, "muse", 0);
+            deliver({ t: "shelf_added", item });
+          }, 2000);
+        }
       }
     } else if (frame.t === "shelf_list") {
       const id = typeof frame.id === "string" && frame.id !== "" ? frame.id : null;
@@ -546,6 +582,45 @@ function main(): void {
     }
     return true;
   };
+
+  // Guest mode: the /g/ session wiring against the fake host — no relay,
+  // no peer, the same guest views, store, controller and router that
+  // production mounts, already connected.
+  if (fakeParams.get("screen") === "guest") {
+    const session = createGuestSession(root, {
+      login: "guest-user",
+      send,
+      onRetry: () => {},
+      onSignOut: () => {},
+      onForgetDevice: () => {},
+    });
+    deliverInto = (raw: string) => session.push(raw);
+    session.view.setConnectionState("connected");
+    session.view.showList();
+    send(buildList(newReqId()));
+    window.__fake = {
+      sent: () => [...sent],
+      clearSent: () => {
+        sent.length = 0;
+      },
+      terminalText: () => "",
+      pushOut: (text: string) => {
+        seq += 1;
+        deliver({ t: "out", id: "smoke", seq, data: b64(text) });
+      },
+      failNextPrompt: (code: string, message: string) => {
+        promptError = { code, message };
+      },
+      graphTick: () => {
+        fakeGraphs.tick();
+      },
+      pushMetrics: (patch?: Record<string, unknown>) => {
+        deliver(metricsFrame(patch ?? {}));
+      },
+      guestOpen: (id: string) => session.open(id),
+    };
+    return;
+  }
 
   // The shelf controller and the graph store the real entry point wires
   // the same way.
@@ -626,6 +701,7 @@ function main(): void {
     onSnapshot: router.handleSnapshot,
     onFrame: router.handleFrame,
   });
+  deliverInto = (raw: string) => frames.push(raw);
 
   // The real sign-out POST, so Playwright can stub or refuse /auth/logout
   // and watch the shell land on the sign-in screen or hold its error.
@@ -697,6 +773,8 @@ declare global {
       graphTick: () => void;
       /** Push one metrics frame, with the patch merged over the fixture. */
       pushMetrics: (patch?: Record<string, unknown>) => void;
+      /** Guest mode only: open one session by id, listed or not. */
+      guestOpen?: (id: string) => void;
     };
   }
 }

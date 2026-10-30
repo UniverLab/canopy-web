@@ -26,6 +26,7 @@ import {
   parseError,
   parseExited,
   parseFilePart,
+  parseForbidden,
   parseGraph,
   parseGraphState,
   parseGraphs,
@@ -219,6 +220,17 @@ describe("frame parsers", () => {
     });
     expect(parseError({ t: "error", code: "internal", message: "boom" })?.req).toBeNull();
     expect(parseError({ t: "error", code: "internal" })).toBeNull();
+  });
+
+  it("parses a denied guest attach with or without a message", () => {
+    expect(parseForbidden({ t: "error", code: "forbidden", id: "s9" })).toEqual({ id: "s9" });
+    expect(parseForbidden({ t: "error", code: "forbidden", id: "s9", message: "no grant" })).toEqual({
+      id: "s9",
+    });
+    expect(parseForbidden({ t: "error", code: "forbidden" })?.id).toBeNull();
+    expect(parseForbidden({ t: "error", code: "forbidden", id: "" })?.id).toBeNull();
+    expect(parseForbidden({ t: "error", code: "internal", message: "boom" })).toBeNull();
+    expect(parseForbidden({ t: "ok", req: "r1" })).toBeNull();
   });
 
   it("parses spawned and composed", () => {

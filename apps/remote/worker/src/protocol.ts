@@ -15,12 +15,18 @@ export const STATE_COOKIE = "cr_oauth_state";
 export const RELAY_ROLE_HEADER = "X-Relay-Role";
 export const RELAY_HOST_ID_HEADER = "X-Relay-Host-Id";
 export const RELAY_LABEL_HEADER = "X-Relay-Label";
+/** The guest's GitHub identity; set only on guest forwards. */
+export const RELAY_LOGIN_HEADER = "X-Relay-Login";
+export const RELAY_UID_HEADER = "X-Relay-Uid";
 
 /** Largest accepted WebSocket frame, in bytes. */
 export const FRAME_MAX_BYTES = 65536;
 
 /** Most device sockets a room holds; the next one is refused. */
 export const MAX_DEVICES = 8;
+
+/** Most guest sockets a room holds; counted apart from devices. */
+export const MAX_GUESTS = 8;
 
 /** Most `pair_init` bodies a room accepts per window. */
 export const PAIR_INIT_MAX = 20;
@@ -32,7 +38,7 @@ export const PAIR_INIT_WINDOW_MS = 600000;
 export const HOST_CACHE_TTL_S = 300;
 
 /** Error codes the relay itself sends. */
-export type RelayErrorCode = "no_target" | "too_large" | "rate_limited" | "bad_frame";
+export type RelayErrorCode = "no_target" | "too_large" | "rate_limited" | "bad_frame" | "forbidden";
 
 /** An envelope a client sends: a target plus an opaque body. */
 export interface IncomingFrame {
@@ -48,10 +54,13 @@ export interface OutgoingFrame {
 
 /** The per-socket attachment; runtime state lives only here. */
 export interface RoomAttachment {
-  role: "device" | "host";
+  role: "device" | "host" | "guest";
   host_id?: string;
   label?: string;
   conn: string;
+  /** The guest's GitHub login and id; set on guest sockets only. */
+  login?: string;
+  uid?: number;
 }
 
 /** One host entry in the `hosts` notice. */

@@ -5,7 +5,6 @@
 // the composer. Extracted from the entry point so tests pin the exact
 // wiring the app uses; main.ts and the fake host both route through here.
 
-import type { Shell } from "./app.js";
 import type { CatalogStore } from "./catalog.js";
 import type { JoinedSnapshot } from "./channel.js";
 import type { GraphStore } from "./graph-store.js";
@@ -17,6 +16,7 @@ import {
   parseError,
   parseExited,
   parseFilePart,
+  parseForbidden,
   parseGraph,
   parseGraphState,
   parseGraphs,
@@ -40,10 +40,24 @@ export interface FrameRouter {
   handleFrame: (frame: unknown) => void;
 }
 
+/**
+ * The slice of the shell the router paints: the full Shell satisfies it,
+ * and so does the guest view's stub, which owns no composer or sheets.
+ */
+export interface RouterShell {
+  ensureTerminal: (id: string, cols: number, rows: number) => void;
+  composerOk: (req: string) => void;
+  composerError: (message: string, req: string | null) => void;
+  sheetSpawned: (req: string, id: string) => void;
+  sheetComposed: (req: string, text: string) => void;
+  sheetOk: (req: string) => void;
+  sheetError: (message: string, req: string | null, code: string) => void;
+}
+
 export interface FrameRouterDeps {
   store: SessionStore;
   controller: SessionController;
-  shell: Shell;
+  shell: RouterShell;
   catalog: CatalogStore;
   /** The session shelf; absent in tests that do not exercise it. */
   shelf?: ShelfFrames;
@@ -51,10 +65,12 @@ export interface FrameRouterDeps {
   graphs?: GraphStore;
   /** The host metrics; absent in tests that do not exercise them. */
   metrics?: MetricsStore;
+  /** A denied guest attach; absent outside the guest view. */
+  onForbidden?: (id: string | null) => void;
 }
 
 export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
-  const { store, controller, shell, catalog, shelf, graphs, metrics } = deps;
+  const { store, controller, shell, catalog, shelf, graphs, metrics, onForbidden } = deps;
 
   function handleSnapshot(snapshot: JoinedSnapshot): void {
     shell.ensureTerminal(snapshot.id, snapshot.cols, snapshot.rows);
@@ -161,6 +177,17 @@ export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
       shell.composerOk(ok);
       shell.sheetOk(ok);
       return;
+    }
+    const forbidden = parseForbidden(frame);
+    if (forbidden) {
+      // A denied guest attach never touches the composer or a sheet: the
+      // guest view paints its own unauthorized state. Without a guest
+      // handler (the owner flow, which the hub never forbids) the frame
+      // falls through to the generic error below.
+      if (onForbidden) {
+        onForbidden(forbidden.id);
+        return;
+      }
     }
     const error = parseError(frame);
     if (error) {

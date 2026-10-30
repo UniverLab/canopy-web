@@ -223,6 +223,19 @@ export function parseError(frame: unknown): ReplyError | null {
   return { req: typeof frame.req === "string" ? frame.req : null, code: frame.code, message: frame.message };
 }
 
+// A denied guest attach: the hub answers the grant check with the session
+// id the guest may not join. The message is optional — the id alone fails
+// closed — so this parses what parseError would reject.
+export function parseForbidden(frame: unknown): { id: string | null } | null {
+  if (frameType(frame) !== "error" || !isRecord(frame)) {
+    return null;
+  }
+  if (frame.code !== "forbidden") {
+    return null;
+  }
+  return { id: typeof frame.id === "string" && frame.id !== "" ? frame.id : null };
+}
+
 function stringList(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
