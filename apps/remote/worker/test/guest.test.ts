@@ -155,7 +155,9 @@ describe("GET /ws/device?guest_of", () => {
 
   it("answers 400 for a malformed guest_of and never reaches a room", async () => {
     const { namespace, env } = setupDoor();
-    for (const guestOf of ["0", "-7", "abc", "12x", "", " 42", "4.5"]) {
+    // 9007199254740993 is 2^53 + 1: well-formed digits that lose
+    // precision in a Number, so they must fail closed, not land elsewhere.
+    for (const guestOf of ["0", "-7", "abc", "12x", "", " 42", "4.5", "9007199254740993"]) {
       const response = await handleDeviceWs(await guestRequest(guestOf), env);
       expect(response.status).toBe(400);
       expect(await response.json()).toEqual({ error: "bad_guest" });
@@ -196,6 +198,9 @@ describe("guest fetch", () => {
     const { room } = setup();
     expect(room.fetch(upgradeRequest("guest")).status).toBe(400);
     expect(room.fetch(upgradeRequest("guest", { "x-relay-login": GUEST_LOGIN })).status).toBe(400);
+    expect(
+      room.fetch(upgradeRequest("guest", { "x-relay-login": "", "x-relay-uid": String(GUEST_UID) })).status,
+    ).toBe(400);
     expect(
       room.fetch(upgradeRequest("guest", { "x-relay-login": GUEST_LOGIN, "x-relay-uid": "0" })).status,
     ).toBe(400);

@@ -311,6 +311,44 @@ describe("GuestPeer", () => {
     expect(setup.pins.size).toBe(0);
   });
 
+  it("fails when the answer signature is forged under another key", async () => {
+    const setup = await setupGuest();
+    const other = await createTestHost("other host");
+    const pending = setup.peer.connect();
+    await waitForSend(setup.ws);
+    // The right key presented, but the signature made by another host's:
+    // verification fails and nothing is pinned.
+    const offer = guestOfferBody(setup);
+    const sig = await signTestAnswer(other.privateKey, setup.device.deviceId, offer.sig, ANSWER_SDP);
+    setup.ws.receive(`h:${setup.host.record.host_id}`, {
+      t: "answer",
+      sdp: ANSWER_SDP,
+      sig,
+      host_spki: setup.host.record.host_spki,
+    });
+    await expect(pending).rejects.toThrow("Host identity check failed");
+    expect(setup.events).toEqual([{ type: "failed", reason: "Host identity check failed" }]);
+    expect(setup.peerHarness.latest().remoteDescription).toBeNull();
+    expect(setup.pins.size).toBe(0);
+  });
+
+  it("fails closed when the answer signature is not base64", async () => {
+    const setup = await setupGuest();
+    const pending = setup.peer.connect();
+    await waitForSend(setup.ws);
+    // "!!!" never decodes: the peer must fail, not hang in connecting.
+    setup.ws.receive(`h:${setup.host.record.host_id}`, {
+      t: "answer",
+      sdp: ANSWER_SDP,
+      sig: "!!!",
+      host_spki: setup.host.record.host_spki,
+    });
+    await expect(pending).rejects.toThrow("Host identity check failed");
+    expect(setup.events).toEqual([{ type: "failed", reason: "Host identity check failed" }]);
+    expect(setup.peerHarness.latest().remoteDescription).toBeNull();
+    expect(setup.pins.size).toBe(0);
+  });
+
   it("ignores an answer without a host key", async () => {
     const setup = await setupGuest();
     const pending = setup.peer.connect();

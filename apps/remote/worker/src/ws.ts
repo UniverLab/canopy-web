@@ -107,7 +107,13 @@ export async function handleDeviceWs(req: Request, env: WsEnv): Promise<Response
   if (!/^[1-9][0-9]*$/.test(guestOf)) {
     return json({ error: "bad_guest" }, 400);
   }
-  return forward(req, roomFor(env, Number(guestOf)), "guest", undefined, undefined, session.login, session.uid);
+  // Digits past 2^53 lose precision in a Number and would land the guest
+  // in another owner's room: fail closed like the room's own uid check.
+  const ownerUid = Number(guestOf);
+  if (!Number.isSafeInteger(ownerUid)) {
+    return json({ error: "bad_guest" }, 400);
+  }
+  return forward(req, roomFor(env, ownerUid), "guest", undefined, undefined, session.login, session.uid);
 }
 
 /** A host socket: GitHub token plus id and label, verified then forwarded. */

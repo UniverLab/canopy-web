@@ -326,13 +326,21 @@ export class GuestPeer {
       this.fail("Host identity check failed");
       return;
     }
-    const valid = await verifyAnswer(
-      hostKey,
-      this.device.deviceId,
-      this.offerSig,
-      answer.sdp,
-      answer.sig,
-    );
+    // verifyAnswer decodes the signature first: undecodable base64
+    // throws instead of returning false, and must fail like a forgery.
+    let valid: boolean;
+    try {
+      valid = await verifyAnswer(
+        hostKey,
+        this.device.deviceId,
+        this.offerSig,
+        answer.sdp,
+        answer.sig,
+      );
+    } catch {
+      this.fail("Host identity check failed");
+      return;
+    }
     if (!valid) {
       this.fail("Host identity check failed");
       return;

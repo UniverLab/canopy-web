@@ -112,7 +112,7 @@ export class UserRoom {
     // from it: fail closed before accepting.
     const login = request.headers.get(RELAY_LOGIN_HEADER);
     const uid = parseUid(request.headers.get(RELAY_UID_HEADER));
-    if (role === "guest" && (login === null || uid === null)) {
+    if (role === "guest" && (login === null || login === "" || uid === null)) {
       return json({ error: "bad_request" }, 400);
     }
     if (role === "device" && this.deviceCount() >= MAX_DEVICES) {
