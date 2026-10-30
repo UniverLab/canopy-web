@@ -14,11 +14,17 @@ export interface ComposerCallbacks {
   onBuilder: () => void;
 }
 
+export interface ComposerOptions {
+  /** False hides the Prompt Builder button; guests send text only. */
+  builder?: boolean;
+}
+
 /** The confirmation line's words; the check beside them is the icon. */
 export const SENT_TEXT = "Sent";
 
 export class Composer {
   private readonly callbacks: ComposerCallbacks;
+  private readonly showBuilder: boolean;
   private area: HTMLTextAreaElement | null = null;
   private errorEl: HTMLElement | null = null;
   private okEl: HTMLElement | null = null;
@@ -26,8 +32,9 @@ export class Composer {
   private sendSlot: MorphSlot | null = null;
   private pendingReq: string | null = null;
 
-  constructor(callbacks: ComposerCallbacks) {
+  constructor(callbacks: ComposerCallbacks, options?: ComposerOptions) {
     this.callbacks = callbacks;
+    this.showBuilder = options?.builder ?? true;
   }
 
   get awaitingReply(): boolean {
@@ -69,6 +76,7 @@ export class Composer {
     builder.innerHTML = icon("blocks");
     builder.append(document.createTextNode("Builder"));
     builder.addEventListener("click", () => this.callbacks.onBuilder());
+    builder.hidden = !this.showBuilder;
     const send = document.createElement("button");
     send.type = "button";
     send.className = "composer-send";

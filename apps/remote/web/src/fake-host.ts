@@ -587,12 +587,16 @@ function main(): void {
   // no peer, the same guest views, store, controller and router that
   // production mounts, already connected.
   if (fakeParams.get("screen") === "guest") {
+    const guestOutput: string[] = [];
     const session = createGuestSession(root, {
       login: "guest-user",
       send,
       onRetry: () => {},
       onSignOut: () => {},
       onForgetDevice: () => {},
+      onTerminalText: (text) => {
+        guestOutput.push(text);
+      },
     });
     deliverInto = (raw: string) => session.push(raw);
     session.view.setConnectionState("connected");
@@ -603,7 +607,7 @@ function main(): void {
       clearSent: () => {
         sent.length = 0;
       },
-      terminalText: () => "",
+      terminalText: () => guestOutput.join(""),
       pushOut: (text: string) => {
         seq += 1;
         deliver({ t: "out", id: "smoke", seq, data: b64(text) });

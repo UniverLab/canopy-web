@@ -20,8 +20,10 @@ import {
 import type { DeviceKey } from "./crypto.js";
 import { getGuestHost, guestHostKey, saveGuestHost } from "./guest-store.js";
 import type { GuestHostRecord } from "./guest-store.js";
+import { guardGuestSend } from "./guest-guard.js";
 import { createGuestView } from "./guest-views.js";
 import type { GuestView } from "./guest-views.js";
+import type { TerminalFactory } from "./terminal.js";
 import { asConnectFail, asIceCandidate, connectFailMessage, isBye, loadIceServers } from "./peer.js";
 import type { PeerConnectionFactory, PeerEvent, TurnFetcher } from "./peer.js";
 import { DATA_CHANNEL_LABEL } from "./peer.js";
@@ -435,6 +437,10 @@ export interface GuestSessionDeps {
   onRetry: () => void;
   onSignOut: () => void;
   onForgetDevice: () => void;
+  /** Injected in tests; production opens the real xterm terminal. */
+  terminalFactory?: TerminalFactory;
+  /** Test hook the fake host uses to read terminal output back. */
+  onTerminalText?: (text: string) => void;
 }
 
 export interface GuestSession {
@@ -450,29 +456,49 @@ export interface GuestSession {
 }
 
 // The guest session wiring production and the fake host share: views,
-// store, controller and router over one send function. The hub's grant
+// store, controller and router over one guarded send function — the
+// allowlist drops whatever the guest may not send. The hub's grant
 // arrives as the sessions frame; a denied attach lands back on the list
-// with the unauthorized notice.
+// with the unauthorized notice. Typing and prompts flow exactly as the
+// owner's do: the same controller over the same widgets, one shared
+// stream with no locking.
 export function createGuestSession(root: HTMLElement, deps: GuestSessionDeps): GuestSession {
   const store = new SessionStore();
   const catalog = new CatalogStore();
-  const view = createGuestView(root, store, {
-    onOpenSession: (id) => open(id),
-    onLeaveSession: () => {
-      controller.close();
-      view.showList();
+  const send = guardGuestSend(deps.send);
+  const view = createGuestView(
+    root,
+    store,
+    {
+      onOpenSession: (id) => open(id),
+      onLeaveSession: () => {
+        controller.close();
+        view.showList();
+      },
+      onRetry: deps.onRetry,
+      onSignOut: deps.onSignOut,
+      onForgetDevice: deps.onForgetDevice,
+      onInput: (bytes) => {
+        controller.sendInputBytes(bytes);
+      },
+      onComposerSend: (text, req) => {
+        if (!controller.sendPrompt(text, req)) {
+          view.composerError("Not connected", req);
+        }
+      },
     },
-    onRetry: deps.onRetry,
-    onSignOut: deps.onSignOut,
-    onForgetDevice: deps.onForgetDevice,
-  });
+    { terminalFactory: deps.terminalFactory },
+  );
   view.setLogin(deps.login);
 
   const controller = new SessionController({
-    send: deps.send,
+    send,
     terminal: () => ({
-      write: (text) => view.appendOutput(text),
-      clear: () => view.clearOutput(),
+      write: (text) => {
+        view.writeTerminal(text);
+        deps.onTerminalText?.(text);
+      },
+      clear: () => view.clearTerminal(),
     }),
     onExited: (_id, code) => view.setSessionStatus(`Session exited (${code})`),
   });
@@ -482,23 +508,18 @@ export function createGuestSession(root: HTMLElement, deps: GuestSessionDeps): G
     controller.open(id);
   }
 
-  // The router's shell slice for a guest: a snapshot lands the read-only
-  // pane; anything composer- or sheet-shaped is inert — a guest sends no
-  // prompts and opens no sheets — except errors, which land as the
-  // session's status line. A denied attach bypasses this entirely and
+  // The router's shell slice for a guest: snapshots mount the terminal,
+  // prompts answer the composer, and anything sheet-shaped is inert — a
+  // guest opens no sheets. A denied attach bypasses this entirely and
   // reaches onForbidden below.
   const routerShell: RouterShell = {
-    ensureTerminal: (id) => {
-      if (controller.sessionId === id) {
-        view.setSessionStatus(null);
-      }
-    },
-    composerOk: () => {},
-    composerError: (message) => view.setSessionStatus(message),
+    ensureTerminal: (id, cols, rows) => view.ensureTerminal(id, cols, rows),
+    composerOk: (req) => view.composerOk(req),
+    composerError: (message, req) => view.composerError(message, req),
     sheetSpawned: () => {},
     sheetComposed: () => {},
     sheetOk: () => {},
-    sheetError: (message) => view.setSessionStatus(message),
+    sheetError: () => {},
   };
 
   const router = createFrameRouter({

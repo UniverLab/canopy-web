@@ -1,12 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 // The guest screens behind a /g/ link: the sign-in gate, the shared
-// session list, one read-only session, and the connecting and
+// session list, one interactive session, and the connecting and
 // unauthorized states. Same markup classes as the owner shell, so the
-// guest list is the owner list minus the New button; no pairing, no
-// picker, no composer, no input of any kind.
+// guest list is the owner list minus the New button and the guest session
+// is the owner session minus the builder, the sheets and the Files: the
+// terminal, the key bar and the composer are the owner's own widgets,
+// sharing the main bundle's chunk. No pairing, no picker, no hub-level
+// control of any kind.
 
 import { renderTopbar, wireAccount } from "./chrome.js";
-import { renderSessions, SessionStore } from "./sessions.js";
+import { Composer } from "./composer.js";
+import { renderKeyBar, updateKeyBarLatches } from "./keys.js";
+import { keyBytesWithModifiers, ModifierLatches, textBytesWithModifiers } from "./modifiers.js";
+import { SessionStore, renderSessions } from "./sessions.js";
+import { TerminalView, createXtermHandle } from "./terminal.js";
+import type { TerminalFactory } from "./terminal.js";
 import { renderColophon } from "../../../../packages/look/colophon/footer.js";
 
 export interface GuestViewCallbacks {
@@ -15,6 +23,9 @@ export interface GuestViewCallbacks {
   onRetry: () => void;
   onSignOut: () => void;
   onForgetDevice: () => void;
+  /** Terminal and key-bar bytes with the latches applied. */
+  onInput: (bytes: Uint8Array) => void;
+  onComposerSend: (text: string, req: string) => void;
 }
 
 export interface GuestView {
@@ -24,12 +35,19 @@ export interface GuestView {
   showForbidden: (message: string) => void;
   showList: (notice?: string | null) => void;
   showSession: (id: string, name: string) => void;
-  appendOutput: (text: string) => void;
-  clearOutput: () => void;
+  ensureTerminal: (id: string, cols: number, rows: number) => void;
+  writeTerminal: (text: string) => void;
+  clearTerminal: () => void;
+  composerOk: (req: string) => void;
+  composerError: (message: string, req: string | null) => void;
   setSessionStatus: (status: string | null) => void;
   setConnectionState: (state: string) => void;
   setLogin: (login: string | null) => void;
   setSignOutError: (message: string | null) => void;
+}
+
+export interface GuestViewDeps {
+  terminalFactory?: TerminalFactory;
 }
 
 type GuestRoute = "signin" | "invalid" | "connecting" | "forbidden" | "list" | "session";
@@ -45,15 +63,6 @@ const COLOPHON = renderColophon({
   ],
 });
 
-// Control sequences a read-only <pre> cannot draw: CSI, OSC and the two
-// short forms. Anything left is printable text. The controls below are
-// the pattern's whole purpose, not a mistake.
-// eslint-disable-next-line no-control-regex
-const ANSI_PATTERN = /\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07\x1b]*(\x07|\x1b\\)|\x1b[()][0-9A-B]|\x1b./g;
-
-/** Most output the read-only session keeps; older lines fall away. */
-const MAX_OUTPUT_CHARS = 262144;
-
 function esc(text: string): string {
   return text
     .replace(/&/g, "&amp;")
@@ -62,16 +71,13 @@ function esc(text: string): string {
     .replace(/"/g, "&quot;");
 }
 
-/** Visible text of terminal output: no escape sequences, no bare returns. */
-export function guestOutputText(text: string): string {
-  return text.replace(ANSI_PATTERN, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-}
-
 export function createGuestView(
   root: HTMLElement,
   store: SessionStore,
   callbacks: GuestViewCallbacks,
+  deps?: GuestViewDeps,
 ): GuestView {
+  const terminalFactory = deps?.terminalFactory ?? createXtermHandle;
   let route: GuestRoute = "connecting";
   let login: string | null = null;
   let connectionState = "connecting";
@@ -81,8 +87,11 @@ export function createGuestView(
   let listNotice: string | null = null;
   let sessionId = "";
   let sessionName = "";
-  let sessionStatus: string | null = null;
-  let output = "";
+  let sessionCols = 0;
+  let sessionRows = 0;
+  let terminalView: TerminalView | null = null;
+  let composer: Composer | null = null;
+  const latches = new ModifierLatches();
 
   function header(): string {
     return renderTopbar({
@@ -110,8 +119,18 @@ export function createGuestView(
     });
   }
 
+  function teardownSessionWidgets(): void {
+    terminalView?.dispose();
+    terminalView = null;
+    composer?.unmount();
+    composer = null;
+    sessionCols = 0;
+    sessionRows = 0;
+  }
+
   function paintSignIn(invalid: boolean): void {
     route = invalid ? "invalid" : "signin";
+    teardownSessionWidgets();
     root.innerHTML = `
     ${header()}
     <main class="signin">
@@ -133,6 +152,7 @@ export function createGuestView(
 
   function paintConnecting(): void {
     route = "connecting";
+    teardownSessionWidgets();
     const failed = connectionState.startsWith("failed:");
     root.innerHTML = `
     ${header()}
@@ -147,6 +167,7 @@ export function createGuestView(
 
   function paintForbidden(): void {
     route = "forbidden";
+    teardownSessionWidgets();
     root.innerHTML = `
     ${header()}
     <main class="signin">
@@ -160,6 +181,7 @@ export function createGuestView(
 
   function paintList(): void {
     route = "list";
+    teardownSessionWidgets();
     const banner =
       listNotice === null
         ? ""
@@ -185,23 +207,51 @@ export function createGuestView(
 
   function paintSession(): void {
     route = "session";
-    const status =
-      sessionStatus === null ? "" : `<p class="empty" id="guest-status">${esc(sessionStatus)}</p>`;
+    teardownSessionWidgets();
+    latches.release();
     root.innerHTML = `
     ${header()}
     <main class="session-view">
       <div class="session-bar">
         <button type="button" id="session-back" aria-label="Back to sessions">←</button>
         <span class="session-title">${esc(sessionName || sessionId)}</span>
+        <span class="session-exit" id="guest-exit" hidden></span>
       </div>
-      <div class="term-pane"><pre id="guest-output" aria-live="off"></pre></div>
-      ${status}
+      <div class="term-pane" id="term-pane">
+        <p class="term-placeholder">Attaching…</p>
+      </div>
+      <div class="keybar" id="keybar"></div>
+      <div class="composer-slot" id="composer-slot"></div>
     </main>`;
     wireChrome();
     root.querySelector("#session-back")?.addEventListener("click", () => callbacks.onLeaveSession());
-    const out = root.querySelector("#guest-output");
-    if (out) {
-      out.textContent = output;
+    const bar = root.querySelector<HTMLElement>("#keybar");
+    if (bar) {
+      renderKeyBar(bar, (def) => {
+        if (def.id === "ctrl") {
+          latches.toggleCtrl();
+          updateKeyBarLatches(bar, latches.snapshot());
+          return;
+        }
+        if (def.id === "shift") {
+          latches.toggleShift();
+          updateKeyBarLatches(bar, latches.snapshot());
+          return;
+        }
+        const bytes = keyBytesWithModifiers(def.id, latches.snapshot());
+        latches.release();
+        updateKeyBarLatches(bar, latches.snapshot());
+        callbacks.onInput(bytes);
+      });
+    }
+    const slot = root.querySelector<HTMLElement>("#composer-slot");
+    if (slot) {
+      // No builder: a guest sends plain text prompts, never drafts.
+      composer = new Composer(
+        { onSend: (text, req) => callbacks.onComposerSend(text, req), onBuilder: () => {} },
+        { builder: false },
+      );
+      composer.mount(slot);
     }
   }
 
@@ -216,6 +266,27 @@ export function createGuestView(
       paintList();
     } else {
       paintSession();
+    }
+  }
+
+  // The session route never repaints for chrome state: it would drop the
+  // terminal and the composer's draft. Only the header carries the state,
+  // so patch it in place, exactly as the owner shell does.
+  function patchHeader(): void {
+    const topbar = root.querySelector(".topbar");
+    if (topbar) {
+      topbar.setAttribute("data-conn", connectionState);
+    }
+    const conn = root.querySelector(".topbar .conn");
+    if (conn) {
+      conn.textContent = connectionState;
+    }
+    const who = root.querySelector(".topbar .login");
+    if (who) {
+      who.textContent = login ?? "";
+    }
+    for (const el of root.querySelectorAll<HTMLElement>(".signout-error")) {
+      el.textContent = signOutError ?? "";
     }
   }
 
@@ -240,48 +311,82 @@ export function createGuestView(
     showSession: (id: string, name: string) => {
       sessionId = id;
       sessionName = name;
-      sessionStatus = "Attaching…";
-      output = "";
       paintSession();
     },
-    clearOutput: () => {
-      output = "";
-      const out = root.querySelector("#guest-output");
-      if (out) {
-        out.textContent = "";
-      }
-    },
-    appendOutput: (text: string) => {
-      if (route !== "session") {
+    ensureTerminal: (id: string, cols: number, rows: number) => {
+      if (route !== "session" || id !== sessionId) {
         return;
       }
-      output = (output + guestOutputText(text)).slice(-MAX_OUTPUT_CHARS);
-      const out = root.querySelector("#guest-output");
-      if (out) {
-        out.textContent = output;
-        const pane = out.closest(".term-pane");
-        if (pane) {
-          pane.scrollTop = pane.scrollHeight;
-        }
+      if (terminalView && cols === sessionCols && rows === sessionRows) {
+        return;
       }
+      // A remount keeps the composer: only the terminal goes.
+      terminalView?.dispose();
+      terminalView = null;
+      sessionCols = cols;
+      sessionRows = rows;
+      const pane = root.querySelector<HTMLElement>("#term-pane");
+      if (!pane) {
+        return;
+      }
+      pane.replaceChildren();
+      terminalView = new TerminalView(terminalFactory, {
+        onUserInput: (text) => {
+          const bytes = textBytesWithModifiers(text, latches.snapshot());
+          if (latches.hasLatch) {
+            latches.release();
+            const bar = root.querySelector<HTMLElement>("#keybar");
+            if (bar) {
+              updateKeyBarLatches(bar, latches.snapshot());
+            }
+          }
+          callbacks.onInput(bytes);
+        },
+      });
+      terminalView.mount(pane, cols, rows);
+    },
+    writeTerminal: (text: string) => {
+      terminalView?.write(text);
+    },
+    clearTerminal: () => {
+      terminalView?.clear();
+    },
+    composerOk: (req: string) => {
+      composer?.handleOk(req);
+    },
+    composerError: (message: string, req: string | null) => {
+      composer?.handleError(message, req);
     },
     setSessionStatus: (status: string | null) => {
-      sessionStatus = status;
-      if (route === "session") {
-        paintSession();
+      const badge = root.querySelector<HTMLElement>("#guest-exit");
+      if (badge && route === "session") {
+        badge.textContent = status ?? "";
+        badge.hidden = status === null;
       }
     },
     setConnectionState: (state: string) => {
       connectionState = state;
-      repaint();
+      if (route === "session") {
+        patchHeader();
+      } else {
+        repaint();
+      }
     },
     setLogin: (name: string | null) => {
       login = name;
-      repaint();
+      if (route === "session") {
+        patchHeader();
+      } else {
+        repaint();
+      }
     },
     setSignOutError: (message: string | null) => {
       signOutError = message;
-      repaint();
+      if (route === "session") {
+        patchHeader();
+      } else {
+        repaint();
+      }
     },
   };
 }

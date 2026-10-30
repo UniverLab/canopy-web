@@ -8,6 +8,7 @@ import { guestHostKey } from "../src/guest-store.js";
 import { connectFailMessage } from "../src/peer.js";
 import type { PeerEvent } from "../src/peer.js";
 import { defaultRelayUrl } from "../src/relay.js";
+import type { TerminalFactory, TerminalHandle } from "../src/terminal.js";
 import {
   connectRelay,
   createPeerHarness,
@@ -373,6 +374,35 @@ describe("GuestPeer", () => {
   });
 });
 
+class FakeGuestHandle implements TerminalHandle {
+  written: string[] = [];
+  private inputListeners: ((text: string) => void)[] = [];
+
+  write = (text: string): void => {
+    this.written.push(text);
+  };
+  clear = (): void => {};
+  focus = (): void => {};
+  scrollToBottom = (): void => {};
+  isAtBottom = (): boolean => true;
+  onUserInput = (callback: (text: string) => void): (() => void) => {
+    this.inputListeners.push(callback);
+    return () => {};
+  };
+  onScroll = (): (() => void) => () => {};
+  onReady = (callback: () => void): (() => void) => {
+    callback();
+    return () => {};
+  };
+  dispose = (): void => {};
+
+  emitInput(text: string): void {
+    for (const listener of this.inputListeners) {
+      listener(text);
+    }
+  }
+}
+
 describe("createGuestSession", () => {
   afterEach(() => {
     document.body.innerHTML = "";
@@ -381,11 +411,18 @@ describe("createGuestSession", () => {
   function setupSession(): {
     root: HTMLElement;
     sent: string[];
+    handles: FakeGuestHandle[];
     session: ReturnType<typeof createGuestSession>;
   } {
     const root = document.createElement("div");
     document.body.appendChild(root);
     const sent: string[] = [];
+    const handles: FakeGuestHandle[] = [];
+    const factory: TerminalFactory = () => {
+      const handle = new FakeGuestHandle();
+      handles.push(handle);
+      return handle;
+    };
     const session = createGuestSession(root, {
       login: "guest-user",
       send: (data) => {
@@ -395,11 +432,21 @@ describe("createGuestSession", () => {
       onRetry: () => {},
       onSignOut: () => {},
       onForgetDevice: () => {},
+      terminalFactory: factory,
     });
-    return { root, sent, session };
+    return { root, sent, handles, session };
   }
 
   const frames = (sent: string[]): unknown[] => sent.map((raw) => JSON.parse(raw));
+
+  function joinSession(session: ReturnType<typeof createGuestSession>, id = "s1", name = "build"): void {
+    session.view.showList();
+    session.push(JSON.stringify({ t: "sessions", items: [{ id, name }] }));
+    session.open(id);
+    const full = b64encode(new TextEncoder().encode("hello"));
+    session.push(JSON.stringify({ t: "snapshot", id, cols: 80, rows: 24, seq: 7, data: full }));
+    session.push(JSON.stringify({ t: "snapshot_more", id, data: "", last: true }));
+  }
 
   it("lists the granted sessions and attaches on open", () => {
     const { root, sent, session } = setupSession();
@@ -436,18 +483,69 @@ describe("createGuestSession", () => {
     expect(root.querySelector("#guest-notice")?.textContent).toBe("“build” is not shared with you.");
   });
 
-  it("draws a granted session read-only", () => {
-    const { root, session } = setupSession();
-    session.view.showList();
-    session.push(JSON.stringify({ t: "sessions", items: [{ id: "s1", name: "build" }] }));
-    session.open("s1");
-    const full = b64encode(new TextEncoder().encode("hello"));
-    session.push(JSON.stringify({ t: "snapshot", id: "s1", cols: 80, rows: 24, seq: 7, data: full }));
-    session.push(JSON.stringify({ t: "snapshot_more", id: "s1", data: "", last: true }));
+  it("mounts the terminal on snapshot and streams output into it", () => {
+    const { root, handles, session } = setupSession();
+    joinSession(session);
+    expect(handles.length).toBe(1);
+    expect(root.querySelector("#term-pane .term-fit")).not.toBeNull();
     session.push(
       JSON.stringify({ t: "out", id: "s1", seq: 8, data: b64encode(new TextEncoder().encode("!")) }),
     );
-    expect(root.querySelector("#guest-output")?.textContent).toBe("hello!");
-    expect(root.querySelector("#guest-status")).toBeNull();
+    expect(handles[0]?.written.join("")).toBe("hello!");
+    // Stale output from a reconnect never duplicates.
+    session.push(
+      JSON.stringify({ t: "out", id: "s1", seq: 8, data: b64encode(new TextEncoder().encode("!")) }),
+    );
+    expect(handles[0]?.written.join("")).toBe("hello!");
+  });
+
+  it("sends typed text and key-bar keys as input frames", () => {
+    const { root, sent, handles, session } = setupSession();
+    joinSession(session);
+    handles[0]?.emitInput("ls");
+    root.querySelector<HTMLButtonElement>('#keybar button[data-key="enter"]')?.click();
+    const outbound = frames(sent);
+    expect(outbound[1]).toEqual({
+      t: "input",
+      id: "s1",
+      data: b64encode(new TextEncoder().encode("ls")),
+    });
+    expect(outbound[2]).toEqual({ t: "input", id: "s1", data: b64encode(new Uint8Array([0x0d])) });
+  });
+
+  it("sends prompts through the composer and answers ok and error", () => {
+    const { root, sent, session } = setupSession();
+    joinSession(session);
+    const area = root.querySelector<HTMLTextAreaElement>(".composer-input");
+    area!.value = "fix the build";
+    root.querySelector<HTMLButtonElement>(".composer-send")?.click();
+    const prompt = frames(sent)[1] as { t: string; req: string; id: string; text: string };
+    expect(prompt.t).toBe("prompt");
+    expect(prompt.id).toBe("s1");
+    expect(prompt.text).toBe("fix the build");
+    session.push(JSON.stringify({ t: "ok", req: prompt.req }));
+    expect(root.querySelector<HTMLElement>(".composer-ok")?.hidden).toBe(false);
+    expect(area?.value).toBe("");
+    area!.value = "again";
+    root.querySelector<HTMLButtonElement>(".composer-send")?.click();
+    const retry = frames(sent)[2] as { req: string };
+    session.push(JSON.stringify({ t: "error", req: retry.req, code: "busy", message: "host is busy" }));
+    expect(root.querySelector<HTMLElement>(".composer-error")?.textContent).toBe("host is busy");
+    expect(area?.value).toBe("again");
+  });
+
+  it("offers no builder, no sheets and no spawn in a granted session", () => {
+    const { root, session } = setupSession();
+    joinSession(session);
+    expect(root.querySelector<HTMLButtonElement>(".composer-builder")?.hidden).toBe(true);
+    expect(root.querySelector("#session-files")).toBeNull();
+    expect(root.querySelector("#session-new")).toBeNull();
+  });
+
+  it("announces the exit on the session badge", () => {
+    const { root, session } = setupSession();
+    joinSession(session);
+    session.push(JSON.stringify({ t: "exited", id: "s1", code: 1 }));
+    expect(root.querySelector("#guest-exit")?.textContent).toBe("Session exited (1)");
   });
 });

@@ -1,11 +1,47 @@
 // SPDX-License-Identifier: Apache-2.0
 import { afterEach, describe, expect, it } from "vitest";
-import { createGuestView, guestOutputText } from "../src/guest-views.js";
+import { createGuestView } from "../src/guest-views.js";
 import type { GuestView } from "../src/guest-views.js";
 import type { SessionItem } from "../src/protocol.js";
 import { SessionStore } from "../src/sessions.js";
+import type { TerminalFactory, TerminalHandle } from "../src/terminal.js";
 
 const NOW = 1793100000_000;
+
+class FakeHandle implements TerminalHandle {
+  written: string[] = [];
+  clears = 0;
+  disposed = false;
+  private inputListeners: ((text: string) => void)[] = [];
+
+  write = (text: string): void => {
+    this.written.push(text);
+  };
+  clear = (): void => {
+    this.clears += 1;
+  };
+  focus = (): void => {};
+  scrollToBottom = (): void => {};
+  isAtBottom = (): boolean => true;
+  onUserInput = (callback: (text: string) => void): (() => void) => {
+    this.inputListeners.push(callback);
+    return () => {};
+  };
+  onScroll = (): (() => void) => () => {};
+  onReady = (callback: () => void): (() => void) => {
+    callback();
+    return () => {};
+  };
+  dispose = (): void => {
+    this.disposed = true;
+  };
+
+  emitInput(text: string): void {
+    for (const listener of this.inputListeners) {
+      listener(text);
+    }
+  }
+}
 
 function item(overrides: Partial<SessionItem> = {}): SessionItem {
   return {
@@ -25,6 +61,9 @@ interface Setup {
   view: GuestView;
   store: SessionStore;
   opened: string[];
+  inputs: Uint8Array[];
+  sends: { text: string; req: string }[];
+  handles: FakeHandle[];
   counts: { leaves: number; retries: number };
 }
 
@@ -33,32 +72,38 @@ function setup(): Setup {
   document.body.appendChild(root);
   const store = new SessionStore();
   const opened: string[] = [];
+  const inputs: Uint8Array[] = [];
+  const sends: { text: string; req: string }[] = [];
+  const handles: FakeHandle[] = [];
   const counts = { leaves: 0, retries: 0 };
-  const view = createGuestView(root, store, {
-    onOpenSession: (id) => opened.push(id),
-    onLeaveSession: () => {
-      counts.leaves += 1;
+  const factory: TerminalFactory = () => {
+    const handle = new FakeHandle();
+    handles.push(handle);
+    return handle;
+  };
+  const view = createGuestView(
+    root,
+    store,
+    {
+      onOpenSession: (id) => opened.push(id),
+      onLeaveSession: () => {
+        counts.leaves += 1;
+      },
+      onRetry: () => {
+        counts.retries += 1;
+      },
+      onSignOut: () => {},
+      onForgetDevice: () => {},
+      onInput: (bytes) => inputs.push(bytes),
+      onComposerSend: (text, req) => sends.push({ text, req }),
     },
-    onRetry: () => {
-      counts.retries += 1;
-    },
-    onSignOut: () => {},
-    onForgetDevice: () => {},
-  });
-  return { root, view, store, opened, counts };
+    { terminalFactory: factory },
+  );
+  return { root, view, store, opened, inputs, sends, handles, counts };
 }
 
 afterEach(() => {
   document.body.innerHTML = "";
-});
-
-describe("guestOutputText", () => {
-  it("strips escape sequences and normalizes newlines", () => {
-    expect(guestOutputText("\x1b[32m●\x1b[0m ok\r\nnext\rlast")).toBe("● ok\nnext\nlast");
-    expect(guestOutputText("\x1b]8;;https://x\x07link\x1b\\done")).toBe("linkdone");
-    expect(guestOutputText("\x1b(0qqq\x1b(B")).toBe("qqq");
-    expect(guestOutputText("plain")).toBe("plain");
-  });
 });
 
 describe("guest entry screens", () => {
@@ -135,37 +180,126 @@ describe("guest session list", () => {
 });
 
 describe("guest session view", () => {
-  it("shows one read-only session with a back button", () => {
+  it("shows the owner's terminal, key bar and composer, minus the builder", () => {
     const { root, view, counts } = setup();
     view.showSession("s1", "build");
     expect(root.querySelector(".session-title")?.textContent).toBe("build");
-    expect(root.querySelector("#guest-output")).not.toBeNull();
-    expect(root.querySelector("#guest-status")?.textContent).toBe("Attaching…");
+    expect(root.querySelector("#term-pane .term-placeholder")?.textContent).toBe("Attaching…");
+    expect(root.querySelectorAll("#keybar button.key").length).toBe(9);
+    expect(root.querySelector(".composer-input")).not.toBeNull();
+    expect(root.querySelector(".composer-send")).not.toBeNull();
+    // No builder, no sheets, no Files: a guest sends text prompts only.
+    expect(root.querySelector<HTMLButtonElement>(".composer-builder")?.hidden).toBe(true);
+    expect(root.querySelector("#session-files")).toBeNull();
     root.querySelector<HTMLButtonElement>("#session-back")?.click();
     expect(counts.leaves).toBe(1);
   });
 
-  it("appends stripped output and clears it on redraw", () => {
-    const { root, view } = setup();
+  it("mounts the terminal on snapshot and feeds it output", () => {
+    const { root, view, handles } = setup();
     view.showSession("s1", "build");
-    view.appendOutput("\x1b[32mok\x1b[0m\r\n");
-    view.appendOutput("more");
-    expect(root.querySelector("#guest-output")?.textContent).toBe("ok\nmore");
-    view.clearOutput();
-    expect(root.querySelector("#guest-output")?.textContent).toBe("");
+    view.ensureTerminal("s1", 80, 24);
+    expect(handles.length).toBe(1);
+    expect(root.querySelector("#term-pane .term-placeholder")).toBeNull();
+    view.writeTerminal("hello");
+    view.writeTerminal("!");
+    expect(handles[0]?.written.join("")).toBe("hello!");
+    view.clearTerminal();
+    expect(handles[0]?.clears).toBe(1);
   });
 
-  it("shows and hides the session status line", () => {
-    const { root, view } = setup();
+  it("ignores snapshots for another session and same-size remounts", () => {
+    const { view, handles } = setup();
     view.showSession("s1", "build");
+    view.ensureTerminal("s2", 80, 24);
+    expect(handles.length).toBe(0);
+    view.ensureTerminal("s1", 80, 24);
+    view.ensureTerminal("s1", 80, 24);
+    expect(handles.length).toBe(1);
+    // A changed host size remounts the terminal but keeps the draft.
+    const area = document.querySelector<HTMLTextAreaElement>(".composer-input");
+    area!.value = "draft kept";
+    view.ensureTerminal("s1", 100, 30);
+    expect(handles.length).toBe(2);
+    expect(handles[0]?.disposed).toBe(true);
+    expect(document.querySelector<HTMLTextAreaElement>(".composer-input")?.value).toBe("draft kept");
+  });
+
+  it("sends typed text and key-bar keys as input", () => {
+    const { root, view, handles, inputs } = setup();
+    view.showSession("s1", "build");
+    view.ensureTerminal("s1", 80, 24);
+    handles[0]?.emitInput("ls");
+    root.querySelector<HTMLButtonElement>('#keybar button[data-key="enter"]')?.click();
+    expect(Array.from(inputs, (bytes) => Array.from(bytes))).toEqual([
+      Array.from(new TextEncoder().encode("ls")),
+      [0x0d],
+    ]);
+  });
+
+  it("applies the one-shot Ctrl latch to typed text, then releases it", () => {
+    const { root, view, handles, inputs } = setup();
+    view.showSession("s1", "build");
+    view.ensureTerminal("s1", 80, 24);
+    root.querySelector<HTMLButtonElement>('#keybar button[data-key="ctrl"]')?.click();
+    expect(root.querySelector('#keybar button[data-key="ctrl"]')?.getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    handles[0]?.emitInput("c");
+    expect(Array.from(inputs[0] ?? [])).toEqual([0x03]);
+    expect(root.querySelector('#keybar button[data-key="ctrl"]')?.getAttribute("aria-pressed")).toBe(
+      "false",
+    );
+  });
+
+  it("sends prompts through the composer and answers ok and error", () => {
+    const { root, view, sends } = setup();
+    view.showSession("s1", "build");
+    const area = root.querySelector<HTMLTextAreaElement>(".composer-input");
+    area!.value = "fix the build";
+    root.querySelector<HTMLButtonElement>(".composer-send")?.click();
+    expect(sends.length).toBe(1);
+    expect(sends[0]?.text).toBe("fix the build");
+    view.composerOk(sends[0]?.req ?? "");
+    expect(root.querySelector<HTMLElement>(".composer-ok")?.hidden).toBe(false);
+    expect(area?.value).toBe("");
+    area!.value = "again";
+    root.querySelector<HTMLButtonElement>(".composer-send")?.click();
+    view.composerError("host is busy", sends[1]?.req ?? null);
+    const error = root.querySelector<HTMLElement>(".composer-error");
+    expect(error?.hidden).toBe(false);
+    expect(error?.textContent).toBe("host is busy");
+    expect(area?.value).toBe("again");
+  });
+
+  it("patches the exit badge and the header in place, keeping the terminal", () => {
+    const { root, view, handles } = setup();
+    view.showSession("s1", "build");
+    view.ensureTerminal("s1", 80, 24);
+    view.writeTerminal("kept");
     view.setSessionStatus("Session exited (1)");
-    expect(root.querySelector("#guest-status")?.textContent).toBe("Session exited (1)");
+    const badge = root.querySelector<HTMLElement>("#guest-exit");
+    expect(badge?.hidden).toBe(false);
+    expect(badge?.textContent).toBe("Session exited (1)");
     view.setSessionStatus(null);
-    expect(root.querySelector("#guest-status")).toBeNull();
-    // The output survives the status repaint.
-    view.appendOutput("kept");
-    view.setSessionStatus("Session exited (1)");
-    expect(root.querySelector("#guest-output")?.textContent).toBe("kept");
+    expect(root.querySelector<HTMLElement>("#guest-exit")?.hidden).toBe(true);
+    view.setConnectionState("retrying");
+    view.setLogin("guest-user");
+    view.setSignOutError(null);
+    // Still the same terminal: nothing repainted under it.
+    expect(handles.length).toBe(1);
+    expect(handles[0]?.disposed).toBe(false);
+    expect(handles[0]?.written.join("")).toBe("kept");
+    expect(root.querySelector(".topbar .conn")?.textContent).toBe("retrying");
+  });
+
+  it("tears the terminal down when leaving the session", () => {
+    const { view, handles } = setup();
+    view.showSession("s1", "build");
+    view.ensureTerminal("s1", 80, 24);
+    view.showList();
+    expect(handles[0]?.disposed).toBe(true);
+    expect(document.querySelector("#term-pane")).toBeNull();
   });
 });
 
