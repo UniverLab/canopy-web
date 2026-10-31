@@ -47,16 +47,6 @@ function nextMessage(client: TestClient): Promise<string> {
   });
 }
 
-function nextClose(client: TestClient): Promise<number> {
-  return new Promise((resolve) => {
-    client.addEventListener(
-      "close",
-      (event) => resolve((event as unknown as { code: number }).code),
-      { once: true },
-    );
-  });
-}
-
 /** Every message the client receives within `ms`; empty when it stays silent. */
 function collectMessages(client: TestClient, ms = 20): Promise<string[]> {
   const seen: string[] = [];
@@ -258,26 +248,21 @@ describe("guest fetch", () => {
     expect(state.getWebSockets()).toHaveLength(3);
   });
 
-  it("refuses the 9th guest with code 4008, apart from the device cap", async () => {
+  it("refuses the 9th guest with 429, apart from the device cap", async () => {
     const { state, room } = setup();
     for (let index = 0; index < 8; index += 1) {
       attachFake(state, room, "device");
       attachFake(state, room, "guest");
     }
-    const ninthGuest = clientOf(room.fetch(upgradeRequest("guest", guestHeaders())));
-    ninthGuest.accept();
-    expect(await nextClose(ninthGuest)).toBe(4008);
-    const ninthDevice = clientOf(room.fetch(upgradeRequest("device")));
-    ninthDevice.accept();
-    expect(await nextClose(ninthDevice)).toBe(4008);
-    // Mirror the runtime: it drops a closed, unattached socket before
-    // calling webSocketClose, which then finds nothing to announce.
-    for (const socket of state.getWebSockets()) {
-      if (socket.deserializeAttachment() === null) {
-        state.remove(socket);
-        room.webSocketClose(socket);
-      }
-    }
+    const started = Date.now();
+    const ninthGuest = room.fetch(upgradeRequest("guest", guestHeaders()));
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(ninthGuest.status).toBe(429);
+    expect(await ninthGuest.json()).toEqual({ error: "too_many_guests" });
+    expect((ninthGuest as unknown as { webSocket?: unknown }).webSocket ?? null).toBeNull();
+    const ninthDevice = room.fetch(upgradeRequest("device"));
+    expect(ninthDevice.status).toBe(429);
+    expect(await ninthDevice.json()).toEqual({ error: "too_many_devices" });
     expect(state.getWebSockets()).toHaveLength(16);
   });
 

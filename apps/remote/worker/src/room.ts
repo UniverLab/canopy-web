@@ -179,17 +179,9 @@ export class UserRoom {
     return upgradeResponse(pair[0]);
   }
 
-  /** A 101 whose server side is already closing: the room is full. */
+  /** A full room refuses before the upgrade: no 101, no socket. */
   private refuse(reason: string): Response {
-    const pair = new WebSocketPair();
-    const refused = pair[1];
-    // Through the hibernation API like every other socket: the runtime
-    // only delivers the close on an accepted socket. It carries no
-    // attachment, so it is invisible to counts and broadcasts, and its
-    // close removes it again.
-    this.state.acceptWebSocket(refused);
-    refused.close(4008, reason);
-    return upgradeResponse(pair[0]);
+    return json({ error: reason }, 429);
   }
 
   webSocketMessage(socket: RoomSocket, message: string | ArrayBuffer): void {
@@ -246,7 +238,10 @@ export class UserRoom {
     this.route(socket, to, body);
   }
 
-  webSocketClose(socket: RoomSocket): void {
+  webSocketClose(socket: RoomSocket, code?: number, reason?: string): void {
+    // Echo the client's close so the handshake completes, then run the
+    // same gone-notices as an error.
+    socket.close(code, reason);
     this.onSocketGone(socket);
   }
 

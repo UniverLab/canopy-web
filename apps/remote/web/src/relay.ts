@@ -19,6 +19,23 @@ export function defaultRelayUrl(): string {
   return `${protocol === "https:" ? "wss:" : "ws:"}//${host}/ws/device`;
 }
 
+/** The user-facing message for a relay close code. */
+export function relayCloseMessage(code: number): string {
+  if (code === 4000) {
+    return "Replaced by a newer connection";
+  }
+  if (code === 4008) {
+    return "Too many devices connected";
+  }
+  if (code === 4009) {
+    return "Too many attempts, try again later";
+  }
+  if (code === 1013) {
+    return "Relay is busy, try again";
+  }
+  return "Could not reach the relay";
+}
+
 function parseFrame(data: unknown): RelayFrame | null {
   if (typeof data !== "string") {
     return null;
@@ -105,24 +122,25 @@ export class RelaySocket {
     }
     this.pending = new Promise<void>((resolve, reject) => {
       let settled = false;
-      const fail = () => {
-        if (!settled) {
-          settled = true;
-          reject(new Error("Could not reach the relay"));
-        }
-      };
       const ws = this.createWs(this.url);
       this.ws = ws;
       ws.onopen = () => {
         settled = true;
         resolve();
       };
-      ws.onerror = () => fail();
+      // An error never settles: the close that always follows it carries
+      // the code the failure message is mapped from.
+      ws.onerror = () => {
+        // Settled by the close below.
+      };
       ws.onclose = (ev) => {
         if (this.ws === ws) {
           this.ws = null;
         }
-        fail();
+        if (!settled) {
+          settled = true;
+          reject(new Error(relayCloseMessage(ev.code)));
+        }
         for (const handler of this.closeHandlers) {
           handler(ev);
         }

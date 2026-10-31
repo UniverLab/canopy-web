@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, expect, it } from "vitest";
-import { parseHostsList } from "../src/relay.js";
+import { parseHostsList, relayCloseMessage } from "../src/relay.js";
 import type { RelayFrame } from "../src/relay.js";
 import { connectRelay, createRelayHarness } from "./fakes.js";
 
@@ -45,6 +45,24 @@ describe("RelaySocket", () => {
     expect(harness.relay.connected).toBe(false);
   });
 
+  it("rejects a pre-open close with that code's message and never opens", async () => {
+    const cases: Array<[number, string]> = [
+      [4000, "Replaced by a newer connection"],
+      [4008, "Too many devices connected"],
+      [4009, "Too many attempts, try again later"],
+      [1013, "Relay is busy, try again"],
+      [1006, "Could not reach the relay"],
+    ];
+    for (const [code, message] of cases) {
+      const harness = createRelayHarness();
+      const pending = harness.relay.connect();
+      harness.latest().close(code);
+      await expect(pending).rejects.toThrow(message);
+      expect(harness.relay.connected).toBe(false);
+      expect(harness.relay.connecting).toBe(false);
+    }
+  });
+
   it("notifies close subscribers", async () => {
     const harness = createRelayHarness();
     await connectRelay(harness);
@@ -61,6 +79,21 @@ describe("RelaySocket", () => {
     const harness = createRelayHarness();
     expect(() => harness.relay.send("h:abc", {})).toThrow("Relay is not connected");
     expect(harness.relay.trySend("h:abc", {})).toBe(false);
+  });
+});
+
+describe("relayCloseMessage", () => {
+  it("maps each close code to its own message", () => {
+    expect(relayCloseMessage(4000)).toBe("Replaced by a newer connection");
+    expect(relayCloseMessage(4008)).toBe("Too many devices connected");
+    expect(relayCloseMessage(4009)).toBe("Too many attempts, try again later");
+    expect(relayCloseMessage(1013)).toBe("Relay is busy, try again");
+  });
+
+  it("falls back to the generic failure for every other code", () => {
+    for (const code of [0, 1000, 1001, 1005, 1006, 1011, 4500]) {
+      expect(relayCloseMessage(code)).toBe("Could not reach the relay");
+    }
   });
 });
 

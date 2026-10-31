@@ -46,9 +46,11 @@ export class FakeWebSocket {
     this.sent.push(data);
   }
 
-  close(): void {
+  close(code?: number, reason?: string): void {
     this.readyState = 3;
-    this.onclose?.(new CloseEvent("close"));
+    this.onclose?.(
+      code === undefined ? new CloseEvent("close") : new CloseEvent("close", { code, reason }),
+    );
   }
 
   envelopes(): SentEnvelope[] {

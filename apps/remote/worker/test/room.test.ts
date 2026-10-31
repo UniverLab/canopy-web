@@ -180,25 +180,44 @@ describe("room fetch", () => {
     });
   });
 
-  it("refuses the 9th device with code 4008", async () => {
+  it("refuses the 9th device with 429 before the upgrade", async () => {
     const { state, room } = setup();
     for (let index = 0; index < 8; index += 1) {
       const response = room.fetch(upgradeRequest("device"));
       expect(response.status).toBe(101);
     }
     expect(state.getWebSockets()).toHaveLength(8);
-    const ninth = clientOf(room.fetch(upgradeRequest("device")));
-    ninth.accept();
-    expect(await nextClose(ninth)).toBe(4008);
-    // Mirror the runtime: it drops the closed, unattached socket before
-    // calling webSocketClose, which then finds nothing to broadcast.
-    for (const socket of state.getWebSockets()) {
-      if (socket.deserializeAttachment() === null) {
-        state.remove(socket);
-        room.webSocketClose(socket);
-      }
-    }
+    const started = Date.now();
+    const ninth = room.fetch(upgradeRequest("device"));
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(ninth.status).toBe(429);
+    expect(await ninth.json()).toEqual({ error: "too_many_devices" });
+    // No 101, so no socket to open: the browser never sees an open event.
+    expect((ninth as unknown as { webSocket?: unknown }).webSocket ?? null).toBeNull();
     expect(state.getWebSockets()).toHaveLength(8);
+  });
+});
+
+describe("close handshake", () => {
+  it("echoes the client's close code and reason", () => {
+    const { state, room } = setup();
+    const device = attachFake(state, room, "device");
+    room.webSocketClose(device, 1000, "gone");
+    expect(device.closed).toEqual([{ code: 1000, reason: "gone" }]);
+  });
+
+  it("still announces the gone socket after echoing its close", () => {
+    const { state, room } = setup();
+    const device = attachFake(state, room, "device");
+    attachFake(state, room, "host", { host_id: HOST_ID, label: "devbox" });
+    const hostSocket = state.getWebSockets().find(
+      (socket) => socket.deserializeAttachment()?.role === "host",
+    );
+    if (hostSocket === undefined) {
+      throw new Error("expected the host socket to be attached");
+    }
+    room.webSocketClose(hostSocket, 1001, "away");
+    expect(device.frames()).toEqual([{ from: "relay", body: { t: "hosts", items: [] } }]);
   });
 });
 
@@ -399,17 +418,16 @@ describe("live room", () => {
   it("refuses the 9th device on the real object", async () => {
     const namespace = (env as unknown as Env).USER_ROOM;
     const stub = namespace.get(namespace.idFromName("room-self-ninth"));
-    const clients: TestClient[] = [];
     for (let index = 0; index < 8; index += 1) {
       const response = await stub.fetch(upgradeRequest("device"));
       expect(response.status).toBe(101);
-      const client = clientOf(response);
-      client.accept();
-      clients.push(client);
+      clientOf(response).accept();
     }
-    const ninth = clientOf(await stub.fetch(upgradeRequest("device")));
-    ninth.accept();
-    expect(await nextClose(ninth)).toBe(4008);
+    const started = Date.now();
+    const ninth = await stub.fetch(upgradeRequest("device"));
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(ninth.status).toBe(429);
+    expect(await ninth.json()).toEqual({ error: "too_many_devices" });
   });
 
   it("answers app pings on the real object", async () => {
