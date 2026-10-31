@@ -240,7 +240,7 @@ label > textarea {
   filter: brightness(1.12);
 }
 
-/* The login, host and connection state read as mono chips. */
+/* The login and host read as mono chips. */
 .topbar .chip {
   font-family: var(--font-mono);
   font-size: 0.75rem;
@@ -258,8 +258,7 @@ label > textarea {
 }
 
 /* The banner takes about half of a phone's header, so the login gives up
- * its width first (an ellipsis, never a push): the connection state keeps
- * its place at the right edge. */
+ * its width first (an ellipsis, never a push). */
 .topbar .login {
   min-width: 0;
   flex-shrink: 1;
@@ -273,12 +272,7 @@ label > textarea {
   gap: 0.3rem;
 }
 
-.topbar .conn {
-  margin-left: auto;
-}
-
-/* The host chip turns ok-green only while connected; the "connected" word
- * in the conn chip beside it is the text signal. */
+/* The host chip turns ok-green only while connected. */
 .topbar[data-conn="connected"] .host {
   background: var(--tint-ok);
   border-color: var(--tint-line);
@@ -1591,7 +1585,7 @@ label > textarea {
 /* --- The host-metrics strip and the SysInfo view ---------------------- */
 
 /* The strip reads as a chip and taps like a button; it wraps onto its
- * own header row on a 360 px phone rather than squeezing the conn chip. */
+ * own header row on a 360 px phone rather than squeezing the host chip. */
 .topbar .metrics-strip {
   font-family: var(--font-mono);
   font-size: 0.72rem;

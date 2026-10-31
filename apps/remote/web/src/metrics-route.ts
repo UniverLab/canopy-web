@@ -145,8 +145,8 @@ export class MetricsRoute {
     this.syncWatch();
   }
 
-  // A push repaints the strip where it sits — beside the host chip, ahead
-  // of the conn chip — without touching the rest of the header, so the
+  // A push repaints the strip where it sits — beside the host chip, at the
+  // header's end — without touching the rest of the header, so the
   // terminal and the composer's draft survive it.
   syncStrip(): void {
     const html = this.stripHtml();
@@ -156,7 +156,7 @@ export class MetricsRoute {
       return;
     }
     if (existing === null) {
-      this.root.querySelector(".topbar .conn")?.insertAdjacentHTML("beforebegin", html);
+      this.root.querySelector(".topbar .topbar-inner")?.insertAdjacentHTML("beforeend", html);
       this.wireStrip();
       return;
     }

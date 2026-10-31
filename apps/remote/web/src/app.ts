@@ -183,7 +183,7 @@ export function createShell(
   };
 
   // A live link is the wifi arc; anything else (connecting, retrying,
-  // failed) is the crossed-out one, and the conn chip's word says which.
+  // failed) is the crossed-out one.
   const linkIcon = (): RemoteIconName => (connectionState === "connected" ? "wifi" : "wifiOff");
 
   // The chrome paints from the shell's state: the topbar, the banner and
@@ -260,7 +260,7 @@ export function createShell(
   };
 
   // The host chip's link icon: mounted after every render that carries the
-  // header, and patched in place while a connection change patches the chip.
+  // header, and patched in place on a connection change.
   const mountHeaderIcon = (): void => {
     hostIcon?.destroy();
     hostIcon = null;
@@ -623,10 +623,6 @@ export function createShell(
         const link = linkIcon();
         if (hostIcon !== null && hostIcon.name !== link) {
           hostIcon.to(link);
-        }
-        const conn = root.querySelector(".topbar .conn");
-        if (conn) {
-          conn.textContent = state;
         }
         const main = root.querySelector("main");
         root.querySelector(".conn-banner")?.remove();

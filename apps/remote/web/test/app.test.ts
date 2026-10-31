@@ -258,7 +258,6 @@ describe("createShell", () => {
     shell.setHostLabel("Host one");
     shell.setConnectionState("connected");
     expect(query(".topbar").getAttribute("data-conn")).toBe("connected");
-    expect(query(".topbar .conn").textContent).toBe("connected");
     shell.setConnectionState("retrying in 2s");
     expect(query(".topbar").getAttribute("data-conn")).toBe("retrying in 2s");
   });
@@ -398,7 +397,7 @@ describe("createShell", () => {
     shell.showSessions();
     expect(query(".topbar .login").textContent).toBe("octo");
     expect(query(".topbar .host").textContent).toBe("Host one");
-    expect(query(".topbar .conn").textContent).toBe("connected");
+    expect(root.querySelector(".conn-banner")).toBeNull();
     const row = query<HTMLButtonElement>('[data-session="s1"]');
     expect(row.querySelector(".session-name")?.textContent).toBe("build");
     row.click();
@@ -498,7 +497,7 @@ describe("createShell", () => {
     shell.writeTerminal("hi");
     query<HTMLTextAreaElement>(".composer-input").value = "draft";
     shell.setConnectionState("retrying in 2s");
-    expect(query(".topbar .conn").textContent).toBe("retrying in 2s");
+    expect(query(".conn-banner").textContent).toContain("retrying in 2s");
     expect(handles).toHaveLength(1);
     expect(handles[0]?.disposed).toBe(false);
     expect(handles[0]?.written).toEqual(["hi"]);
@@ -538,6 +537,7 @@ describe("createShell", () => {
   it("shows retry and pair-again on failure", () => {
     shell.showSessions();
     shell.setConnectionState("failed: Too many devices connected");
+    expect(query(".conn-banner").textContent).toContain("failed: Too many devices connected");
     query<HTMLButtonElement>("#conn-retry").click();
     expect(signal().retries).toBe(1);
     shell.setConnectionState(`failed: ${connectFailMessage("unknown_device")}`);

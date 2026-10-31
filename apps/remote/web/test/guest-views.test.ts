@@ -153,13 +153,16 @@ describe("guest entry screens", () => {
     expect(root.querySelector("main.session-view footer.look-colophon")).toBeNull();
   });
 
-  it("shows the relay state while connecting, with a retry on failure", () => {
+  it("shows the banner only while failing, with a retry on failure", () => {
     const { root, view, counts } = setup();
     view.setConnectionState("connecting");
     view.showConnecting();
-    expect(root.querySelector(".conn-banner")?.textContent).toContain("connecting");
+    expect(root.querySelector(".conn-banner")).toBeNull();
+    view.setConnectionState("retrying in 2s");
+    expect(root.querySelector(".conn-banner")?.textContent).toContain("retrying in 2s");
     expect(root.querySelector("#guest-retry")).toBeNull();
     view.setConnectionState("failed: Connection closed");
+    expect(root.querySelector(".conn-banner")?.textContent).toContain("failed: Connection closed");
     const retry = root.querySelector<HTMLButtonElement>("#guest-retry");
     expect(retry).not.toBeNull();
     retry?.click();
@@ -320,7 +323,7 @@ describe("guest session view", () => {
     expect(handles.length).toBe(1);
     expect(handles[0]?.disposed).toBe(false);
     expect(handles[0]?.written.join("")).toBe("kept");
-    expect(root.querySelector(".topbar .conn")?.textContent).toBe("retrying");
+    expect(root.querySelector(".topbar")?.getAttribute("data-conn")).toBe("retrying");
   });
 
   it("tears the terminal down when leaving the session", () => {
@@ -353,7 +356,6 @@ describe("guest chrome", () => {
     view.setConnectionState("connected");
     view.showList();
     expect(root.querySelector(".topbar .login")?.textContent).toBe("guest-user");
-    expect(root.querySelector(".topbar .conn")?.textContent).toBe("connected");
     expect(root.querySelector(".topbar")?.getAttribute("data-conn")).toBe("connected");
   });
 });

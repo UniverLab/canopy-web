@@ -239,23 +239,22 @@ for (const viewport of [
   });
 }
 
-test("puts the banner on its own row and keeps the connection chip at 390x844", async ({
+test("puts the banner on its own row and keeps the login inside at 390x844", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   // The banner owns the header's first row (275 px on a phone), so a long
-  // GitHub login wraps below it with the connection state — the state
-  // keeps its right edge inside the bar instead of being pushed out.
+  // GitHub login wraps below it, keeping its right edge inside the bar
+  // instead of being pushed out.
   const boxes = await page.evaluate(() => {
     const login = document.querySelector(".topbar .login") as HTMLElement;
     login.textContent = "a-very-long-github-username-1234567890";
     const bar = document.querySelector(".topbar") as HTMLElement;
-    const conn = bar.querySelector(".conn") as HTMLElement;
     const banner = bar.querySelector(".look-banner-header") as HTMLElement;
     return {
       overflow: bar.scrollWidth - bar.clientWidth,
       barRight: Math.round(bar.getBoundingClientRect().right),
-      connRight: Math.round(conn.getBoundingClientRect().right),
+      loginRight: Math.round(login.getBoundingClientRect().right),
       bannerBottom: Math.round(banner.getBoundingClientRect().bottom),
       loginTop: Math.round(login.getBoundingClientRect().top),
       loginWidth: Math.round(login.getBoundingClientRect().width),
@@ -263,7 +262,7 @@ test("puts the banner on its own row and keeps the connection chip at 390x844", 
     };
   });
   expect(boxes.overflow).toBeLessThanOrEqual(0);
-  expect(boxes.connRight).toBeLessThanOrEqual(boxes.barRight);
+  expect(boxes.loginRight).toBeLessThanOrEqual(boxes.barRight);
   expect(boxes.loginTop).toBeGreaterThanOrEqual(boxes.bannerBottom);
   expect(boxes.loginWidth).toBeLessThanOrEqual(boxes.rowWidth);
 });

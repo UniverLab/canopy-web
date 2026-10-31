@@ -146,12 +146,17 @@ export function createGuestView(
     document.title = remoteTitle("Connecting");
     teardownSessionWidgets();
     const failed = connectionState.startsWith("failed:");
+    const retrying = connectionState.startsWith("retrying");
+    const banner =
+      failed || retrying
+        ? `<p class="conn-banner" role="status">${esc(connectionState)} ${
+            failed ? `<button type="button" id="guest-retry">Retry</button>` : ""
+          }</p>`
+        : "";
     root.innerHTML = `
     ${header()}
     <main class="sessions">
-      <p class="conn-banner" role="status">${esc(connectionState)} ${
-        failed ? `<button type="button" id="guest-retry">Retry</button>` : ""
-      }</p>
+      ${banner}
     </main>
     ${REMOTE_FOOTER}`;
     wireChrome();
@@ -273,10 +278,6 @@ export function createGuestView(
     const topbar = root.querySelector(".topbar");
     if (topbar) {
       topbar.setAttribute("data-conn", connectionState);
-    }
-    const conn = root.querySelector(".topbar .conn");
-    if (conn) {
-      conn.textContent = connectionState;
     }
     const who = root.querySelector(".topbar .login");
     if (who) {

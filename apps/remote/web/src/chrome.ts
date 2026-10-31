@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-// The app chrome: the sticky topbar (banner home, account menu, host and
-// connection chips), the connection banner, the pair form's host options,
+// The app chrome: the sticky topbar (banner home, account menu and host
+// chip), the connection banner, the pair form's host options,
 // and the sign-out controls — the header account menu on every signed-in
 // route, plus a direct button on every signed-in route except the session
 // view, which keeps the whole viewport for the terminal. The shell owns
@@ -78,7 +78,6 @@ export function renderTopbar(state: TopbarState): string {
     (state.login === null ? "" : accountHtml(state.login, state.signOutError, state.accountOpen)) +
     host +
     (state.metricsStrip ?? "") +
-    `<span class="conn chip" role="status">${esc(state.connectionState)}</span>` +
     `</div></header>`
   );
 }
