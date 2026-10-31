@@ -268,6 +268,70 @@ test("puts the banner on its own row and keeps the connection chip at 390x844", 
   expect(boxes.loginWidth).toBeLessThanOrEqual(boxes.rowWidth);
 });
 
+test("stacks the banner over a centred chips row at 390x844", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const layout = await page.evaluate(() => {
+    const banner = document.querySelector(".topbar .look-banner-header") as HTMLElement;
+    const bannerBox = banner.getBoundingClientRect();
+    const chips = [...document.querySelectorAll(".topbar-inner > :not(#brand-home)")].map(
+      (chip) => {
+        const box = chip.getBoundingClientRect();
+        return { top: box.top, bottom: box.bottom, left: box.left, right: box.right };
+      },
+    );
+    const el = document.scrollingElement ?? document.documentElement;
+    return {
+      view: window.innerWidth,
+      bannerCenter: bannerBox.left + bannerBox.width / 2,
+      bannerBottom: bannerBox.bottom,
+      chips,
+      overflow: el.scrollWidth - el.clientWidth,
+    };
+  });
+  // Row 1: the banner sits on the viewport's centre line.
+  expect(Math.abs(layout.bannerCenter - layout.view / 2)).toBeLessThanOrEqual(3);
+  // Row 2: every chip starts below the banner, and each wrapped row is
+  // centred; the page never scrolls sideways.
+  expect(layout.chips.length).toBeGreaterThan(0);
+  const rows = new Map<number, { left: number; right: number }>();
+  for (const chip of layout.chips) {
+    expect(chip.top).toBeGreaterThanOrEqual(layout.bannerBottom);
+    expect(chip.left).toBeGreaterThanOrEqual(-1);
+    expect(chip.right).toBeLessThanOrEqual(layout.view + 1);
+    const key = Math.round(chip.top);
+    const row = rows.get(key) ?? { left: chip.left, right: chip.right };
+    row.left = Math.min(row.left, chip.left);
+    row.right = Math.max(row.right, chip.right);
+    rows.set(key, row);
+  }
+  for (const row of rows.values()) {
+    expect(Math.abs((row.left + row.right) / 2 - layout.view / 2)).toBeLessThanOrEqual(4);
+  }
+  expect(layout.overflow).toBeLessThanOrEqual(1);
+});
+
+test("keeps the banner left-aligned on the first row at 1280x900", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  // Desktop keeps the current single-row header: the banner stays
+  // left-aligned beside the chips instead of stacking centred above them.
+  const layout = await page.evaluate(() => {
+    const inner = document.querySelector(".topbar-inner") as HTMLElement;
+    const home = document.querySelector(".topbar #brand-home") as HTMLElement;
+    const first = document.querySelector(".topbar-inner > :not(#brand-home)") as HTMLElement;
+    const innerBox = inner.getBoundingClientRect();
+    const homeBox = home.getBoundingClientRect();
+    const firstBox = first.getBoundingClientRect();
+    return {
+      innerLeft: innerBox.left + parseFloat(getComputedStyle(inner).paddingLeft),
+      home: { left: homeBox.left, top: homeBox.top, bottom: homeBox.bottom },
+      first: { top: firstBox.top, bottom: firstBox.bottom },
+    };
+  });
+  expect(Math.abs(layout.home.left - layout.innerLeft)).toBeLessThanOrEqual(1);
+  expect(layout.first.top).toBeGreaterThanOrEqual(layout.home.top - 1);
+  expect(layout.first.bottom).toBeLessThanOrEqual(layout.home.bottom + 1);
+});
+
 test("puts the Content textarea full width in its card", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator(".composer-builder").click();

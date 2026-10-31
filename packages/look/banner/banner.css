@@ -72,6 +72,7 @@
 @media (max-width: 639px) {
   .topbar .brand-home {
     flex-basis: 100%;
+    justify-content: center;
   }
 
   .look-banner-art {
@@ -84,5 +85,32 @@
 
   .look-banner-header-remote {
     width: 275px;
+  }
+
+  /* Phones stack the header: the banner centred on its own row, the nav
+   * (graphs) or the chips (remote) in one centred row below. The extra
+   * class on each selector outranks the apps' own header rules — the
+   * catalogue's inline lookCss and the remote's Vite bundle both load
+   * after this sheet — and desktop keeps its single row untouched. */
+  .site-header .band-top {
+    justify-content: center;
+  }
+
+  .site-header .banner-home {
+    flex-basis: 100%;
+    justify-content: center;
+  }
+
+  .site-header .site-nav {
+    justify-content: center;
+    margin-inline: auto;
+  }
+
+  .topbar-inner {
+    justify-content: center;
+  }
+
+  .topbar .topbar-inner .conn {
+    margin-left: 0;
   }
 }
