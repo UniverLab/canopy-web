@@ -9,6 +9,7 @@
 // control of any kind.
 
 import { renderTopbar, wireAccount } from "./chrome.js";
+import { syncHeaderFondo } from "./fondo.js";
 import { Composer } from "./composer.js";
 import { REMOTE_FOOTER } from "./footer.js";
 import { renderKeyBar, updateKeyBarLatches } from "./keys.js";
@@ -95,6 +96,9 @@ export function createGuestView(
   }
 
   function wireChrome(): void {
+    // Every paint above repainted the header with innerHTML, detaching
+    // the honeycomb's old host: remount the kit on the fresh one.
+    syncHeaderFondo(root);
     root.querySelector("#brand-home")?.addEventListener("click", () => {
       if (route === "session") {
         callbacks.onLeaveSession();

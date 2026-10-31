@@ -12,7 +12,6 @@ import { b64encode } from "./crypto.js";
 import { GraphStore } from "./graph-store.js";
 import { createGuestSession } from "./guest.js";
 import { MetricsStore } from "./metrics-store.js";
-import { mountCanopyBackground } from "../../../../packages/look/fondo/index.js";
 import { buildCatalog, buildList, buildSpawn, newReqId } from "./protocol.js";
 import type { GraphState, GraphSummary, NodeStatus, PromptDraft, SessionItem, ShelfItem } from "./protocol.js";
 import { createFrameRouter } from "./router.js";
@@ -309,12 +308,6 @@ function main(): void {
   const root = document.getElementById("app");
   if (!root) {
     throw new Error("Missing #app element");
-  }
-  // The same honeycomb the real entry mounts, so the smoke run sees the
-  // dressed page.
-  const fondo = document.getElementById("fondo");
-  if (fondo) {
-    mountCanopyBackground(fondo, "/look/fondo/assets/");
   }
   const store = new SessionStore();
   const catalog = new CatalogStore();
@@ -729,12 +722,16 @@ function main(): void {
   deliver({ t: "hello", features: ["shelf"] });
 
   // Playwright picks the opening screen: the sessions home by default,
-  // the hosts list for the sign-out walk, the sign-in for the colophon.
+  // the hosts list for the sign-out walk, the sign-in for the colophon,
+  // the pair form for the header-band look.
   const screen = new URLSearchParams(globalThis.location.search).get("screen");
   shell.setLogin("smoke");
   if (screen === "signin") {
     shell.setLogin(null);
     shell.showSignIn();
+  } else if (screen === "pair") {
+    shell.showPair();
+    shell.setOnlineHosts([{ host_id: "0123456789abcdef", label: "demo host" }]);
   } else if (screen === "hosts") {
     shell.setPairedHosts([{ host_id: "h1", label: "demo host" }]);
     shell.showHosts();

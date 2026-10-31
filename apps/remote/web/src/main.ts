@@ -13,7 +13,6 @@ import { generateDeviceKey } from "./crypto.js";
 import type { DeviceKey } from "./crypto.js";
 import { GraphStore } from "./graph-store.js";
 import { MetricsStore } from "./metrics-store.js";
-import { mountCanopyBackground } from "../../../../packages/look/fondo/index.js";
 import { buildCatalog, buildCompose, buildList, buildSpawn, newReqId } from "./protocol.js";
 import { runPairing } from "./pairing.js";
 import { ConnectionManager } from "./reconnect.js";
@@ -52,13 +51,9 @@ async function main(): Promise<void> {
     mountEditor(root);
     return;
   }
-  // The live honeycomb behind the page, from the shared look kit.
-  const fondo = document.getElementById("fondo");
-  if (fondo) {
-    mountCanopyBackground(fondo, "/look/fondo/assets/");
-  }
-  // A guest link rides its own chunk with the owner's honeycomb behind it:
-  // no pairing, no host picker — the link names the room and the host.
+  // A guest link rides its own chunk: no pairing, no host picker —
+  // the link names the room and the host. The honeycomb lives in the
+  // header band each view paints, never behind the page.
   if (globalThis.location?.pathname.startsWith("/g/") === true) {
     const { mountGuest } = await import("./guest.js");
     await mountGuest(root);

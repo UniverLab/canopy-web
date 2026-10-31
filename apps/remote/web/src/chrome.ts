@@ -67,8 +67,12 @@ export function renderTopbar(state: TopbarState): string {
     state.showDisconnect === true
       ? `<button type="button" id="conn-disconnect" class="disconnect" aria-label="Disconnect">${icon("x")}<span>Disconnect</span></button>`
       : "";
+  // The honeycomb's host: the first child of the sticky band, so it
+  // rides the stickiness for free; fondo.ts mounts the kit on it after
+  // every repaint. Decoration only, like the graphs header band.
   return (
     `<header class="topbar" data-conn="${esc(state.connectionState)}">` +
+    `<div class="fondo" id="fondo" aria-hidden="true"></div>` +
     `<div class="topbar-inner">` +
     `<button type="button" id="brand-home" class="brand-home" aria-label="Canopy remote, home">${bannerSvg(REMOTE_BANNER_LINES, "look-banner-header look-banner-header-remote", "Canopy remote")}</button>` +
     (state.login === null ? "" : accountHtml(state.login, state.signOutError, state.accountOpen)) +

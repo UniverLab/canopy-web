@@ -9,6 +9,7 @@ import { Composer } from "./composer.js";
 import { CatalogStore } from "./catalog.js";
 import { Builder } from "./builder.js";
 import { renderConnBanner, renderTopbar, wireAccount, wireConnActions } from "./chrome.js";
+import { syncHeaderFondo } from "./fondo.js";
 import { renderHosts, renderPair, renderSignIn } from "./entry-views.js";
 import type { EntryViewHooks, PairDraft } from "./entry-views.js";
 import { REMOTE_FOOTER } from "./footer.js";
@@ -421,9 +422,8 @@ export function createShell(
   // Declared rather than assigned so the entry views' hooks can call it
   // from above: a pairing complaint repaints through setPairError.
   function render(): void {
-    // The view name on <body> lets the stylesheet dim the honeycomb
-    // behind the terminal (body[data-view="session"]), and the document
-    // title names the view behind it.
+    // The view name on <body>, and the document title names the view
+    // behind it.
     document.body.dataset.view = route;
     document.title = shellTitle(route, {
       homeTab: graphRoute.homeTab,
@@ -446,6 +446,9 @@ export function createShell(
       renderSession();
     }
     mountHeaderIcon();
+    // Every route above repainted the header with innerHTML, detaching the
+    // honeycomb's old host: remount the kit on the fresh one.
+    syncHeaderFondo(root);
     metricsRoute.afterRender();
     root.querySelector("#brand-home")?.addEventListener("click", () => goHome());
     // The header Disconnect, present on the sessions route only; the

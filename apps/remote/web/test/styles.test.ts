@@ -37,4 +37,28 @@ describe("web/src/styles.css", () => {
     const rule = styles.slice(styles.indexOf(".composer-send"));
     expect(rule.slice(0, rule.indexOf("}"))).toContain("background: var(--accent)");
   });
+
+  it("confines the honeycomb to the header band over a flat body", () => {
+    // The body is the flat deep surface, never the honeycomb's stage.
+    expect(styles).toContain("body {\n  background: var(--bg-deep);");
+    // The host rides the sticky band, clipping its own canvas — the bar
+    // itself must not clip, or the account menu is cut off.
+    const fondo = styles.slice(styles.indexOf(".fondo {"));
+    const fondoRule = fondo.slice(0, fondo.indexOf("}"));
+    expect(fondoRule).toContain("position: absolute");
+    expect(fondoRule).not.toContain("position: fixed");
+    expect(fondoRule).toContain("overflow: hidden");
+    expect(fondoRule).not.toContain("opacity");
+    const topbar = styles.slice(styles.indexOf(".topbar {"));
+    const topbarRule = topbar.slice(0, topbar.indexOf("}"));
+    expect(topbarRule).toContain("background: var(--bg-deep)");
+    expect(topbarRule).not.toContain("overflow");
+    // The header's row paints above the host, the band's first child.
+    const inner = styles.slice(styles.indexOf(".topbar-inner {"));
+    const innerRule = inner.slice(0, inner.indexOf("}"));
+    expect(innerRule).toContain("position: relative");
+    expect(innerRule).toContain("z-index: 1");
+    // No view dims a page-wide layer anymore: there is none.
+    expect(styles).not.toContain("body[data-view=");
+  });
 });

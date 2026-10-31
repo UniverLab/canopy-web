@@ -39,8 +39,12 @@ body {
   overflow-x: hidden;
 }
 
+html {
+  background: var(--bg-deep);
+}
+
 body {
-  background: var(--bg);
+  background: var(--bg-deep);
   color: var(--ink);
   font-family: var(--font-body);
   font-size: 1.0625rem;
@@ -48,23 +52,16 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* The live honeycomb: a fixed canvas layer behind the whole page. The
- * session view dims it so the terminal stays legible. */
+/* The live honeycomb: confined to the header band, like the graphs
+ * header — the page body is the flat deep surface. The host is the
+ * topbar's first child; the topbar itself must not clip (the account
+ * menu floats over the page below), so the host clips its own canvas. */
 .fondo {
-  position: fixed;
+  position: absolute;
   inset: 0;
+  overflow: hidden;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.55;
-}
-
-body[data-view="session"] .fondo {
-  opacity: 0.15;
-}
-
-/* The graph view stages a drawing: the honeycomb steps back the same way. */
-body[data-view="graph"] .fondo {
-  opacity: 0.15;
 }
 
 #app {
@@ -204,13 +201,16 @@ label > textarea {
   position: sticky;
   top: 0;
   z-index: 5;
-  background: var(--bg);
+  background: var(--bg-deep);
   border-bottom: 1px solid var(--line);
 }
 
 /* The header's centred row; the bar itself stays full width. No overflow
- * clip here: the account menu floats over the page below the header. */
+ * clip here: the account menu floats over the page below the header. The
+ * row rides above the honeycomb host, the band's first child. */
 .topbar-inner {
+  position: relative;
+  z-index: 1;
   width: 100%;
   max-width: 48rem;
   margin: 0 auto;
@@ -1749,9 +1749,4 @@ label > textarea {
   margin: 0.4rem 0 0;
   font-size: 0.85rem;
   color: var(--muted);
-}
-
-/* The SysInfo view stages its sparklines: the honeycomb steps back. */
-body[data-view="metrics"] .fondo {
-  opacity: 0.15;
 }

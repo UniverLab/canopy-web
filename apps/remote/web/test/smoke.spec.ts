@@ -164,23 +164,40 @@ test("shows all nine keys inside the viewport at 360x640", async ({ page }) => {
 
 test("dresses the page in the Canopy surface", async ({ page }) => {
   await expect(page.locator("html")).toHaveAttribute("data-surface", "tui");
-  const look = await page.evaluate(() => ({
-    body: getComputedStyle(document.body).backgroundColor,
-    view: document.body.dataset.view ?? null,
-    fondo: (() => {
-      const host = document.getElementById("fondo");
-      return {
+  // The honeycomb mounts lazily after the header paints.
+  await expect.poll(() => page.locator(".topbar > #fondo canvas").count()).toBeGreaterThan(0);
+  const look = await page.evaluate(() => {
+    const host = document.getElementById("fondo");
+    const bar = document.querySelector(".topbar");
+    const hostBox = host?.getBoundingClientRect();
+    const barBox = bar?.getBoundingClientRect();
+    return {
+      body: getComputedStyle(document.body).backgroundColor,
+      view: document.body.dataset.view ?? null,
+      fondo: {
         mounted: host?.querySelector("canvas") !== null,
-        opacity: host === null ? null : getComputedStyle(host).opacity,
-      };
-    })(),
-  }));
-  // #012624, the Liquid Abyss canvas of the Canopy page.
-  expect(look.body).toBe("rgb(1, 38, 36)");
+        inHeader: host?.parentElement?.classList.contains("topbar") ?? false,
+        position: host ? getComputedStyle(host).position : null,
+        inside:
+          hostBox !== undefined &&
+          barBox !== undefined &&
+          hostBox.top >= barBox.top - 1 &&
+          hostBox.bottom <= barBox.bottom + 1,
+      },
+      fixedCanvases: [...document.querySelectorAll("canvas")].filter(
+        (canvas) => getComputedStyle(canvas).position === "fixed",
+      ).length,
+    };
+  });
+  // #011d1c, the flat deep surface: the body carries no honeycomb.
+  expect(look.body).toBe("rgb(1, 29, 28)");
   expect(look.view).toBe("session");
-  // The honeycomb is behind the session, dimmed so the terminal stays legible.
+  // The honeycomb lives inside the sticky header band only.
   expect(look.fondo.mounted).toBe(true);
-  expect(look.fondo.opacity).toBe("0.15");
+  expect(look.fondo.inHeader).toBe(true);
+  expect(look.fondo.position).toBe("absolute");
+  expect(look.fondo.inside).toBe(true);
+  expect(look.fixedCanvases).toBe(0);
 });
 
 for (const viewport of [
