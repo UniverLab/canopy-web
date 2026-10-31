@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { b64decode, generateDeviceKey, importSpkiVerifyKey } from "../src/crypto.js";
 import type { DeviceKey } from "../src/crypto.js";
-import { HostPeer } from "../src/peer.js";
+import { HostPeer, asIceCandidate } from "../src/peer.js";
 import type { PeerEvent } from "../src/peer.js";
 import {
   connectRelay,
@@ -226,5 +226,54 @@ describe("HostPeer", () => {
     await flush();
     expect(setup.events).not.toContainEqual({ type: "failed", reason: "Host identity check failed" });
     expect(setup.peerHarness.latest().closed).toBe(false);
+  });
+});
+
+describe("asIceCandidate contract vectors", () => {
+  const line = "candidate:1 1 UDP 1694498815 127.0.0.1 5000 typ host";
+
+  it("V1 object full", () => {
+    expect(
+      asIceCandidate({ t: "ice", candidate: { candidate: line, sdpMid: "0", sdpMLineIndex: 0 } }),
+    ).toEqual({ candidate: line, sdpMid: "0", sdpMLineIndex: 0 });
+  });
+
+  it("V2 object minimal", () => {
+    expect(asIceCandidate({ t: "ice", candidate: { candidate: line } })).toEqual({
+      candidate: line,
+      sdpMid: null,
+      sdpMLineIndex: null,
+    });
+  });
+
+  it("V3 bare string", () => {
+    expect(asIceCandidate({ t: "ice", candidate: line })).toEqual({
+      candidate: line,
+      sdpMid: null,
+      sdpMLineIndex: null,
+    });
+  });
+
+  it("V4 missing candidate", () => {
+    expect(asIceCandidate({ t: "ice" })).toBeNull();
+  });
+
+  it("V5 candidate null", () => {
+    expect(asIceCandidate({ t: "ice", candidate: null })).toBeNull();
+  });
+
+  it("delivers a host-shaped string candidate to addIceCandidate", async () => {
+    const setup = await setupAndOpen();
+    const pc = setup.peerHarness.latest();
+    const before = pc.addedCandidates.length;
+    setup.ws.receive(`h:${setup.host.record.host_id}`, { t: "ice", candidate: line });
+    await flush();
+    await flush();
+    expect(pc.addedCandidates).toHaveLength(before + 1);
+    expect(pc.addedCandidates[before]).toEqual({
+      candidate: line,
+      sdpMid: null,
+      sdpMLineIndex: null,
+    });
   });
 });

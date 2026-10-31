@@ -54,11 +54,11 @@ function asAnswer(body: unknown): AnswerBody | null {
   if (typeof body !== "object" || body === null) {
     return null;
   }
-  const row = body as Record<string, unknown>;
-  if (row.t !== "answer" || typeof row.sdp !== "string" || typeof row.sig !== "string") {
+  const { t, sdp, sig } = body as Record<string, unknown>;
+  if (t !== "answer" || typeof sdp !== "string" || typeof sig !== "string") {
     return null;
   }
-  return { sdp: row.sdp, sig: row.sig };
+  return { sdp, sig };
 }
 
 // Shared with the guest peer: the trickle, refuse and farewell bodies are
@@ -67,18 +67,19 @@ export function asIceCandidate(body: unknown): RTCIceCandidateInit | null {
   if (typeof body !== "object" || body === null) {
     return null;
   }
-  const row = body as Record<string, unknown>;
-  if (row.t !== "ice" || typeof row.candidate !== "object" || row.candidate === null) {
+  const { t, candidate } = body as Record<string, unknown>;
+  const raw = typeof candidate === "string" ? { candidate } : candidate;
+  if (t !== "ice" || typeof raw !== "object" || raw === null) {
     return null;
   }
-  const init = row.candidate as Record<string, unknown>;
-  if (typeof init.candidate !== "string") {
+  const { candidate: line, sdpMid, sdpMLineIndex } = raw as Record<string, unknown>;
+  if (typeof line !== "string") {
     return null;
   }
   return {
-    candidate: init.candidate,
-    sdpMid: typeof init.sdpMid === "string" ? init.sdpMid : null,
-    sdpMLineIndex: typeof init.sdpMLineIndex === "number" ? init.sdpMLineIndex : null,
+    candidate: line,
+    sdpMid: typeof sdpMid === "string" ? sdpMid : null,
+    sdpMLineIndex: typeof sdpMLineIndex === "number" ? sdpMLineIndex : null,
   };
 }
 
@@ -86,11 +87,11 @@ export function asConnectFail(body: unknown): string | null {
   if (typeof body !== "object" || body === null) {
     return null;
   }
-  const row = body as Record<string, unknown>;
-  if (row.t !== "connect_fail" || typeof row.reason !== "string") {
+  const { t, reason } = body as Record<string, unknown>;
+  if (t !== "connect_fail" || typeof reason !== "string") {
     return null;
   }
-  return row.reason;
+  return reason;
 }
 
 export function isBye(body: unknown): boolean {
@@ -107,16 +108,13 @@ export async function loadIceServers(fetchTurn: TurnFetcher): Promise<RTCIceServ
     throw new Error("Could not load TURN credentials");
   }
   const data = await res.json();
-  if (Array.isArray(data)) {
-    return data as RTCIceServer[];
+  const servers = Array.isArray(data)
+    ? data
+    : (data as { iceServers?: unknown } | null)?.iceServers;
+  if (!Array.isArray(servers)) {
+    throw new Error("Could not load TURN credentials");
   }
-  if (typeof data === "object" && data !== null) {
-    const servers = (data as Record<string, unknown>).iceServers;
-    if (Array.isArray(servers)) {
-      return servers as RTCIceServer[];
-    }
-  }
-  throw new Error("Could not load TURN credentials");
+  return servers as RTCIceServer[];
 }
 
 export class HostPeer {
