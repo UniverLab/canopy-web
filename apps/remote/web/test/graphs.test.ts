@@ -80,10 +80,7 @@ function viewArgs(overrides: Partial<GraphViewArgs> = {}): GraphViewArgs {
     receivedAt: 1793100000_000,
     connected: true,
     orientation: "horizontal",
-    login: "octo",
-    signOutError: null,
     onBack: () => {},
-    onSignOut: () => {},
     ...overrides,
   };
 }

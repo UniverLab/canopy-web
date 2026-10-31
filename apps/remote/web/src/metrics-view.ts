@@ -6,7 +6,6 @@
 // with a "disconnected — last update" note. The shell owns the watches;
 // this module only paints what the store holds.
 
-import { signOutButtonHtml } from "./chrome.js";
 import { REMOTE_FOOTER } from "./footer.js";
 import { icon } from "./icons-dom.js";
 import {
@@ -29,17 +28,12 @@ export interface MetricsViewArgs {
   header: string;
   /** The connection banner, "" while nothing is wrong. */
   banner: string;
-  /** The signed-in login the direct button names, or null. */
-  login: string | null;
-  /** The last sign-out failure, shown inline, or null. */
-  signOutError: string | null;
   frame: HostMetricsFrame | null;
   history: MetricsHistory | null;
   /** When the last frame arrived locally (epoch ms), or null. */
   receivedAt: number | null;
   connected: boolean;
   onBack: () => void;
-  onSignOut: () => void;
 }
 
 function esc(text: string): string {
@@ -187,10 +181,6 @@ function paint(root: HTMLElement, args: MetricsViewArgs): void {
   if (body) {
     body.innerHTML = bodyHtml(args.frame, args.history);
   }
-  const signOutError = main.querySelector<HTMLElement>("#signout-error");
-  if (signOutError) {
-    signOutError.textContent = args.signOutError ?? "";
-  }
 }
 
 function viewHtml(args: MetricsViewArgs): string {
@@ -205,7 +195,6 @@ function viewHtml(args: MetricsViewArgs): string {
     `</div>` +
     `<p class="metrics-note" id="metrics-note" hidden></p>` +
     `<div id="metrics-body"></div>` +
-    signOutButtonHtml(args.login, args.signOutError) +
     `</main>` +
     REMOTE_FOOTER
   );

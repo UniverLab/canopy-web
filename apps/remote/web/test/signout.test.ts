@@ -2,9 +2,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createShell } from "../src/app.js";
 import type { Shell, ShellCallbacks } from "../src/app.js";
-import { FORGET_MESSAGE } from "../src/chrome.js";
+import { FORGET_MESSAGE, renderTopbar } from "../src/chrome.js";
 import { renderGraphView, updateGraphView } from "../src/graph-view.js";
 import type { GraphViewArgs } from "../src/graph-view.js";
+import { renderMetricsView, updateMetricsView } from "../src/metrics-view.js";
+import type { MetricsViewArgs } from "../src/metrics-view.js";
 import { SessionStore } from "../src/sessions.js";
 import type { TerminalHandle } from "../src/terminal.js";
 
@@ -32,6 +34,7 @@ describe("sign out", () => {
   let shell: Shell;
   let signedOut: number;
   let forgotten: number;
+  let disconnects: number;
 
   const query = <T extends Element>(selector: string): T => {
     const el = root.querySelector(selector);
@@ -47,10 +50,13 @@ describe("sign out", () => {
     document.body.appendChild(root);
     signedOut = 0;
     forgotten = 0;
+    disconnects = 0;
     const callbacks: ShellCallbacks = {
       onPair: () => {},
       onConnect: () => {},
-      onDisconnect: () => {},
+      onDisconnect: () => {
+        disconnects += 1;
+      },
       onRetry: () => {},
       onPairAgain: () => {},
       onOpenSession: () => {},
@@ -85,26 +91,32 @@ describe("sign out", () => {
     vi.useRealTimers();
   });
 
-  it("signs out with one tap from the hosts screen", () => {
+  it("signs out from the hosts screen through the header menu only", () => {
     shell.setPairedHosts([{ host_id: "h1", label: "demo host" }]);
     shell.showHosts();
-    const button = query<HTMLButtonElement>("#signout");
-    expect(button.textContent).toContain("Sign out octo");
+    // No bottom control: the menu is the only way out.
+    expect(root.querySelector("#signout")).toBeNull();
+    expect(root.querySelector("#signout-error")).toBeNull();
+    const menu = query("#account");
+    expect(menu.querySelector("summary.login")?.textContent).toBe("octo");
+    const button = query<HTMLButtonElement>("#signout-menu");
     expect(button.querySelector("svg.icon")).not.toBeNull();
     button.click();
     expect(signedOut).toBe(1);
   });
 
-  it("signs out with one tap from the sessions screen", () => {
+  it("signs out from the sessions screen through the header menu only", () => {
     shell.showSessions();
-    query<HTMLButtonElement>("#signout").click();
+    expect(root.querySelector("#signout")).toBeNull();
+    expect(root.querySelector("#signout-error")).toBeNull();
+    query<HTMLButtonElement>("#signout-menu").click();
     expect(signedOut).toBe(1);
-    expect(query("#signout").textContent).toContain("octo");
   });
 
   it("reaches sign out through the header menu on the session view, never a button", () => {
     shell.showSession("s1", "smoke");
-    expect(root.querySelector("main #signout")).toBeNull();
+    expect(root.querySelector("#signout")).toBeNull();
+    expect(root.querySelector("#signout-error")).toBeNull();
     const menu = query("#account");
     expect(menu.querySelector("summary.login")?.textContent).toBe("octo");
     query<HTMLButtonElement>("#signout-menu").click();
@@ -123,18 +135,49 @@ describe("sign out", () => {
     expect(root.querySelector("#signout")).toBeNull();
   });
 
+  it("keeps every signed-in shell view free of bottom controls", () => {
+    shell.setPairedHosts([{ host_id: "h1", label: "demo host" }]);
+    const walk: { show: () => void; disconnect: boolean }[] = [
+      { show: () => shell.showPair(), disconnect: false },
+      { show: () => shell.showHosts(), disconnect: false },
+      { show: () => shell.showSessions(), disconnect: true },
+      { show: () => shell.showSession("s1", "smoke"), disconnect: false },
+    ];
+    for (const step of walk) {
+      step.show();
+      // The old bottom ids render nowhere; the menu signs out everywhere.
+      expect(root.querySelector("#signout")).toBeNull();
+      expect(root.querySelector("#signout-error")).toBeNull();
+      expect(root.querySelector("main #conn-disconnect")).toBeNull();
+      expect(root.querySelector(".topbar #signout-menu")).not.toBeNull();
+      // Disconnect rides the header on the sessions route alone — no view
+      // gains or loses it.
+      expect(root.querySelector(".topbar #conn-disconnect") !== null).toBe(step.disconnect);
+    }
+  });
+
+  it("detaches through the header Disconnect on the sessions route", () => {
+    shell.showSessions();
+    const disconnect = query<HTMLButtonElement>(".topbar #conn-disconnect");
+    expect(disconnect.getAttribute("aria-label")).toBe("Disconnect");
+    expect(disconnect.textContent).toContain("Disconnect");
+    expect(disconnect.querySelector("svg.icon")).not.toBeNull();
+    disconnect.click();
+    expect(disconnects).toBe(1);
+  });
+
   it("shows a failure inline and stays signed in", () => {
     shell.setPairedHosts([{ host_id: "h1", label: "demo host" }]);
     shell.showHosts();
     shell.setSignOutError("Could not reach the relay");
-    // Still on the hosts screen, the error beside both controls.
+    // Still on the hosts screen, the error beside the one control.
     expect(root.querySelector("main.hosts")).not.toBeNull();
-    expect(query("#signout-error").textContent).toBe("Could not reach the relay");
+    expect(root.querySelector("#signout-error")).toBeNull();
     expect(query("#signout-error-menu").textContent).toBe("Could not reach the relay");
     // The menu opens itself, so the failure is seen.
     expect(query("#account").hasAttribute("open")).toBe(true);
     shell.setSignOutError(null);
-    expect(query("#signout-error").textContent).toBe("");
+    expect(query("#signout-error-menu").textContent).toBe("");
   });
 
   it("keeps the session terminal mounted when a sign-out fails", () => {
@@ -147,11 +190,11 @@ describe("sign out", () => {
     expect(root.contains(pane)).toBe(true);
     expect(query("#term-pane")).toBe(pane);
     expect(pane.children).toHaveLength(mounted);
-    // The only sign-out control on the session view, so the error and the
-    // menu both show, with no terminal space lost to a permanent button.
+    // The header menu holds the only sign-out control on every view, so
+    // the error and the menu both show, with no space lost to a button.
     expect(query("#signout-error-menu").textContent).toBe("Could not reach the relay");
     expect(query("#account").hasAttribute("open")).toBe(true);
-    expect(root.querySelector("main #signout")).toBeNull();
+    expect(root.querySelector("#signout")).toBeNull();
     shell.setSignOutError(null);
     expect(query("#signout-error-menu").textContent).toBe("");
   });
@@ -160,9 +203,9 @@ describe("sign out", () => {
     shell.setPairedHosts([{ host_id: "h1", label: "demo host" }]);
     shell.showHosts();
     shell.setSignOutError("Could not sign out (500)");
-    expect(query("#signout-error").textContent).toBe("Could not sign out (500)");
+    expect(query("#signout-error-menu").textContent).toBe("Could not sign out (500)");
     shell.showSessions();
-    expect(root.querySelector("#signout-error")?.textContent).toBe("");
+    expect(query("#signout-error-menu").textContent).toBe("");
     expect(query("#account").hasAttribute("open")).toBe(false);
   });
 
@@ -191,19 +234,28 @@ describe("sign out", () => {
 
   it("wears no inline styles on the account controls", () => {
     shell.showHosts();
-    for (const el of root.querySelectorAll("#account, #signout, #signout-error")) {
+    for (const el of root.querySelectorAll("#account, #signout-menu, #signout-error-menu")) {
       expect(el.getAttribute("style")).toBeNull();
     }
   });
 });
 
+function signedInHeader(): string {
+  return renderTopbar({
+    login: "octo",
+    hostLabel: "demo host",
+    connectionState: "connected",
+    link: "wifi",
+    signOutError: null,
+    accountOpen: false,
+  });
+}
+
 describe("sign out on the graph view", () => {
   function args(overrides: Partial<GraphViewArgs> = {}): GraphViewArgs {
     return {
-      header: `<header class="topbar"></header>`,
+      header: signedInHeader(),
       banner: "",
-      login: "octo",
-      signOutError: null,
       id: "g1",
       name: "palette-loop",
       summary: null,
@@ -213,22 +265,58 @@ describe("sign out on the graph view", () => {
       connected: true,
       orientation: "horizontal",
       onBack: () => {},
-      onSignOut: () => {},
       ...overrides,
     };
   }
 
-  it("names the login on its direct button and repaints the error in place", () => {
+  it("keeps sign-out in the header menu with no bottom controls", () => {
     const root = document.createElement("div");
     document.body.appendChild(root);
     try {
       renderGraphView(root, args());
-      const button = root.querySelector("#signout");
-      expect(button?.textContent).toContain("Sign out octo");
-      updateGraphView(root, args({ signOutError: "Could not sign out (500)" }));
-      expect(root.querySelector("#signout-error")?.textContent).toBe("Could not sign out (500)");
-      // The button survives the repaint: the shell's wiring still holds.
-      expect(root.querySelector("#signout")).not.toBeNull();
+      expect(root.querySelector(".topbar #signout-menu")).not.toBeNull();
+      expect(root.querySelector("#signout")).toBeNull();
+      expect(root.querySelector("#signout-error")).toBeNull();
+      expect(root.querySelector("main #conn-disconnect")).toBeNull();
+      // A repaint keeps it that way: the view never paints its own.
+      updateGraphView(root, args());
+      expect(root.querySelector("#signout")).toBeNull();
+      expect(root.querySelector("#signout-error")).toBeNull();
+      expect(root.querySelector("main #conn-disconnect")).toBeNull();
+    } finally {
+      root.remove();
+    }
+  });
+});
+
+describe("sign out on the metrics view", () => {
+  function args(overrides: Partial<MetricsViewArgs> = {}): MetricsViewArgs {
+    return {
+      header: signedInHeader(),
+      banner: "",
+      frame: null,
+      history: null,
+      receivedAt: null,
+      connected: true,
+      onBack: () => {},
+      ...overrides,
+    };
+  }
+
+  it("keeps sign-out in the header menu with no bottom controls", () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    try {
+      renderMetricsView(root, args());
+      expect(root.querySelector(".topbar #signout-menu")).not.toBeNull();
+      expect(root.querySelector("#signout")).toBeNull();
+      expect(root.querySelector("#signout-error")).toBeNull();
+      expect(root.querySelector("main #conn-disconnect")).toBeNull();
+      // A repaint keeps it that way: the view never paints its own.
+      updateMetricsView(root, args());
+      expect(root.querySelector("#signout")).toBeNull();
+      expect(root.querySelector("#signout-error")).toBeNull();
+      expect(root.querySelector("main #conn-disconnect")).toBeNull();
     } finally {
       root.remove();
     }

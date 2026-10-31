@@ -1,32 +1,56 @@
 // SPDX-License-Identifier: Apache-2.0
 import { expect, test } from "@playwright/test";
 
-// The sign-out walk and the edge-to-edge colophon, through the fake host's
-// ?screen= openings (hosts for the walk, sign-in for the band).
+// The sign-out walk through the header account menu, the header Disconnect
+// on the sessions home, and the edge-to-edge colophon — through the fake
+// host's ?screen= openings (hosts for the walk, sign-in for the band).
 
 test("sign out from the hosts screen lands on sign-in", async ({ page }) => {
   await page.route("**/auth/logout", (route) =>
     route.fulfill({ status: 200, contentType: "text/plain", body: "" }),
   );
   await page.goto("/fake.html?screen=hosts");
-  const button = page.locator("#signout");
+  // The menu is the only way out: no bottom control anywhere.
+  await expect(page.locator("#signout")).toHaveCount(0);
+  await expect(page.locator("main #conn-disconnect")).toHaveCount(0);
+  await page.locator("#account summary").click();
+  const button = page.locator("#signout-menu");
   await expect(button).toBeVisible();
-  await expect(button).toContainText("Sign out smoke");
   await button.click();
   await expect(page.locator("main.signin")).toBeVisible();
   await expect(page.locator("#signin-go")).toBeVisible();
-  // Signed out: no account menu, no direct control left behind.
+  // Signed out: no account menu left behind.
   await expect(page.locator("#account")).toHaveCount(0);
-  await expect(page.locator("#signout")).toHaveCount(0);
+  await expect(page.locator("#signout-menu")).toHaveCount(0);
 });
 
 test("a refused sign-out stays signed in with an inline error", async ({ page }) => {
   await page.route("**/auth/logout", (route) => route.abort("failed"));
   await page.goto("/fake.html?screen=hosts");
-  await page.locator("#signout").click();
-  await expect(page.locator("#signout-error")).toHaveText("Could not reach the relay");
+  await page.locator("#account summary").click();
+  await page.locator("#signout-menu").click();
+  await expect(page.locator("#signout-error-menu")).toHaveText("Could not reach the relay");
+  await expect(page.locator("#signout-error")).toHaveCount(0);
   await expect(page.locator("main.hosts")).toBeVisible();
   await expect(page.locator("#account")).toBeVisible();
+});
+
+test("the sessions header keeps Disconnect reachable at 390px with no sideways scroll", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/fake.html");
+  await expect(page.locator("main.sessions")).toBeVisible();
+  // Disconnect rides the header beside the host chip — never below.
+  await expect(page.locator(".topbar #conn-disconnect")).toBeVisible();
+  await expect(page.locator("main #conn-disconnect")).toHaveCount(0);
+  await expect(page.locator("main #signout")).toHaveCount(0);
+  await expect(page.locator(".topbar #signout-menu")).toHaveCount(1);
+  const horizontal = await page.evaluate(() => {
+    const el = document.scrollingElement ?? document.documentElement;
+    return el.scrollWidth - el.clientWidth;
+  });
+  expect(horizontal).toBeLessThanOrEqual(1);
 });
 
 for (const viewport of [

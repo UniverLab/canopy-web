@@ -406,7 +406,9 @@ describe("createShell", () => {
     expect(root.querySelector("#new-form")).not.toBeNull();
     query<HTMLButtonElement>("#new-close").click();
     expect(root.querySelector(".sheet-overlay")).toBeNull();
-    query<HTMLButtonElement>("#conn-disconnect").click();
+    // Disconnect rides the header beside the host chip — nothing below.
+    expect(root.querySelector("main #conn-disconnect")).toBeNull();
+    query<HTMLButtonElement>(".topbar #conn-disconnect").click();
     expect(signal().disconnects).toBe(1);
   });
 

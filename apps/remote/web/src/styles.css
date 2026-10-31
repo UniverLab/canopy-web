@@ -333,11 +333,28 @@ label > textarea {
   text-align: left;
 }
 
-/* The direct control names the login too; the icon sits beside the words. */
-#signout {
+/* The header Disconnect: an icon button beside the host chip, dressed as
+ * a chip so the 390 px header keeps banner, chips and menu on two rows
+ * at most; it wraps with the row rather than pushing it sideways. */
+.topbar #conn-disconnect {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--muted);
+  background: transparent;
+  min-height: 0;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.topbar #conn-disconnect:hover {
+  color: var(--ink);
+  border-color: var(--muted);
 }
 
 .signout-error {

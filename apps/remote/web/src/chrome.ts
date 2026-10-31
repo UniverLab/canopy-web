@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-// The app chrome: the sticky topbar (banner home, account menu and host
-// chip), the connection banner, the pair form's host options,
-// and the sign-out controls — the header account menu on every signed-in
-// route, plus a direct button on every signed-in route except the session
-// view, which keeps the whole viewport for the terminal. The shell owns
-// the state; this module only paints and wires it.
+// The app chrome: the sticky topbar (banner home, account menu, host
+// chip and, on the sessions route, a Disconnect icon button), the
+// connection banner, the pair form's host options, and the one sign-out
+// control — the header account menu on every signed-in route. The shell
+// owns the state; this module only paints and wires it.
 
 import { icon, type RemoteIconName } from "./icons-dom.js";
 import { connectFailMessage } from "./peer.js";
@@ -28,6 +27,8 @@ export interface TopbarState {
   link: RemoteIconName;
   signOutError: string | null;
   accountOpen: boolean;
+  /** Show the Disconnect icon button beside the host chip (sessions route). */
+  showDisconnect?: boolean;
   /** The host-metrics strip markup; "" until the first frame lands. */
   metricsStrip?: string;
 }
@@ -39,15 +40,6 @@ export const FORGET_MESSAGE =
 /** A sign-out failure, inline where the control sits; empty hides it. */
 export function signOutErrorHtml(error: string | null, id: string): string {
   return `<p class="signout-error" id="${id}" role="alert">${error === null ? "" : esc(error)}</p>`;
-}
-
-/** The direct control with the signed-in login, and its inline error. */
-export function signOutButtonHtml(login: string | null, error: string | null): string {
-  const who = login === null ? "" : ` ${esc(login)}`;
-  return (
-    `<p><button type="button" id="signout">${icon("logOut")}<span>Sign out${who}</span></button></p>` +
-    signOutErrorHtml(error, "signout-error")
-  );
 }
 
 function accountHtml(login: string, signOutError: string | null, open: boolean): string {
@@ -71,12 +63,17 @@ export function renderTopbar(state: TopbarState): string {
       : `<span class="host chip">` +
         `<span class="icon-slot" id="conn-icon" data-morph="host" aria-hidden="true">${icon(state.link)}</span>` +
         `${esc(state.hostLabel)}</span>`;
+  const disconnect =
+    state.showDisconnect === true
+      ? `<button type="button" id="conn-disconnect" class="disconnect" aria-label="Disconnect">${icon("x")}<span>Disconnect</span></button>`
+      : "";
   return (
     `<header class="topbar" data-conn="${esc(state.connectionState)}">` +
     `<div class="topbar-inner">` +
     `<button type="button" id="brand-home" class="brand-home" aria-label="Canopy remote, home">${bannerSvg(REMOTE_BANNER_LINES, "look-banner-header look-banner-header-remote", "Canopy remote")}</button>` +
     (state.login === null ? "" : accountHtml(state.login, state.signOutError, state.accountOpen)) +
     host +
+    disconnect +
     (state.metricsStrip ?? "") +
     `</div></header>`
   );
@@ -119,7 +116,7 @@ export function renderHostOptions(online: OnlineHost[], draftHostId: string): st
   return [`<option value=""${placeholder}>Choose a host…</option>`, ...options].join("");
 }
 
-/** Wire the account menu and the direct button, wherever they rendered. */
+/** Wire the header account menu: the one sign-out control, on every view. */
 export function wireAccount(
   root: HTMLElement,
   callbacks: { onSignOut: () => void; onForget: () => void; onToggle: (open: boolean) => void },
@@ -129,7 +126,6 @@ export function wireAccount(
     callbacks.onToggle((details as HTMLDetailsElement).open);
   });
   root.querySelector("#signout-menu")?.addEventListener("click", () => callbacks.onSignOut());
-  root.querySelector("#signout")?.addEventListener("click", () => callbacks.onSignOut());
   root.querySelector("#forget-menu")?.addEventListener("click", () => {
     if (globalThis.confirm(FORGET_MESSAGE)) {
       callbacks.onForget();

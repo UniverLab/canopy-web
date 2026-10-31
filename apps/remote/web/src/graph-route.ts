@@ -12,7 +12,6 @@
 import type { GraphStore } from "./graph-store.js";
 import { REMOTE_FOOTER } from "./footer.js";
 import { graphTitle } from "./titles.js";
-import { signOutButtonHtml } from "./chrome.js";
 import { renderGraphView, updateGraphView } from "./graph-view.js";
 import type { GraphViewArgs } from "./graph-view.js";
 import { renderGraphsList } from "./graphs-list.js";
@@ -51,12 +50,6 @@ export interface GraphRouteHooks {
   header: () => string;
   banner: () => string;
   wireBanner: () => void;
-  onDisconnect: () => void;
-  onSignOut: () => void;
-  /** The signed-in login the direct button names, or null. */
-  login: () => string | null;
-  /** The last sign-out failure, shown inline, or null. */
-  signOutError: () => string | null;
   connectionState: () => string;
   /** The shell's current route name ("sessions", "graph", …). */
   route: () => string;
@@ -120,14 +113,9 @@ export class GraphRoute {
       ${this.hooks.banner()}
       ${this.tabSwitchHtml()}
       <div id="session-list"></div>
-      <p><button type="button" id="conn-disconnect">Disconnect</button></p>
-      ${signOutButtonHtml(this.hooks.login(), this.hooks.signOutError())}
     </main>
     ${REMOTE_FOOTER}`;
     this.hooks.wireBanner();
-    this.root
-      .querySelector("#conn-disconnect")
-      ?.addEventListener("click", () => this.hooks.onDisconnect());
     this.wireTabSwitch();
     this.paintHome();
     // Showing the Graphs tab asks the host for the list — on a tab click,
@@ -214,8 +202,6 @@ export class GraphRoute {
     return {
       header: this.hooks.header(),
       banner: this.hooks.banner(),
-      login: this.hooks.login(),
-      signOutError: this.hooks.signOutError(),
       id: this.graphId ?? "",
       name: this.displayName(),
       summary,
@@ -225,7 +211,6 @@ export class GraphRoute {
       connected: this.hooks.connectionState() === "connected",
       orientation: (globalThis.innerWidth ?? 0) < 720 ? "vertical" : "horizontal",
       onBack: () => this.back(),
-      onSignOut: () => this.hooks.onSignOut(),
     };
   }
 

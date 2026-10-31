@@ -15,7 +15,6 @@ export interface PairSubmit {
 export interface UiCallbacks {
   onPair: (submit: PairSubmit) => void;
   onConnect: (hostId: string) => void;
-  onDisconnect: () => void;
   onRetry: () => void;
   onPairAgain: () => void;
 }
@@ -138,15 +137,14 @@ export function createApp(root: HTMLElement, callbacks: UiCallbacks): AppUi {
   const renderSession = (): string => {
     const failed = connectionState.startsWith("failed:");
     const unpaired = connectionState === `failed: ${connectFailMessage("unknown_device")}`;
+    const actions =
+      (failed ? `<button type="button" id="conn-retry">Retry</button> ` : "") +
+      (unpaired ? `<button type="button" id="conn-pair-again">Pair again</button> ` : "");
     return `
     <h1>${esc(sessionLabel)}</h1>
     <p id="conn-state" role="status">${esc(connectionState)}</p>
     <p>The session view arrives with the next update.</p>
-    <p>
-      ${failed ? `<button type="button" id="conn-retry">Retry</button> ` : ""}
-      ${unpaired ? `<button type="button" id="conn-pair-again">Pair again</button> ` : ""}
-      <button type="button" id="conn-disconnect">Disconnect</button>
-    </p>`;
+    ${actions === "" ? "" : `<p>${actions}</p>`}`;
   };
 
   const render = () => {
@@ -185,7 +183,6 @@ export function createApp(root: HTMLElement, callbacks: UiCallbacks): AppUi {
       return;
     }
     root.innerHTML = renderSession();
-    root.querySelector("#conn-disconnect")?.addEventListener("click", () => callbacks.onDisconnect());
     root.querySelector("#conn-retry")?.addEventListener("click", () => callbacks.onRetry());
     root.querySelector("#conn-pair-again")?.addEventListener("click", () => callbacks.onPairAgain());
   };

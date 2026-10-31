@@ -28,7 +28,6 @@ describe("createApp", () => {
   let app: AppUi;
   let pairs: PairSubmit[];
   let connected: string[];
-  let disconnects: number;
   let retries: number;
   let pairAgains: number;
 
@@ -51,15 +50,11 @@ describe("createApp", () => {
     document.body.appendChild(root);
     pairs = [];
     connected = [];
-    disconnects = 0;
     retries = 0;
     pairAgains = 0;
     app = createApp(root, {
       onPair: (submit) => pairs.push(submit),
       onConnect: (hostId) => connected.push(hostId),
-      onDisconnect: () => {
-        disconnects += 1;
-      },
       onRetry: () => {
         retries += 1;
       },
@@ -171,8 +166,8 @@ describe("createApp", () => {
     query<HTMLButtonElement>("#conn-retry").click();
     expect(retries).toBe(1);
     expect(root.querySelector("#conn-pair-again")).toBeNull();
-    query<HTMLButtonElement>("#conn-disconnect").click();
-    expect(disconnects).toBe(1);
+    // Disconnect left the view bottom for the header: nothing to tap here.
+    expect(root.querySelector("#conn-disconnect")).toBeNull();
   });
 
   it("offers to pair again when the browser is no longer paired", () => {

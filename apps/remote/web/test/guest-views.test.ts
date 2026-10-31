@@ -358,4 +358,13 @@ describe("guest chrome", () => {
     expect(root.querySelector(".topbar .login")?.textContent).toBe("guest-user");
     expect(root.querySelector(".topbar")?.getAttribute("data-conn")).toBe("connected");
   });
+
+  it("carries no disconnect: guests never detach the host", () => {
+    const { root, view } = setup();
+    view.setLogin("guest-user");
+    view.showList();
+    expect(root.querySelector("#conn-disconnect")).toBeNull();
+    view.showSession("s1", "build");
+    expect(root.querySelector("#conn-disconnect")).toBeNull();
+  });
 });

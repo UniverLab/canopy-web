@@ -39,7 +39,7 @@ export interface ShellCallbacks {
   onPairAgain: () => void;
   onOpenSession: (id: string) => void;
   onLeaveSession: () => void;
-  /** Sign out through POST /auth/logout, from the menu or a direct button. */
+  /** Sign out through POST /auth/logout, from the header account menu. */
   onSignOut: () => void;
   /** Forget this device (pairing keys go too) after the shell's confirm. */
   onForgetDevice: () => void;
@@ -187,7 +187,8 @@ export function createShell(
   const linkIcon = (): RemoteIconName => (connectionState === "connected" ? "wifi" : "wifiOff");
 
   // The chrome paints from the shell's state: the topbar, the banner and
-  // the pair form's host options.
+  // the pair form's host options. Disconnect rides the header beside the
+  // host chip on exactly one route: the sessions home it always sat on.
   const header = (): string =>
     renderTopbar({
       login,
@@ -196,6 +197,7 @@ export function createShell(
       link: linkIcon(),
       signOutError,
       accountOpen,
+      showDisconnect: route === "sessions",
       metricsStrip: metricsRoute.stripHtml(),
     });
   const connBanner = (): string => renderConnBanner(connectionState);
@@ -206,8 +208,6 @@ export function createShell(
   // pair submit clears the old error before the shell takes over.
   const entryViews: EntryViewHooks = {
     header: () => header(),
-    login: () => login,
-    signOutError: () => signOutError,
     online: () => online,
     paired: () => paired,
     draft: () => draft,
@@ -448,6 +448,9 @@ export function createShell(
     mountHeaderIcon();
     metricsRoute.afterRender();
     root.querySelector("#brand-home")?.addEventListener("click", () => goHome());
+    // The header Disconnect, present on the sessions route only; the
+    // detach it runs is the same one the old bottom button ran.
+    root.querySelector("#conn-disconnect")?.addEventListener("click", () => callbacks.onDisconnect());
     wireAccount(root, {
       onSignOut: () => callbacks.onSignOut(),
       onForget: () => callbacks.onForgetDevice(),
@@ -483,10 +486,6 @@ export function createShell(
       header: () => header(),
       banner: () => connBanner(),
       wireBanner: () => wireConnBanner(),
-      onDisconnect: () => callbacks.onDisconnect(),
-      onSignOut: () => callbacks.onSignOut(),
-      login: () => login,
-      signOutError: () => signOutError,
       connectionState: () => connectionState,
       route: () => route,
     },
@@ -505,9 +504,8 @@ export function createShell(
       teardownSession: () => teardownSessionWidgets(),
       showMetrics: () => { closeSheets(); route = "metrics"; beginRoute(); render(); },
       chrome: () => ({
-        header: header(), banner: connBanner(), login, signOutError,
+        header: header(), banner: connBanner(),
         connected: connectionState === "connected",
-        onSignOut: () => callbacks.onSignOut(),
       }),
       route: () => route,
     },
@@ -679,8 +677,8 @@ export function createShell(
         el.textContent = message ?? "";
       }
       if (message !== null) {
-        // The menu is where the session view keeps its only sign-out
-        // control, so a failure opens it rather than hiding its text.
+        // The menu holds the only sign-out control on every view, so a
+        // failure opens it rather than hiding its text.
         const details = root.querySelector<HTMLDetailsElement>("#account");
         if (details !== null && !details.open) {
           details.open = true;

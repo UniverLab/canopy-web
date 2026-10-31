@@ -5,7 +5,7 @@
 // paint or change. A pairing complaint and a changed host list repaint
 // from the shell, so the views never render themselves.
 
-import { renderHostOptions, signOutButtonHtml } from "./chrome.js";
+import { renderHostOptions } from "./chrome.js";
 import { REMOTE_FOOTER } from "./footer.js";
 import type { OnlineHost } from "./relay.js";
 import type { PairSubmit } from "./ui.js";
@@ -21,9 +21,6 @@ export interface PairDraft {
 export interface EntryViewHooks {
   /** The shell's topbar markup; the screens ride below it. */
   header: () => string;
-  login: () => string | null;
-  /** The last sign-out failure, shown inline, or null. */
-  signOutError: () => string | null;
   online: () => OnlineHost[];
   paired: () => { host_id: string; label: string }[];
   /** The draft the fields should carry when the form paints. */
@@ -121,7 +118,6 @@ export function renderHosts(root: HTMLElement, hooks: EntryViewHooks): void {
       <h2>Choose a host</h2>
       <ul id="host-list">${rows}</ul>
       <p><button type="button" id="pair-new">Pair a new host</button></p>
-      ${signOutButtonHtml(hooks.login(), hooks.signOutError())}
     </main>
     ${REMOTE_FOOTER}`;
   for (const button of root.querySelectorAll<HTMLButtonElement>("[data-connect]")) {

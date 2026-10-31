@@ -28,13 +28,7 @@ export interface MetricsRouteCallbacks {
 export interface MetricsRouteChrome {
   header: string;
   banner: string;
-  /** The signed-in login the direct button names, or null. */
-  login: string | null;
-  /** The last sign-out failure, shown inline, or null. */
-  signOutError: string | null;
   connected: boolean;
-  /** Sign out through POST /auth/logout (shell-owned). */
-  onSignOut: () => void;
 }
 
 export interface MetricsRouteHooks {
@@ -197,14 +191,11 @@ export class MetricsRoute {
     return {
       header: chrome.header,
       banner: chrome.banner,
-      login: chrome.login,
-      signOutError: chrome.signOutError,
       frame: this.metrics?.current() ?? null,
       history: this.metrics?.history() ?? null,
       receivedAt: this.metrics?.lastReceivedAt() ?? null,
       connected: chrome.connected,
       onBack: () => this.back(),
-      onSignOut: () => chrome.onSignOut(),
     };
   }
 
