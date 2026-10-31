@@ -33,6 +33,8 @@ import {
   SOURCE_HREF,
   SOURCE_LABEL,
   TITLE_SEPARATOR,
+  TRANSPARENCY_HREF,
+  TRANSPARENCY_LABEL,
 } from "./copy.js";
 import { AGENT_LINK_HEADER } from "../agent-files.js";
 import { renderHeaderBanner } from "../../../../packages/look/banner/banner.js";
@@ -146,6 +148,7 @@ function htmlDocument(page: Page): string {
     `<a href="${EDITOR_HREF}" aria-label="${EDITOR_LABEL}" title="${EDITOR_LABEL}">${iconSvg("pencilRuler")}<span>${EDITOR_LABEL}</span></a>`,
     `<a href="${PUBLISH_HREF}" aria-label="${PUBLISH_LABEL}" title="${PUBLISH_LABEL}">${iconSvg("upload")}<span>${PUBLISH_LABEL}</span></a>`,
     `<a href="${PATTERNS_HREF}" aria-label="${PATTERNS_LABEL}" title="${PATTERNS_LABEL}">${iconSvg("workflow")}<span>${PATTERNS_LABEL}</span></a>`,
+    `<a href="${TRANSPARENCY_HREF}" aria-label="${TRANSPARENCY_LABEL}" title="${TRANSPARENCY_LABEL}">${iconSvg("eye")}<span>${TRANSPARENCY_LABEL}</span></a>`,
     `<a href="${SOURCE_HREF}"${linkAttrs(SOURCE_HREF)} aria-label="${SOURCE_LABEL}" title="${SOURCE_LABEL}">${iconSvg("github")}<span>${SOURCE_LABEL}</span></a>`,
     `</nav>`,
     `</div>`,

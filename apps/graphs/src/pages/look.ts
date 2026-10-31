@@ -603,12 +603,12 @@ pre.prompt, pre.hash {
 }
 .verdict-list .verdict-meta { color: var(--surface-ink-dim); }
 
-/* Under 520 px the header's four links show their icon alone, so the row
+/* Under 520 px the header's five links show their icon alone, so the row
  * stays one line on a small screen: the label leaves the layout but stays
  * in the accessibility tree through the link's aria-label and title, and
  * each link is a 44 px square target (the 639 block below adds the
- * height). The banner is 253 px wide under 640 px (banner.css); the four
- * labelled links need about 330 px beside it, so above 519 px the band-top
+ * height). The banner is 253 px wide under 640 px (banner.css); the five
+ * labelled links need about 460 px beside it, so above 519 px the band-top
  * wraps them onto a second row inside the band's height. */
 @media (max-width: 519px) {
   .site-nav { gap: 0.25rem; }

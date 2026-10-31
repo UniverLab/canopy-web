@@ -92,7 +92,7 @@ for (const viewport of VIEWPORTS) {
         return { left: box.left, right: box.right, width: box.width, height: box.height };
       }),
     }));
-    expect(nav.boxes).toHaveLength(4);
+    expect(nav.boxes).toHaveLength(5);
     for (const box of nav.boxes) {
       expect(box.left).toBeGreaterThanOrEqual(0);
       expect(box.right).toBeLessThanOrEqual(nav.view);

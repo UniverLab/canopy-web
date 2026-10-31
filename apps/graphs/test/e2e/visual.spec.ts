@@ -168,6 +168,7 @@ for (const viewport of VIEWPORTS) {
       await expect(page.locator("header nav.site-nav a[href='/editor']")).toHaveText("Editor");
       await expect(page.locator("header nav.site-nav a[href='/publish']")).toHaveText("Publish");
       await expect(page.locator("header nav.site-nav a[href='/patterns']")).toHaveText("Patterns");
+      await expect(page.locator("header nav.site-nav a[href='/transparency']")).toHaveText("Transparency");
       await expect(page.locator("header nav.site-nav a[href='https://github.com/UniverLab/canopy-web']")).toHaveText("Source");
       // Every header link lies inside the viewport at both reference
       // sizes — the Source link was cut off at 390 px — and under 640 px
@@ -179,7 +180,7 @@ for (const viewport of VIEWPORTS) {
           return { left: box.left, right: box.right, width: box.width, height: box.height };
         }),
       }));
-      expect(nav.boxes).toHaveLength(4);
+      expect(nav.boxes).toHaveLength(5);
       for (const box of nav.boxes) {
         expect(box.left).toBeGreaterThanOrEqual(0);
         expect(box.right).toBeLessThanOrEqual(nav.view);
@@ -317,7 +318,7 @@ for (const viewport of VIEWPORTS) {
     await expect(search).toHaveAttribute("aria-hidden", "true");
     await expect(search).toHaveAttribute("stroke", "currentColor");
     await expect(search).toHaveAttribute("stroke-width", "1.75");
-    await expect(page.locator("header nav.site-nav svg.icon")).toHaveCount(4);
+    await expect(page.locator("header nav.site-nav svg.icon")).toHaveCount(5);
     await expect(page.locator("link[rel='preload'][as='font']")).toHaveCount(0);
     expect(
       await page.evaluate(() =>
@@ -454,10 +455,11 @@ test("the colophon links share one row at 1280x900", async ({ page }) => {
   // The middot between links is decoration, never part of a link's name.
   await expect(page.getByRole("link", { name: "univerlab.org", exact: true })).toHaveCount(1);
   await expect(page.getByRole("link", { name: "Terms", exact: true })).toHaveCount(1);
+  await expect(page.locator("footer.look-colophon nav a[href='/transparency']")).toHaveText("Transparency");
   const tops = await page
     .locator("footer.look-colophon nav a")
     .evaluateAll((links) => links.map((link) => (link as HTMLElement).offsetTop));
-  expect(tops).toHaveLength(5);
+  expect(tops).toHaveLength(6);
   expect(new Set(tops).size).toBe(1);
 });
 
@@ -496,7 +498,7 @@ test("the home lists sit on dark panels with the search in the page at 1280x900"
   await expect(page.locator("header form")).toHaveCount(0);
 });
 
-test("the header fits the banner and its four links at 480x900", async ({ page }) => {
+test("the header fits the banner and its five links at 480x900", async ({ page }) => {
   // The tightest width for the band: just below the labelled nav's
   // threshold, where the row has the least room beside the banner.
   await page.setViewportSize({ width: 480, height: 900 });
@@ -525,9 +527,9 @@ test("the header fits the banner and its four links at 480x900", async ({ page }
   }
 });
 
-test("the banner fits a 360 px phone beside its four icons", async ({ page }) => {
+test("the banner fits a 360 px phone beside its five icons", async ({ page }) => {
   // The narrowest phone: the banner's 253 px plus the band's gutters, and
-  // the four icon-only links under it — no sideways scroll.
+  // the five icon-only links under it — no sideways scroll.
   await page.setViewportSize({ width: 360, height: 740 });
   await page.goto("/", { waitUntil: "load" });
   const fit = await page.evaluate(() => {
@@ -554,7 +556,7 @@ test("the banner fits a 360 px phone beside its four icons", async ({ page }) =>
       (link) => link.getBoundingClientRect().bottom - bottom,
     );
   });
-  expect(hang).toHaveLength(4);
+  expect(hang).toHaveLength(5);
   for (const over of hang) {
     expect(over).toBeLessThanOrEqual(1);
   }
@@ -589,11 +591,10 @@ for (const width of [360, 390] as const) {
   }) => {
     await page.setViewportSize({ width, height: 844 });
     await page.goto("/", { waitUntil: "load" });
-    // FIX-18 adds the fifth link (Transparency); until then a clone of the
-    // Source link stands in for its 44 px icon target.
+    // Five real links now: the fifth is Transparency, icon-only like the
+    // rest under 520 px — the clone stand-in is gone.
     const fit = await page.evaluate(() => {
       const nav = document.querySelector("header nav.site-nav") as HTMLElement;
-      nav.appendChild((nav.lastElementChild as HTMLElement).cloneNode(true));
       const links = [...nav.querySelectorAll("a")].map((link) => {
         const box = link.getBoundingClientRect();
         return { left: box.left, right: box.right };
@@ -632,6 +633,7 @@ test("the header keeps its single row at 1280x900", async ({ page }) => {
 test("the colophon wraps without sideways scroll at 390x844", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/", { waitUntil: "load" });
+  await expect(page.locator("footer.look-colophon nav a[href='/transparency']")).toHaveText("Transparency");
   const boxes = await page
     .locator("footer.look-colophon nav a")
     .evaluateAll((links) =>
@@ -640,7 +642,7 @@ test("the colophon wraps without sideways scroll at 390x844", async ({ page }) =
         return { left: box.left, right: box.right };
       }),
     );
-  expect(boxes).toHaveLength(5);
+  expect(boxes).toHaveLength(6);
   for (const box of boxes) {
     expect(box.left).toBeGreaterThanOrEqual(-1);
     expect(box.right).toBeLessThanOrEqual(391);

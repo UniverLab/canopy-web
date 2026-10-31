@@ -485,6 +485,15 @@ describe("the transparency page", () => {
     expect(response.status).toBe(200);
     expect(await response.text()).toContain(TRANSPARENCY_NO_VERDICTS);
   });
+
+  it("is linked from the header nav and the colophon", async () => {
+    resetIndexMemo();
+    const html = await (await call("/transparency", new FakeKV())).text();
+    const header = html.slice(html.indexOf(`<header class="site-header">`), html.indexOf(`</header>`));
+    expect(header).toMatch(/<a href="\/transparency" aria-label="Transparency" title="Transparency"><svg[\s\S]*?<\/svg><span>Transparency<\/span><\/a>/);
+    const footer = html.slice(html.indexOf(`<footer class="look-colophon">`), html.indexOf(`</footer>`));
+    expect(footer).toContain(`<a href="/transparency">Transparency</a>`);
+  });
 });
 
 describe("the bundled review assets", () => {

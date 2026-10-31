@@ -562,12 +562,12 @@ pre.prompt, pre.hash {
 }
 .verdict-list .verdict-meta { color: var(--surface-ink-dim); }
 
-/* Under 520 px the header's four links show their icon alone, so the row
+/* Under 520 px the header's five links show their icon alone, so the row
  * stays one line on a small screen: the label leaves the layout but stays
  * in the accessibility tree through the link's aria-label and title, and
  * each link is a 44 px square target (the 639 block below adds the
- * height). The banner is 253 px wide under 640 px (banner.css); the four
- * labelled links need about 330 px beside it, so above 519 px the band-top
+ * height). The banner is 253 px wide under 640 px (banner.css); the five
+ * labelled links need about 460 px beside it, so above 519 px the band-top
  * wraps them onto a second row inside the band's height. */
 @media (max-width: 519px) {
   .site-nav { gap: 0.25rem; }
@@ -612,6 +612,7 @@ pre.prompt, pre.hash {
 <a href="/editor" aria-label="Editor" title="Editor"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span>Editor</span></a>
 <a href="/publish" aria-label="Publish" title="Publish"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg><span>Publish</span></a>
 <a href="/patterns" aria-label="Patterns" title="Patterns"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg><span>Patterns</span></a>
+<a href="/transparency" aria-label="Transparency" title="Transparency"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg><span>Transparency</span></a>
 <a href="https://github.com/UniverLab/canopy-web" target="_blank" rel="noopener noreferrer" aria-label="Source" title="Source"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg><span>Source</span></a>
 </nav>
 </div>
@@ -643,6 +644,7 @@ pre.prompt, pre.hash {
       <a href="https://univerlab.org/canopy/" target="_blank" rel="noopener noreferrer">Canopy</a>
       <a href="https://univerlab.org/" target="_blank" rel="noopener noreferrer">univerlab.org</a>
       <a href="https://github.com/UniverLab/canopy-web" target="_blank" rel="noopener noreferrer">Source</a>
+      <a href="/transparency">Transparency</a>
       <a href="https://univerlab.org/privacy/" target="_blank" rel="noopener noreferrer">Privacy</a>
       <a href="https://univerlab.org/terms/" target="_blank" rel="noopener noreferrer">Terms</a>
     </nav>
@@ -1232,12 +1234,12 @@ pre.prompt, pre.hash {
 }
 .verdict-list .verdict-meta { color: var(--surface-ink-dim); }
 
-/* Under 520 px the header's four links show their icon alone, so the row
+/* Under 520 px the header's five links show their icon alone, so the row
  * stays one line on a small screen: the label leaves the layout but stays
  * in the accessibility tree through the link's aria-label and title, and
  * each link is a 44 px square target (the 639 block below adds the
- * height). The banner is 253 px wide under 640 px (banner.css); the four
- * labelled links need about 330 px beside it, so above 519 px the band-top
+ * height). The banner is 253 px wide under 640 px (banner.css); the five
+ * labelled links need about 460 px beside it, so above 519 px the band-top
  * wraps them onto a second row inside the band's height. */
 @media (max-width: 519px) {
   .site-nav { gap: 0.25rem; }
@@ -1282,6 +1284,7 @@ pre.prompt, pre.hash {
 <a href="/editor" aria-label="Editor" title="Editor"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span>Editor</span></a>
 <a href="/publish" aria-label="Publish" title="Publish"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg><span>Publish</span></a>
 <a href="/patterns" aria-label="Patterns" title="Patterns"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg><span>Patterns</span></a>
+<a href="/transparency" aria-label="Transparency" title="Transparency"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg><span>Transparency</span></a>
 <a href="https://github.com/UniverLab/canopy-web" target="_blank" rel="noopener noreferrer" aria-label="Source" title="Source"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg><span>Source</span></a>
 </nav>
 </div>
@@ -1322,6 +1325,7 @@ pre.prompt, pre.hash {
       <a href="https://univerlab.org/canopy/" target="_blank" rel="noopener noreferrer">Canopy</a>
       <a href="https://univerlab.org/" target="_blank" rel="noopener noreferrer">univerlab.org</a>
       <a href="https://github.com/UniverLab/canopy-web" target="_blank" rel="noopener noreferrer">Source</a>
+      <a href="/transparency">Transparency</a>
       <a href="https://univerlab.org/privacy/" target="_blank" rel="noopener noreferrer">Privacy</a>
       <a href="https://univerlab.org/terms/" target="_blank" rel="noopener noreferrer">Terms</a>
     </nav>
@@ -1911,12 +1915,12 @@ pre.prompt, pre.hash {
 }
 .verdict-list .verdict-meta { color: var(--surface-ink-dim); }
 
-/* Under 520 px the header's four links show their icon alone, so the row
+/* Under 520 px the header's five links show their icon alone, so the row
  * stays one line on a small screen: the label leaves the layout but stays
  * in the accessibility tree through the link's aria-label and title, and
  * each link is a 44 px square target (the 639 block below adds the
- * height). The banner is 253 px wide under 640 px (banner.css); the four
- * labelled links need about 330 px beside it, so above 519 px the band-top
+ * height). The banner is 253 px wide under 640 px (banner.css); the five
+ * labelled links need about 460 px beside it, so above 519 px the band-top
  * wraps them onto a second row inside the band's height. */
 @media (max-width: 519px) {
   .site-nav { gap: 0.25rem; }
@@ -1961,6 +1965,7 @@ pre.prompt, pre.hash {
 <a href="/editor" aria-label="Editor" title="Editor"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span>Editor</span></a>
 <a href="/publish" aria-label="Publish" title="Publish"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg><span>Publish</span></a>
 <a href="/patterns" aria-label="Patterns" title="Patterns"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg><span>Patterns</span></a>
+<a href="/transparency" aria-label="Transparency" title="Transparency"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg><span>Transparency</span></a>
 <a href="https://github.com/UniverLab/canopy-web" target="_blank" rel="noopener noreferrer" aria-label="Source" title="Source"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg><span>Source</span></a>
 </nav>
 </div>
@@ -2000,6 +2005,7 @@ pre.prompt, pre.hash {
       <a href="https://univerlab.org/canopy/" target="_blank" rel="noopener noreferrer">Canopy</a>
       <a href="https://univerlab.org/" target="_blank" rel="noopener noreferrer">univerlab.org</a>
       <a href="https://github.com/UniverLab/canopy-web" target="_blank" rel="noopener noreferrer">Source</a>
+      <a href="/transparency">Transparency</a>
       <a href="https://univerlab.org/privacy/" target="_blank" rel="noopener noreferrer">Privacy</a>
       <a href="https://univerlab.org/terms/" target="_blank" rel="noopener noreferrer">Terms</a>
     </nav>
@@ -2610,12 +2616,12 @@ pre.prompt, pre.hash {
 }
 .verdict-list .verdict-meta { color: var(--surface-ink-dim); }
 
-/* Under 520 px the header's four links show their icon alone, so the row
+/* Under 520 px the header's five links show their icon alone, so the row
  * stays one line on a small screen: the label leaves the layout but stays
  * in the accessibility tree through the link's aria-label and title, and
  * each link is a 44 px square target (the 639 block below adds the
- * height). The banner is 253 px wide under 640 px (banner.css); the four
- * labelled links need about 330 px beside it, so above 519 px the band-top
+ * height). The banner is 253 px wide under 640 px (banner.css); the five
+ * labelled links need about 460 px beside it, so above 519 px the band-top
  * wraps them onto a second row inside the band's height. */
 @media (max-width: 519px) {
   .site-nav { gap: 0.25rem; }
@@ -2660,6 +2666,7 @@ pre.prompt, pre.hash {
 <a href="/editor" aria-label="Editor" title="Editor"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span>Editor</span></a>
 <a href="/publish" aria-label="Publish" title="Publish"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg><span>Publish</span></a>
 <a href="/patterns" aria-label="Patterns" title="Patterns"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg><span>Patterns</span></a>
+<a href="/transparency" aria-label="Transparency" title="Transparency"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg><span>Transparency</span></a>
 <a href="https://github.com/UniverLab/canopy-web" target="_blank" rel="noopener noreferrer" aria-label="Source" title="Source"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg><span>Source</span></a>
 </nav>
 </div>
@@ -2694,6 +2701,7 @@ pre.prompt, pre.hash {
       <a href="https://univerlab.org/canopy/" target="_blank" rel="noopener noreferrer">Canopy</a>
       <a href="https://univerlab.org/" target="_blank" rel="noopener noreferrer">univerlab.org</a>
       <a href="https://github.com/UniverLab/canopy-web" target="_blank" rel="noopener noreferrer">Source</a>
+      <a href="/transparency">Transparency</a>
       <a href="https://univerlab.org/privacy/" target="_blank" rel="noopener noreferrer">Privacy</a>
       <a href="https://univerlab.org/terms/" target="_blank" rel="noopener noreferrer">Terms</a>
     </nav>
@@ -3283,12 +3291,12 @@ pre.prompt, pre.hash {
 }
 .verdict-list .verdict-meta { color: var(--surface-ink-dim); }
 
-/* Under 520 px the header's four links show their icon alone, so the row
+/* Under 520 px the header's five links show their icon alone, so the row
  * stays one line on a small screen: the label leaves the layout but stays
  * in the accessibility tree through the link's aria-label and title, and
  * each link is a 44 px square target (the 639 block below adds the
- * height). The banner is 253 px wide under 640 px (banner.css); the four
- * labelled links need about 330 px beside it, so above 519 px the band-top
+ * height). The banner is 253 px wide under 640 px (banner.css); the five
+ * labelled links need about 460 px beside it, so above 519 px the band-top
  * wraps them onto a second row inside the band's height. */
 @media (max-width: 519px) {
   .site-nav { gap: 0.25rem; }
@@ -3333,6 +3341,7 @@ pre.prompt, pre.hash {
 <a href="/editor" aria-label="Editor" title="Editor"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span>Editor</span></a>
 <a href="/publish" aria-label="Publish" title="Publish"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg><span>Publish</span></a>
 <a href="/patterns" aria-label="Patterns" title="Patterns"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg><span>Patterns</span></a>
+<a href="/transparency" aria-label="Transparency" title="Transparency"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg><span>Transparency</span></a>
 <a href="https://github.com/UniverLab/canopy-web" target="_blank" rel="noopener noreferrer" aria-label="Source" title="Source"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg><span>Source</span></a>
 </nav>
 </div>
@@ -3359,6 +3368,7 @@ pre.prompt, pre.hash {
       <a href="https://univerlab.org/canopy/" target="_blank" rel="noopener noreferrer">Canopy</a>
       <a href="https://univerlab.org/" target="_blank" rel="noopener noreferrer">univerlab.org</a>
       <a href="https://github.com/UniverLab/canopy-web" target="_blank" rel="noopener noreferrer">Source</a>
+      <a href="/transparency">Transparency</a>
       <a href="https://univerlab.org/privacy/" target="_blank" rel="noopener noreferrer">Privacy</a>
       <a href="https://univerlab.org/terms/" target="_blank" rel="noopener noreferrer">Terms</a>
     </nav>
@@ -3948,12 +3958,12 @@ pre.prompt, pre.hash {
 }
 .verdict-list .verdict-meta { color: var(--surface-ink-dim); }
 
-/* Under 520 px the header's four links show their icon alone, so the row
+/* Under 520 px the header's five links show their icon alone, so the row
  * stays one line on a small screen: the label leaves the layout but stays
  * in the accessibility tree through the link's aria-label and title, and
  * each link is a 44 px square target (the 639 block below adds the
- * height). The banner is 253 px wide under 640 px (banner.css); the four
- * labelled links need about 330 px beside it, so above 519 px the band-top
+ * height). The banner is 253 px wide under 640 px (banner.css); the five
+ * labelled links need about 460 px beside it, so above 519 px the band-top
  * wraps them onto a second row inside the band's height. */
 @media (max-width: 519px) {
   .site-nav { gap: 0.25rem; }
@@ -3998,6 +4008,7 @@ pre.prompt, pre.hash {
 <a href="/editor" aria-label="Editor" title="Editor"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span>Editor</span></a>
 <a href="/publish" aria-label="Publish" title="Publish"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg><span>Publish</span></a>
 <a href="/patterns" aria-label="Patterns" title="Patterns"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg><span>Patterns</span></a>
+<a href="/transparency" aria-label="Transparency" title="Transparency"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg><span>Transparency</span></a>
 <a href="https://github.com/UniverLab/canopy-web" target="_blank" rel="noopener noreferrer" aria-label="Source" title="Source"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg><span>Source</span></a>
 </nav>
 </div>
@@ -4037,6 +4048,7 @@ pre.prompt, pre.hash {
       <a href="https://univerlab.org/canopy/" target="_blank" rel="noopener noreferrer">Canopy</a>
       <a href="https://univerlab.org/" target="_blank" rel="noopener noreferrer">univerlab.org</a>
       <a href="https://github.com/UniverLab/canopy-web" target="_blank" rel="noopener noreferrer">Source</a>
+      <a href="/transparency">Transparency</a>
       <a href="https://univerlab.org/privacy/" target="_blank" rel="noopener noreferrer">Privacy</a>
       <a href="https://univerlab.org/terms/" target="_blank" rel="noopener noreferrer">Terms</a>
     </nav>

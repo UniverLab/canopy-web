@@ -192,15 +192,6 @@ export function draftTime(iso: string): string {
 export const DRAFT_MISSING_HEADING = "Draft not found";
 export const DRAFT_MISSING_BODY = "A draft lasts 30 minutes or one install. This one is gone.";
 
-/** The UniverLab colophon: the product line, its experiment and its links. */
-export const COLOPHON_PRODUCT = "Canopy graphs";
-export const COLOPHON_EXP = "EXP-001";
-export const COLOPHON_LINKS: Array<{ label: string; href: string }> = [
-  { label: "Canopy", href: CANOPY_HREF },
-  { label: "univerlab.org", href: "https://univerlab.org/" },
-  { label: SOURCE_LABEL, href: SOURCE_HREF },
-];
-
 /**
  * The markdown twin's footer section: every twin ends with the lab's
  * privacy and terms links, the counterpart of the HTML colophon's.
@@ -655,8 +646,9 @@ export function llmsPatternLine(title: string, summary: string, slug: string): s
  * review works, and the verdict list with hash and date.
  */
 
-/** The transparency page: its route, its h1, its meta description. */
+/** The transparency page: its route, its header link, its h1, its meta description. */
 export const TRANSPARENCY_HREF = "/transparency";
+export const TRANSPARENCY_LABEL = "Transparency";
 export const TRANSPARENCY_TITLE = "Transparency";
 export const TRANSPARENCY_DESCRIPTION =
   "How the catalogue is indexed, how the model review works, and every verdict it gave.";
@@ -719,3 +711,16 @@ export const TRANSPARENCY_NO_VERDICTS = "No documents reviewed yet.";
 /** One verdict row's hash and date labels. */
 export const VERDICT_HASH_LABEL = "hash";
 export const VERDICT_DATE_LABEL = "reviewed";
+
+/**
+ * The UniverLab colophon: the product line, its experiment and its links.
+ * Last in this module so the links can name the transparency page above.
+ */
+export const COLOPHON_PRODUCT = "Canopy graphs";
+export const COLOPHON_EXP = "EXP-001";
+export const COLOPHON_LINKS: Array<{ label: string; href: string }> = [
+  { label: "Canopy", href: CANOPY_HREF },
+  { label: "univerlab.org", href: "https://univerlab.org/" },
+  { label: SOURCE_LABEL, href: SOURCE_HREF },
+  { label: TRANSPARENCY_LABEL, href: TRANSPARENCY_HREF },
+];
