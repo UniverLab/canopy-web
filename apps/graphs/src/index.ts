@@ -13,12 +13,15 @@
  * either a 302 to the document on GitHub or a 400/404 explaining why
  * not. The Worker never fetches or proxies the document: GitHub stays
  * the download origin and the trust anchor, so this adds no
- * supply-chain surface beyond a redirect. There are two deliberate
- * exceptions. An explicit `?ref=`: a pinned ref is not in the index, so
- * the Worker fetches that ref live through the cached client and
- * validates it before redirecting. And `GET /i/draft/<id>`: a draft the
- * Worker itself stored for 30 minutes (drafts.ts) is served once and
- * deleted, because a draft has no repository to redirect to.
+ * supply-chain surface beyond a redirect. There are three deliberate
+ * exceptions, all of them the same live fetch-and-validate: an explicit
+ * `?ref=`, a pinned ref is not in the index, so the Worker fetches that
+ * ref live through the cached client and validates it before
+ * redirecting; an install URL the index has no entry for, which gets
+ * the same treatment at the default branch, so knowing the ref is
+ * enough; and `GET /i/draft/<id>`, a draft the
+ * Worker itself stored for 30 minutes (drafts.ts) that is served once
+ * and deleted, because a draft has no repository to redirect to.
  *
  * A Cron Trigger also wakes the Worker every 15 minutes to rebuild the
  * index into KV (indexer.ts). Until the first run lands, data routes
@@ -33,6 +36,7 @@
 import {
   type Outcome,
   type Parts,
+  type Target,
   USAGE,
   buildUrl,
   canopyVersion,
@@ -245,14 +249,25 @@ export function createWorker(deps: WorkerDeps = {}) {
 
 export default createWorker();
 
-/** An explicit `?ref=`: fetch that ref live, validate it, redirect to it. */
-async function installAtRef(
+/**
+ * The live fetch behind both live installs: one document ref through the
+ * cached GitHub client, validated exactly as the `?ref=` path validates,
+ * then a 302 to the document on GitHub. `ref` names what GitHub is asked
+ * to read — "" for the default branch, else the branch, tag or commit;
+ * `Target.ref`, always non-empty (`HEAD` when the request pinned nothing),
+ * is what the redirect URL carries — for the unpinned fallback "" is
+ * fetched and `HEAD` redirected, the pair meaning the same thing. Nothing
+ * redirects without validation: a load that dropped answers 404 with a
+ * one-line reason ("at ref <ref>" only when pinned), and a typed GitHub
+ * error keeps its shape — 429 on the rate limit, 502 unreachable.
+ */
+async function installLive(
   req: Request,
   env: Env,
   deps: WorkerDeps,
-  parsed: Extract<ReturnType<typeof parseTarget>, { ok: true }>,
+  target: Target,
+  ref: string,
 ): Promise<Response> {
-  const target = parsed.target;
   const github = createGitHub({
     fetchImpl: deps.fetchImpl,
     cache: deps.cache ?? defaultCache(),
@@ -268,7 +283,8 @@ async function installAtRef(
       kind: target.kind,
       slug: target.slug,
       stars: null,
-      ref: target.ref,
+      // "" reads the default branch; the pinned ref is exactly what was sent.
+      ref,
     },
     () => undefined,
   );
@@ -290,10 +306,23 @@ async function installAtRef(
     }
     return textResponse("GitHub is unreachable right now; try again in a moment.\n", 502);
   }
+  // The unpinned fallback keeps the index-miss wording (no ref to name);
+  // a pinned miss says which ref it read.
+  const atRef = ref === "" ? "" : ` at ref ${ref}`;
   return textResponse(
-    `no ${target.kind} named ${target.slug} in ${target.owner}/${target.repo} at ref ${target.ref}\n`,
+    `no ${target.kind} named ${target.slug} in ${target.owner}/${target.repo}${atRef}\n`,
     404,
   );
+}
+
+/** An explicit `?ref=`: fetch that ref live, validate it, redirect to it. */
+async function installAtRef(
+  req: Request,
+  env: Env,
+  deps: WorkerDeps,
+  parsed: Extract<ReturnType<typeof parseTarget>, { ok: true }>,
+): Promise<Response> {
+  return installLive(req, env, deps, parsed.target, parsed.target.ref);
 }
 
 /**
@@ -342,7 +371,10 @@ async function installDraft(req: Request, env: Env, url: URL): Promise<Response 
 /**
  * The install redirector: the index verifies the document exists, then a
  * 302 to the document on GitHub, or a 400/404 explaining why not. An
- * explicit `?ref=` is not in the index, so it is fetched live instead.
+ * explicit `?ref=` is not in the index, so it is fetched live instead;
+ * an install the index has no entry for gets the same live treatment —
+ * the 404 the index-miss wording keeps is only for what GitHub does
+ * not list either.
  */
 async function install(req: Request, env: Env, url: URL, deps: WorkerDeps): Promise<Response> {
   const draft = await installDraft(req, env, url);
@@ -384,11 +416,13 @@ async function install(req: Request, env: Env, url: URL, deps: WorkerDeps): Prom
     ? null
     : await store.getDoc(target.kind, target.owner, target.repo, target.slug);
   if (entry === null || stored === null) {
-    record(env, req, target, "bad-request");
-    return textResponse(
-      `no ${target.kind} named ${target.slug} in ${target.owner}/${target.repo}\n`,
-      404,
-    );
+    // No index entry is not proof the document is gone: the unindexed
+    // fallback asks GitHub the same way a `?ref=` install does, reading
+    // the default branch. A validated document redirects; a fetch or
+    // validation miss keeps the very wording the index-miss path had
+    // (nothing pinned, so no "at ref" suffix), so callers that already
+    // treat a miss as a miss keep doing exactly that.
+    return installLive(req, env, deps, target, "");
   }
 
   record(env, req, target, "redirect");

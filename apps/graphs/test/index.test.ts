@@ -124,10 +124,18 @@ describe("redirects", () => {
     expect(response.headers.get("location")).toBe(community("acme", "things", "graph", "flow"));
   });
 
-  it("answers an install for a document the index never listed with a 404", async () => {
-    const response = await call("/i/graph/no-such-graph", { env: { INDEX: await seeded() } });
+  it("answers an install for a document the index never listed with the live fallback", async () => {
+    // The index has no entry, so the Worker asks GitHub the way a pinned
+    // ref is asked. GitHub has no such document either (the miss below),
+    // so the answer stays the same 404 with the same wording it always had.
+    const kv = await seeded();
+    const fake = fakeFetch([
+      { url: "repos/UniverLab/canopy-graphs/contents/graphs/no-such-graph/graph.json", status: 404, body: {} },
+    ]);
+    const live = createWorker({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
+    const response = await live.fetch(request("/i/graph/no-such-graph", { env: { INDEX: kv } }), { INDEX: kv });
     expect(response.status).toBe(404);
-    expect(await response.text()).toContain("no graph named no-such-graph");
+    expect(await response.text()).toContain(`no graph named no-such-graph in UniverLab/canopy-graphs\n`);
   });
 
   it("answers installs with a 503 before the first scheduled run", async () => {
@@ -280,6 +288,94 @@ describe("explicit refs go live", () => {
   });
 });
 
+describe("unindexed installs go live", () => {
+  /**
+   * A Worker over the stub table, with the caller's index KV: the fallback
+   * installs need an index that lacks the target, the cold start needs no
+   * index at all, and the fast path proves the stubs never get fetched.
+   */
+  function liveWorker(stubs: Stub[]) {
+    const fake = fakeFetch(stubs);
+    return {
+      worker: createWorker({ fetchImpl: fake.fetchImpl, cache: new FakeCache() }),
+      fetch: fake,
+    };
+  }
+
+  /** A fresh official index; the tests read targets it never lists. */
+  async function indexedEnv(): Promise<Env> {
+    return { INDEX: await seeded() };
+  }
+
+  it("installs an unindexed community ref through a live fetch", async () => {
+    const env = await indexedEnv();
+    const { worker, fetch } = liveWorker([
+      { url: "repos/acme/things/contents/graphs/new-graph/graph.json", status: 200, body: fileBody("graphs/new-graph/graph.json", VALID_GRAPH_TEXT) },
+      { url: "repos/acme/things/contents/graphs/new-graph/README.md", status: 404, body: {} },
+    ]);
+    const response = await worker.fetch(new Request(`${ORIGIN}/i/acme/things/graph/new-graph`), env);
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(community("acme", "things", "graph", "new-graph"));
+    expect(fetch.calls.length).toBeGreaterThan(0);
+  });
+
+  it("installs an unindexed official ref through the same fallback", async () => {
+    const env = await indexedEnv();
+    const { worker, fetch } = liveWorker([
+      { url: "repos/UniverLab/canopy-graphs/contents/graphs/brand-new-graph/graph.json", status: 200, body: fileBody("graphs/brand-new-graph/graph.json", VALID_GRAPH_TEXT) },
+      { url: "repos/UniverLab/canopy-graphs/contents/graphs/brand-new-graph/README.md", status: 404, body: {} },
+    ]);
+    const response = await worker.fetch(new Request(`${ORIGIN}/i/graph/brand-new-graph`), env);
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(official("graph", "brand-new-graph"));
+    expect(fetch.calls.length).toBeGreaterThan(0);
+  });
+
+  it("fails closed when the unindexed ref holds an invalid document", async () => {
+    const env = await indexedEnv();
+    const { worker, fetch } = liveWorker([
+      { url: "repos/acme/things/contents/graphs/broken/graph.json", status: 200, body: fileBody("graphs/broken/graph.json", INVALID_GRAPH_TEXT) },
+    ]);
+    const response = await worker.fetch(new Request(`${ORIGIN}/i/acme/things/graph/broken`), env);
+    expect(response.status).toBe(404);
+    expect(await response.text()).toContain(`no graph named broken in acme/things\n`);
+    expect(fetch.calls.length).toBeGreaterThan(0);
+  });
+
+  it("fails closed when GitHub has no such document at the default branch", async () => {
+    const env = await indexedEnv();
+    const { worker, fetch } = liveWorker([
+      { url: "repos/absent/repo/contents/nodes/ghost/node.json", status: 404, body: {} },
+    ]);
+    const response = await worker.fetch(new Request(`${ORIGIN}/i/absent/repo/node/ghost`), env);
+    expect(response.status).toBe(404);
+    expect(await response.text()).toContain(`no node named ghost in absent/repo\n`);
+    expect(fetch.calls.length).toBeGreaterThan(0);
+  });
+
+  it("never fetches GitHub on the indexed fast path", async () => {
+    const env = await indexedEnv();
+    const { worker, fetch } = liveWorker([]);
+    const response = await worker.fetch(new Request(`${ORIGIN}/i/graph/hello-graph`), env);
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(official("graph", "hello-graph"));
+    expect(fetch.calls).toEqual([]);
+    expect(fetch.missing).toEqual([]);
+  });
+
+  it("keeps the cold start at 503, never falling back to a live fetch", async () => {
+    // No INDEX binding at all: 503 retry-after 120, exactly as before.
+    // The isolate memo belongs to the previous case's KV, so it is reset here.
+    resetIndexMemo();
+    const { worker, fetch } = liveWorker([]);
+    const response = await worker.fetch(new Request(`${ORIGIN}/i/graph/hello-graph`), {});
+    expect(response.status).toBe(503);
+    expect(response.headers.get("retry-after")).toBe("120");
+    expect(await response.text()).toContain(INDEXING_BODY);
+    expect(fetch.calls).toEqual([]);
+  });
+});
+
 describe("bad requests", () => {
   const cases: Array<{ path: string; reason: string }> = [
     { path: "/i/preset/hello-graph", reason: "kind must be graph or node" },
@@ -412,10 +508,16 @@ describe("counting", () => {
   });
 
   it("writes one point per request, never two", async () => {
+    // The unindexed install falls back to a live fetch, so the Worker gets a
+    // stubbed GitHub here: the miss below keeps that request at one point.
+    const fake = fakeFetch([
+      { url: "repos/UniverLab/canopy-graphs/contents/graphs/no-such-graph/graph.json", status: 404, body: {} },
+    ]);
     const points: DataPoint[] = [];
     const env = await counting(points);
+    const live = createWorker({ fetchImpl: fake.fetchImpl, cache: new FakeCache() });
     for (const path of ["/i/graph/hello-graph", "/i/graph/no-such-graph", "/health"]) {
-      await call(path, { env });
+      await live.fetch(request(path, { env }), env);
     }
     expect(points).toHaveLength(3);
   });
