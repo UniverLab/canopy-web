@@ -93,6 +93,21 @@ describe("security headers", () => {
     expectSecurityHeaders(response);
   });
 
+  it("carries the headers on the room's 429 refusal", async () => {
+    const room = new UserRoom(new FakeRoomState());
+    const deviceUpgrade = (): Request =>
+      new Request("https://user-room/", {
+        headers: { upgrade: "websocket", "x-relay-role": "device" },
+      });
+    for (let index = 0; index < 8; index += 1) {
+      expect(room.fetch(deviceUpgrade()).status).toBe(101);
+    }
+    const ninth = room.fetch(deviceUpgrade());
+    expect(ninth.status).toBe(429);
+    expect(await ninth.json()).toEqual({ error: "too_many_devices" });
+    expectSecurityHeaders(ninth);
+  });
+
   it("carries the headers on the room's 426 and 400", () => {
     const room = new UserRoom(new FakeRoomState());
     const upgrade = new Request("https://user-room/", {

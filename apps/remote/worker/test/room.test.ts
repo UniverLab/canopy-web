@@ -219,6 +219,18 @@ describe("close handshake", () => {
     room.webSocketClose(hostSocket, 1001, "away");
     expect(device.frames()).toEqual([{ from: "relay", body: { t: "hosts", items: [] } }]);
   });
+
+  it("still announces the gone socket when the echo throws", () => {
+    const { state, room } = setup();
+    const device = attachFake(state, room, "device");
+    const host = attachFake(state, room, "host", { host_id: HOST_ID, label: "devbox" });
+    host.close = () => {
+      state.remove(host);
+      throw new Error("echo failed");
+    };
+    expect(() => room.webSocketClose(host, 1000, "gone")).toThrow("echo failed");
+    expect(device.frames()).toEqual([{ from: "relay", body: { t: "hosts", items: [] } }]);
+  });
 });
 
 describe("routing", () => {

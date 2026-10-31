@@ -240,9 +240,14 @@ export class UserRoom {
 
   webSocketClose(socket: RoomSocket, code?: number, reason?: string): void {
     // Echo the client's close so the handshake completes, then run the
-    // same gone-notices as an error.
-    socket.close(code, reason);
-    this.onSocketGone(socket);
+    // same gone-notices as an error. The echo must never swallow the
+    // notices: a throw would leave a stale hosts list or a missing
+    // device_left.
+    try {
+      socket.close(code, reason);
+    } finally {
+      this.onSocketGone(socket);
+    }
   }
 
   webSocketError(socket: RoomSocket): void {
