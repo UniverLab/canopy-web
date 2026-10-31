@@ -106,7 +106,7 @@
     margin-inline: auto;
   }
 
-  .topbar-inner {
+  .topbar .topbar-inner {
     justify-content: center;
   }
 
