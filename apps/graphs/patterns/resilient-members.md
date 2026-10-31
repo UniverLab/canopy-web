@@ -3,7 +3,7 @@ title: Resilient members
 summary: Cascade and round-robin ensembles give one node a fallback ladder or a rotation across providers, so a quota death is not a failed run.
 status: in use
 implements:
-  - graph:canopy-loop
+  - graph:canopy-builder
 figure: resilient-members.figure.json
 sources:
   - title: How we built our multi-agent research system (Anthropic), resilience
@@ -65,7 +65,7 @@ Cascade and round robin reuse the ensemble idea from the parallel proposers: an 
 
 ## In Canopy
 
-`canopy-loop` ships this pattern: each of its five working roles is a round-robin ensemble — Designer, Implementer, Reviewer, Auditor and Documenter — and every member is an empty object, so no harness is baked in. From `graphs/canopy-loop/graph.json`:
+`canopy-builder` ships this pattern: each of its five working roles is a round-robin ensemble — Designer, Implementer, Reviewer, Auditor and Documenter — and every member is an empty object, so no harness is baked in. From `graphs/canopy-builder/graph.json`:
 
 ```json
 {
@@ -95,12 +95,12 @@ Cascade and round robin reuse the ensemble idea from the parallel proposers: an 
 
 The members take turns: spend rotates across providers, and a quota death rotates to the next member instead of failing the spec. Bind a different harness to each member at install time. The schema also allows `cascade`, where the members form a ladder and the first pass exits.
 
-For the failure side of the same problem, `canopy-loop` carries a `Resilience` node: it reacts after a node fails, where members prevent the failure from ending the run.
+For the failure side of the same problem, `canopy-builder` carries a `Resilience` node: it reacts after a node fails, where members prevent the failure from ending the run.
 
 ## Try it
 
 ```sh
-canopy graph install canopy-loop
+canopy graph install canopy-builder
 ```
 
 To spend free tiers first: one cascade ensemble, cheapest to dearest, one pass enough to exit, short per-member timeouts, no infra retries. The honest limit is the missing memory above: each new spec rediscovers the spent tiers.

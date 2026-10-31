@@ -3,8 +3,8 @@ title: Deterministic commit
 summary: A check node commits with the spec's own Conventional Commit subject, and a model never writes the commit.
 status: in use
 implements:
-  - graph:canopy-loop
-  - graph:canopy-loop-plain
+  - graph:canopy-builder
+  - graph:adversarial-developer
 figure: deterministic-commit.figure.json
 sources:
   - title: Building effective agents (Anthropic), ground truth from the environment
@@ -36,9 +36,9 @@ What the convention buys is boring history. No trailers to strip, no paraphrases
 ## In Canopy
 
 Both loop graphs carry this pattern as a check node with commit rights.
-In `canopy-loop-plain` it is the `Commit` node, whose command stages
+In `adversarial-developer` it is the `Commit` node, whose command stages
 everything and commits with the spec's own message verbatim. From
-`graphs/canopy-loop-plain/graph.json`:
+`graphs/adversarial-developer/graph.json`:
 
 ```json
 "config": {
@@ -51,9 +51,9 @@ When the tree is already clean, the command passes without committing.
 Pushing to the work branch is optional: add the push to the command if
 the graph should publish the branch.
 
-In `canopy-loop-plain` the documenter leaves its docs uncommitted, so
+In `adversarial-developer` the documenter leaves its docs uncommitted, so
 `Commit` lands the code and the docs together under the one subject.
-`canopy-loop` commits twice the same way: `Commit spec` lands the
+`canopy-builder` commits twice the same way: `Commit spec` lands the
 spec's own message after the completeness review, and `Commit auditor
 fixes` lands `fix(<scope>): audit fixes for <name>` after the auditor's
 repairs, and both push the branch when they succeed.
@@ -73,6 +73,6 @@ the spec cannot carry.
 ## Try it
 
 ```sh
-canopy graph install canopy-loop
-canopy graph install canopy-loop-plain
+canopy graph install canopy-builder
+canopy graph install adversarial-developer
 ```

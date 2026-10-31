@@ -3,7 +3,7 @@ title: Cross-platform check
 summary: The reviewer runs on a different vendor from the implementer, so one family's blind spots and one quota ceiling cannot stall the graph.
 status: in use
 implements:
-  - graph:canopy-loop
+  - graph:canopy-builder
 figure: cross-platform-check.figure.json
 sources:
   - title: Building effective agents (Anthropic), evaluator-optimizer workflow
@@ -36,7 +36,7 @@ The lab has not measured how many defects this catches that a same-family review
 
 ## In Canopy
 
-No catalogue document is dedicated to this pattern, because it is a binding choice, not a new shape. Install `canopy-loop` and bind its role ensembles across vendors: the Implementer on one, the Designer on a second, and the reviewer and the auditor on a third. Every ensemble in that document arrives without a platform or a model, so the split is yours to make at install time.
+No catalogue document is dedicated to this pattern, because it is a binding choice, not a new shape. Install `canopy-builder` and bind its role ensembles across vendors: the Implementer on one, the Designer on a second, and the reviewer and the auditor on a third. Every ensemble in that document arrives without a platform or a model, so the split is yours to make at install time.
 
 Everything else stays as the loop defines it. The gate still sits before the reviewer, failures still route back to the implementer, and the documenter's own check still proves the tree is clean. Only the vendors differ.
 
@@ -45,7 +45,7 @@ That loop already reviews twice behind one gate — the reviewer must locate eve
 ## Try it
 
 ```sh
-canopy graph install canopy-loop
+canopy graph install canopy-builder
 ```
 
 Bind the implementer and the reviewer to different vendors at install time, and keep the review prompt to diff plus spec plus "find what is wrong".

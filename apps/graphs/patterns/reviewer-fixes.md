@@ -52,7 +52,7 @@ repairs without turning into a second implementer that iterates.
 
 This differs from the catalogue's `reviewer` node, which fails a
 bad diff back to the implementer with a list of what is wrong instead
-of fixing it. `canopy-loop` splits the two jobs: its reviewer
+of fixing it. `canopy-builder` splits the two jobs: its reviewer
 only reports what is missing, its auditor repairs what it
 finds, and a check node commits those repairs. Pick the arrangement
 that matches how much you trust the model that repairs.

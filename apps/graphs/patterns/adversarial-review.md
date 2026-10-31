@@ -69,7 +69,7 @@ No official document implements this pair as a whole. The `reviewer` node is the
 ## Try it
 
 ```sh
-canopy graph install canopy-loop
+canopy graph install canopy-builder
 ```
 
 Bind a different model family to each reviewer member of the pair you add.

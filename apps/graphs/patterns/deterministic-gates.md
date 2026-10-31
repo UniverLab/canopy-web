@@ -3,8 +3,8 @@ title: Deterministic gates
 summary: Shell checks decide pass or fail, never an LLM judge, and a failure carries its reason into the next prompt.
 status: standard
 implements:
-  - graph:canopy-loop
-  - graph:canopy-loop-plain
+  - graph:canopy-builder
+  - graph:adversarial-developer
   - node:full-gates-cargo
   - node:full-gates-web
 figure: deterministic-gates.figure.json
@@ -51,7 +51,7 @@ A plan from one node to the next travels through spec notes, not files. A design
 
 ## In Canopy
 
-A `check` node holds the command. Edges route `pass` forward and `fail` back to the implementer. In `canopy-loop-plain`, the gate that follows the implementer and its two edges look like this:
+A `check` node holds the command. Edges route `pass` forward and `fail` back to the implementer. In `adversarial-developer`, the gate that follows the implementer and its two edges look like this:
 
 ```json
 {
@@ -97,7 +97,7 @@ Harden the one gate instead, so every spec meets the same bar. Put the test budg
 ## Try it
 
 ```sh
-canopy graph install canopy-loop
+canopy graph install canopy-builder
 canopy node install full-gates-cargo
 canopy node install full-gates-web
 ```

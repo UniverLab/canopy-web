@@ -403,9 +403,9 @@ describe("stored pattern relations", () => {
     expect(html).toContain(`<a class="row-name" href="/g/acme/things/flow">flow</a>`);
     expect(html).toContain(`<code>canopy graph install acme/things/flow</code>`);
     // The statically authored graph links are replaced: no static graph row.
-    expect(html).not.toContain(`<a class="row-name" href="/g/canopy-loop">`);
-    expect(html).not.toContain(`<a class="row-name" href="/g/canopy-loop-plain">`);
-    expect(html).not.toContain(`<span class="row-name">graph:canopy-loop</span>`);
+    expect(html).not.toContain(`<a class="row-name" href="/g/canopy-builder">`);
+    expect(html).not.toContain(`<a class="row-name" href="/g/adversarial-developer">`);
+    expect(html).not.toContain(`<span class="row-name">graph:canopy-builder</span>`);
     // The static node refs stay: reviews carry none for nodes.
     expect(html).toContain(`<span class="row-name">node:full-gates-cargo</span>`);
     expect(html).toContain(PATTERN_MISSING_REF);
@@ -422,7 +422,7 @@ describe("stored pattern relations", () => {
       [docKey("graph", "acme", "things", "flow")]: graphDoc("flow", "echo hi"),
     });
     const html = await (await call("/patterns/deterministic-gates", kv)).text();
-    expect(html).toContain(`<span class="row-name">graph:canopy-loop</span>`);
+    expect(html).toContain(`<span class="row-name">graph:canopy-builder</span>`);
   });
 
   it("keeps the static graph links for a pattern the last review never saw", async () => {
@@ -439,7 +439,7 @@ describe("stored pattern relations", () => {
     }));
     await runReview({ index: kv, provider, patternSlugs: ["other-pattern"], now: () => NOW });
     const html = await (await call("/patterns/deterministic-gates", kv)).text();
-    expect(html).toContain(`<span class="row-name">graph:canopy-loop</span>`);
+    expect(html).toContain(`<span class="row-name">graph:canopy-builder</span>`);
   });
 });
 
