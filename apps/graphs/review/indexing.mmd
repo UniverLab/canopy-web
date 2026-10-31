@@ -1,0 +1,28 @@
+%% SPDX-License-Identifier: Apache-2.0
+%% The catalogue's indexing model, committed in-repo and pre-rendered to
+%% static SVG at build time (`npm run build:review-assets`). The transparency
+%% page inlines the SVG; no runtime mermaid.js ships. Keep the participant
+%% names and the message order stable: the build renderer and the tests pin
+%% them.
+sequenceDiagram
+  autonumber
+  participant Cron as Cron */15
+  participant Worker as Worker
+  participant GitHub as GitHub
+  participant KV as KV
+  participant Muse as Claude API
+  participant Browser as Browser
+  Cron->>Worker: scheduled trigger
+  Worker->>GitHub: read blocked.json
+  Worker->>GitHub: discover topic canopy-graph
+  loop per repository
+    Worker->>GitHub: fetch document folders
+    Worker->>Worker: validate graph and node JSON
+  end
+  Worker->>KV: write index, docs, meta
+  Worker->>Muse: review newest unscanned docs
+  Muse-->>Worker: patterns and verdict
+  Worker->>KV: write reviews and pattern links
+  Browser->>Worker: GET page or API
+  Worker->>KV: read index and docs
+  Worker-->>Browser: HTML, twin, JSON or 302

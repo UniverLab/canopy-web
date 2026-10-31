@@ -25,6 +25,17 @@ import {
 import { isArray, isNumber, isRecord, isString, parseJson, stringField } from "./json.js";
 import type { PatternEntry, StoredPattern } from "./patterns.js";
 import { bundledPatterns } from "./patterns-bundled.js";
+import {
+  REVIEWS_KEY,
+  REVIEW_PATTERNS_KEY,
+  parseReviewPatterns,
+  parseReviewsAggregate,
+  parseStoredReview,
+  reviewKey,
+  type StoredReview,
+  type StoredReviewPatterns,
+  type StoredReviews,
+} from "./review.js";
 
 export type { BlockedEntry } from "./blocked.js";
 
@@ -346,6 +357,17 @@ export interface IndexStore {
   ): Promise<BlockedEntry | null>;
   /** The last run's accounting, or null when no run has written it. */
   getMeta(): Promise<IndexMeta | null>;
+  /** One document's model review, or null when unreviewed. */
+  getReview(
+    kind: DocumentKind,
+    owner: string,
+    repo: string,
+    slug: string,
+  ): Promise<StoredReview | null>;
+  /** Every verdict, for the transparency page, or null when none reviewed. */
+  getReviews(): Promise<StoredReviews | null>;
+  /** The pattern-to-graphs relations, or null when none reviewed. */
+  getReviewPatterns(): Promise<StoredReviewPatterns | null>;
 }
 
 /** Build the read side over a KV binding, real or fake. */
@@ -434,5 +456,49 @@ export function createStore(kv: KV | undefined): IndexStore {
     return text === null ? null : parseMeta(text);
   }
 
-  return { getIndex, getPatterns, getDoc, getPattern, getBlocked, getMeta };
+  async function getReview(
+    kind: DocumentKind,
+    owner: string,
+    repo: string,
+    slug: string,
+  ): Promise<StoredReview | null> {
+    if (kv === undefined) {
+      return null;
+    }
+    let text: string | null;
+    try {
+      text = await kv.get(reviewKey(kind, owner, repo, slug));
+    } catch {
+      return null;
+    }
+    return text === null ? null : parseStoredReview(text);
+  }
+
+  async function getReviews(): Promise<StoredReviews | null> {
+    if (kv === undefined) {
+      return null;
+    }
+    let text: string | null;
+    try {
+      text = await kv.get(REVIEWS_KEY);
+    } catch {
+      return null;
+    }
+    return text === null ? null : parseReviewsAggregate(text);
+  }
+
+  async function getReviewPatterns(): Promise<StoredReviewPatterns | null> {
+    if (kv === undefined) {
+      return null;
+    }
+    let text: string | null;
+    try {
+      text = await kv.get(REVIEW_PATTERNS_KEY);
+    } catch {
+      return null;
+    }
+    return text === null ? null : parseReviewPatterns(text);
+  }
+
+  return { getIndex, getPatterns, getDoc, getPattern, getBlocked, getMeta, getReview, getReviews, getReviewPatterns };
 }

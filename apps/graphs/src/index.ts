@@ -56,6 +56,9 @@ import { entryFor } from "./catalog.js";
 import { runIndexer } from "./indexer.js";
 import { createStore, type BlockedEntry } from "./store.js";
 import { INDEXING_BODY } from "./pages/copy.js";
+import { bundledPatterns } from "./patterns-bundled.js";
+import { REVIEW_DEFAULT_CAP, runReview, type ReviewProvider } from "./review.js";
+import { CLAUDE_DEFAULT_MODEL, createClaudeProvider } from "./review-claude.js";
 
 /** The single Analytics Engine method this Worker uses. */
 export interface DataPoint {
@@ -154,13 +157,13 @@ function firstSegment(pathname: string): string {
   return pathname.replace(/^\/+/, "").split("/")[0] ?? "";
 }
 
-/** The catalogue pages claim /, /search, /g, /n, /llms.txt, /publish, /patterns and /editor;
+/** The catalogue pages claim /, /search, /g, /n, /llms.txt, /publish, /patterns, /editor and /transparency;
  * every other path (the /i install routes above all) stays a redirect. */
 function isPagePath(pathname: string): boolean {
   const first = firstSegment(pathname);
   return first === "" || first === "search" || first === "llms.txt" || first === "g" || first === "n" ||
     first === "d" || first === "publish" || first === "publish.md" || first === "patterns" ||
-    first === "editor";
+    first === "editor" || first === "transparency";
 }
 
 /** The injected transport and cache: production defaults, test overrides. */
@@ -234,11 +237,22 @@ export function createWorker(deps: WorkerDeps = {}) {
         token: env.GITHUB_TOKEN,
         log: () => undefined,
       });
-      const run = runIndexer({
-        github,
-        index: kv,
-        authenticated: (env.GITHUB_TOKEN ?? "") !== "",
-      });
+      const run = (async (): Promise<void> => {
+        await runIndexer({
+          github,
+          index: kv,
+          authenticated: (env.GITHUB_TOKEN ?? "") !== "",
+        });
+        // The review pass hooks in after the index writes landed, so it
+        // never blocks them; `off` (or a missing key) skips it entirely.
+        try {
+          const provider = await reviewProviderFromEnv(env, deps);
+          const slugs = await reviewSlugs();
+          await runReview({ index: kv, provider, patternSlugs: slugs, cap: reviewCap(env) });
+        } catch {
+          // A review failure never fails the scheduled run.
+        }
+      })();
       if (ctx !== undefined) {
         ctx.waitUntil(run);
       }
@@ -248,6 +262,46 @@ export function createWorker(deps: WorkerDeps = {}) {
 }
 
 export default createWorker();
+
+/** The bundled pattern slugs the review may name; empty when unparsable. */
+async function reviewSlugs(): Promise<string[]> {
+  try {
+    const bundled = await bundledPatterns();
+    return bundled.entries.map((entry) => entry.slug);
+  } catch {
+    return [];
+  }
+}
+
+/** The per-run scan cap from config, clamped to 1..50. */
+function reviewCap(env: Env): number {
+  const parsed = Number.parseInt(env.REVIEW_SCAN_CAP ?? "", 10);
+  if (!Number.isInteger(parsed)) {
+    return REVIEW_DEFAULT_CAP;
+  }
+  return Math.min(50, Math.max(1, parsed));
+}
+
+/**
+ * The configured review provider, or null when the pass is off. `Muse`
+ * without a key is off too: documents stay `unreviewed` with no calls.
+ */
+async function reviewProviderFromEnv(env: Env, deps: WorkerDeps): Promise<ReviewProvider | null> {
+  if ((env.REVIEW_PROVIDER ?? "off").toLowerCase() !== "claude") {
+    return null;
+  }
+  const apiKey = env.CLAUDE_API_KEY ?? "";
+  if (apiKey === "") {
+    return null;
+  }
+  const model = env.REVIEW_MODEL ?? CLAUDE_DEFAULT_MODEL;
+  return createClaudeProvider({
+    apiKey,
+    model: model === "" ? CLAUDE_DEFAULT_MODEL : model,
+    patternSlugs: await reviewSlugs(),
+    fetchImpl: deps.fetchImpl,
+  });
+}
 
 /**
  * The live fetch behind both live installs: one document ref through the

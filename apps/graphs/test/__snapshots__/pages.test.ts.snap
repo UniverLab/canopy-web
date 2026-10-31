@@ -507,6 +507,61 @@ details.run-prompt summary .run-where { color: var(--surface-ink); }
 .run-builtin { margin: 0.5rem 0 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--surface-ink-dim); }
 details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
+/* The fuzzy verdict: one line under the description, tinted by label —
+ * safe reads ok, needs-a-look warns, flagged errors — with the reasons
+ * as plain prose below. Unreviewed renders nothing at all. */
+.review-badge {
+  display: inline-block;
+  margin: 0 0 0.5rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius-ctl);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+.review-badge.review-looks-safe { background: var(--tint-ok); }
+.review-badge.review-needs-look { background: var(--tint-warn); }
+.review-badge.review-flagged { background: var(--tint-error); }
+.review-reasons { font-family: var(--font-body); font-size: 1rem; color: var(--surface-ink-dim); }
+
+/* The transparency page: the pre-rendered diagram scrolls inside itself,
+ * the prompt and the verdict hashes read as mono blocks. */
+figure.diagram {
+  margin: 0 0 1.5rem;
+  padding: 0.75rem;
+  max-width: 100%;
+  overflow-x: auto;
+  background: var(--stage-bg);
+  border: 1px solid var(--stage-line);
+  border-radius: var(--radius-card);
+  color: var(--stage-ink);
+}
+figure.diagram svg { display: block; min-width: 40rem; height: auto; }
+pre.prompt, pre.hash {
+  padding: 0.75rem;
+  background: var(--stage-bg);
+  border: 1px solid var(--stage-line);
+  border-radius: var(--radius-ctl);
+  color: var(--stage-ink);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-x: auto;
+}
+.verdict-list { list-style: none; margin: 0 0 1.5rem; padding: 0; }
+.verdict-list li {
+  margin: 0 0 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface-panel);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-card);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+.verdict-list .verdict-meta { color: var(--surface-ink-dim); }
+
 /* Under 520 px the header's four links show their icon alone, so the row
  * stays one line on a small screen: the label leaves the layout but stays
  * in the accessibility tree through the link's aria-label and title, and
@@ -1121,6 +1176,61 @@ details.run-prompt summary .run-where { color: var(--surface-ink); }
 }
 .run-builtin { margin: 0.5rem 0 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--surface-ink-dim); }
 details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
+
+/* The fuzzy verdict: one line under the description, tinted by label —
+ * safe reads ok, needs-a-look warns, flagged errors — with the reasons
+ * as plain prose below. Unreviewed renders nothing at all. */
+.review-badge {
+  display: inline-block;
+  margin: 0 0 0.5rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius-ctl);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+.review-badge.review-looks-safe { background: var(--tint-ok); }
+.review-badge.review-needs-look { background: var(--tint-warn); }
+.review-badge.review-flagged { background: var(--tint-error); }
+.review-reasons { font-family: var(--font-body); font-size: 1rem; color: var(--surface-ink-dim); }
+
+/* The transparency page: the pre-rendered diagram scrolls inside itself,
+ * the prompt and the verdict hashes read as mono blocks. */
+figure.diagram {
+  margin: 0 0 1.5rem;
+  padding: 0.75rem;
+  max-width: 100%;
+  overflow-x: auto;
+  background: var(--stage-bg);
+  border: 1px solid var(--stage-line);
+  border-radius: var(--radius-card);
+  color: var(--stage-ink);
+}
+figure.diagram svg { display: block; min-width: 40rem; height: auto; }
+pre.prompt, pre.hash {
+  padding: 0.75rem;
+  background: var(--stage-bg);
+  border: 1px solid var(--stage-line);
+  border-radius: var(--radius-ctl);
+  color: var(--stage-ink);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-x: auto;
+}
+.verdict-list { list-style: none; margin: 0 0 1.5rem; padding: 0; }
+.verdict-list li {
+  margin: 0 0 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface-panel);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-card);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+.verdict-list .verdict-meta { color: var(--surface-ink-dim); }
 
 /* Under 520 px the header's four links show their icon alone, so the row
  * stays one line on a small screen: the label leaves the layout but stays
@@ -1745,6 +1855,61 @@ details.run-prompt summary .run-where { color: var(--surface-ink); }
 }
 .run-builtin { margin: 0.5rem 0 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--surface-ink-dim); }
 details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
+
+/* The fuzzy verdict: one line under the description, tinted by label —
+ * safe reads ok, needs-a-look warns, flagged errors — with the reasons
+ * as plain prose below. Unreviewed renders nothing at all. */
+.review-badge {
+  display: inline-block;
+  margin: 0 0 0.5rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius-ctl);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+.review-badge.review-looks-safe { background: var(--tint-ok); }
+.review-badge.review-needs-look { background: var(--tint-warn); }
+.review-badge.review-flagged { background: var(--tint-error); }
+.review-reasons { font-family: var(--font-body); font-size: 1rem; color: var(--surface-ink-dim); }
+
+/* The transparency page: the pre-rendered diagram scrolls inside itself,
+ * the prompt and the verdict hashes read as mono blocks. */
+figure.diagram {
+  margin: 0 0 1.5rem;
+  padding: 0.75rem;
+  max-width: 100%;
+  overflow-x: auto;
+  background: var(--stage-bg);
+  border: 1px solid var(--stage-line);
+  border-radius: var(--radius-card);
+  color: var(--stage-ink);
+}
+figure.diagram svg { display: block; min-width: 40rem; height: auto; }
+pre.prompt, pre.hash {
+  padding: 0.75rem;
+  background: var(--stage-bg);
+  border: 1px solid var(--stage-line);
+  border-radius: var(--radius-ctl);
+  color: var(--stage-ink);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-x: auto;
+}
+.verdict-list { list-style: none; margin: 0 0 1.5rem; padding: 0; }
+.verdict-list li {
+  margin: 0 0 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface-panel);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-card);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+.verdict-list .verdict-meta { color: var(--surface-ink-dim); }
 
 /* Under 520 px the header's four links show their icon alone, so the row
  * stays one line on a small screen: the label leaves the layout but stays
@@ -2390,6 +2555,61 @@ details.run-prompt summary .run-where { color: var(--surface-ink); }
 .run-builtin { margin: 0.5rem 0 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--surface-ink-dim); }
 details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
+/* The fuzzy verdict: one line under the description, tinted by label —
+ * safe reads ok, needs-a-look warns, flagged errors — with the reasons
+ * as plain prose below. Unreviewed renders nothing at all. */
+.review-badge {
+  display: inline-block;
+  margin: 0 0 0.5rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius-ctl);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+.review-badge.review-looks-safe { background: var(--tint-ok); }
+.review-badge.review-needs-look { background: var(--tint-warn); }
+.review-badge.review-flagged { background: var(--tint-error); }
+.review-reasons { font-family: var(--font-body); font-size: 1rem; color: var(--surface-ink-dim); }
+
+/* The transparency page: the pre-rendered diagram scrolls inside itself,
+ * the prompt and the verdict hashes read as mono blocks. */
+figure.diagram {
+  margin: 0 0 1.5rem;
+  padding: 0.75rem;
+  max-width: 100%;
+  overflow-x: auto;
+  background: var(--stage-bg);
+  border: 1px solid var(--stage-line);
+  border-radius: var(--radius-card);
+  color: var(--stage-ink);
+}
+figure.diagram svg { display: block; min-width: 40rem; height: auto; }
+pre.prompt, pre.hash {
+  padding: 0.75rem;
+  background: var(--stage-bg);
+  border: 1px solid var(--stage-line);
+  border-radius: var(--radius-ctl);
+  color: var(--stage-ink);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-x: auto;
+}
+.verdict-list { list-style: none; margin: 0 0 1.5rem; padding: 0; }
+.verdict-list li {
+  margin: 0 0 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface-panel);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-card);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+.verdict-list .verdict-meta { color: var(--surface-ink-dim); }
+
 /* Under 520 px the header's four links show their icon alone, so the row
  * stays one line on a small screen: the label leaves the layout but stays
  * in the accessibility tree through the link's aria-label and title, and
@@ -3008,6 +3228,61 @@ details.run-prompt summary .run-where { color: var(--surface-ink); }
 .run-builtin { margin: 0.5rem 0 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--surface-ink-dim); }
 details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
+/* The fuzzy verdict: one line under the description, tinted by label —
+ * safe reads ok, needs-a-look warns, flagged errors — with the reasons
+ * as plain prose below. Unreviewed renders nothing at all. */
+.review-badge {
+  display: inline-block;
+  margin: 0 0 0.5rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius-ctl);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+.review-badge.review-looks-safe { background: var(--tint-ok); }
+.review-badge.review-needs-look { background: var(--tint-warn); }
+.review-badge.review-flagged { background: var(--tint-error); }
+.review-reasons { font-family: var(--font-body); font-size: 1rem; color: var(--surface-ink-dim); }
+
+/* The transparency page: the pre-rendered diagram scrolls inside itself,
+ * the prompt and the verdict hashes read as mono blocks. */
+figure.diagram {
+  margin: 0 0 1.5rem;
+  padding: 0.75rem;
+  max-width: 100%;
+  overflow-x: auto;
+  background: var(--stage-bg);
+  border: 1px solid var(--stage-line);
+  border-radius: var(--radius-card);
+  color: var(--stage-ink);
+}
+figure.diagram svg { display: block; min-width: 40rem; height: auto; }
+pre.prompt, pre.hash {
+  padding: 0.75rem;
+  background: var(--stage-bg);
+  border: 1px solid var(--stage-line);
+  border-radius: var(--radius-ctl);
+  color: var(--stage-ink);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-x: auto;
+}
+.verdict-list { list-style: none; margin: 0 0 1.5rem; padding: 0; }
+.verdict-list li {
+  margin: 0 0 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface-panel);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-card);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+.verdict-list .verdict-meta { color: var(--surface-ink-dim); }
+
 /* Under 520 px the header's four links show their icon alone, so the row
  * stays one line on a small screen: the label leaves the layout but stays
  * in the accessibility tree through the link's aria-label and title, and
@@ -3617,6 +3892,61 @@ details.run-prompt summary .run-where { color: var(--surface-ink); }
 }
 .run-builtin { margin: 0.5rem 0 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--surface-ink-dim); }
 details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
+
+/* The fuzzy verdict: one line under the description, tinted by label —
+ * safe reads ok, needs-a-look warns, flagged errors — with the reasons
+ * as plain prose below. Unreviewed renders nothing at all. */
+.review-badge {
+  display: inline-block;
+  margin: 0 0 0.5rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius-ctl);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+.review-badge.review-looks-safe { background: var(--tint-ok); }
+.review-badge.review-needs-look { background: var(--tint-warn); }
+.review-badge.review-flagged { background: var(--tint-error); }
+.review-reasons { font-family: var(--font-body); font-size: 1rem; color: var(--surface-ink-dim); }
+
+/* The transparency page: the pre-rendered diagram scrolls inside itself,
+ * the prompt and the verdict hashes read as mono blocks. */
+figure.diagram {
+  margin: 0 0 1.5rem;
+  padding: 0.75rem;
+  max-width: 100%;
+  overflow-x: auto;
+  background: var(--stage-bg);
+  border: 1px solid var(--stage-line);
+  border-radius: var(--radius-card);
+  color: var(--stage-ink);
+}
+figure.diagram svg { display: block; min-width: 40rem; height: auto; }
+pre.prompt, pre.hash {
+  padding: 0.75rem;
+  background: var(--stage-bg);
+  border: 1px solid var(--stage-line);
+  border-radius: var(--radius-ctl);
+  color: var(--stage-ink);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-x: auto;
+}
+.verdict-list { list-style: none; margin: 0 0 1.5rem; padding: 0; }
+.verdict-list li {
+  margin: 0 0 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface-panel);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-card);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+.verdict-list .verdict-meta { color: var(--surface-ink-dim); }
 
 /* Under 520 px the header's four links show their icon alone, so the row
  * stays one line on a small screen: the label leaves the layout but stays

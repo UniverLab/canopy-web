@@ -645,3 +645,74 @@ export const LLMS_PATTERNS_HEADING = "Patterns";
 export function llmsPatternLine(title: string, summary: string, slug: string): string {
   return `${title}\t${summary}\t${PATTERNS_HREF}/${slug}`;
 }
+
+/* ── Review verdicts and transparency (/transparency) ───────────────────
+ * Every string the verdict badge and the transparency page render: the
+ * badge line over the model that wrote it, the indexing story, how the
+ * review works, and the verdict list with hash and date.
+ */
+
+/** The transparency page: its route, its h1, its meta description. */
+export const TRANSPARENCY_HREF = "/transparency";
+export const TRANSPARENCY_TITLE = "Transparency";
+export const TRANSPARENCY_DESCRIPTION =
+  "How the catalogue is indexed, how the model review works, and every verdict it gave.";
+
+/** The transparency lede: what the page promises. */
+export const TRANSPARENCY_LEDE =
+  "How this catalogue is built, what the model review is and is not, the exact prompt it runs, and every verdict it gave.";
+
+/** The transparency sections, in page order. */
+export const TRANSPARENCY_INDEX_HEADING = "How the catalogue is built";
+export const TRANSPARENCY_REVIEW_HEADING = "How the review works";
+export const TRANSPARENCY_PROMPT_HEADING = "The review prompt";
+export const TRANSPARENCY_VERDICTS_HEADING = "Verdicts";
+export const TRANSPARENCY_DIAGRAM_HEADING = "Indexing diagram";
+
+/** The indexing story, one paragraph per step, in run order. */
+export const TRANSPARENCY_CRON_BODY =
+  "A Cron Trigger wakes the Worker every 15 minutes. Until the first run lands, data routes answer 503 and ask the client to retry.";
+export const TRANSPARENCY_DISCOVERY_BODY =
+  "The run reads the community removal list first, then discovers every repository tagged with the catalogue topic, best starred first, paging to GitHub's 1,000-result cap.";
+export const TRANSPARENCY_FETCH_BODY =
+  "It reads each repository's document folders — one GraphQL answer per repository when it has a token, folder by folder over REST when it does not — visiting only repositories that changed or were never read, oldest visit first.";
+export const TRANSPARENCY_VALIDATE_BODY =
+  "Every document is validated against the JSON Schemas before it is indexed. Invalid documents are recorded in the run's accounting and left out, never served.";
+export const TRANSPARENCY_WRITES_BODY =
+  "The run writes the catalogue into KV: the index entries, one key per document plus its README, one key per blocked entry, and the run's accounting. Fingerprints keep an unchanged run to a single write.";
+export const TRANSPARENCY_SERVE_BODY =
+  "Pages, API answers and install redirects are then served from KV and never spend GitHub quota on traffic. The index is the only thing traffic reads.";
+export const TRANSPARENCY_HOOK_BODY =
+  "The model review hooks in after those writes land, so it never blocks them: it scans the newest unscanned documents, up to the per-run cap, and writes verdicts and pattern links beside the catalogue.";
+
+/** How the review works, one paragraph per rule. */
+export const TRANSPARENCY_REVIEW_MODEL_BODY =
+  "A configured provider reads each unscanned document's install-review facts — shell commands, prompt excerpts, attention marks — and answers which bundled patterns the graph uses plus one fuzzy verdict. Nodes carry no patterns.";
+export const TRANSPARENCY_REVIEW_HASH_BODY =
+  "A document is reviewed only when its content hash differs from the last reviewed hash. The verdict, detected patterns, scanned hash, model name and review date are stored alongside the document and refreshed on content change only.";
+export const TRANSPARENCY_REVIEW_BUDGET_BODY =
+  "The pass is budgeted: a per-run scan cap takes the newest unscanned documents first, and API failures, timeouts or missing credits leave those documents unreviewed, without touching the index path.";
+export const TRANSPARENCY_REVIEW_ADVISORY_BODY =
+  "Verdicts are advisory only, an opinion never a certification: they never block installs or delist documents. The human install review stays the gate. Unreviewed documents show no badge.";
+
+/** The prompt section's line over the versioned prompt below it. */
+export function transparencyPromptLine(version: string): string {
+  return `Version ${version}, exactly as the Worker sends it — placeholders filled per document:`;
+}
+
+/** The verdict labels, as the badge and the list show them. */
+export const VERDICT_SAFE_LABEL = "Looks safe";
+export const VERDICT_LOOK_LABEL = "Needs a look";
+export const VERDICT_FLAGGED_LABEL = "Flagged";
+
+/** The badge line over the model that wrote it. */
+export function verdictOf(model: string): string {
+  return `Verdict of ${model}`;
+}
+
+/** Shown when no document has been reviewed yet. */
+export const TRANSPARENCY_NO_VERDICTS = "No documents reviewed yet.";
+
+/** One verdict row's hash and date labels. */
+export const VERDICT_HASH_LABEL = "hash";
+export const VERDICT_DATE_LABEL = "reviewed";

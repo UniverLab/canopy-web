@@ -13,6 +13,7 @@
  *   GET /llms.txt                             one line per document: name, description, ref
  *   GET /publish, /publish.md                 how to list a graph or node (page, markdown twin)
  *   GET /editor                               the hand-assembly canvas (server-rendered shell)
+ *   GET /transparency                         how the index and the review work, every verdict
  *
  * Every route reads the catalogue through the scheduled index (store.ts,
  * catalog.ts) and only renders what comes back: no page reaches GitHub,
@@ -82,6 +83,13 @@ import { docRef, pageRef, type PageRef } from "./ref.js";
 import { documentPage } from "./document.js";
 import { docList, docListMarkdown } from "./rows.js";
 import { patternPage, patternsIndexPage, type ImplementsRow } from "./patterns.js";
+import { transparencyPage } from "./transparency.js";
+import {
+  INDEXING_MMD,
+  INDEXING_SVG,
+  REVIEW_PROMPT_V1,
+  REVIEW_PROMPT_VERSION,
+} from "../review-assets.generated.js";
 
 /** A non-page request: index.ts keeps routing it to the redirector. */
 export const NOT_PAGE = true as const;
@@ -346,16 +354,25 @@ async function documentResponse(req: Request, env: PageEnv, deps: PageDeps, ref:
   }
   const loaded = documentFromStored(entry, stored);
   const [doc] = attachDownloads([loaded.doc], await volumes());
-  // A pattern's `implements` names official documents by kind and slug, so
-  // only an official page can carry the Patterns back-link.
-  const patterns = ref.official ? await store.getPatterns() : null;
-  const backlinks = patterns === null
-    ? []
-    : implementingPatterns(patterns.entries, ref.kind, ref.slug).map((pattern) => ({
-      slug: pattern.slug,
-      title: pattern.title,
-    }));
-  return page(req, documentPage(doc, loaded.document, ref, { patterns: backlinks }));
+  const review = await store.getReview(ref.kind, ref.owner, ref.repo, ref.slug);
+  // A reviewed graph links back from its stored patterns; anything else
+  // falls back to the statically authored `implements`, which names
+  // official documents by kind and slug, so only an official page can
+  // carry that back-link. Nodes always fall back: they carry no patterns.
+  const patterns = await store.getPatterns();
+  const titles = new Map((patterns?.entries ?? []).map((pattern) => [pattern.slug, pattern.title]));
+  const backlinks = ref.kind === "graph" && review !== null
+    ? review.patterns.flatMap((slug) => {
+      const title = titles.get(slug);
+      return title === undefined ? [] : [{ slug, title }];
+    })
+    : patterns === null || !ref.official
+      ? []
+      : implementingPatterns(patterns.entries, ref.kind, ref.slug).map((pattern) => ({
+        slug: pattern.slug,
+        title: pattern.title,
+      }));
+  return page(req, documentPage(doc, loaded.document, ref, { patterns: backlinks, review }));
 }
 
 /** The patterns list: every card from the patterns index. */
@@ -369,9 +386,12 @@ async function patternsResponse(req: Request, env: PageEnv, deps: PageDeps): Pro
 }
 
 /**
- * One pattern page: the stored page joined to the catalogue index, so each
- * `implements` ref renders as its row. A missing catalogue index is the
- * cold start, not an empty Implemented-by.
+ * One pattern page: the stored page joined to the catalogue index. Graphs
+ * come from the stored review relations once any review landed (replacing
+ * the statically authored graph links, community graphs included); nodes
+ * always come from the static `implements`, since reviews carry none for
+ * them. Before the first review the static links render as they always
+ * did. A missing catalogue index is the cold start, not empty Implemented-by.
  */
 async function patternResponse(
   req: Request,
@@ -395,8 +415,29 @@ async function patternResponse(
   if (index === null) {
     return indexing(req);
   }
+  const relations = await store.getReviewPatterns();
   const rows: ImplementsRow[] = [];
-  for (const ref of stored.implements) {
+  if (relations !== null) {
+    for (const coords of relations.relations[slug] ?? []) {
+      const entry = entryFor(index, coords.kind, coords.owner, coords.repo, coords.slug);
+      if (entry === null) {
+        continue;
+      }
+      const graph = await store.getDoc(coords.kind, entry.owner, entry.repo, entry.slug);
+      rows.push({
+        ref: { kind: coords.kind, slug: coords.slug },
+        doc: rowFromEntry(entry),
+        figure: graph === null ? null : graph.document,
+      });
+    }
+  }
+  // The static refs: every ref before the first review landed, nodes only
+  // after (a missing ref still lists as text beside the not-in-the-catalogue
+  // line, exactly as it always did).
+  const statics = relations === null
+    ? stored.implements
+    : stored.implements.filter((ref) => ref.kind === "node");
+  for (const ref of statics) {
     const entry = entryFor(index, ref.kind, OFFICIAL_OWNER, OFFICIAL_REPO, ref.slug);
     if (entry === null) {
       rows.push({ ref, doc: null, figure: null });
@@ -410,6 +451,24 @@ async function patternResponse(
     rows.push({ ref, doc: rowFromEntry(entry), figure });
   }
   return page(req, patternPage(stored, rows));
+}
+
+/**
+ * The transparency page: the indexing story, the pre-rendered diagram, how
+ * the review works, the exact prompt, and every stored verdict. It needs
+ * no index, so it answers 200 on a cold KV with an empty verdict list.
+ */
+async function transparencyResponse(req: Request, env: PageEnv, deps: PageDeps): Promise<Response> {
+  void deps;
+  const { store } = readers(env, deps);
+  const reviews = await store.getReviews();
+  return page(req, transparencyPage({
+    svg: INDEXING_SVG,
+    mmd: INDEXING_MMD,
+    prompt: REVIEW_PROMPT_V1,
+    promptVersion: REVIEW_PROMPT_VERSION,
+    reviews: reviews?.reviews ?? [],
+  }));
 }
 
 async function homeResponse(req: Request, env: PageEnv, deps: PageDeps): Promise<Response> {
@@ -522,6 +581,9 @@ export async function handlePage(
   }
   if (segments.length === 2 && segments[0] === "patterns") {
     return patternResponse(req, env, deps, segments[1] ?? "");
+  }
+  if (segments.length === 1 && segments[0] === "transparency") {
+    return transparencyResponse(req, env, deps);
   }
   const verb = segments[0];
   if ((verb === "g" || verb === "n") && (segments.length === 2 || segments.length === 4)) {

@@ -20,6 +20,12 @@ routes = [{ pattern = "graphs.univerlab.org", custom_domain = true }]
 # only consumer. The token arrives as a secret (CF_ANALYTICS_TOKEN), the
 # token for GitHub arrives as GITHUB_TOKEN.
 CF_ACCOUNT_ID = "d7b81bdd721f503968523dd903d967be"
+# The index-time model review: "Muse" enables the pass, "off" disables it
+# entirely with indexing unaffected. The model id the badge names and the
+# per-run scan cap; the Muse key arrives as a secret (CLAUDE_API_KEY).
+REVIEW_PROVIDER = "off"
+REVIEW_MODEL = "claude-haiku-4-5-20251001"
+REVIEW_SCAN_CAP = "5"
 
 # Aggregate counting. Analytics Engine is the right store: writes are
 # fire-and-forget (no latency added to the redirect), there is no database to

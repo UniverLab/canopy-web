@@ -51,6 +51,14 @@ export interface ApiEnv {
   DRAFTS?: DraftKV;
   /** The Workers rate-limiting binding; absent in tests and dev, so drafts stay unlimited. */
   DRAFT_LIMIT?: RateLimiter;
+  /** The review provider: "Muse", or "off" (the default) to disable the pass. */
+  REVIEW_PROVIDER?: string;
+  /** The model id the verdict badge names; the provider default when absent. */
+  REVIEW_MODEL?: string;
+  /** Documents scanned per review run; the runner default when absent. */
+  REVIEW_SCAN_CAP?: string;
+  /** The Muse API key, as a worker secret; absent leaves documents unreviewed. */
+  CLAUDE_API_KEY?: string;
 }
 
 /** The one Workers rate-limiting method the drafts route uses. */

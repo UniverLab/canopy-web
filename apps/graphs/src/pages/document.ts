@@ -16,6 +16,7 @@ import { iconSvg } from "../../../../packages/look/icon-svg.js";
 import type { DocumentKind, JsonValue } from "../../../../src/schema.js";
 import type { Doc } from "../documents.js";
 import { isArray, isRecord, isString, stringField } from "../json.js";
+import { VERDICT_LABELS, type StoredReview } from "../review.js";
 import { escapeHtml, renderMarkdown } from "./md.js";
 import { copyButton } from "./look.js";
 import { editorQuery, pagePath, type PageRef } from "./ref.js";
@@ -34,6 +35,7 @@ import {
   RUNS_HEADING,
   RUNS_REVIEW_LINE,
   RUNS_SECTION_ID,
+  TRANSPARENCY_HREF,
   SHEET_AGENTS,
   SHEET_EDGES,
   SHEET_ENSEMBLES,
@@ -56,6 +58,7 @@ import {
   installCommand,
   nodesByKindLine,
   runsSummary,
+  verdictOf,
 } from "./copy.js";
 
 /** One line of twin text: flattened, with markdown punctuation backslashed. */
@@ -236,6 +239,8 @@ export interface DocumentPageOptions {
   install?: string;
   /** The pattern pages whose `implements` names this document, if any. */
   patterns?: Array<{ slug: string; title: string }>;
+  /** The model review, when the document was reviewed; unreviewed shows no badge. */
+  review?: StoredReview | null;
 }
 
 /**
@@ -376,11 +381,35 @@ export function documentPage(
     `<a class="button" href="/editor${editorQuery(ref)}">${iconSvg("pencilRuler")}<span>` +
     `${ref.kind === "graph" ? EDITOR_EDIT_COPY : EDITOR_ADD_TO_GRAPH}</span></a>`;
   const actions = `<p>${[star, edit].filter((part) => part !== "").join(" ")}</p>`;
+  // The fuzzy verdict, when reviewed: "Verdict of <model>" links to the
+  // transparency page, the label carries the tint, the reasons follow for
+  // a flagged (or a careful) verdict. Unreviewed shows no badge at all.
+  const review = options.review ?? null;
+  const reviewBadge = review === null
+    ? ""
+    : `<p class="review-badge review-${review.verdict}">` +
+      `<a href="${TRANSPARENCY_HREF}">${escapeHtml(verdictOf(review.model))}</a>` +
+      `<span> · ${escapeHtml(VERDICT_LABELS[review.verdict])}</span></p>`;
+  const reviewReasons = review !== null && review.reasons !== "" &&
+      (review.verdict === "flagged" || review.verdict === "needs-look")
+    ? `<p class="review-reasons">${escapeHtml(review.reasons)}</p>`
+    : "";
+  const reviewTwin = review === null
+    ? []
+    : [
+      `${verdictOf(review.model)}: ${VERDICT_LABELS[review.verdict]} (${TRANSPARENCY_HREF})`,
+      ...(review.reasons !== "" && (review.verdict === "flagged" || review.verdict === "needs-look")
+        ? [review.reasons]
+        : []),
+      ``,
+    ];
 
   const html = [
     banner,
     `<h1 class="doc-title">${escapeHtml(doc.name)}${badge}</h1>`,
     `<p class="description">${escapeHtml(doc.description)}</p>`,
+    reviewBadge,
+    reviewReasons,
     actions,
     warning,
     `<div class="doc-cols">`,
@@ -397,6 +426,7 @@ export function documentPage(
     ``,
     doc.description,
     ``,
+    ...reviewTwin,
     ...(doc.official || standalone ? [] : [communityWarningMarkdown(`#${RUNS_SECTION_ID}`), ``]),
     ...sheet.lines,
     ``,
