@@ -384,6 +384,14 @@ export function createGuestView(
       signOutError = message;
       if (route === "session") {
         patchHeader();
+        if (message !== null) {
+          // The menu holds the session view's only sign-out control, so a
+          // failure opens it rather than hiding its text — as the owner's.
+          const details = root.querySelector<HTMLDetailsElement>("#account");
+          if (details !== null && !details.open) {
+            details.open = true;
+          }
+        }
       } else {
         repaint();
       }

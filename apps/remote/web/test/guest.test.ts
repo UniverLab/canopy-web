@@ -548,4 +548,36 @@ describe("createGuestSession", () => {
     session.push(JSON.stringify({ t: "exited", id: "s1", code: 1 }));
     expect(root.querySelector("#guest-exit")?.textContent).toBe("Session exited (1)");
   });
+
+  it("clears the collected terminal text on a fresh snapshot", () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    const collected: string[] = [];
+    const handles: FakeGuestHandle[] = [];
+    const factory: TerminalFactory = () => {
+      const handle = new FakeGuestHandle();
+      handles.push(handle);
+      return handle;
+    };
+    const session = createGuestSession(root, {
+      login: "guest-user",
+      send: () => true,
+      onRetry: () => {},
+      onSignOut: () => {},
+      onForgetDevice: () => {},
+      terminalFactory: factory,
+      onTerminalText: (text) => {
+        collected.push(text);
+      },
+      onTerminalClear: () => {
+        collected.length = 0;
+      },
+    });
+    joinSession(session);
+    expect(collected.join("")).toBe("hello");
+    const full = b64encode(new TextEncoder().encode("fresh"));
+    session.push(JSON.stringify({ t: "snapshot", id: "s1", cols: 80, rows: 24, seq: 9, data: full }));
+    session.push(JSON.stringify({ t: "snapshot_more", id: "s1", data: "", last: true }));
+    expect(collected.join("")).toBe("fresh");
+  });
 });

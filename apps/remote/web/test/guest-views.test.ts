@@ -301,6 +301,19 @@ describe("guest session view", () => {
     expect(handles[0]?.disposed).toBe(true);
     expect(document.querySelector("#term-pane")).toBeNull();
   });
+
+  it("opens the account menu for a sign-out failure inside the session", () => {
+    const { root, view, handles } = setup();
+    view.setLogin("guest-user");
+    view.showSession("s1", "build");
+    view.ensureTerminal("s1", 80, 24);
+    view.setSignOutError("Could not sign out");
+    // The menu opens so the failure is visible; the terminal survives.
+    expect(root.querySelector<HTMLDetailsElement>("#account")?.open).toBe(true);
+    expect(root.querySelector("#signout-error-menu")?.textContent).toBe("Could not sign out");
+    expect(handles.length).toBe(1);
+    expect(handles[0]?.disposed).toBe(false);
+  });
 });
 
 describe("guest chrome", () => {

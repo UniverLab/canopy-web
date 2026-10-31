@@ -597,6 +597,9 @@ function main(): void {
       onTerminalText: (text) => {
         guestOutput.push(text);
       },
+      onTerminalClear: () => {
+        guestOutput.length = 0;
+      },
     });
     deliverInto = (raw: string) => session.push(raw);
     session.view.setConnectionState("connected");

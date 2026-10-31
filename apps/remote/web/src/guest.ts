@@ -441,6 +441,8 @@ export interface GuestSessionDeps {
   terminalFactory?: TerminalFactory;
   /** Test hook the fake host uses to read terminal output back. */
   onTerminalText?: (text: string) => void;
+  /** Test hook the fake host uses to reset that reading on redraw. */
+  onTerminalClear?: () => void;
 }
 
 export interface GuestSession {
@@ -498,7 +500,10 @@ export function createGuestSession(root: HTMLElement, deps: GuestSessionDeps): G
         view.writeTerminal(text);
         deps.onTerminalText?.(text);
       },
-      clear: () => view.clearTerminal(),
+      clear: () => {
+        view.clearTerminal();
+        deps.onTerminalClear?.();
+      },
     }),
     onExited: (_id, code) => view.setSessionStatus(`Session exited (${code})`),
   });
