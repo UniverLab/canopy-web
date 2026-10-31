@@ -28,7 +28,7 @@ test("serves the app on / with the shared security headers", async ({
   expect(link).toContain('</llms.txt>; rel="describedby"');
   expect(link).toContain('</.well-known/api-catalog>; rel="api-catalog"');
   await expect(page.locator("#app")).toBeAttached();
-  await expect(page).toHaveTitle("Canopy remote");
+  await expect(page).toHaveTitle("Sign in · Canopy remote");
 });
 
 test("answers / with markdown when asked", async ({ request }) => {
@@ -45,7 +45,7 @@ test("falls back to the app on /pair", async ({ page }) => {
   expect(response?.status()).toBe(200);
   const html = await page.content();
   expect(html).toContain('<div id="app">');
-  await expect(page).toHaveTitle("Canopy remote");
+  await expect(page).toHaveTitle("Sign in · Canopy remote");
 });
 
 test("falls back to the app on a guest link", async ({ page }) => {
@@ -53,7 +53,7 @@ test("falls back to the app on a guest link", async ({ page }) => {
   expect(response?.status()).toBe(200);
   const html = await page.content();
   expect(html).toContain('<div id="app">');
-  await expect(page).toHaveTitle("Canopy remote");
+  await expect(page).toHaveTitle("Sign in · Canopy remote");
 });
 
 test("answers /auth/me with 401 JSON without a session", async ({ request }) => {

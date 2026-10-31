@@ -31,18 +31,25 @@ const VIEWPORTS = [
 ] as const;
 
 const PAGES = [
-  { label: "home", path: "/", heading: "A catalogue of Canopy graphs and nodes." },
+  {
+    label: "home",
+    path: "/",
+    heading: "A catalogue of Canopy graphs and nodes.",
+    title: "Canopy graphs · graphs.univerlab.org",
+  },
   {
     label: "graph",
     path: "/g/hello-graph",
     heading: "hello-graph Official",
     install: "canopy graph install hello-graph",
+    title: "hello-graph · graphs.univerlab.org",
   },
   {
     label: "node",
     path: "/n/hello-node",
     heading: "hello-node Official",
     install: "canopy node install hello-node",
+    title: "hello-node · graphs.univerlab.org",
   },
 ] as const;
 
@@ -198,6 +205,7 @@ for (const viewport of VIEWPORTS) {
       const headings = page.locator("main.look-col > h1");
       await expect(headings).toHaveCount(1);
       await expect(headings).toHaveText(target.heading);
+      await expect(page).toHaveTitle(target.title);
 
       // No body banner anywhere: the page starts directly under the header.
       await expect(page.locator("main.look-col .look-banner")).toHaveCount(0);

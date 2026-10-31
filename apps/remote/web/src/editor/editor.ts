@@ -7,11 +7,12 @@
  * the page instead of leaving it silent.
  */
 import { EditorApp, editorShell } from "./app.js";
+import { remoteTitle } from "../titles.js";
 import "./editor.css";
 
 /** Mount the graph editor into the app root. */
 export function mountEditor(root: HTMLElement): void {
-  document.title = "Graph editor · Canopy remote";
+  document.title = remoteTitle("Graph editor");
   root.innerHTML = editorShell();
   const shell = root.querySelector<HTMLElement>("#editor");
   if (shell === null) {

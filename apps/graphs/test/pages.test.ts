@@ -9,7 +9,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { NOT_PAGE, handlePage } from "../src/pages/routes.js";
 import { linkAttrs } from "../src/pages/layout.js";
-import { BLOCKED_HEADING, INDEXING_BODY, INDEXING_HEADING, COMMUNITY_GRAPHS_HEADING, COMMUNITY_NODES_HEADING, COPY_BUTTON, EMPTY_OFFICIAL_GRAPHS, EMPTY_OFFICIAL_NODES, OFFICIAL_GRAPHS_HEADING, OFFICIAL_NODES_HEADING, REPORT_LABEL, REPORT_REPO_LABEL, SEARCH_BUTTON, SEARCH_LABEL } from "../src/pages/copy.js";
+import { BLOCKED_HEADING, INDEXING_BODY, INDEXING_HEADING, COMMUNITY_GRAPHS_HEADING, COMMUNITY_NODES_HEADING, COPY_BUTTON, EMPTY_OFFICIAL_GRAPHS, EMPTY_OFFICIAL_NODES, HOME_TITLE, OFFICIAL_GRAPHS_HEADING, OFFICIAL_NODES_HEADING, REPORT_LABEL, REPORT_REPO_LABEL, SEARCH_BUTTON, SEARCH_LABEL, SITE_NAME, TITLE_SEPARATOR } from "../src/pages/copy.js";
 import { REPORT_REPOSITORY_HREF, reportUrl } from "../src/pages/report.js";
 import { blockedKey, type BlockedEntry } from "../src/blocked.js";
 import { escapeHtml } from "../src/pages/md.js";
@@ -1084,5 +1084,52 @@ describe("official standing", () => {
     );
     const community = await (await call("/g/acme/things/flow", { stubs: searchStubs() })).text();
     expect(community).not.toContain(`<span class="badge-official">`);
+  });
+});
+
+describe("page titles", () => {
+  // The head <title>: the first one in the document — the plate's SVG
+  // <title> elements come later, in the body.
+  const headTitle = (html: string): string | null => {
+    const match = /<title>([^<]*)<\/title>/.exec(html);
+    return match === null ? null : (match[1] ?? null);
+  };
+
+  it("gives the home a real title, not the doubled site name", async () => {
+    const html = await (await call("/")).text();
+    expect(headTitle(html)).toBe(`${HOME_TITLE}${TITLE_SEPARATOR}${SITE_NAME}`);
+  });
+
+  it("keeps the datasheet title as the document name plus the site", async () => {
+    const html = await (await call("/g/hello-graph")).text();
+    expect(headTitle(html)).toBe(`hello-graph${TITLE_SEPARATOR}${SITE_NAME}`);
+  });
+
+  it("renders a non-empty title on every route, never repeating the site name", async () => {
+    const patterns = await (await call("/patterns", { stubs: searchStubs() })).text();
+    const slug = /\/patterns\/([a-z0-9-]+)/.exec(patterns)?.[1] ?? "";
+    expect(slug).not.toBe("");
+    const paths = [
+      "/",
+      "/search?q=flow",
+      "/g/hello-graph",
+      "/n/hello-node",
+      "/g/acme/things/flow",
+      "/patterns",
+      `/patterns/${slug}`,
+      "/publish",
+      "/editor",
+      "/transparency",
+      "/g/no-such-document",
+      "/d/does-not-exist",
+    ];
+    for (const path of paths) {
+      const html = await (await call(path, { stubs: searchStubs() })).text();
+      const title = headTitle(html);
+      expect(title, path).not.toBeNull();
+      expect(title === null || title.trim() === "", path).toBe(false);
+      const occurrences = title === null ? 0 : title.split(SITE_NAME).length - 1;
+      expect(occurrences, `${path}: ${title}`).toBeLessThanOrEqual(1);
+    }
   });
 });

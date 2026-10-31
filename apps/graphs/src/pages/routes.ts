@@ -46,6 +46,7 @@ import {
   DRAFT_MISSING_HEADING,
   EMPTY_OFFICIAL_GRAPHS,
   EMPTY_OFFICIAL_NODES,
+  HOME_TITLE,
   INDEXING_BODY,
   INDEXING_HEADING,
   LLMS_HEADER,
@@ -312,7 +313,7 @@ function homePage(graphs: Doc[], nodes: Doc[], communityGraphs: Doc[], community
     ``,
     `${homePublishLine(PUBLISH_LABEL, PUBLISH_HREF)}\n`,
   ].join("\n");
-  return { title: SITE_NAME, description: TAGLINE, html, markdown };
+  return { title: HOME_TITLE, description: TAGLINE, html, markdown };
 }
 
 function searchPage(q: string, sort: SearchSort, items: Doc[]): Page {

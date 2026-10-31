@@ -201,6 +201,11 @@ export class GraphRoute {
     this.callbacks.onUnwatchGraph();
   }
 
+  /** The open graph's display name: the watched summary's, else the row's. */
+  displayName(): string {
+    return this.graphs?.currentSummary()?.name || this.graphName;
+  }
+
   args(): GraphViewArgs {
     const summary = this.graphs?.currentSummary() ?? null;
     return {
@@ -209,7 +214,7 @@ export class GraphRoute {
       login: this.hooks.login(),
       signOutError: this.hooks.signOutError(),
       id: this.graphId ?? "",
-      name: summary?.name || this.graphName,
+      name: this.displayName(),
       summary,
       doc: this.graphs?.currentDoc() ?? null,
       state: this.graphs?.currentState() ?? null,

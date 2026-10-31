@@ -27,6 +27,7 @@ import type { SessionStore } from "./sessions.js";
 import { createXtermHandle, TerminalView } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
 import { readFitOnly, writeFitOnly } from "./terminal-prefs.js";
+import { shellTitle } from "./titles.js";
 import type { PairSubmit } from "./ui.js";
 
 export interface ShellCallbacks {
@@ -419,8 +420,14 @@ export function createShell(
   // from above: a pairing complaint repaints through setPairError.
   function render(): void {
     // The view name on <body> lets the stylesheet dim the honeycomb
-    // behind the terminal (body[data-view="session"]).
+    // behind the terminal (body[data-view="session"]), and the document
+    // title names the view behind it.
     document.body.dataset.view = route;
+    document.title = shellTitle(route, {
+      homeTab: graphRoute.homeTab,
+      graphName: graphRoute.displayName(),
+      sessionName,
+    });
     if (route === "signin") {
       renderSignIn(root, entryViews);
     } else if (route === "pair") {

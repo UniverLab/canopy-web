@@ -31,6 +31,9 @@ export const TITLE_SEPARATOR = " · ";
 /** The catalogue in one line: the home's hero, and the meta description. */
 export const TAGLINE = "A catalogue of Canopy graphs and nodes.";
 
+/** The home page's title: "Canopy graphs · graphs.univerlab.org". */
+export const HOME_TITLE = "Canopy graphs";
+
 /** The Canopy page the colophon links back to. */
 export const CANOPY_HREF = "https://univerlab.org/canopy/";
 

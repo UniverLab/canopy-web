@@ -15,6 +15,7 @@ import { keyBytesWithModifiers, ModifierLatches, textBytesWithModifiers } from "
 import { SessionStore, renderSessions } from "./sessions.js";
 import { TerminalView, createXtermHandle } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
+import { remoteTitle, sessionTitle } from "./titles.js";
 import { renderColophon } from "../../../../packages/look/colophon/footer.js";
 
 export interface GuestViewCallbacks {
@@ -130,6 +131,7 @@ export function createGuestView(
 
   function paintSignIn(invalid: boolean): void {
     route = invalid ? "invalid" : "signin";
+    document.title = remoteTitle(invalid ? "Invalid link" : "Sign in");
     teardownSessionWidgets();
     root.innerHTML = `
     ${header()}
@@ -152,6 +154,7 @@ export function createGuestView(
 
   function paintConnecting(): void {
     route = "connecting";
+    document.title = remoteTitle("Connecting");
     teardownSessionWidgets();
     const failed = connectionState.startsWith("failed:");
     root.innerHTML = `
@@ -167,6 +170,7 @@ export function createGuestView(
 
   function paintForbidden(): void {
     route = "forbidden";
+    document.title = remoteTitle("Not shared");
     teardownSessionWidgets();
     root.innerHTML = `
     ${header()}
@@ -181,6 +185,7 @@ export function createGuestView(
 
   function paintList(): void {
     route = "list";
+    document.title = remoteTitle("Sessions");
     teardownSessionWidgets();
     const banner =
       listNotice === null
@@ -207,6 +212,7 @@ export function createGuestView(
 
   function paintSession(): void {
     route = "session";
+    document.title = sessionTitle(sessionName === "" ? sessionId : sessionName);
     teardownSessionWidgets();
     latches.release();
     root.innerHTML = `
