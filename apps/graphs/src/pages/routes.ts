@@ -391,7 +391,9 @@ async function patternsResponse(req: Request, env: PageEnv, deps: PageDeps): Pro
  * the statically authored graph links, community graphs included); nodes
  * always come from the static `implements`, since reviews carry none for
  * them. Before the first review the static links render as they always
- * did. A missing catalogue index is the cold start, not empty Implemented-by.
+ * did, and so does a pattern the last review never saw — one added after
+ * the aggregates were rebuilt keeps its static refs until the next
+ * rebuild. A missing catalogue index is the cold start, not empty Implemented-by.
  */
 async function patternResponse(
   req: Request,
@@ -416,9 +418,10 @@ async function patternResponse(
     return indexing(req);
   }
   const relations = await store.getReviewPatterns();
+  const storedGraphs = relations?.relations[slug] ?? null;
   const rows: ImplementsRow[] = [];
-  if (relations !== null) {
-    for (const coords of relations.relations[slug] ?? []) {
+  if (storedGraphs !== null) {
+    for (const coords of storedGraphs) {
       const entry = entryFor(index, coords.kind, coords.owner, coords.repo, coords.slug);
       if (entry === null) {
         continue;
@@ -431,10 +434,11 @@ async function patternResponse(
       });
     }
   }
-  // The static refs: every ref before the first review landed, nodes only
-  // after (a missing ref still lists as text beside the not-in-the-catalogue
-  // line, exactly as it always did).
-  const statics = relations === null
+  // The static refs: every ref before the first review landed or when the
+  // last review never saw this pattern, nodes only after (a missing ref
+  // still lists as text beside the not-in-the-catalogue line, exactly as
+  // it always did).
+  const statics = storedGraphs === null
     ? stored.implements
     : stored.implements.filter((ref) => ref.kind === "node");
   for (const ref of statics) {

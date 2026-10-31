@@ -364,8 +364,9 @@ export interface ReviewRunOptions {
  * `cap` provider calls; a document whose content hash matches its last
  * reviewed hash is never re-reviewed. Failures stay `unreviewed`: no key
  * is written for them. Orphaned reviews (no live index entry) are pruned,
- * and the two aggregates rebuilt only when something changed. Total: it
- * never throws past the caller, so the index path stays untouched.
+ * and the two aggregates rebuilt only when something changed and the
+ * listing completed — never from a partial view. Total: it never throws
+ * past the caller, so the index path stays untouched.
  */
 export async function runReview(options: ReviewRunOptions): Promise<ReviewRunStats> {
   const quiet: ReviewRunStats = { candidates: 0, reviewed: 0, failed: 0, pruned: 0 };
@@ -498,14 +499,18 @@ export async function runReview(options: ReviewRunOptions): Promise<ReviewRunSta
       stats.reviewed += 1;
     }
     // Orphans: reviews whose index entry is gone lose their keys, so the
-    // transparency page never lists a document the catalogue dropped.
+    // transparency page never lists a document the catalogue dropped. A
+    // listing that fails leaves the aggregates alone: they are rebuilt
+    // from a complete view only, and the next run retries.
     let cursor: string | undefined;
+    let listedAll = true;
     const survivors = new Set<string>();
     do {
       let listed: { keys: Array<{ name: string }>; list_complete: boolean; cursor?: string };
       try {
         listed = await options.index.list({ prefix: REVIEW_PREFIX, cursor });
       } catch {
+        listedAll = false;
         break;
       }
       for (const key of listed.keys) {
@@ -522,7 +527,7 @@ export async function runReview(options: ReviewRunOptions): Promise<ReviewRunSta
       }
       cursor = listed.list_complete ? undefined : listed.cursor;
     } while (cursor !== undefined);
-    if (stats.reviewed === 0 && stats.pruned === 0) {
+    if (!listedAll || (stats.reviewed === 0 && stats.pruned === 0)) {
       return stats;
     }
     const reviews: ReviewEntry[] = [];

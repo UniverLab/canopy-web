@@ -311,6 +311,21 @@ describe("failure", () => {
     expect(stats).toEqual({ candidates: 1, reviewed: 0, failed: 1, pruned: 0 });
     expect(await kv.get(reviewKey("graph", "acme", "things", "flow"))).toBeNull();
   });
+
+  it("keeps per-document reviews but skips the aggregates when the listing fails", async () => {
+    const kv = new FakeKV();
+    await seed(kv, [entry("graph", "acme", "things", "flow", "2026-10-29")], {
+      [docKey("graph", "acme", "things", "flow")]: graphDoc("flow", "echo hi"),
+    });
+    kv.list = () => Promise.reject(new Error("KV list failed"));
+    const provider = mockProvider(() => ({ verdict: "looks-safe", reasons: "", patterns: [] }));
+    const stats = await runReview({ index: kv, provider, patternSlugs: SLUGS, now: () => NOW });
+    expect(stats.reviewed).toBe(1);
+    expect(await kv.get(reviewKey("graph", "acme", "things", "flow"))).not.toBeNull();
+    // No complete view, no aggregates: the next run rebuilds them.
+    expect(await kv.get(REVIEWS_KEY)).toBeNull();
+    expect(await kv.get(REVIEW_PATTERNS_KEY)).toBeNull();
+  });
 });
 
 describe("verdict labels", () => {
@@ -406,6 +421,23 @@ describe("stored pattern relations", () => {
     await seed(kv, [entry("graph", "acme", "things", "flow", "2026-10-29")], {
       [docKey("graph", "acme", "things", "flow")]: graphDoc("flow", "echo hi"),
     });
+    const html = await (await call("/patterns/deterministic-gates", kv)).text();
+    expect(html).toContain(`<span class="row-name">graph:canopy-loop</span>`);
+  });
+
+  it("keeps the static graph links for a pattern the last review never saw", async () => {
+    const kv = new FakeKV();
+    await seed(kv, [entry("graph", "acme", "things", "flow", "2026-10-29")], {
+      [docKey("graph", "acme", "things", "flow")]: graphDoc("flow", "echo hi"),
+    });
+    // Reviewed when the bundled list held another slug only: the relations
+    // aggregate exists but carries no key for deterministic-gates.
+    const provider = mockProvider(() => ({
+      verdict: "looks-safe",
+      reasons: "",
+      patterns: ["other-pattern"],
+    }));
+    await runReview({ index: kv, provider, patternSlugs: ["other-pattern"], now: () => NOW });
     const html = await (await call("/patterns/deterministic-gates", kv)).text();
     expect(html).toContain(`<span class="row-name">graph:canopy-loop</span>`);
   });
