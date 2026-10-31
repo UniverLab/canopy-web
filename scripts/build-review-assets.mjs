@@ -310,7 +310,7 @@ function renderModule(prompt, mmd, svg, builtAt) {
     `/** When the bundled payload last changed, ISO-8601. */`,
     `export const REVIEW_ASSETS_BUILT_AT = ${JSON.stringify(builtAt)};`,
     ``,
-    `/** The exact review prompt text, shown verbatim on /transparency. */`,
+    `/** The bundled review prompt; the runner strips its leading comments, and /transparency shows the stripped bytes. */`,
     `export const REVIEW_PROMPT_V1 = ${JSON.stringify(prompt)};`,
     ``,
     `/** The indexing diagram source, a mermaid sequenceDiagram. */`,

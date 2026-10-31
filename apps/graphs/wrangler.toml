@@ -25,7 +25,7 @@ CF_ACCOUNT_ID = "d7b81bdd721f503968523dd903d967be"
 # closed (no scan, one log line). The model id the badge names and the
 # per-run scan cap; the Muse key arrives as a secret (CLAUDE_API_KEY).
 # Meta additionally needs META_API_BASE_URL (its chat-completions endpoint,
-# set here with no default anywhere) and REVIEW_MODEL set verbatim, plus
+# no default anywhere; add it here for meta) and REVIEW_MODEL set verbatim, plus
 # its key as a secret (META_API_KEY). Local values live in `.dev.vars`
 # (see `.dev.vars.example`); production keys via `wrangler secret put`.
 REVIEW_PROVIDER = "off"

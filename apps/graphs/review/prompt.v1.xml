@@ -1,10 +1,12 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- The catalogue's index-time review prompt, version v1. Committed in-repo
      and bundled into the Worker by `npm run build:review-assets`; the
-     transparency page shows this exact text. XML-tag style: the runner fills
-     the {{PLACEHOLDERS}} with the install-review facts (shell commands,
-     prompt excerpts, attention marks) and the bundled pattern slugs, then
-     sends the whole document to the model. The model answers JSON only. -->
+     runner strips these leading comments before sending, and the
+     transparency page shows the stripped bytes. XML-tag style: the runner
+     fills the {{PLACEHOLDERS}} with the install-review facts (shell
+     commands, prompt excerpts, attention marks) and the bundled pattern
+     slugs, then sends the stripped document to the model. The model answers
+     JSON only. -->
 <review_prompt version="v1">
   <role>
     You are a skeptical reader of Canopy graph and node documents. Community
