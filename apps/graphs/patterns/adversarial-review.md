@@ -3,6 +3,7 @@ title: Adversarial review
 summary: Review the work with models of different families, one told to break it, and back the verdict with deterministic checks.
 status: standard
 implements:
+  - graph:adversarial-developer
   - node:reviewer
 figure: adversarial-review.figure.json
 sources:
@@ -64,7 +65,7 @@ The shape you add, with the prompt fields left out:
 
 The reviewers have no commit rights. A single committer lands the work only after both pass, and a failure routes back to the implementer.
 
-No official document implements this pair as a whole. The `reviewer` node is the constructive half: the lab's loop reviews for completeness and then for correctness, and its auditor repairs what it finds instead of breaking the change on purpose. An adversary needs the narrower case, work that arrives from outside, and is added to that loop as one more ensemble when it is wanted.
+The `adversarial-developer` graph is the baseline implementation of this pair: the reviewer fails bad diffs back, the auditor repairs what it finds, and deterministic gates judge what a command can decide. The standalone breaker agent — report FAIL with a concrete reproduction, or PASS — stays opt-in for work that arrives from outside, and is added to that loop as one more ensemble when it is wanted; the baseline ships no dedicated breaker.
 
 ## Try it
 
