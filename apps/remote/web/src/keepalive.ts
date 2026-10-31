@@ -80,6 +80,11 @@ export class RelayKeepalive {
   private tick(): void {
     const now = this.now();
     if (!this.relay.connected) {
+      // A slow open is not a dead socket: closing it would abort the
+      // attempt and join its failure instead of opening a new socket.
+      if (this.relay.connecting) {
+        return;
+      }
       if (now < this.nextAttemptAt) {
         return;
       }

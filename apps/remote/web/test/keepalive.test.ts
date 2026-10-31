@@ -143,6 +143,34 @@ describe("RelayKeepalive", () => {
     setup.keepalive.stop();
   });
 
+  it("leaves an externally started slow connect alone", async () => {
+    const setup = createSetup();
+    // main.ts's initial relay.connect() racing the first ticks: still
+    // pending after 15s, and the keepalive must neither close it nor
+    // open a second socket for it.
+    const opened = setup.harness.relay.connect();
+    await setup.advance(15000);
+    expect(setup.harness.sockets).toHaveLength(1);
+    expect(setup.harness.latest().readyState).toBe(0);
+    setup.harness.latest().open();
+    await opened;
+    expect(setup.harness.relay.connected).toBe(true);
+    setup.keepalive.stop();
+  });
+
+  it("lets its own slow reconnect attempt finish", async () => {
+    const setup = createSetup();
+    await setup.advance(5000);
+    expect(setup.harness.sockets).toHaveLength(1);
+    await setup.advance(10000);
+    expect(setup.harness.sockets).toHaveLength(1);
+    expect(setup.harness.latest().readyState).toBe(0);
+    setup.harness.latest().open();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(setup.harness.relay.connected).toBe(true);
+    setup.keepalive.stop();
+  });
+
   it("stops pinging and reconnecting after stop", async () => {
     const setup = createSetup();
     await openRelay(setup);

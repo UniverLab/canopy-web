@@ -76,6 +76,11 @@ export class RelaySocket {
     return this.ws !== null && this.ws.readyState === WebSocket.OPEN;
   }
 
+  /** True while an open is in flight: connected is still false then. */
+  get connecting(): boolean {
+    return this.pending !== null;
+  }
+
   onFrame(handler: (frame: RelayFrame) => void): () => void {
     this.frameHandlers.add(handler);
     return () => {
