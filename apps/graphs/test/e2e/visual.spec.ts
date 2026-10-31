@@ -53,8 +53,8 @@ const PAGES = [
   },
 ] as const;
 
-/** #012624, the Liquid Abyss canvas of the Canopy page. */
-const SURFACE_BG = "rgb(1, 38, 36)";
+/** #011d1c, the shared page both apps paint. */
+const PAGE_BG = "rgb(1, 29, 28)";
 
 for (const viewport of VIEWPORTS) {
   for (const target of PAGES) {
@@ -70,10 +70,15 @@ for (const viewport of VIEWPORTS) {
       });
       await page.goto(target.path, { waitUntil: "load" });
 
-      // The Canopy surface, named on <html> and painted on <body>.
+      // The Canopy surface, named on <html> and painted on <body>, with
+      // the header band on the same base under its honeycomb.
       await expect(page.locator("html")).toHaveAttribute("data-surface", "tui");
       const surface = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-      expect(surface).toBe(SURFACE_BG);
+      expect(surface).toBe(PAGE_BG);
+      const headerBase = await page.evaluate(
+        () => getComputedStyle(document.querySelector("header.site-header") as HTMLElement).backgroundColor,
+      );
+      expect(headerBase).toBe(PAGE_BG);
 
       // The kit's three faces loaded for real (the unit tests only see the CSS).
       // `document.fonts.check()` alone would pass on the fallback stack, so
@@ -472,7 +477,7 @@ test("the home lists sit on dark panels with the search in the page at 1280x900"
     body: getComputedStyle(document.body).backgroundColor,
     panel: getComputedStyle(document.querySelector("ol.index") as HTMLElement).backgroundColor,
   }));
-  expect(painted.body).toBe("rgb(1, 38, 36)");
+  expect(painted.body).toBe(PAGE_BG);
   expect(painted.panel).toBe("rgb(5, 5, 5)");
 
   // The search form renders in the page body, above the lists — and no

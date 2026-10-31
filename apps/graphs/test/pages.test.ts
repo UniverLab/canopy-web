@@ -311,7 +311,7 @@ describe("the page shell", () => {
     expect(html).toContain(`/look/fondo/assets/`);
     expect(html).toContain(`<main class="look-col">`);
     // The kit's variables, and both of its faces, drive the page stylesheet.
-    expect(html).toContain("background: var(--surface-bg)");
+    expect(html).toContain("background: var(--bg-deep)");
     expect(html).toContain("color: var(--surface-ink)");
     expect(html).toContain("font-family: var(--font-body)");
     expect(html).toContain("font-family: var(--font-mono)");

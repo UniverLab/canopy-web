@@ -30,8 +30,8 @@ html[data-surface='tui'] {
 }
 
 :root {
-  /* The page both apps paint: unchanged. */
-  --page: #012624;
+  /* The page both apps paint: the darkest green. */
+  --page: #011d1c;
 
   /* The stage: what a harness or a graph draws sits on black. */
   --stage-bg: #050505;
@@ -39,8 +39,8 @@ html[data-surface='tui'] {
   --stage-ink: #e6e6e6;
 
   /* The install command field: one raised surface for every host it sits
-   * on — a card (#050505) and the page (#012624) — so the field reads as
-   * a copyable field at a glance (2.13:1 on a card, 1.68:1 on the page),
+   * on — a card (#050505) and the page (#011d1c) — so the field reads as
+   * a copyable field at a glance (2.13:1 on a card, 1.83:1 on the page),
    * the outline stays visible against both, and the command rides at full
    * ink (9.28:1 on the field). */
   --command-bg: #454545;

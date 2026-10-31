@@ -47,7 +47,7 @@ export function fondoHost(): string {
 /**
  * The page stylesheet, inline, over the kit's tokens. The register is a
  * parts catalogue: dense mono rows under a header band, the honeycomb only
- * behind the band, the body flat `--surface-bg`. Nothing is centred except
+ * behind the band, the body flat `--bg-deep`. Nothing is centred except
  * the plate inside its figure. Breakpoints: 640 px (band height, page
  * gutters, plate orientation), 900 px (index rows), 1024 px (datasheet
  * columns).
@@ -56,13 +56,13 @@ export function lookCss(): string {
   return `
 *, *::before, *::after { box-sizing: border-box; }
 html {
-  background: var(--surface-bg);
+  background: var(--bg-deep);
   color-scheme: dark;
 }
 body {
   margin: 0;
   min-height: 100vh;
-  background: var(--surface-bg);
+  background: var(--bg-deep);
   color: var(--surface-ink);
   font-family: var(--font-mono);
   font-size: 0.9375rem;
@@ -91,6 +91,7 @@ a:hover { text-decoration-thickness: 2px; }
   position: relative;
   height: 160px;
   overflow: hidden;
+  background: var(--bg-deep);
   border-bottom: 1px solid var(--surface-line);
 }
 .fondo { position: absolute; inset: 0; z-index: 0; pointer-events: none; }

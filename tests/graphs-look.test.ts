@@ -46,7 +46,7 @@ function contrast(a: string, b: string): number {
 
 describe("the tokens on the Canopy surface", () => {
   const css = readFileSync(TOKENS, "utf8");
-  const bg = token(css, "surface-bg");
+  const bg = token(css, "bg-deep");
   const raise = token(css, "surface-bg-raise");
   const ink = token(css, "surface-ink");
   const dim = token(css, "surface-ink-dim");
@@ -80,7 +80,7 @@ describe("the install command field", () => {
   const line = token(css, "command-line");
   const ink = token(css, "surface-ink");
   const card = token(css, "surface-panel");
-  const page = token(css, "surface-bg");
+  const page = token(css, "bg-deep");
 
   // The site ships one colour scheme (dark), so the "both schemes" pair is
   // the pair the field is painted on: a card and the page. A future light
@@ -105,9 +105,9 @@ describe("the install command field", () => {
     }
   });
 
-  it("pins the field's ratios: 2.13:1 on a card, 1.68:1 on the page, 9.3:1 for the ink", () => {
+  it("pins the field's ratios: 2.13:1 on a card, 1.83:1 on the page, 9.3:1 for the ink", () => {
     expect(contrast(field, card)).toBeCloseTo(2.13, 1);
-    expect(contrast(field, page)).toBeCloseTo(1.68, 1);
+    expect(contrast(field, page)).toBeCloseTo(1.83, 1);
     expect(contrast(ink, field)).toBeCloseTo(9.3, 1);
   });
 });
