@@ -112,6 +112,16 @@ describe("shell titles", () => {
     root.querySelector<HTMLButtonElement>('[data-graph="g1"]')?.click();
     expect(document.title).toBe("palette-loop · Canopy remote");
   });
+
+  it("follows the watched summary's name while the graph is open", () => {
+    graphs.handleGraphs([summary()]);
+    shell.showSessions();
+    root.querySelector<HTMLButtonElement>('[data-tab="graphs"]')?.click();
+    root.querySelector<HTMLButtonElement>('[data-graph="g1"]')?.click();
+    expect(document.title).toBe("palette-loop · Canopy remote");
+    graphs.handleGraph({ summary: summary({ name: "renamed-loop" }), doc: null });
+    expect(document.title).toBe("renamed-loop · Canopy remote");
+  });
 });
 
 describe("guest titles", () => {

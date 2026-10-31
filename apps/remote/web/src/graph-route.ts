@@ -10,6 +10,7 @@
 // here pauses, continues or resets.
 
 import type { GraphStore } from "./graph-store.js";
+import { graphTitle } from "./titles.js";
 import { signOutButtonHtml } from "./chrome.js";
 import { renderGraphView, updateGraphView } from "./graph-view.js";
 import type { GraphViewArgs } from "./graph-view.js";
@@ -248,6 +249,9 @@ export class GraphRoute {
         }
       } else if (this.hooks.route() === "graph") {
         updateGraphView(this.root, this.args());
+        // The push repaints in place, so the shell's render never runs:
+        // the title follows the watched summary's name itself.
+        document.title = graphTitle(this.displayName());
       }
     }) ?? null;
     // The Graphs tab asks for the list when it shows and every 10 s while
