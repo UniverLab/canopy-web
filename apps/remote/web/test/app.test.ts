@@ -288,21 +288,49 @@ describe("createShell", () => {
     expect(query("#term-fit").textContent).toBe("Fit");
   });
 
-  it("renders the colophon on sign-in and pair only", () => {
+  it("ends every view in the same UniverLab footer, after the main", () => {
+    const footerHtml = (): string => {
+      const footer = root.querySelector("footer.look-colophon");
+      expect(footer).not.toBeNull();
+      // The footer is a sibling after </main>: at the end of the scroll,
+      // never overlaying the view's own widgets.
+      expect(footer?.previousElementSibling?.tagName).toBe("MAIN");
+      expect(footer?.parentElement).toBe(root);
+      return footer?.innerHTML ?? "";
+    };
     shell.showSignIn();
     expect(root.querySelector("footer.look-colophon")?.textContent).toContain("Canopy remote");
-    expect(root.querySelector("footer.look-colophon")?.innerHTML).toContain('href="https://univerlab.org/privacy/"');
-    expect(root.querySelector("footer.look-colophon")?.innerHTML).toContain('href="https://univerlab.org/terms/"');
+    expect(footerHtml()).toContain('href="https://univerlab.org/privacy/"');
+    expect(footerHtml()).toContain('href="https://univerlab.org/terms/"');
     shell.showPair();
-    expect(root.querySelector("footer.look-colophon")).not.toBeNull();
-    expect(root.querySelector("footer.look-colophon")?.innerHTML).toContain('href="https://univerlab.org/privacy/"');
-    expect(root.querySelector("footer.look-colophon")?.innerHTML).toContain('href="https://univerlab.org/terms/"');
+    expect(footerHtml()).toContain('href="https://univerlab.org/privacy/"');
+    expect(footerHtml()).toContain('href="https://univerlab.org/terms/"');
     shell.showHosts();
-    expect(root.querySelector("footer.look-colophon")).toBeNull();
+    expect(footerHtml()).toContain("Canopy remote");
     shell.showSessions();
-    expect(root.querySelector("footer.look-colophon")).toBeNull();
+    expect(footerHtml()).toContain("Canopy remote");
+    // The graphs home tab shares the sessions route's template, footer kept.
+    query<HTMLButtonElement>('[data-tab="graphs"]').click();
+    expect(root.querySelector("#session-list")).not.toBeNull();
+    expect(footerHtml()).toContain("Canopy remote");
+    query<HTMLButtonElement>('[data-tab="sessions"]').click();
     shell.showSession("s1", "build");
-    expect(root.querySelector("footer.look-colophon")).toBeNull();
+    expect(footerHtml()).toContain("Canopy remote");
+  });
+
+  it("keeps the session view's terminal, key bar and composer above the footer", () => {
+    shell.showSession("s1", "build");
+    const main = query("main.session-view");
+    expect(main.querySelector("#term-pane")).not.toBeNull();
+    expect(main.querySelectorAll("#keybar .key").length).toBe(9);
+    expect(main.querySelector(".composer-input")).not.toBeNull();
+    expect(main.querySelector(".composer-send")).not.toBeNull();
+    // The terminal, key bar and composer live inside the main; the footer
+    // follows it, so nothing scrolls the terminal out or covers it.
+    expect(root.querySelector("main.session-view footer.look-colophon")).toBeNull();
+    const footer = root.querySelector("footer.look-colophon");
+    expect(footer).not.toBeNull();
+    expect(footer?.previousElementSibling).toBe(main);
   });
 
   it("says what signing in shares before the click", () => {

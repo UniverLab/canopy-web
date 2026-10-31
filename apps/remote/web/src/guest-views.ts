@@ -10,13 +10,13 @@
 
 import { renderTopbar, wireAccount } from "./chrome.js";
 import { Composer } from "./composer.js";
+import { REMOTE_FOOTER } from "./footer.js";
 import { renderKeyBar, updateKeyBarLatches } from "./keys.js";
 import { keyBytesWithModifiers, ModifierLatches, textBytesWithModifiers } from "./modifiers.js";
 import { SessionStore, renderSessions } from "./sessions.js";
 import { TerminalView, createXtermHandle } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
 import { remoteTitle, sessionTitle } from "./titles.js";
-import { renderColophon } from "../../../../packages/look/colophon/footer.js";
 
 export interface GuestViewCallbacks {
   onOpenSession: (id: string) => void;
@@ -52,17 +52,6 @@ export interface GuestViewDeps {
 }
 
 type GuestRoute = "signin" | "invalid" | "connecting" | "forbidden" | "list" | "session";
-
-// The colophon rides the guest entry screens, as on the owner's.
-const COLOPHON = renderColophon({
-  product: "Canopy remote",
-  exp: "EXP-001",
-  links: [
-    { label: "Canopy", href: "https://univerlab.org/canopy/" },
-    { label: "univerlab.org", href: "https://univerlab.org/" },
-    { label: "Source", href: "https://github.com/UniverLab/canopy-web" },
-  ],
-});
 
 function esc(text: string): string {
   return text
@@ -145,7 +134,7 @@ export function createGuestView(
       <p>Signing in shares your GitHub username and numeric id with this relay, kept in a 12-hour session cookie. <a href="https://univerlab.org/privacy/">Privacy</a></p>`
       }
     </main>
-    ${COLOPHON}`;
+    ${REMOTE_FOOTER}`;
     wireChrome();
     root.querySelector("#signin-go")?.addEventListener("click", () => {
       globalThis.location.href = "/auth/login";
@@ -163,7 +152,8 @@ export function createGuestView(
       <p class="conn-banner" role="status">${esc(connectionState)} ${
         failed ? `<button type="button" id="guest-retry">Retry</button>` : ""
       }</p>
-    </main>`;
+    </main>
+    ${REMOTE_FOOTER}`;
     wireChrome();
     root.querySelector("#guest-retry")?.addEventListener("click", () => callbacks.onRetry());
   }
@@ -179,7 +169,7 @@ export function createGuestView(
       <p role="alert">${esc(forbiddenMessage)}</p>
       <p>Ask the owner to share this host with your GitHub user.</p>
     </main>
-    ${COLOPHON}`;
+    ${REMOTE_FOOTER}`;
     wireChrome();
   }
 
@@ -191,7 +181,7 @@ export function createGuestView(
       listNotice === null
         ? ""
         : `<p class="signout-error" id="guest-notice" role="alert">${esc(listNotice)}</p>`;
-    root.innerHTML = `${header()}<main class="sessions">${banner}<div id="guest-list"></div></main>`;
+    root.innerHTML = `${header()}<main class="sessions">${banner}<div id="guest-list"></div></main>${REMOTE_FOOTER}`;
     wireChrome();
     const list = root.querySelector<HTMLElement>("#guest-list");
     if (list) {
@@ -228,7 +218,8 @@ export function createGuestView(
       </div>
       <div class="keybar" id="keybar"></div>
       <div class="composer-slot" id="composer-slot"></div>
-    </main>`;
+    </main>
+    ${REMOTE_FOOTER}`;
     wireChrome();
     root.querySelector("#session-back")?.addEventListener("click", () => callbacks.onLeaveSession());
     const bar = root.querySelector<HTMLElement>("#keybar");

@@ -6,9 +6,9 @@
 // from the shell, so the views never render themselves.
 
 import { renderHostOptions, signOutButtonHtml } from "./chrome.js";
+import { REMOTE_FOOTER } from "./footer.js";
 import type { OnlineHost } from "./relay.js";
 import type { PairSubmit } from "./ui.js";
-import { renderColophon } from "../../../../packages/look/colophon/footer.js";
 
 /** The pair form's three fields, as the shell keeps them between repaints. */
 export interface PairDraft {
@@ -40,18 +40,6 @@ export interface EntryViewHooks {
   onPairAgain: () => void;
 }
 
-// The UniverLab colophon, on the sign-in and pair screens only — the
-// session view keeps the whole viewport for the terminal.
-const COLOPHON = renderColophon({
-  product: "Canopy remote",
-  exp: "EXP-001",
-  links: [
-    { label: "Canopy", href: "https://univerlab.org/canopy/" },
-    { label: "univerlab.org", href: "https://univerlab.org/" },
-    { label: "Source", href: "https://github.com/UniverLab/canopy-web" },
-  ],
-});
-
 function esc(text: string): string {
   return text
     .replace(/&/g, "&amp;")
@@ -69,7 +57,7 @@ export function renderSignIn(root: HTMLElement, hooks: EntryViewHooks): void {
       <button type="button" class="primary" id="signin-go">Sign in with GitHub</button>
       <p>Signing in shares your GitHub username and numeric id with this relay, kept in a 12-hour session cookie. Your sessions travel encrypted between your browser and your machine. <a href="https://univerlab.org/privacy/">Privacy</a></p>
     </main>
-    ${COLOPHON}`;
+    ${REMOTE_FOOTER}`;
   root.querySelector("#signin-go")?.addEventListener("click", () => {
     globalThis.location.href = "/auth/login";
   });
@@ -102,7 +90,7 @@ export function renderPair(root: HTMLElement, hooks: EntryViewHooks): void {
         <button type="submit"${busy ? " disabled" : ""}>${busy ? "Pairing…" : "Pair"}</button>
       </form>
     </main>
-    ${COLOPHON}`;
+    ${REMOTE_FOOTER}`;
   root.querySelector<HTMLFormElement>("#pair-form")?.addEventListener("submit", (ev) => {
     ev.preventDefault();
     hooks.snapshotDraft();
@@ -134,7 +122,8 @@ export function renderHosts(root: HTMLElement, hooks: EntryViewHooks): void {
       <ul id="host-list">${rows}</ul>
       <p><button type="button" id="pair-new">Pair a new host</button></p>
       ${signOutButtonHtml(hooks.login(), hooks.signOutError())}
-    </main>`;
+    </main>
+    ${REMOTE_FOOTER}`;
   for (const button of root.querySelectorAll<HTMLButtonElement>("[data-connect]")) {
     button.addEventListener("click", () => {
       const hostId = button.getAttribute("data-connect");

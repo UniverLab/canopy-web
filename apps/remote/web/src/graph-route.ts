@@ -10,6 +10,7 @@
 // here pauses, continues or resets.
 
 import type { GraphStore } from "./graph-store.js";
+import { REMOTE_FOOTER } from "./footer.js";
 import { graphTitle } from "./titles.js";
 import { signOutButtonHtml } from "./chrome.js";
 import { renderGraphView, updateGraphView } from "./graph-view.js";
@@ -121,7 +122,8 @@ export class GraphRoute {
       <div id="session-list"></div>
       <p><button type="button" id="conn-disconnect">Disconnect</button></p>
       ${signOutButtonHtml(this.hooks.login(), this.hooks.signOutError())}
-    </main>`;
+    </main>
+    ${REMOTE_FOOTER}`;
     this.hooks.wireBanner();
     this.root
       .querySelector("#conn-disconnect")

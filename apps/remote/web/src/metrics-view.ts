@@ -7,6 +7,7 @@
 // this module only paints what the store holds.
 
 import { signOutButtonHtml } from "./chrome.js";
+import { REMOTE_FOOTER } from "./footer.js";
 import { icon } from "./icons-dom.js";
 import {
   cpuTempLevel,
@@ -205,7 +206,8 @@ function viewHtml(args: MetricsViewArgs): string {
     `<p class="metrics-note" id="metrics-note" hidden></p>` +
     `<div id="metrics-body"></div>` +
     signOutButtonHtml(args.login, args.signOutError) +
-    `</main>`
+    `</main>` +
+    REMOTE_FOOTER
   );
 }
 

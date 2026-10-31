@@ -123,6 +123,36 @@ describe("guest entry screens", () => {
     expect(root.querySelector("main.signin [role='alert']")?.textContent).toContain("malformed");
   });
 
+  it("ends every guest screen in the footer, after the main", () => {
+    const { root, view } = setup();
+    const footerAfterMain = (): void => {
+      const footer = root.querySelector("footer.look-colophon");
+      expect(footer).not.toBeNull();
+      expect(footer?.previousElementSibling?.tagName).toBe("MAIN");
+      expect(footer?.textContent).toContain("Canopy remote");
+    };
+    view.showSignIn();
+    footerAfterMain();
+    view.showInvalidLink();
+    footerAfterMain();
+    view.setConnectionState("connecting");
+    view.showConnecting();
+    footerAfterMain();
+    view.showForbidden("This host is not shared with you");
+    footerAfterMain();
+    view.showList();
+    footerAfterMain();
+    view.showSession("s1", "build");
+    footerAfterMain();
+    // The terminal, key bar and composer stay inside the main; the footer
+    // follows it, so nothing scrolls the terminal out or covers it.
+    const main = root.querySelector("main.session-view");
+    expect(main?.querySelector("#term-pane")).not.toBeNull();
+    expect(main?.querySelectorAll("#keybar .key").length).toBe(9);
+    expect(main?.querySelector(".composer-input")).not.toBeNull();
+    expect(root.querySelector("main.session-view footer.look-colophon")).toBeNull();
+  });
+
   it("shows the relay state while connecting, with a retry on failure", () => {
     const { root, view, counts } = setup();
     view.setConnectionState("connecting");

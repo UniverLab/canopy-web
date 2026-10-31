@@ -11,6 +11,7 @@ import type { GraphDocument } from "../../../../packages/plate/document.js";
 import { renderPlate } from "../../../../packages/plate/render.js";
 import type { PlateState } from "../../../../packages/plate/render.js";
 import { signOutButtonHtml } from "./chrome.js";
+import { REMOTE_FOOTER } from "./footer.js";
 import { specMark, statusChip } from "./graphs-list.js";
 import { icon } from "./icons-dom.js";
 import type { GraphState, GraphSpecRow, GraphSummary } from "./protocol.js";
@@ -203,7 +204,8 @@ function viewHtml(args: GraphViewArgs): string {
     `<h2>Checklist</h2>` +
     `<ol class="spec-list" id="spec-list"></ol>` +
     signOutButtonHtml(args.login, args.signOutError) +
-    `</main>`
+    `</main>` +
+    REMOTE_FOOTER
   );
 }
 

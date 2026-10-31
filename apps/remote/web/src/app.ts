@@ -11,6 +11,7 @@ import { Builder } from "./builder.js";
 import { renderConnBanner, renderTopbar, wireAccount, wireConnActions } from "./chrome.js";
 import { renderHosts, renderPair, renderSignIn } from "./entry-views.js";
 import type { EntryViewHooks, PairDraft } from "./entry-views.js";
+import { REMOTE_FOOTER } from "./footer.js";
 import { GraphRoute } from "./graph-route.js";
 import type { GraphStore } from "./graph-store.js";
 import { icon, mountMorphSlot, type RemoteIconName, type MorphSlot } from "./icons-dom.js";
@@ -326,7 +327,8 @@ export function createShell(
       </div>
       <div class="keybar" id="keybar"></div>
       <div class="composer-slot" id="composer-slot"></div>
-    </main>`;
+    </main>
+    ${REMOTE_FOOTER}`;
     wireConnBanner();
     const filesIcon = root.querySelector<HTMLElement>("#session-files-icon");
     if (filesIcon) {
