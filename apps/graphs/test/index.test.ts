@@ -258,7 +258,7 @@ describe("explicit refs go live", () => {
       {},
     );
     expect(response.status).toBe(404);
-    expect(await response.text()).toContain("no graph named flow");
+    expect(await response.text()).toBe(`no graph named flow in acme/things at ref v9.9.9\n`);
   });
 
   it("answers a 404 when the pinned ref holds an invalid document", async () => {
@@ -270,7 +270,7 @@ describe("explicit refs go live", () => {
       {},
     );
     expect(response.status).toBe(404);
-    expect(await response.text()).toContain("no graph named flow");
+    expect(await response.text()).toBe(`no graph named flow in acme/things at ref main\n`);
   });
 
   it("fetches the pinned ref live even during the cold start", async () => {
@@ -339,6 +339,20 @@ describe("unindexed installs go live", () => {
     const response = await worker.fetch(new Request(`${ORIGIN}/i/acme/things/graph/broken`), env);
     expect(response.status).toBe(404);
     expect(await response.text()).toContain(`no graph named broken in acme/things\n`);
+    expect(fetch.calls.length).toBeGreaterThan(0);
+  });
+
+  it("fails closed when the unindexed ref holds the other kind", async () => {
+    // A valid node document at a graph path: schema validation is per
+    // kind, so the shared loader drops it and the miss keeps the
+    // index-miss wording, never a redirect.
+    const env = await indexedEnv();
+    const { worker, fetch } = liveWorker([
+      { url: "repos/acme/things/contents/graphs/swapped/graph.json", status: 200, body: fileBody("graphs/swapped/graph.json", VALID_NODE_TEXT) },
+    ]);
+    const response = await worker.fetch(new Request(`${ORIGIN}/i/acme/things/graph/swapped`), env);
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe(`no graph named swapped in acme/things\n`);
     expect(fetch.calls.length).toBeGreaterThan(0);
   });
 
