@@ -327,7 +327,7 @@ describe("the page shell", () => {
     // the Canopy landing any more — that link lives in the colophon only.
     expect(html).toContain(`<a class="banner-home" href="/" aria-label="Canopy graphs, home">`);
     expect(html).toContain(`class="look-banner-header look-banner-header-graphs"`);
-    expect(html).toContain(`viewBox="0 0 58 11"`);
+    expect(html).toContain(`viewBox="0 0 58 22"`);
     expect(html).toContain(`role="img" aria-label="Canopy graphs"`);
     const header = html.slice(html.indexOf(`<header class="site-header">`), html.indexOf(`</header>`));
     expect(header).not.toContain("univerlab.org/canopy");
@@ -535,9 +535,9 @@ describe("the header band", () => {
       /<a href="https:\/\/github.com\/UniverLab\/canopy-web" target="_blank" rel="noopener noreferrer" aria-label="Source" title="Source"><svg[\s\S]*?<\/svg><span>Source<\/span><\/a>/,
     );
     expect(header).toContain(`<div class="fondo" id="fondo" aria-hidden="true"></div>`);
-    // The band is 160 px on desktop, 120 px on mobile, clipping the honeycomb.
-    expect(html).toMatch(/\.site-header \{[^}]*height: 120px;[^}]*overflow: hidden;/);
-    expect(html).toMatch(/@media \(min-width: 640px\) \{[\s\S]*\.site-header \{ height: 160px; \}/);
+    // The band is 200 px on desktop, 160 px on mobile, clipping the honeycomb.
+    expect(html).toMatch(/\.site-header \{[^}]*height: 160px;[^}]*overflow: hidden;/);
+    expect(html).toMatch(/@media \(min-width: 640px\) \{[\s\S]*\.site-header \{ height: 200px; \}/);
   });
 
   it("holds the current query in the search box, in the page body", async () => {

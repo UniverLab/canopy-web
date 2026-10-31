@@ -137,23 +137,29 @@ describe("bannerSvg", () => {
 
   it("draws one cell per character on a fixed grid", () => {
     const svg = bannerSvg(["██░ ██"], "look-banner-art");
-    // Six columns, one row; the space is a cell with no rect.
-    expect(svg).toContain(`viewBox="0 0 6 1"`);
+    // Six columns, one row of 1:2 terminal cells; the space is a cell
+    // with no rect.
+    expect(svg).toContain(`viewBox="0 0 6 2"`);
     expect(svg).toContain(`shape-rendering="crispEdges"`);
     const widths = rects(svg).map((rect) => Number(/width="(\d+)"/.exec(rect)?.[1]));
     expect(widths.reduce((sum, width) => sum + width, 0)).toBe(5);
+    // Every run is two units tall: the terminal cell, twice as tall as
+    // wide.
+    for (const rect of rects(svg)) {
+      expect(rect).toContain(`height="2"`);
+    }
     // The space is a cell with no rect — and no text node either: only
     // rects may sit between the tags, never the art's own characters.
     expect(svg.replace(/<[^>]*>/g, "")).toBe("");
   });
 
   it("merges adjacent cells of one kind into one rect, shade runs too", () => {
-    const svg = bannerSvg(["█████░░███"], "look-banner-art");
+    const svg = bannerSvg(["█████", "░░███"], "look-banner-art");
     const cells = rects(svg);
     expect(cells).toHaveLength(3);
-    expect(cells[0]).toContain(`x="0" y="0" width="5"`);
-    expect(cells[1]).toContain(`x="5" y="0" width="2" height="1" fill-opacity=".35"`);
-    expect(cells[2]).toContain(`x="7" y="0" width="3"`);
+    expect(cells[0]).toContain(`x="0" y="0" width="5" height="2"`);
+    expect(cells[1]).toContain(`x="0" y="2" width="2" height="2" fill-opacity=".35"`);
+    expect(cells[2]).toContain(`x="2" y="2" width="3" height="2"`);
     expect(cells[0]).not.toContain("fill-opacity");
   });
 
@@ -256,7 +262,7 @@ describe("the header banners", () => {
     expect(renderHeaderBanner("graphs")).not.toBe(renderHeaderBanner("remote"));
   });
 
-  it("sizes the header art in banner.css to about 80 px, 48 px on a phone", () => {
+  it("sizes the header art in banner.css to about 160 px, 96 px on a phone", () => {
     const css = readFileSync(path.join(KIT, "banner", "banner.css"), "utf8");
     const width = (name: string): number => {
       const match = new RegExp(`\\.${name} \\{\\s*width: (\\d+)px;`).exec(css);
@@ -271,9 +277,9 @@ describe("the header banners", () => {
     ];
     for (const [name, cells, desktop, phone] of cases) {
       expect(width(name)).toBe(desktop);
-      // Eleven square cells: 421/58 × 11 = 80 px, 253/58 × 11 = 48 px.
-      expect(Math.round((desktop * 11) / cells)).toBe(80);
-      expect(Math.abs((phone * 11) / cells - 48)).toBeLessThanOrEqual(1);
+      // Eleven 1:2 terminal cells: 421/58 × 22 = 160 px, 253/58 × 22 = 96 px.
+      expect(Math.round((desktop * 22) / cells)).toBe(160);
+      expect(Math.abs((phone * 22) / cells - 96)).toBeLessThanOrEqual(1);
     }
     // The phone widths live in the one ≤639 px block.
     expect(css).toMatch(

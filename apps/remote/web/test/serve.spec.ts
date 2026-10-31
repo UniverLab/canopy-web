@@ -137,10 +137,10 @@ test("sign-in wears the header banner and a one-row colophon at 1280x900", async
   await expect(home.locator(".look-banner-line")).toHaveCount(11);
   await expect(page.locator(".topbar a[href*='univerlab.org/canopy']")).toHaveCount(0);
   await expect(page.locator("main.signin .look-banner")).toHaveCount(0);
-  // About 80 px tall at desktop width, from the viewBox's square cells.
+  // About 160 px tall at desktop width, from the viewBox's 1:2 cells.
   const box = await banner.boundingBox();
   expect(box).not.toBeNull();
-  expect(Math.abs((box?.height ?? 0) - 80)).toBeLessThanOrEqual(5);
+  expect(Math.abs((box?.height ?? 0) - 160)).toBeLessThanOrEqual(5);
   // The teal gradient survives the relay's CSP: the ink is a `fill`
   // presentation attribute (or banner.css), never an inline style. A
   // refused load would log here.

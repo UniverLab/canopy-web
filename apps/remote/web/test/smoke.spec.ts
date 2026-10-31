@@ -219,10 +219,10 @@ for (const viewport of [
     await expect(banner).toHaveAttribute("aria-label", "Canopy remote");
     await expect(home.locator(".look-banner-line")).toHaveCount(11);
     await expect(page.locator(".topbar a[href*='univerlab.org/canopy']")).toHaveCount(0);
-    // About 80 px tall on desktop, 48 px on the phone.
+    // About 160 px tall on desktop, 96 px on the phone.
     const art = await banner.boundingBox();
     expect(art).not.toBeNull();
-    expect(Math.abs((art?.height ?? 0) - (viewport.width < 640 ? 48 : 80))).toBeLessThanOrEqual(5);
+    expect(Math.abs((art?.height ?? 0) - (viewport.width < 640 ? 96 : 160))).toBeLessThanOrEqual(5);
     // No body banner anywhere; the sessions start under the header.
     await expect(page.locator("main .look-banner")).toHaveCount(0);
     // From the session, the banner goes home to the sessions list.

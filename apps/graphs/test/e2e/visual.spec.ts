@@ -3,7 +3,7 @@
  * The catalogue as a technical index, checked in a browser against the
  * fixture Worker: the Canopy surface, the three faces loaded from the kit,
  * the honeycomb mounted inside the header band only, the header banner as
- * an SVG on a fixed grid (about 80 px tall on desktop, 48 px on a phone,
+ * an SVG on a fixed grid (about 160 px tall on desktop, 96 px on a phone,
  * no sideways scroll at 360 px) with its Publish/Source links, dense index
  * rows instead of cards, each document page as a plate beside its
  * datasheet — the vertical plate under 640 px, the horizontal one above —
@@ -140,11 +140,11 @@ for (const viewport of VIEWPORTS) {
       await expect(art).toHaveAttribute("aria-label", "Canopy graphs");
       await expect(home.locator(".look-banner-line")).toHaveCount(11);
       await expect(page.locator("header a[href*='univerlab.org/canopy']")).toHaveCount(0);
-      // About 80 px tall on desktop, 48 px on the phone, and never wider
-      // than the header row.
+      // About 160 px tall on desktop, 96 px on the phone, and never
+      // wider than the header row.
       const box = await art.boundingBox();
       expect(box).not.toBeNull();
-      expect(Math.abs((box?.height ?? 0) - (viewport.width < 640 ? 48 : 80))).toBeLessThanOrEqual(5);
+      expect(Math.abs((box?.height ?? 0) - (viewport.width < 640 ? 96 : 160))).toBeLessThanOrEqual(5);
       expect((box?.width ?? 0) + (box?.x ?? 0)).toBeLessThanOrEqual(viewport.width);
       // The teal gradient is a `fill` presentation attribute — never a
       // style attribute, which this page's CSP would refuse — so the art
@@ -503,6 +503,16 @@ test("the header fits the banner and its four links at 480x900", async ({ page }
   });
   expect(fit.clipped).toBeLessThanOrEqual(0);
   expect(fit.lastRight).toBeLessThanOrEqual(fit.view);
+  // And nothing hangs below the band's clipped edge either.
+  const hang = await page.evaluate(() => {
+    const bottom = document.querySelector(".site-header")!.getBoundingClientRect().bottom;
+    return [...document.querySelectorAll(".site-nav a")].map(
+      (link) => link.getBoundingClientRect().bottom - bottom,
+    );
+  });
+  for (const over of hang) {
+    expect(over).toBeLessThanOrEqual(1);
+  }
 });
 
 test("the banner fits a 360 px phone beside its four icons", async ({ page }) => {
@@ -525,7 +535,19 @@ test("the banner fits a 360 px phone beside its four icons", async ({ page }) =>
   expect(fit.overflow).toBeLessThanOrEqual(1);
   expect(fit.left).toBeGreaterThanOrEqual(0);
   expect(fit.right).toBeLessThanOrEqual(fit.view);
-  expect(Math.abs(fit.height - 48)).toBeLessThanOrEqual(5);
+  expect(Math.abs(fit.height - 96)).toBeLessThanOrEqual(5);
+  // The band holds the banner and the wrapped icon row: no link hangs
+  // below the header's clipped edge.
+  const hang = await page.evaluate(() => {
+    const bottom = document.querySelector(".site-header")!.getBoundingClientRect().bottom;
+    return [...document.querySelectorAll(".site-nav a")].map(
+      (link) => link.getBoundingClientRect().bottom - bottom,
+    );
+  });
+  expect(hang).toHaveLength(4);
+  for (const over of hang) {
+    expect(over).toBeLessThanOrEqual(1);
+  }
 });
 
 test("the colophon wraps without sideways scroll at 390x844", async ({ page }) => {

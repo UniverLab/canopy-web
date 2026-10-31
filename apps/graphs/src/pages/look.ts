@@ -84,9 +84,12 @@ a:hover { text-decoration-thickness: 2px; }
 .copy-icon svg, .copy-icon morph-icon { display: block; }
 .look-shell { min-height: 100vh; }
 
+/* The band holds the header banner (96 px on a phone, 160 px on
+ * desktop) and, wrapped below it, the nav row: 96 + gap + the 44 px icon
+ * targets on a phone, 160 + gap + the labelled links on desktop. */
 .site-header {
   position: relative;
-  height: 120px;
+  height: 160px;
   overflow: hidden;
   border-bottom: 1px solid var(--surface-line);
 }
@@ -570,7 +573,7 @@ details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
   .row-install code { flex: 1; }
 }
 @media (min-width: 640px) {
-  .site-header { height: 160px; }
+  .site-header { height: 200px; }
   .band { padding: 0 1.5rem; }
   main.look-col { padding: 2rem 1.5rem 4rem; }
 }

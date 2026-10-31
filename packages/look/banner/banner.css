@@ -40,12 +40,13 @@
   border: 0;
 }
 
-/* The header banner: the app's own art, square cells from its viewBox,
- * about 80 px tall on desktop and 48 px on a phone. The widths are fixed
- * so the eleven lines never stretch: 7.26 px per cell for graphs' 58
- * columns, 7.27 px for the remote's 63, and 4.36 px under 640 px. They
- * fit a 360 px phone beside the band's gutters (253/275 < 328); the
- * remote puts the banner on its own row under 640 px. */
+/* The header banner: the app's own art, 1:2 terminal cells from its
+ * viewBox, about 160 px tall on desktop and 96 px on a phone. The widths
+ * are fixed so the eleven lines never stretch: 7.26 px per cell for
+ * graphs' 58 columns, 7.27 px for the remote's 63, and 4.36 px under
+ * 640 px. They fit a 360 px phone beside the band's gutters
+ * (253/275 < 328); the remote puts the banner on its own row under
+ * 640 px. */
 .look-banner-header {
   display: block;
   height: auto;

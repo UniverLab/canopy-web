@@ -97,22 +97,22 @@ function escapeHtml(value: string): string {
 }
 
 /**
- * Draw art lines as one inline SVG on a fixed cell grid — one square per
- * character, `█` a full cell, `░` the same fill at 35% opacity (the TUI's
- * shade), a space nothing — so the banner never depends on a font: no
- * fallback advances, no line box, no gaps between rows. Adjacent cells of
- * one kind merge into one rect, which keeps the graphs banner under 6 KB.
- * Each line is a `<g class="look-banner-line">` filled with its
- * `BANNER_GRADIENT` stop, as a presentation attribute: presentation
- * attributes sit outside the style directives entirely, so the ink
- * survives whatever the relay's CSP allows xterm. The class
- * and the accessible name are the caller's own constants; an unnamed art
- * is decorative and hidden from assistive tech. banner.css sizes the SVG;
- * `viewBox` keeps the cells square.
+ * Draw art lines as one inline SVG on a fixed cell grid — one terminal
+ * cell per character, 1 wide and 2 tall like the TUI's own cells, `█` a
+ * full cell, `░` the same fill at 35% opacity (the TUI's shade), a space
+ * nothing — so the banner never depends on a font: no fallback advances,
+ * no line box, no gaps between rows. Adjacent cells of one kind merge
+ * into one rect, which keeps the graphs banner under 6 KB. Each line is
+ * a `<g class="look-banner-line">` filled with its `BANNER_GRADIENT`
+ * stop, as a presentation attribute: presentation attributes sit outside
+ * the style directives entirely, so the ink survives whatever the relay's
+ * CSP allows xterm. The class and the accessible name are the caller's
+ * own constants; an unnamed art is decorative and hidden from assistive
+ * tech. banner.css sizes the SVG; `viewBox` keeps the 1:2 cells.
  */
 export function bannerSvg(lines: readonly string[], className: string, label?: string): string {
   const width = Math.max(1, ...lines.map((line) => line.length));
-  const height = lines.length || 1;
+  const height = (lines.length || 1) * 2;
   const art = lines
     .map((line, y) => {
       // Runs only: a replace would leave the art's own spaces behind as
@@ -120,7 +120,7 @@ export function bannerSvg(lines: readonly string[], className: string, label?: s
       let rects = "";
       for (const run of line.matchAll(/█+|░+/g)) {
         rects +=
-          `<rect x="${run.index}" y="${y}" width="${run[0].length}" height="1"` +
+          `<rect x="${run.index}" y="${y * 2}" width="${run[0].length}" height="2"` +
           `${run[0][0] === "░" ? ' fill-opacity=".35"' : ""}/>`;
       }
       return `<g class="look-banner-line" fill="${bannerColor(y, lines.length)}">${rects}</g>`;
@@ -152,9 +152,9 @@ export function renderBanner(app: BannerApp): string {
 /**
  * Render the header banner: the app's own DOS Rebel art as an SVG with
  * the app's accessible name, one `<g class="look-banner-line">` per line.
- * banner.css sets each class's width (80 px tall on desktop, 48 px on a
- * phone) and keeps the cells square; the wrapping link or button carries
- * the home label. An app that needs only its own art (the remote, whose
+ * banner.css sets each class's width (160 px tall on desktop, 96 px on a
+ * phone) and keeps the 1:2 terminal cells; the wrapping link or button
+ * carries the home label. An app that needs only its own art (the remote, whose
  * bundle budget is tight) can call `bannerSvg` with its lines directly:
  * anything this function references ships in the importing bundle.
  */
