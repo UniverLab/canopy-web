@@ -36,10 +36,18 @@ export interface RoomSocket {
   close(code?: number, reason?: string): void;
 }
 
+/** A hibernation auto-response pair, narrowed to its two getters. */
+export interface AutoResponsePair {
+  readonly request: string;
+  readonly response: string;
+}
+
 /** The hibernation state, narrowed to what the room uses. */
 export interface RoomState {
   acceptWebSocket(socket: RoomSocket): void;
   getWebSockets(): RoomSocket[];
+  setWebSocketAutoResponse(pair?: AutoResponsePair): void;
+  getWebSocketAutoResponse(): AutoResponsePair | null;
 }
 
 /** A freshly split WebSocket pair: index 0 is the client side. */
@@ -50,6 +58,12 @@ interface WebSocketPairLike {
 
 /** The runtime's pair constructor, declared narrowly for this module. */
 declare const WebSocketPair: new () => WebSocketPairLike;
+
+/** The runtime's auto-response pair constructor, declared narrowly. */
+declare const WebSocketRequestResponsePair: new (
+  request: string,
+  response: string,
+) => AutoResponsePair;
 
 /** A 101 carrying `client`, with the relay's security headers. */
 function upgradeResponse(client: RoomSocket): Response {
@@ -73,6 +87,10 @@ function hostsFrame(items: HostItem[]): string {
   return JSON.stringify({ from: "relay", body: { t: "hosts", items } });
 }
 
+function pongFrame(): string {
+  return JSON.stringify({ from: "relay", body: { t: "pong" } });
+}
+
 /** A forwarded uid header, or null when it is missing or malformed. */
 function parseUid(value: string | null): number | null {
   if (value === null || !/^[1-9][0-9]*$/.test(value)) {
@@ -94,7 +112,11 @@ export class UserRoom {
   nextConn = 1;
   pairInit: number[] = [];
 
-  constructor(private readonly state: RoomState) {}
+  constructor(private readonly state: RoomState) {
+    // Hosts ping with plain-text pings (protocol pings never reach us):
+    // the edge answers without waking this room.
+    this.state.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
+  }
 
   fetch(request: Request): Response {
     if ((request.headers.get("upgrade") ?? "").toLowerCase() !== "websocket") {
@@ -196,9 +218,14 @@ export class UserRoom {
       return;
     }
     if (to === "relay") {
-      // Reserved address, and the loop guard for the identity notices: an
-      // old hub answers an unknown notice with an error addressed here,
-      // which must die quietly instead of bouncing back forever.
+      // Browsers cannot send protocol pings, so they send an app ping the
+      // edge cannot auto-answer: reply here and nowhere else. Anything
+      // else to this reserved address dies quietly — the loop guard for
+      // the identity notices, where an old hub answers an unknown notice
+      // with an error addressed here.
+      if (this.isPing(body)) {
+        socket.send(pongFrame());
+      }
       return;
     }
     // Guests never pair: pairing binds a device to the owner's hub, and a
@@ -243,6 +270,15 @@ export class UserRoom {
       typeof body === "object" &&
       body !== null &&
       (body as Record<string, unknown>)["t"] === "pair_init"
+    );
+  }
+
+  /** True when the body is an object whose `t` is `ping`. */
+  private isPing(body: unknown): boolean {
+    return (
+      typeof body === "object" &&
+      body !== null &&
+      (body as Record<string, unknown>)["t"] === "ping"
     );
   }
 

@@ -318,6 +318,41 @@ describe("pair_init rate limit", () => {
   });
 });
 
+describe("keepalive", () => {
+  it("enables auto-response for plain-text pings in the constructor", () => {
+    const { state } = setup();
+    const pair = state.getWebSocketAutoResponse();
+    expect(pair?.request).toBe("ping");
+    expect(pair?.response).toBe("pong");
+  });
+
+  it("answers app pings to the relay with a pong", () => {
+    const { state, room } = setup();
+    const device = attachFake(state, room, "device");
+    room.webSocketMessage(device, JSON.stringify({ to: "relay", body: { t: "ping" } }));
+    expect(device.frames()).toEqual([{ from: "relay", body: { t: "pong" } }]);
+    expect(device.sent).toEqual([`{"from":"relay","body":{"t":"pong"}}`]);
+  });
+
+  it("keeps pings outside the pair_init quota", () => {
+    vi.useFakeTimers();
+    const { state, room } = setup();
+    const device = attachFake(state, room, "device");
+    attachFake(state, room, "host", { host_id: HOST_ID, label: "devbox" });
+    for (let index = 0; index < 20; index += 1) {
+      room.webSocketMessage(device, JSON.stringify({ to: `h:${HOST_ID}`, body: { t: "pair_init" } }));
+    }
+    // The quota is spent, but a ping still pongs instead of rate-limiting.
+    room.webSocketMessage(device, JSON.stringify({ to: "relay", body: { t: "ping" } }));
+    expect(device.frames()).toEqual([{ from: "relay", body: { t: "pong" } }]);
+    room.webSocketMessage(device, JSON.stringify({ to: `h:${HOST_ID}`, body: { t: "pair_init" } }));
+    expect(device.frames()).toEqual([
+      { from: "relay", body: { t: "pong" } },
+      { from: "relay", body: { t: "error", code: "rate_limited" } },
+    ]);
+  });
+});
+
 describe("no storage", () => {
   it("never touches the storage API: the source says so", () => {
     expect(roomSource).not.toContain(".storage");
@@ -375,5 +410,24 @@ describe("live room", () => {
     const ninth = clientOf(await stub.fetch(upgradeRequest("device")));
     ninth.accept();
     expect(await nextClose(ninth)).toBe(4008);
+  });
+
+  it("answers app pings on the real object", async () => {
+    const namespace = (env as unknown as Env).USER_ROOM;
+    const stub = namespace.get(namespace.idFromName("room-self-ping"));
+    const deviceResponse = await stub.fetch(upgradeRequest("device"));
+    expect(deviceResponse.status).toBe(101);
+    const device = clientOf(deviceResponse);
+    device.accept();
+    expect(JSON.parse(await nextMessage(device))).toEqual({
+      from: "relay",
+      body: { t: "hosts", items: [] },
+    });
+    const pong = nextMessage(device);
+    device.send(JSON.stringify({ to: "relay", body: { t: "ping" } }));
+    expect(JSON.parse(await pong)).toEqual({
+      from: "relay",
+      body: { t: "pong" },
+    });
   });
 });

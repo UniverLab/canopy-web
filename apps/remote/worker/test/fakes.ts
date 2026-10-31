@@ -10,7 +10,7 @@
  */
 import type { AssetsFetcher } from "../src/index.js";
 import type { RoomAttachment } from "../src/protocol.js";
-import type { RoomSocket, RoomState } from "../src/room.js";
+import type { AutoResponsePair, RoomSocket, RoomState } from "../src/room.js";
 
 /** One stubbed upstream answer. `body` is JSON-encoded, `text` stays raw. */
 export interface Stub {
@@ -94,6 +94,7 @@ export class FakeRoomSocket implements RoomSocket {
 /** Hibernation state for direct room tests; storage access throws. */
 export class FakeRoomState implements RoomState {
   private sockets: RoomSocket[] = [];
+  private autoResponse: AutoResponsePair | null = null;
 
   get storage(): never {
     throw new Error("UserRoom must never touch storage");
@@ -108,6 +109,14 @@ export class FakeRoomState implements RoomState {
 
   getWebSockets(): RoomSocket[] {
     return [...this.sockets];
+  }
+
+  setWebSocketAutoResponse(pair?: AutoResponsePair): void {
+    this.autoResponse = pair ?? null;
+  }
+
+  getWebSocketAutoResponse(): AutoResponsePair | null {
+    return this.autoResponse;
   }
 
   /** Drop a closed socket, like the runtime does. */

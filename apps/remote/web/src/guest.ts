@@ -28,6 +28,7 @@ import { asConnectFail, asIceCandidate, connectFailMessage, isBye, loadIceServer
 import type { PeerConnectionFactory, PeerEvent, TurnFetcher } from "./peer.js";
 import { DATA_CHANNEL_LABEL } from "./peer.js";
 import { buildList, newReqId } from "./protocol.js";
+import { RelayKeepalive } from "./keepalive.js";
 import { RelaySocket, defaultRelayUrl } from "./relay.js";
 import type { RelayFrame } from "./relay.js";
 import { createFrameRouter } from "./router.js";
@@ -562,6 +563,7 @@ export function createGuestSession(root: HTMLElement, deps: GuestSessionDeps): G
 export async function mountGuest(root: HTMLElement): Promise<void> {
   let peer: GuestPeer | null = null;
   let relay: RelaySocket | null = null;
+  let keepalive: RelayKeepalive | null = null;
 
   const login = await fetchLogin();
   const link = parseGuestLink(globalThis.location.pathname);
@@ -586,6 +588,8 @@ export async function mountGuest(root: HTMLElement): Promise<void> {
   const hostId = link.hostId;
   const device = await ensureDeviceKey();
   relay = new RelaySocket(guestRelayUrl(ownerUid));
+  keepalive = new RelayKeepalive({ relay });
+  keepalive.start();
 
   async function connect(): Promise<void> {
     const socket = relay;
@@ -651,6 +655,7 @@ export async function mountGuest(root: HTMLElement): Promise<void> {
     session.detach();
     peer?.close();
     peer = null;
+    keepalive?.stop();
     relay?.close();
     if (forget) {
       try {

@@ -50,6 +50,13 @@ const FEATURE_BUDGET = 1_024;
  * headroom made any implementation of the spec impossible.
  */
 const METRICS_BUDGET = 4_096;
+/**
+ * Allowance for the relay-keepalive spec (browser ping every 20 s, silence
+ * reconnect with backoff): measured +385 B gzip over the pre-change main.
+ * Added in the feature commit like METRICS_BUDGET: the 1-byte headroom
+ * made any implementation of the spec impossible.
+ */
+const KEEPALIVE_BUDGET = 1_024;
 /** The budget the lazy guest chunk is allowed, gzip bytes of JS. */
 const GUEST_BUDGET = 6_144;
 /** The budget the lazy editor chunk is allowed, gzip bytes of JS. */
@@ -145,7 +152,7 @@ describe("the remote's bundle", () => {
     };
     // Keep the numbers in the failure message: a regression says by how much.
     expect(main, JSON.stringify(report)).toBeLessThanOrEqual(
-      BASELINE + BUDGET + FEATURE_BUDGET + METRICS_BUDGET,
+      BASELINE + BUDGET + FEATURE_BUDGET + METRICS_BUDGET + KEEPALIVE_BUDGET,
     );
     expect(guestJs, JSON.stringify(report)).toBeLessThanOrEqual(GUEST_BUDGET);
     expect(editorJs, JSON.stringify(report)).toBeLessThanOrEqual(EDITOR_BUDGET);

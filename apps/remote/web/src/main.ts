@@ -16,6 +16,7 @@ import { MetricsStore } from "./metrics-store.js";
 import { buildCatalog, buildCompose, buildList, buildSpawn, newReqId } from "./protocol.js";
 import { runPairing } from "./pairing.js";
 import { ConnectionManager } from "./reconnect.js";
+import { RelayKeepalive } from "./keepalive.js";
 import { RelaySocket, defaultRelayUrl, parseHostsList } from "./relay.js";
 import { createFrameRouter } from "./router.js";
 import type { OnlineHost } from "./relay.js";
@@ -63,6 +64,7 @@ async function main(): Promise<void> {
   const login = await fetchLogin();
 
   const relay = new RelaySocket(defaultRelayUrl());
+  const keepalive = new RelayKeepalive({ relay });
   const store = new SessionStore();
   const catalog = new CatalogStore();
   let onlineHosts: OnlineHost[] = [];
@@ -253,6 +255,7 @@ async function main(): Promise<void> {
     shelf.reset();
     graphs.reset();
     metrics.reset();
+    keepalive.stop();
     relay.close();
     if (forget) {
       try {
@@ -301,6 +304,7 @@ async function main(): Promise<void> {
     return;
   }
   shell.setLogin(login);
+  keepalive.start();
   await refreshPaired();
   const stored = await listHosts();
   if (prefill !== null || stored.length === 0) {
