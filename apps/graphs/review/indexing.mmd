@@ -3,26 +3,49 @@
 %% static SVG at build time (`npm run build:review-assets`). The transparency
 %% page inlines the SVG; no runtime mermaid.js ships. Keep the participant
 %% names and the message order stable: the build renderer and the tests pin
-%% them.
+%% them. The Review label is a build token: the build keeps it, the page
+%% substitutes the configured provider's display name at request time.
 sequenceDiagram
   autonumber
   participant Cron as Cron */15
   participant Worker as Worker
   participant GitHub as GitHub
   participant KV as KV
-  participant Muse as Claude API
+  participant Review as {{REVIEW_PROVIDER}}
   participant Browser as Browser
   Cron->>Worker: scheduled trigger
+  activate Worker
+  activate GitHub
   Worker->>GitHub: read blocked.json
+  GitHub-->>Worker: blocked list
+  deactivate GitHub
+  activate GitHub
   Worker->>GitHub: discover topic canopy-graph
+  GitHub-->>Worker: repository list
+  deactivate GitHub
   loop per repository
+    activate GitHub
     Worker->>GitHub: fetch document folders
+    GitHub-->>Worker: documents
+    deactivate GitHub
     Worker->>Worker: validate graph and node JSON
   end
+  activate KV
   Worker->>KV: write index, docs, meta
-  Worker->>Muse: review newest unscanned docs
-  Muse-->>Worker: patterns and verdict
+  deactivate KV
+  activate Review
+  Worker->>Review: review newest unscanned docs
+  Review-->>Worker: patterns and verdict
+  deactivate Review
+  activate KV
   Worker->>KV: write reviews and pattern links
+  deactivate KV
+  deactivate Worker
   Browser->>Worker: GET page or API
+  activate Worker
+  activate KV
   Worker->>KV: read index and docs
+  KV-->>Worker: index and docs
+  deactivate KV
   Worker-->>Browser: HTML, twin, JSON or 302
+  deactivate Worker

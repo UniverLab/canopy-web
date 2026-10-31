@@ -43,6 +43,25 @@ import { type Page } from "./layout.js";
 import { escapeHtml } from "./md.js";
 import { iconSvg } from "../../../../packages/look/icon-svg.js";
 
+/** The token the diagram source carries for the review participant's label. */
+export const REVIEW_PROVIDER_TOKEN = "{{REVIEW_PROVIDER}}";
+
+/**
+ * The review provider's display name, as the indexing diagram labels it:
+ * Meta's API by provider id, Claude's by either of its ids, and the
+ * generic Review API when scanning is off or unconfigured.
+ */
+export function reviewProviderLabel(provider?: string): string {
+  const name = (provider ?? "").trim().toLowerCase();
+  if (name === "meta") {
+    return "Meta API";
+  }
+  if (name === "claude" || name === "anthropic") {
+    return "Claude API";
+  }
+  return "Review API";
+}
+
 /** What the page renders: the bundled assets plus the stored verdicts. */
 export interface TransparencyInput {
   /** The pre-rendered indexing diagram, static SVG. */
@@ -55,6 +74,8 @@ export interface TransparencyInput {
   promptVersion: string;
   /** Every stored verdict, in aggregate order. */
   reviews: ReviewEntry[];
+  /** The configured REVIEW_PROVIDER value; the diagram labels it. */
+  reviewProvider?: string;
 }
 
 /** One prose paragraph, escaped. */
@@ -109,6 +130,9 @@ function verdictMarkdown(entry: ReviewEntry): string {
  * a fenced XML block, so agents read the same facts.
  */
 export function transparencyPage(input: TransparencyInput): Page {
+  const providerLabel = reviewProviderLabel(input.reviewProvider);
+  const svg = input.svg.replaceAll(REVIEW_PROVIDER_TOKEN, () => providerLabel);
+  const mmd = input.mmd.replaceAll(REVIEW_PROVIDER_TOKEN, () => providerLabel);
   const indexParas = [
     TRANSPARENCY_CRON_BODY,
     TRANSPARENCY_DISCOVERY_BODY,
@@ -130,7 +154,7 @@ export function transparencyPage(input: TransparencyInput): Page {
     heading(TRANSPARENCY_INDEX_HEADING),
     ...indexParas.map(para),
     heading(TRANSPARENCY_DIAGRAM_HEADING),
-    `<figure class="diagram">${input.svg}</figure>`,
+    `<figure class="diagram">${svg}</figure>`,
     heading(TRANSPARENCY_REVIEW_HEADING),
     ...reviewParas.map(para),
     heading(TRANSPARENCY_PROMPT_HEADING),
@@ -152,7 +176,7 @@ export function transparencyPage(input: TransparencyInput): Page {
     ...indexParas.flatMap((body) => [body, ``]),
     `## ${TRANSPARENCY_DIAGRAM_HEADING}`,
     ``,
-    ...fencedBlock("mermaid", input.mmd),
+    ...fencedBlock("mermaid", mmd),
     `## ${TRANSPARENCY_REVIEW_HEADING}`,
     ``,
     ...reviewParas.flatMap((body) => [body, ``]),

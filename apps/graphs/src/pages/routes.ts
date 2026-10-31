@@ -473,6 +473,7 @@ async function transparencyResponse(req: Request, env: PageEnv, deps: PageDeps):
     prompt: REVIEW_PROMPT_V1,
     promptVersion: REVIEW_PROMPT_VERSION,
     reviews: reviews?.reviews ?? [],
+    reviewProvider: env.REVIEW_PROVIDER,
   }));
 }
 

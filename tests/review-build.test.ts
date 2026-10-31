@@ -72,6 +72,47 @@ const DIAGRAM = [
   ``,
 ].join("\n");
 
+/** Build this diagram source to a generated module; the build must succeed. */
+function buildDiagram(source: string): string {
+  const { dir, out, remove } = scratch();
+  try {
+    writeFileSync(path.join(dir, "prompt.v1.xml"), PROMPT);
+    writeFileSync(path.join(dir, "indexing.mmd"), source);
+    const result = attempt(["--dir", dir, "--out", out]);
+    expect(result.status, result.stderr).toBe(0);
+    return readFileSync(out, "utf8");
+  } finally {
+    remove();
+  }
+}
+
+/** Attempt this diagram source; the caller asserts on the failure. */
+function failDiagram(source: string): Attempt {
+  const { dir, out, remove } = scratch();
+  try {
+    writeFileSync(path.join(dir, "prompt.v1.xml"), PROMPT);
+    writeFileSync(path.join(dir, "indexing.mmd"), source);
+    return attempt(["--dir", dir, "--out", out]);
+  } finally {
+    remove();
+  }
+}
+
+const RICH_DIAGRAM = [
+  `sequenceDiagram`,
+  `  autonumber`,
+  `  participant A as Alpha`,
+  `  participant B as Beta`,
+  `  A->>B: hello`,
+  `  activate B`,
+  `  B-->>A: hi back`,
+  `  deactivate B`,
+  `  loop every one`,
+  `    A->>A: think`,
+  `  end`,
+  ``,
+].join("\n");
+
 describe("the review bundle", () => {
   it("--check passes on the committed tree", () => {
     expect(attempt(["--check"])).toEqual({ status: 0, stderr: "" });
@@ -126,6 +167,59 @@ describe("the review bundle", () => {
       expect(existsSync(out)).toBe(false);
     } finally {
       remove();
+    }
+  });
+});
+
+describe("the sequence renderer", () => {
+  it("draws activation boxes between activate and deactivate", () => {
+    const module = buildDiagram(RICH_DIAGRAM);
+    expect(module).toContain(`fill-opacity=\\"0.12\\"`);
+  });
+
+  it("renders replies dashed and lighter than calls", () => {
+    const module = buildDiagram(RICH_DIAGRAM);
+    expect(module).toContain(`stroke-dasharray=\\"4 3\\" opacity=\\"0.65\\"`);
+    expect(module).toContain(`stroke=\\"currentColor\\"/>`);
+  });
+
+  it("numbers every arrow in order when autonumber is set", () => {
+    const module = buildDiagram(RICH_DIAGRAM);
+    const one = module.indexOf(">1<");
+    const two = module.indexOf(">2<");
+    const three = module.indexOf(">3<");
+    expect(one).toBeGreaterThan(-1);
+    expect(two).toBeGreaterThan(one);
+    expect(three).toBeGreaterThan(two);
+    expect(buildDiagram(DIAGRAM)).not.toContain(`rx=\\"8\\"`);
+  });
+
+  it("frames loops with their labels", () => {
+    expect(buildDiagram(RICH_DIAGRAM)).toContain("loop every one");
+  });
+
+  it("fails the strict grammar with the line and the reason", () => {
+    const cases: Array<[string, string, string]> = [
+      ["activate names an unknown participant", `  activate Z\n`, "unknown participant"],
+      ["double activate", `  activate A\n  activate A\n`, "already active"],
+      ["deactivate without activate", `  deactivate A\n`, "without activate"],
+      ["end without a loop", `  end\n`, "without a loop"],
+      ["nested loops", `  loop outer\n  loop inner\n`, "nested loops"],
+      ["loop without a label", `  loop\n`, "without a label"],
+      ["unclosed loop", `  loop outer\n  A->>B: hello\n`, "unclosed"],
+      ["unclosed activation", `  activate A\n  A->>B: hello\n`, "leaves A active"],
+    ];
+    for (const [name, extra, reason] of cases) {
+      const source = [
+        `sequenceDiagram`,
+        `  participant A as Alpha`,
+        `  participant B as Beta`,
+        extra,
+        ``,
+      ].join("\n");
+      const failed = failDiagram(source);
+      expect(failed.status, name).toBe(1);
+      expect(failed.stderr, name).toContain(reason);
     }
   });
 });

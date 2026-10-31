@@ -108,14 +108,14 @@ function mockProvider(
 }
 
 /** Render one page from this KV; no request may reach upstream. */
-async function call(path: string, kv: FakeKV, accept?: string): Promise<Response> {
+async function call(path: string, kv: FakeKV, accept?: string, reviewProvider?: string): Promise<Response> {
   resetIndexMemo();
   const fake = fakeFetch([]);
   const headers = new Headers();
   if (accept !== undefined) {
     headers.set("accept", accept);
   }
-  const answer = await handlePage(new Request(`${ORIGIN}${path}`, { headers }), { INDEX: kv }, {
+  const answer = await handlePage(new Request(`${ORIGIN}${path}`, { headers }), { INDEX: kv, REVIEW_PROVIDER: reviewProvider }, {
     fetchImpl: fake.fetchImpl,
     cache: new FakeCache(),
   });
@@ -486,6 +486,34 @@ describe("the transparency page", () => {
     expect(await response.text()).toContain(TRANSPARENCY_NO_VERDICTS);
   });
 
+  it("labels the review participant with the configured provider", async () => {
+    const html = await (await call("/transparency", new FakeKV(), undefined, "meta")).text();
+    expect(html).toContain("Meta API");
+    expect(html).not.toContain("Claude API");
+    expect(html).not.toContain("{{REVIEW_PROVIDER}}");
+    const twin = await (await call("/transparency", new FakeKV(), "text/markdown", "meta")).text();
+    expect(twin).toContain("Meta API");
+    expect(twin).not.toContain("{{REVIEW_PROVIDER}}");
+  });
+
+  it("names Claude's API for either of its ids", async () => {
+    for (const provider of ["claude", "anthropic"]) {
+      const html = await (await call("/transparency", new FakeKV(), undefined, provider)).text();
+      expect(html, provider).toContain("Claude API");
+      expect(html, provider).not.toContain("{{REVIEW_PROVIDER}}");
+    }
+  });
+
+  it("keeps the diagram with a generic label when scanning is off", async () => {
+    for (const provider of [undefined, "off"]) {
+      const html = await (await call("/transparency", new FakeKV(), undefined, provider)).text();
+      expect(html).toContain("<svg");
+      expect(html).toContain("Review API");
+      expect(html).not.toContain("Claude API");
+      expect(html).not.toContain("{{REVIEW_PROVIDER}}");
+    }
+  });
+
   it("is linked from the header nav and the colophon", async () => {
     resetIndexMemo();
     const html = await (await call("/transparency", new FakeKV())).text();
@@ -513,7 +541,13 @@ describe("the bundled review assets", () => {
 
   it("pre-renders the sequence diagram to static SVG", () => {
     expect(INDEXING_MMD).toContain("sequenceDiagram");
-    for (const participant of ["Cron", "Worker", "GitHub", "KV", "Muse", "Browser"]) {
+    expect(INDEXING_MMD).toContain("autonumber");
+    expect(INDEXING_MMD).toContain("loop per repository");
+    expect(INDEXING_MMD).toContain("activate Worker");
+    expect(INDEXING_MMD).toContain("deactivate Worker");
+    expect(INDEXING_MMD).toContain("participant Review as {{REVIEW_PROVIDER}}");
+    expect(INDEXING_MMD).not.toContain("Claude API");
+    for (const participant of ["Cron", "Worker", "GitHub", "KV", "Review", "Browser"]) {
       expect(INDEXING_MMD).toContain(participant);
     }
     for (const message of [
@@ -523,13 +557,19 @@ describe("the bundled review assets", () => {
       "write index, docs, meta",
       "review newest unscanned docs",
       "write reviews and pattern links",
+      "blocked list",
+      "repository list",
+      "documents",
     ]) {
       expect(INDEXING_MMD).toContain(message);
     }
     expect(INDEXING_SVG).toContain("<svg");
     expect(INDEXING_SVG).toContain("Cron */15");
     expect(INDEXING_SVG).toContain("review newest unscanned docs");
+    expect(INDEXING_SVG).toContain("{{REVIEW_PROVIDER}}");
+    expect(INDEXING_SVG).toContain("loop per repository");
     expect(INDEXING_SVG).not.toContain("mermaid");
+    expect(INDEXING_SVG).not.toContain("Claude API");
   });
 });
 
