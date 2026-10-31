@@ -236,6 +236,27 @@ harness bindings; the 413 and the 429; the page banner, `noindex` and the
 promise that viewing never consumes; and that no draft reaches search,
 `llms.txt` or the sitemap.
 
+## Proving the Meta review locally (before production is ever enabled)
+
+The `meta` review provider is proven from the laptop before `REVIEW_PROVIDER`
+is ever set to `meta` in production. The proof runs one real review against
+the configured Meta endpoint and prints the verdict plus the token usage:
+
+```sh
+cp apps/graphs/.dev.vars.example apps/graphs/.dev.vars   # gitignored; stays on the laptop
+# Set META_API_KEY, META_API_BASE_URL and REVIEW_MODEL in .dev.vars.
+npm run review:local -- apps/graphs/review/local-fixture.json
+```
+
+The fixture is a real-shaped graph (pipe-to-shell plus a destructive `rm`
+with an unresolved placeholder), so a healthy run answers `flagged` or
+`needs-look` with its reasons, the model name, and one usage line per
+attempt (`effort=… prompt=… completion=… total=…`). Any document JSON works
+as the fixture; `--kind=node --owner=acme --repo=things --slug=cool` overrides
+the local coordinates. The script refuses without the key, the endpoint or
+the model — sending nothing — and never prints the key. Production takes its
+key from `wrangler secret put META_API_KEY`, never from this file.
+
 ## One-time setup (before the first deploy)
 
 1. **Enable Analytics Engine on the account** — dash.cloudflare.com →

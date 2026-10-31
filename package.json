@@ -22,6 +22,7 @@
     "test:worker": "vitest run --config apps/graphs/vitest.config.ts",
     "test:remote-worker": "vitest run --config apps/remote/worker/vitest.config.ts",
     "validate": "tsx src/validate.ts",
+    "review:local": "tsx scripts/review-local.ts",
     "test:remote-smoke": "playwright test --config apps/remote/web/playwright.config.ts",
     "test:remote-serve": "playwright test --config apps/remote/web/playwright.serve.config.ts",
     "test:graphs-visual": "playwright test --config apps/graphs/playwright.config.ts",

@@ -49,7 +49,7 @@ import { handleAgentFiles, NOT_AGENT_FILE } from "./agent-files.js";
 import { handleDiscoveryFiles, NOT_DISCOVERY } from "./agent-discovery.js";
 import { handleApi, type ApiEnv } from "./api.js";
 import { handlePage, NOT_PAGE } from "./pages/routes.js";
-import { createGitHub, type CacheLike } from "./github.js";
+import { createGitHub, type CacheLike, type Log } from "./github.js";
 import { consumeDraft } from "./drafts.js";
 import { documentDirectory, loadDocument } from "./documents.js";
 import { entryFor } from "./catalog.js";
@@ -59,6 +59,7 @@ import { INDEXING_BODY } from "./pages/copy.js";
 import { bundledPatterns } from "./patterns-bundled.js";
 import { REVIEW_DEFAULT_CAP, runReview, type ReviewProvider } from "./review.js";
 import { CLAUDE_DEFAULT_MODEL, createClaudeProvider } from "./review-claude.js";
+import { createMetaProvider, resolveMetaMaxTokens } from "./review-meta.js";
 
 /** The single Analytics Engine method this Worker uses. */
 export interface DataPoint {
@@ -172,6 +173,8 @@ export interface WorkerDeps {
   fetchImpl?: typeof fetch;
   /** The Cache API stand-in; defaults to the runtime's `caches.default`. */
   cache?: CacheLike;
+  /** Where the review pass notes refusals, failures and token usage; dropped without it. */
+  log?: Log;
 }
 
 /** The scheduled event the Cron Trigger wakes the Worker with. */
@@ -248,7 +251,13 @@ export function createWorker(deps: WorkerDeps = {}) {
         try {
           const provider = await reviewProviderFromEnv(env, deps);
           const slugs = await reviewSlugs();
-          await runReview({ index: kv, provider, patternSlugs: slugs, cap: reviewCap(env) });
+          await runReview({
+            index: kv,
+            provider,
+            patternSlugs: slugs,
+            cap: reviewCap(env),
+            log: deps.log ?? (() => undefined),
+          });
         } catch {
           // A review failure never fails the scheduled run.
         }
@@ -285,22 +294,59 @@ function reviewCap(env: Env): number {
 /**
  * The configured review provider, or null when the pass is off. `Muse`
  * without a key is off too: documents stay `unreviewed` with no calls.
+ * `meta` needs its key, its endpoint and its model — a missing one
+ * refuses with one clear line and skips the scan, indexing unaffected.
+ * An unknown provider fails closed the same way: no scan, one log line.
  */
-async function reviewProviderFromEnv(env: Env, deps: WorkerDeps): Promise<ReviewProvider | null> {
-  if ((env.REVIEW_PROVIDER ?? "off").toLowerCase() !== "claude") {
+export async function reviewProviderFromEnv(env: Env, deps: WorkerDeps): Promise<ReviewProvider | null> {
+  const log = deps.log ?? (() => undefined);
+  const raw = env.REVIEW_PROVIDER ?? "off";
+  const name = raw.toLowerCase();
+  if (name === "off" || name === "") {
     return null;
   }
-  const apiKey = env.CLAUDE_API_KEY ?? "";
-  if (apiKey === "") {
-    return null;
+  if (name === "claude") {
+    const apiKey = env.CLAUDE_API_KEY ?? "";
+    if (apiKey === "") {
+      return null;
+    }
+    const model = env.REVIEW_MODEL ?? CLAUDE_DEFAULT_MODEL;
+    return createClaudeProvider({
+      apiKey,
+      model: model === "" ? CLAUDE_DEFAULT_MODEL : model,
+      patternSlugs: await reviewSlugs(),
+      fetchImpl: deps.fetchImpl,
+    });
   }
-  const model = env.REVIEW_MODEL ?? CLAUDE_DEFAULT_MODEL;
-  return createClaudeProvider({
-    apiKey,
-    model: model === "" ? CLAUDE_DEFAULT_MODEL : model,
-    patternSlugs: await reviewSlugs(),
-    fetchImpl: deps.fetchImpl,
-  });
+  if (name === "meta") {
+    const apiKey = env.META_API_KEY ?? "";
+    if (apiKey === "") {
+      log("review: the meta provider needs META_API_KEY; skipping this scan");
+      return null;
+    }
+    const baseUrl = env.META_API_BASE_URL ?? "";
+    if (baseUrl === "") {
+      log("review: the meta provider needs META_API_BASE_URL; skipping this scan");
+      return null;
+    }
+    const model = env.REVIEW_MODEL ?? "";
+    if (model === "") {
+      log("review: the meta provider needs REVIEW_MODEL; skipping this scan");
+      return null;
+    }
+    return createMetaProvider({
+      apiKey,
+      baseUrl,
+      model,
+      patternSlugs: await reviewSlugs(),
+      effort: env.REVIEW_EFFORT,
+      maxTokens: resolveMetaMaxTokens(env.REVIEW_MAX_TOKENS),
+      fetchImpl: deps.fetchImpl,
+      log,
+    });
+  }
+  log(`review: unknown REVIEW_PROVIDER "${raw}"; skipping this scan`);
+  return null;
 }
 
 /**

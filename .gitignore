@@ -149,6 +149,8 @@ $RECYCLE.BIN/
 .wrangler/
 .dev.vars
 .dev.vars.*
+# The documented review variables; the real `.dev.vars` stays local.
+!.dev.vars.example
 
 # Generated look kit output (npm run build:look)
 apps/graphs/public/look/

@@ -56,9 +56,22 @@ export interface ClaudeOptions {
 }
 
 /**
+ * Drop the template's leading HTML comments (the license header, the build
+ * notes): they cost tokens and are not instructions, so neither the wire
+ * nor the transparency page ever sees them. Only leading comments go — the
+ * first non-comment byte and everything after it is kept verbatim, and a
+ * template with no leading comment comes back unchanged.
+ */
+export function stripLeadingComments(template: string): string {
+  return template.replace(/^(?:\s*<!--[\s\S]*?-->\s*)+/, "");
+}
+
+/**
  * Fill the prompt template with one document's facts: kind, name, slug,
  * the bundled slugs one per line, and the install-review lines. Pure, so
  * the transparency page and the tests read the same shape the model saw.
+ * The template's leading comments are stripped before filling, so what is
+ * sent is exactly what the transparency page shows, placeholders aside.
  */
 export function buildReviewPrompt(
   document: ReviewDocument,
@@ -66,7 +79,7 @@ export function buildReviewPrompt(
   template: string = REVIEW_PROMPT_V1,
 ): string {
   const facts = reviewFactsOf(document.kind, document.document);
-  return template
+  return stripLeadingComments(template)
     .replaceAll("{{KIND}}", document.kind)
     .replaceAll("{{NAME}}", document.name)
     .replaceAll("{{SLUG}}", document.slug)

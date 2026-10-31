@@ -16,6 +16,8 @@ CF_ACCOUNT_ID = "d7b81bdd721f503968523dd903d967be"
 REVIEW_PROVIDER = "off"
 REVIEW_MODEL = "claude-haiku-4-5-20251001"
 REVIEW_SCAN_CAP = "5"
+REVIEW_EFFORT = "minimal"
+REVIEW_MAX_TOKENS = "4096"
 
 [[analytics_engine_datasets]]
 binding = "INSTALLS"

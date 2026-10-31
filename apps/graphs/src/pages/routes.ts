@@ -91,6 +91,7 @@ import {
   REVIEW_PROMPT_V1,
   REVIEW_PROMPT_VERSION,
 } from "../review-assets.generated.js";
+import { stripLeadingComments } from "../review-claude.js";
 
 /** A non-page request: index.ts keeps routing it to the redirector. */
 export const NOT_PAGE = true as const;
@@ -470,7 +471,10 @@ async function transparencyResponse(req: Request, env: PageEnv, deps: PageDeps):
   return page(req, transparencyPage({
     svg: INDEXING_SVG,
     mmd: INDEXING_MMD,
-    prompt: REVIEW_PROMPT_V1,
+    // The same stripped bytes the model saw: the template's leading
+    // comments cost tokens and are not instructions, so the page shows
+    // the prompt exactly as it was sent, placeholders aside.
+    prompt: stripLeadingComments(REVIEW_PROMPT_V1),
     promptVersion: REVIEW_PROMPT_VERSION,
     reviews: reviews?.reviews ?? [],
     reviewProvider: env.REVIEW_PROVIDER,

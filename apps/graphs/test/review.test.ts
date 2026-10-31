@@ -3,8 +3,10 @@
  * The index-time model review: the provider interface against a mock,
  * `off` disabling the pass, the hash gate, the per-run cap, failure
  * degrading to `unreviewed`, every verdict label including the
- * placeholder case, stored pattern relations on the patterns pages, and
- * the bundled prompt plus the pre-rendered diagram. Tests seed a fresh
+ * placeholder case, stored pattern relations on the patterns pages, the
+ * `meta` provider with its repair retry and usage logs, prompt hygiene
+ * (leading comments stripped from wire and page), the meta env wiring,
+ * and the bundled prompt plus the pre-rendered diagram. Tests seed a fresh
  * in-memory KV with an index and documents directly — no GitHub — then
  * run the review and render pages from the same KV.
  */
@@ -36,7 +38,17 @@ import {
   type ReviewProvider,
   type ReviewResult,
 } from "../src/review.js";
-import { buildReviewPrompt, createClaudeProvider, parseModelAnswer } from "../src/review-claude.js";
+import { buildReviewPrompt, createClaudeProvider, parseModelAnswer, stripLeadingComments } from "../src/review-claude.js";
+import {
+  META_DEFAULT_MAX_TOKENS,
+  META_MAX_MAX_TOKENS,
+  META_MIN_MAX_TOKENS,
+  META_REPAIR_INSTRUCTION,
+  createMetaProvider,
+  resolveMetaEffort,
+  resolveMetaMaxTokens,
+} from "../src/review-meta.js";
+import { reviewProviderFromEnv, type Env } from "../src/index.js";
 import { createStore, docKey, resetIndexMemo } from "../src/store.js";
 import { FakeCache, FakeKV, fakeFetch } from "./fakes.js";
 
@@ -461,7 +473,7 @@ describe("the transparency page", () => {
     expect(html).toContain("<svg");
     expect(html).toContain("Cron */15");
     expect(html).toContain("review newest unscanned docs");
-    // The exact prompt, verbatim.
+    // The stripped prompt, exactly as the model saw it.
     expect(html).toContain("&lt;review_prompt");
     expect(html).toContain("{{COMMANDS}}");
     expect(html).toContain(`Version ${REVIEW_PROMPT_VERSION}`);
@@ -693,5 +705,399 @@ describe("the Muse provider", () => {
     expect(await empty.getReview("graph", "acme", "things", "flow")).toBeNull();
     expect(await empty.getReviews()).toBeNull();
     expect(await empty.getReviewPatterns()).toBeNull();
+  });
+});
+
+describe("the Meta provider", () => {
+  const DOCUMENT: ReviewDocument = {
+    kind: "graph",
+    owner: "acme",
+    repo: "things",
+    slug: "flow",
+    name: "flow",
+    document: graphDoc("flow", "echo hi") as unknown as JsonValue,
+  };
+  const BASE_URL = "https://meta.example/v1/chat/completions";
+  const API_KEY = "test-meta-key";
+  const MODEL = "muse-spark-1.3-contributor";
+
+  interface Captured {
+    url: string;
+    headers: Record<string, string>;
+    body: string;
+  }
+
+  interface Canned {
+    status: number;
+    body?: unknown;
+    text?: string;
+  }
+
+  /** An inline stub: fakeFetch records URLs and bodies, not headers. */
+  function metaStub(answers: Canned[]): { fetchImpl: typeof fetch; calls: Captured[] } {
+    const calls: Captured[] = [];
+    const fetchImpl = (async (input: URL | Request | string, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : String(input);
+      const body = typeof init?.body === "string" ? init.body : "";
+      const headers: Record<string, string> = {};
+      new Headers(init?.headers).forEach((value, key) => {
+        headers[key] = value;
+      });
+      calls.push({ url, headers, body });
+      const next = answers[Math.min(calls.length - 1, answers.length - 1)] as Canned;
+      const payload = next.text ?? JSON.stringify(next.body ?? {});
+      return new Response(payload, {
+        status: next.status,
+        headers: { "content-type": "application/json" },
+      });
+    }) as unknown as typeof fetch;
+    return { fetchImpl, calls };
+  }
+
+  /** One chat.completion answer carrying this content and usage. */
+  function chatBody(content: unknown, usage?: Record<string, unknown>): Record<string, unknown> {
+    const body: Record<string, unknown> = { choices: [{ message: { content } }] };
+    if (usage !== undefined) {
+      body["usage"] = usage;
+    }
+    return body;
+  }
+
+  const USAGE = { prompt_tokens: 11, completion_tokens: 22, total_tokens: 33 };
+  const VERDICT = JSON.stringify({ verdict: "looks-safe", reasons: "", patterns: ["deterministic-gates", "unknown-slug"] });
+
+  it("sends the key, the verbatim model and the usage-logged call to the base URL", async () => {
+    const stub = metaStub([{ status: 200, body: chatBody(VERDICT, USAGE) }]);
+    const lines: string[] = [];
+    const provider = createMetaProvider({
+      apiKey: API_KEY,
+      baseUrl: BASE_URL,
+      model: MODEL,
+      patternSlugs: SLUGS,
+      fetchImpl: stub.fetchImpl,
+      log: (line) => {
+        lines.push(line);
+      },
+    });
+    expect(provider.model).toBe(MODEL);
+    const result = await provider.review(DOCUMENT);
+    expect(result).toEqual({ verdict: "looks-safe", reasons: "", patterns: ["deterministic-gates"] });
+    expect(stub.calls).toHaveLength(1);
+    const sent = stub.calls[0] as Captured;
+    expect(sent.url).toBe(BASE_URL);
+    expect(sent.headers["authorization"]).toBe(`Bearer ${API_KEY}`);
+    const body = JSON.parse(sent.body) as {
+      model: string;
+      max_tokens: number;
+      reasoning_effort: string;
+      messages: Array<{ content: string }>;
+    };
+    expect(body.model).toBe(MODEL);
+    expect(body.reasoning_effort).toBe("minimal");
+    expect(body.max_tokens).toBe(META_DEFAULT_MAX_TOKENS);
+    expect(body.messages[0]?.content).toContain("echo hi");
+    expect(body.messages[0]?.content).toContain("deterministic-gates");
+    expect(body.messages[0]?.content).not.toContain("<!--");
+    expect(sent.body).not.toContain(API_KEY);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("effort=minimal");
+    expect(lines[0]).toContain("prompt=11");
+    expect(lines[0]).toContain("completion=22");
+    expect(lines[0]).toContain("total=33");
+    expect(lines[0]).not.toContain(API_KEY);
+  });
+
+  it("answers no patterns for nodes, whatever the model named", async () => {
+    const stub = metaStub([{
+      status: 200,
+      body: chatBody(JSON.stringify({ verdict: "flagged", reasons: "bad", patterns: ["deterministic-gates"] }), USAGE),
+    }]);
+    const provider = createMetaProvider({
+      apiKey: API_KEY,
+      baseUrl: BASE_URL,
+      model: MODEL,
+      patternSlugs: SLUGS,
+      fetchImpl: stub.fetchImpl,
+    });
+    const node = await provider.review({ ...DOCUMENT, kind: "node" });
+    expect(node).toEqual({ verdict: "flagged", reasons: "bad", patterns: [] });
+  });
+
+  it("honors effort overrides and clamps the budget to its floor and ceiling", async () => {
+    expect(resolveMetaEffort(undefined)).toBe("minimal");
+    expect(resolveMetaEffort("bogus")).toBe("minimal");
+    expect(resolveMetaEffort("low")).toBe("low");
+    expect(resolveMetaEffort("HIGH")).toBe("high");
+    expect(resolveMetaMaxTokens(undefined)).toBe(META_DEFAULT_MAX_TOKENS);
+    expect(resolveMetaMaxTokens("nope")).toBe(META_DEFAULT_MAX_TOKENS);
+    expect(resolveMetaMaxTokens("1")).toBe(META_MIN_MAX_TOKENS);
+    expect(resolveMetaMaxTokens("99999999")).toBe(META_MAX_MAX_TOKENS);
+    const stub = metaStub([{ status: 200, body: chatBody(VERDICT, USAGE) }]);
+    const provider = createMetaProvider({
+      apiKey: API_KEY,
+      baseUrl: BASE_URL,
+      model: MODEL,
+      patternSlugs: SLUGS,
+      effort: "low",
+      maxTokens: "1",
+      fetchImpl: stub.fetchImpl,
+    });
+    await provider.review(DOCUMENT);
+    const body = JSON.parse((stub.calls[0] as Captured).body) as {
+      max_tokens: number;
+      reasoning_effort: string;
+    };
+    expect(body.reasoning_effort).toBe("low");
+    expect(body.max_tokens).toBe(META_MIN_MAX_TOKENS);
+  });
+
+  it("retries once with the repair instruction on unparsable output, then gives up", async () => {
+    const lines: string[] = [];
+    const stub = metaStub([
+      { status: 200, body: chatBody("not json at all", { prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 }) },
+      { status: 200, body: chatBody(VERDICT, { prompt_tokens: 4, completion_tokens: 5, total_tokens: 9 }) },
+    ]);
+    const provider = createMetaProvider({
+      apiKey: API_KEY,
+      baseUrl: BASE_URL,
+      model: MODEL,
+      patternSlugs: SLUGS,
+      fetchImpl: stub.fetchImpl,
+      log: (line) => {
+        lines.push(line);
+      },
+    });
+    const result = await provider.review(DOCUMENT);
+    expect(result.verdict).toBe("looks-safe");
+    expect(stub.calls).toHaveLength(2);
+    expect((stub.calls[0] as Captured).body).not.toContain("ONLY the JSON object");
+    expect((stub.calls[1] as Captured).body).toContain(META_REPAIR_INSTRUCTION);
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain("attempt=1");
+    expect(lines[1]).toContain("attempt=2");
+    // A second failure leaves the document unreviewed: the throw, two calls, no more.
+    const failing = metaStub([
+      { status: 200, body: chatBody("still not json", USAGE) },
+      { status: 200, body: chatBody("never json", USAGE) },
+    ]);
+    const retry = createMetaProvider({
+      apiKey: API_KEY,
+      baseUrl: BASE_URL,
+      model: MODEL,
+      patternSlugs: SLUGS,
+      fetchImpl: failing.fetchImpl,
+    });
+    await expect(retry.review(DOCUMENT)).rejects.toThrow();
+    expect(failing.calls).toHaveLength(2);
+  });
+
+  it("falls back safely on malformed model output", async () => {
+    const malformed: unknown[] = [
+      {},
+      { choices: [] },
+      { choices: [{ message: { content: null } }] },
+      { choices: [{ message: {} }] },
+      { choices: "nope" },
+    ];
+    for (const body of malformed) {
+      const stub = metaStub([{ status: 200, body }]);
+      const provider = createMetaProvider({
+        apiKey: API_KEY,
+        baseUrl: BASE_URL,
+        model: MODEL,
+        patternSlugs: SLUGS,
+        fetchImpl: stub.fetchImpl,
+      });
+      await expect(provider.review(DOCUMENT), JSON.stringify(body)).rejects.toThrow();
+    }
+    const badStatus = metaStub([{ status: 500, body: {} }]);
+    const failing = createMetaProvider({
+      apiKey: API_KEY,
+      baseUrl: BASE_URL,
+      model: MODEL,
+      patternSlugs: SLUGS,
+      fetchImpl: badStatus.fetchImpl,
+    });
+    await expect(failing.review(DOCUMENT)).rejects.toThrow("500");
+    const transport = createMetaProvider({
+      apiKey: API_KEY,
+      baseUrl: BASE_URL,
+      model: MODEL,
+      patternSlugs: SLUGS,
+      fetchImpl: (() => Promise.reject(new Error("down"))) as unknown as typeof fetch,
+    });
+    await expect(transport.review(DOCUMENT)).rejects.toThrow();
+    // A missing usage still resolves: the scan logs zeros, never throws.
+    const lines: string[] = [];
+    const noUsage = metaStub([{ status: 200, body: chatBody(VERDICT) }]);
+    const provider = createMetaProvider({
+      apiKey: API_KEY,
+      baseUrl: BASE_URL,
+      model: MODEL,
+      patternSlugs: SLUGS,
+      fetchImpl: noUsage.fetchImpl,
+      log: (line) => {
+        lines.push(line);
+      },
+    });
+    const result = await provider.review(DOCUMENT);
+    expect(result.verdict).toBe("looks-safe");
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("prompt=0");
+  });
+});
+
+describe("prompt hygiene", () => {
+  it("strips the template's leading comments and keeps everything else verbatim", () => {
+    const stripped = stripLeadingComments(REVIEW_PROMPT_V1);
+    expect(stripped.startsWith("<review_prompt")).toBe(true);
+    expect(stripped).toContain("{{PATTERNS}}");
+    expect(stripped).toContain("{{COMMANDS}}");
+    expect(stripped).toContain("{{PROMPTS}}");
+    expect(stripped).toContain("{{ATTENTION}}");
+    expect(stripped).not.toContain("<!--");
+    const plain = "  <review_prompt>{{COMMANDS}}</review_prompt>";
+    expect(stripLeadingComments(plain)).toBe(plain);
+  });
+
+  it("sends no comment to the wire", () => {
+    const prompt = buildReviewPrompt({
+      kind: "graph",
+      owner: "acme",
+      repo: "things",
+      slug: "flow",
+      name: "flow",
+      document: graphDoc("flow", "echo hi") as unknown as JsonValue,
+    }, SLUGS);
+    expect(prompt).toContain("echo hi");
+    expect(prompt).not.toContain("<!--");
+  });
+
+  it("shows the transparency page the same stripped bytes the model saw", async () => {
+    const kv = new FakeKV();
+    const html = await (await call("/transparency", kv)).text();
+    const pre = html.slice(html.indexOf(`<pre class="prompt">`), html.indexOf(`</pre>`));
+    expect(pre).toContain("&lt;review_prompt");
+    expect(pre).toContain("{{COMMANDS}}");
+    expect(pre).not.toContain("<!--");
+    expect(pre).not.toContain("&lt;!--");
+    const twin = await (await call("/transparency", kv, "text/markdown")).text();
+    const fenced = twin.slice(twin.indexOf("```xml"));
+    expect(fenced).toContain("<review_prompt");
+    expect(fenced).not.toContain("<!--");
+  });
+});
+
+describe("the meta wiring", () => {
+  const FULL: Env = {
+    REVIEW_PROVIDER: "meta",
+    REVIEW_MODEL: "Custom-Model-1.0",
+    META_API_KEY: "test-meta-key",
+    META_API_BASE_URL: "https://meta.example/v1/chat/completions",
+  };
+
+  function wiringFetch(): { fetchImpl: typeof fetch; calls: string[] } {
+    const calls: string[] = [];
+    const fetchImpl = (async (input: URL | Request | string) => {
+      calls.push(input instanceof Request ? input.url : String(input));
+      return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    }) as unknown as typeof fetch;
+    return { fetchImpl, calls };
+  }
+
+  it("builds the meta provider case-insensitively with the verbatim model", async () => {
+    for (const name of ["meta", "Meta", "META"]) {
+      const lines: string[] = [];
+      const provider = await reviewProviderFromEnv({ ...FULL, REVIEW_PROVIDER: name }, {
+        log: (line) => {
+          lines.push(line);
+        },
+      });
+      expect(provider, name).not.toBeNull();
+      expect(provider?.model, name).toBe("Custom-Model-1.0");
+      expect(lines, name).toEqual([]);
+    }
+  });
+
+  it("passes effort and budget from the environment into the call", async () => {
+    const seen: string[] = [];
+    const fetchImpl = (async (_input: URL | Request | string, init?: RequestInit) => {
+      seen.push(typeof init?.body === "string" ? init.body : "");
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: JSON.stringify({ verdict: "looks-safe", reasons: "", patterns: [] }) } }],
+        usage: { prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 },
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    }) as unknown as typeof fetch;
+    const provider = await reviewProviderFromEnv({
+      ...FULL,
+      REVIEW_EFFORT: "low",
+      REVIEW_MAX_TOKENS: "1",
+    }, { fetchImpl });
+    expect(provider).not.toBeNull();
+    await provider?.review({
+      kind: "graph",
+      owner: "acme",
+      repo: "things",
+      slug: "flow",
+      name: "flow",
+      document: graphDoc("flow", "echo hi") as unknown as JsonValue,
+    });
+    const body = JSON.parse(seen[0] ?? "{}") as { max_tokens: number; reasoning_effort: string };
+    expect(body.reasoning_effort).toBe("low");
+    expect(body.max_tokens).toBe(META_MIN_MAX_TOKENS);
+  });
+
+  it("stays off silently for off, empty and absent providers", async () => {
+    for (const name of ["off", "OFF", "", undefined]) {
+      const lines: string[] = [];
+      const wired = wiringFetch();
+      const env: Env = name === undefined ? {} : { REVIEW_PROVIDER: name };
+      const provider = await reviewProviderFromEnv(env, {
+        fetchImpl: wired.fetchImpl,
+        log: (line) => {
+          lines.push(line);
+        },
+      });
+      expect(provider, String(name)).toBeNull();
+      expect(lines, String(name)).toEqual([]);
+      expect(wired.calls, String(name)).toEqual([]);
+    }
+  });
+
+  it("fails closed with one log line on an unknown provider", async () => {
+    const lines: string[] = [];
+    const wired = wiringFetch();
+    const provider = await reviewProviderFromEnv({ REVIEW_PROVIDER: "bogus" }, {
+      fetchImpl: wired.fetchImpl,
+      log: (line) => {
+        lines.push(line);
+      },
+    });
+    expect(provider).toBeNull();
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("unknown REVIEW_PROVIDER");
+    expect(wired.calls).toEqual([]);
+  });
+
+  it("refuses the meta scan without its key, endpoint or model", async () => {
+    const cases: Array<[string, Env, string]> = [
+      ["key", { ...FULL, META_API_KEY: "" }, "META_API_KEY"],
+      ["endpoint", { ...FULL, META_API_BASE_URL: "" }, "META_API_BASE_URL"],
+      ["model", { ...FULL, REVIEW_MODEL: "" }, "REVIEW_MODEL"],
+    ];
+    for (const [name, env, missing] of cases) {
+      const lines: string[] = [];
+      const wired = wiringFetch();
+      const provider = await reviewProviderFromEnv(env, {
+        fetchImpl: wired.fetchImpl,
+        log: (line) => {
+          lines.push(line);
+        },
+      });
+      expect(provider, name).toBeNull();
+      expect(lines, name).toHaveLength(1);
+      expect(lines[0], name).toContain(missing);
+      expect(wired.calls, name).toEqual([]);
+    }
   });
 });

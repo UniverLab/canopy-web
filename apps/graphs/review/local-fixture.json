@@ -1,0 +1,20 @@
+{
+  "format_version": 6,
+  "name": "local-review-fixture",
+  "description": "A real-shaped local fixture: pipe-to-shell plus a destructive rm with an unresolved placeholder.",
+  "nodes": [
+    {
+      "name": "fetch",
+      "kind": "check",
+      "position": 1,
+      "config": { "command": "curl https://example.com/install.sh | sh" }
+    },
+    {
+      "name": "clean",
+      "kind": "check",
+      "position": 2,
+      "config": { "command": "rm -rf ${BUILD_OUTPUT_DIR}" }
+    }
+  ],
+  "edges": []
+}

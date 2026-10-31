@@ -20,12 +20,23 @@ routes = [{ pattern = "graphs.univerlab.org", custom_domain = true }]
 # only consumer. The token arrives as a secret (CF_ANALYTICS_TOKEN), the
 # token for GitHub arrives as GITHUB_TOKEN.
 CF_ACCOUNT_ID = "d7b81bdd721f503968523dd903d967be"
-# The index-time model review: "Muse" enables the pass, "off" disables it
-# entirely with indexing unaffected. The model id the badge names and the
+# The index-time model review: "Muse" or "meta" enables the pass, "off"
+# disables it entirely with indexing unaffected, and anything else fails
+# closed (no scan, one log line). The model id the badge names and the
 # per-run scan cap; the Muse key arrives as a secret (CLAUDE_API_KEY).
+# Meta additionally needs META_API_BASE_URL (its chat-completions endpoint,
+# set here with no default anywhere) and REVIEW_MODEL set verbatim, plus
+# its key as a secret (META_API_KEY). Local values live in `.dev.vars`
+# (see `.dev.vars.example`); production keys via `wrangler secret put`.
 REVIEW_PROVIDER = "off"
 REVIEW_MODEL = "claude-haiku-4-5-20251001"
 REVIEW_SCAN_CAP = "5"
+# The meta reasoning effort (minimal|low|medium|high); the Muse provider
+# ignores it. Minimal stays until verdict-quality evidence says otherwise.
+REVIEW_EFFORT = "minimal"
+# The review completion budget, clamped to a floor that survives reasoning
+# and a ceiling that keeps it bounded.
+REVIEW_MAX_TOKENS = "4096"
 
 # Aggregate counting. Analytics Engine is the right store: writes are
 # fire-and-forget (no latency added to the redirect), there is no database to

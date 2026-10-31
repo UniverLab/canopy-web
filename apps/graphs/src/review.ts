@@ -12,9 +12,10 @@
  *
  * The provider interface is `ReviewProvider.review(document)`; the `Muse`
  * implementation lives in review-claude.ts and calls the Muse API with
- * the key from worker secrets. `off` (or no provider) disables the pass
- * entirely: `runReview` with a null provider touches no KV key and the
- * index path is unaffected.
+ * the key from worker secrets, and the `meta` implementation lives in
+ * review-meta.ts and calls the configured chat-completions endpoint.
+ * `off` (or no provider) disables the pass entirely: `runReview` with a
+ * null provider touches no KV key and the index path is unaffected.
  *
  * The pass never blocks index writes: `scheduled()` runs it after the
  * indexer flushed, and every failure — API errors, timeouts, missing
