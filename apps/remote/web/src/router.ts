@@ -7,6 +7,7 @@
 
 import type { CatalogStore } from "./catalog.js";
 import type { JoinedSnapshot } from "./channel.js";
+import { sanitizeRemoteError } from "./errors.js";
 import type { GraphStore } from "./graph-store.js";
 import { parseHostMetrics } from "./metrics.js";
 import type { MetricsStore } from "./metrics-store.js";
@@ -149,7 +150,10 @@ export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
     // host that sends none of them changes nothing.
     const hello = parseHello(frame);
     if (hello !== null) {
-      shelf?.handleHello(hello);
+      // The greeting carries what the host has: features gate the shelf,
+      // the harness list narrows the New dialog to installed harnesses.
+      catalog.setInstalledHarnesses(hello.harnesses);
+      shelf?.handleHello(hello.features);
       return;
     }
     const shelfList = parseShelf(frame);
@@ -191,13 +195,16 @@ export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
     }
     const error = parseError(frame);
     if (error) {
+      // The crossing point to the client: host paths die here, so every
+      // present and future caller — composer, sheets, guests — is covered.
+      const clean = { ...error, message: sanitizeRemoteError(error.code, error.message) };
       // A shelf transfer answers its own req (busy, not_found, …) and
       // must never surface as a composer or dialog error.
-      if (shelf?.handleError(error)) {
+      if (shelf?.handleError(clean)) {
         return;
       }
-      shell.composerError(error.message, error.req);
-      shell.sheetError(error.message, error.req, error.code);
+      shell.composerError(clean.message, clean.req);
+      shell.sheetError(clean.message, clean.req, clean.code);
     }
   }
 

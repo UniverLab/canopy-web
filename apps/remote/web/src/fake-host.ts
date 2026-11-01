@@ -718,8 +718,9 @@ function main(): void {
     shell.showSignIn();
   }
 
-  // The host greets first: hello.features is what turns the shelf UI on.
-  deliver({ t: "hello", features: ["shelf"] });
+  // The host greets first: hello.features is what turns the shelf UI on,
+  // and hello.harnesses is what the New dialog may offer (both installed).
+  deliver({ t: "hello", features: ["shelf"], harnesses: ["muse", "claude"] });
 
   // Playwright picks the opening screen: the sessions home by default,
   // the hosts list for the sign-out walk, the sign-in for the colophon,

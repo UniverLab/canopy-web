@@ -162,7 +162,7 @@ export class NewDialog {
 
   // Keep the harness that still exists, default the rest to the first.
   private defaultsFromCatalog(): void {
-    const clis = this.catalog.clis;
+    const clis = this.catalog.availableClis;
     const cli = clis.find((item) => item.cli === this.form.cli) ?? clis[0] ?? null;
     this.form.cli = cli?.cli ?? "";
     // A harness without yolo support cannot stay checked.
@@ -229,7 +229,7 @@ export class NewDialog {
   }
 
   private agentFields(): string {
-    const clis = this.catalog.clis;
+    const clis = this.catalog.availableClis;
     const supported = this.yoloSupported(this.form.cli);
     return `
         <label>Harness
@@ -268,7 +268,7 @@ export class NewDialog {
   }
 
   private cliOptions(): string {
-    const clis = this.catalog.clis;
+    const clis = this.catalog.availableClis;
     if (clis.length === 0) {
       return `<option value="" selected>No harnesses</option>`;
     }

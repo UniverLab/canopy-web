@@ -263,6 +263,24 @@ describe("NewDialog", () => {
     expect(dialog.isOpen).toBe(true);
   });
 
+  it("dialog_offers_only_installed_harnesses", () => {
+    const offered = () =>
+      [...root.querySelectorAll<HTMLOptionElement>("#new-cli option")].map((option) => option.value);
+    // An old host never names its harnesses: everything the catalog carries.
+    expect(offered()).toEqual(["muse", "claude"]);
+    // Hello names claude only: the picker and the default follow at once.
+    catalog.setInstalledHarnesses(["claude"]);
+    expect(offered()).toEqual(["claude"]);
+    expect(query<HTMLSelectElement>("#new-cli").value).toBe("claude");
+    // A submit now can only name an installed harness: no Create-then-error.
+    query<HTMLInputElement>("#new-directory").value = "/home/u/demo";
+    submit();
+    expect(spawns[0]?.spawn.cli).toBe("claude");
+    // Known-none: the picker says so and offers nothing to spawn.
+    catalog.setInstalledHarnesses([]);
+    expect(query<HTMLOptionElement>("#new-cli option").textContent).toBe("No harnesses");
+  });
+
   it("fills the harness picker when the catalog arrives late", () => {
     catalog.clear();
     expect(query<HTMLOptionElement>("#new-cli option").textContent).toBe("No harnesses");

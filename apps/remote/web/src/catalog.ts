@@ -12,6 +12,7 @@ export function emptyCatalog(): Catalog {
 
 export class CatalogStore {
   private catalog: Catalog = emptyCatalog();
+  private installed: Set<string> | null = null;
   private loaded = false;
   private readonly listeners = new Set<() => void>();
 
@@ -36,8 +37,28 @@ export class CatalogStore {
 
   clear(): void {
     this.catalog = emptyCatalog();
+    this.installed = null;
     this.loaded = false;
     this.notify();
+  }
+
+  /** The hello frame's installed harness ids; null when the host never said (an old host). */
+  setInstalledHarnesses(harnesses: string[] | null): void {
+    this.installed = harnesses === null ? null : new Set(harnesses);
+    this.notify();
+  }
+
+  /**
+   * The harnesses the New dialog may offer: the installed ones once the
+   * host's hello names them, every catalog harness until then. A missing
+   * harness never reaches the Create-then-error path.
+   */
+  get availableClis(): CatalogCli[] {
+    const installed = this.installed;
+    if (installed === null) {
+      return this.catalog.clis;
+    }
+    return this.catalog.clis.filter((item) => installed.has(item.cli));
   }
 
   get isLoaded(): boolean {

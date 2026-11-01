@@ -364,16 +364,29 @@ export interface FilePart {
   last: boolean;
 }
 
+// The host's greeting: the features it speaks, plus the harness ids
+// installed on it. A hello without harnesses (or with a malformed list)
+// says nothing about presence — null, unknown — so the New dialog keeps
+// offering every catalog harness against an old host; an explicit []
+// means the host knows it has none.
+export interface Hello {
+  features: string[];
+  harnesses: string[] | null;
+}
+
 // A hello without features (or with a malformed list) advertises nothing,
 // so it parses to an empty feature set and the shelf stays hidden.
-export function parseHello(frame: unknown): string[] | null {
+export function parseHello(frame: unknown): Hello | null {
   if (frameType(frame) !== "hello" || !isRecord(frame)) {
     return null;
   }
-  if (!Array.isArray(frame.features)) {
-    return [];
-  }
-  return frame.features.filter((feature): feature is string => typeof feature === "string");
+  const features = Array.isArray(frame.features)
+    ? frame.features.filter((feature): feature is string => typeof feature === "string")
+    : [];
+  const harnesses = Array.isArray(frame.harnesses)
+    ? frame.harnesses.filter((harness): harness is string => typeof harness === "string" && harness !== "")
+    : null;
+  return { features, harnesses };
 }
 
 // One shelf entry is dropped when its file_id is missing or empty; the

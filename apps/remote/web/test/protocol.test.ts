@@ -44,6 +44,7 @@ import {
   statusDot,
   workdirBasename,
 } from "../src/protocol.js";
+import { sanitizeRemoteError } from "../src/errors.js";
 
 describe("builders", () => {
   it("builds the exact session frames", () => {
@@ -370,12 +371,51 @@ describe("shelf frames", () => {
   });
 
   it("reads hello features and treats a broken hello as featureless", () => {
-    expect(parseHello({ t: "hello", features: ["shelf"] })).toEqual(["shelf"]);
-    expect(parseHello({ t: "hello", features: [] })).toEqual([]);
-    expect(parseHello({ t: "hello" })).toEqual([]);
-    expect(parseHello({ t: "hello", features: ["shelf", 7] })).toEqual(["shelf"]);
+    expect(parseHello({ t: "hello", features: ["shelf"] })).toEqual({ features: ["shelf"], harnesses: null });
+    expect(parseHello({ t: "hello", features: [] })).toEqual({ features: [], harnesses: null });
+    expect(parseHello({ t: "hello" })).toEqual({ features: [], harnesses: null });
+    expect(parseHello({ t: "hello", features: ["shelf", 7] })).toEqual({
+      features: ["shelf"],
+      harnesses: null,
+    });
     expect(parseHello({ t: "sessions", items: [] })).toBeNull();
     expect(parseHello(null)).toBeNull();
+  });
+
+  it("reads hello harnesses, unknown when absent or malformed", () => {
+    expect(parseHello({ t: "hello", harnesses: ["muse"] })).toEqual({ features: [], harnesses: ["muse"] });
+    expect(parseHello({ t: "hello", harnesses: ["muse", "", 7] })).toEqual({
+      features: [],
+      harnesses: ["muse"],
+    });
+    expect(parseHello({ t: "hello", harnesses: [] })).toEqual({ features: [], harnesses: [] });
+    expect(parseHello({ t: "hello", harnesses: "muse" })).toEqual({ features: [], harnesses: null });
+  });
+
+  it("sanitizes harness failures to a name and a reason, never a path", () => {
+    expect(
+      sanitizeRemoteError(
+        "spawn_failed",
+        'spawn "opencode" failed: No such file or directory (PATH=/usr/local/bin:/usr/bin:/bin)',
+      ),
+    ).toBe('harness "opencode" is not installed on this host');
+    expect(sanitizeRemoteError("spawn_failed", "sh: opencode: command not found")).toBe(
+      'harness "opencode" is not installed on this host',
+    );
+    expect(sanitizeRemoteError("spawn_failed", 'spawn failed: "opencode" not found')).toBe(
+      'harness "opencode" is not installed on this host',
+    );
+    // A quoted name outside a harness/spawn context is not a harness:
+    // skill, preset and file complaints pass through untouched.
+    expect(sanitizeRemoteError("unknown_skill", 'skill "tdd" not found')).toBe('skill "tdd" not found');
+    expect(sanitizeRemoteError("internal", 'file "notes.md" not found')).toBe('file "notes.md" not found');
+    const stripped = sanitizeRemoteError("spawn_failed", "spawn failed: signal in /home/u/demo/run.sh");
+    expect(stripped).not.toContain("/");
+    // A bad directory echoes what the user typed, not the host's disk.
+    expect(sanitizeRemoteError("unknown_project", "unknown workdir: /home/u/nope")).toBe(
+      "unknown workdir: /home/u/nope",
+    );
+    expect(sanitizeRemoteError("delivery_failed", "host is gone")).toBe("host is gone");
   });
 
   it("parses a shelf reply newest first, dropping broken items", () => {

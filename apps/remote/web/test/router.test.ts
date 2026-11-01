@@ -158,6 +158,28 @@ describe("createFrameRouter", () => {
     ]);
   });
 
+  it("spawn_error_hides_paths", () => {
+    const h = setup();
+    h.hostSend({
+      t: "error",
+      req: "r11",
+      code: "spawn_failed",
+      message: 'spawn "opencode" failed: No such file or directory (PATH=/usr/local/bin:/usr/bin:/bin)',
+    });
+    expect(h.sheetErrors).toEqual([
+      { message: 'harness "opencode" is not installed on this host', req: "r11", code: "spawn_failed" },
+    ]);
+    expect(h.errors).toEqual([{ message: 'harness "opencode" is not installed on this host', req: "r11" }]);
+    for (const seen of [...h.errors.map((entry) => entry.message), ...h.sheetErrors.map((entry) => entry.message)]) {
+      expect(seen).toContain("opencode");
+      expect(seen).not.toContain("/");
+      expect(seen).not.toContain("usr/bin");
+    }
+    // A bad directory still echoes what the user typed, paths and all.
+    h.hostSend({ t: "error", req: "r12", code: "unknown_project", message: "unknown workdir: /home/u/nope" });
+    expect(h.sheetErrors[1]?.message).toBe("unknown workdir: /home/u/nope");
+  });
+
   it("routes a denied guest attach to onForbidden, past the composer", () => {
     const denied: (string | null)[] = [];
     const h = setup((id) => denied.push(id));
@@ -198,6 +220,27 @@ describe("createFrameRouter", () => {
     expect(h.spawned).toEqual([{ req: "r2", id: "s9" }]);
     h.hostSend({ t: "composed", req: "r3", text: "# Goal" });
     expect(h.composed).toEqual([{ req: "r3", text: "# Goal" }]);
+  });
+
+  it("routes hello harnesses to the catalog's installed set", () => {
+    const h = setup();
+    h.hostSend({
+      t: "catalog",
+      req: "r1",
+      clis: [
+        { cli: "muse", label: "Muse", models: [] },
+        { cli: "opencode", label: "opencode", models: [] },
+      ],
+      projects: [],
+      presets: [],
+      skills: [],
+    });
+    expect(h.catalog.availableClis.map((cli) => cli.cli)).toEqual(["muse", "opencode"]);
+    h.hostSend({ t: "hello", features: [], harnesses: ["muse"] });
+    expect(h.catalog.availableClis.map((cli) => cli.cli)).toEqual(["muse"]);
+    // An old host says nothing: everything is offered again.
+    h.hostSend({ t: "hello", features: [] });
+    expect(h.catalog.availableClis.map((cli) => cli.cli)).toEqual(["muse", "opencode"]);
   });
 
   it("ignores unknown frames without throwing", () => {
