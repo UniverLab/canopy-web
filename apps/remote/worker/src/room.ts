@@ -12,6 +12,7 @@
  * socket gets a frame budget; what an invited guest may do is the hub's
  * call, from the identity notice.
  */
+import { decodeLabel } from "./codec.js";
 import {
   FRAME_MAX_BYTES,
   MAX_DEVICES,
@@ -207,7 +208,7 @@ export class UserRoom {
     this.nextConn += 1;
     if (role === "host") {
       attachment.host_id = hostId as string;
-      attachment.label = request.headers.get(RELAY_LABEL_HEADER) ?? "";
+      attachment.label = decodeLabel(request.headers.get(RELAY_LABEL_HEADER) ?? "");
     }
     if (role === "guest") {
       attachment.login = login as string;

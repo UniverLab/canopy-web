@@ -84,6 +84,23 @@ export interface CookieOptions {
   sameSite?: "Lax" | "Strict" | "None";
 }
 
+/**
+ * Decode a percent-encoded host label. Labels without `%` pass through
+ * raw, so old hosts that send plain ASCII keep working; malformed
+ * sequences fall back to the raw string instead of throwing. Never
+ * maps `+` to space: the host encodes with encodeURIComponent style.
+ */
+export function decodeLabel(label: string): string {
+  if (!label.includes("%")) {
+    return label;
+  }
+  try {
+    return decodeURIComponent(label);
+  } catch {
+    return label;
+  }
+}
+
 /** Build a Set-Cookie value. Values are the relay's own tokens, never quoted. */
 export function serializeCookie(name: string, value: string, options: CookieOptions): string {
   const parts = [`${name}=${value}`];

@@ -180,6 +180,68 @@ describe("room fetch", () => {
     });
   });
 
+  it("decodes a percent-encoded accented label on ingest", async () => {
+    const { room } = setup();
+    const device = clientOf(room.fetch(upgradeRequest("device")));
+    device.accept();
+    expect(JSON.parse(await nextMessage(device))).toEqual({
+      from: "relay",
+      body: { t: "hosts", items: [] },
+    });
+    const label = "caf\u00e9-\u00f1and\u00fa \u4e2d\u6587";
+    const seen = nextMessage(device);
+    const hostResponse = room.fetch(
+      upgradeRequest("host", { "x-relay-host-id": HOST_ID, "x-relay-label": encodeURIComponent(label) }),
+    );
+    expect(hostResponse.status).toBe(101);
+    expect(JSON.parse(await seen)).toEqual({
+      from: "relay",
+      body: { t: "hosts", items: [{ host_id: HOST_ID, label }] },
+    });
+  });
+
+  it("leaves plain ASCII and plus signs untouched", async () => {
+    for (const label of ["devbox", "devbox+v2", "a+b c"]) {
+      const { room } = setup();
+      const device = clientOf(room.fetch(upgradeRequest("device")));
+      device.accept();
+      expect(JSON.parse(await nextMessage(device))).toEqual({
+        from: "relay",
+        body: { t: "hosts", items: [] },
+      });
+      const seen = nextMessage(device);
+      const hostResponse = room.fetch(
+        upgradeRequest("host", { "x-relay-host-id": HOST_ID, "x-relay-label": label }),
+      );
+      expect(hostResponse.status).toBe(101);
+      expect(JSON.parse(await seen)).toEqual({
+        from: "relay",
+        body: { t: "hosts", items: [{ host_id: HOST_ID, label }] },
+      });
+    }
+  });
+
+  it("falls back to the raw string on malformed sequences without a 400", async () => {
+    for (const raw of ["100%", "bad%2", "%ZZ", "%E0%A4%A", "caf%C3%A9%zz"]) {
+      const { room } = setup();
+      const device = clientOf(room.fetch(upgradeRequest("device")));
+      device.accept();
+      expect(JSON.parse(await nextMessage(device))).toEqual({
+        from: "relay",
+        body: { t: "hosts", items: [] },
+      });
+      const seen = nextMessage(device);
+      const hostResponse = room.fetch(
+        upgradeRequest("host", { "x-relay-host-id": HOST_ID, "x-relay-label": raw }),
+      );
+      expect(hostResponse.status).toBe(101);
+      expect(JSON.parse(await seen)).toEqual({
+        from: "relay",
+        body: { t: "hosts", items: [{ host_id: HOST_ID, label: raw }] },
+      });
+    }
+  });
+
   it("refuses the 9th device with 429 before the upgrade", async () => {
     const { state, room } = setup();
     for (let index = 0; index < 8; index += 1) {
