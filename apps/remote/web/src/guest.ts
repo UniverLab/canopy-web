@@ -564,6 +564,7 @@ export async function mountGuest(root: HTMLElement): Promise<void> {
   let peer: GuestPeer | null = null;
   let relay: RelaySocket | null = null;
   let keepalive: RelayKeepalive | null = null;
+  let revoked = false;
 
   const login = await fetchLogin();
   const link = parseGuestLink(globalThis.location.pathname);
@@ -590,6 +591,21 @@ export async function mountGuest(root: HTMLElement): Promise<void> {
   relay = new RelaySocket(guestRelayUrl(ownerUid));
   keepalive = new RelayKeepalive({ relay });
   keepalive.start();
+  // A 4003 is the relay kicking a guest whose uid left the allowlist: tear
+  // down and land on the terminal screen. The keepalive already stopped
+  // itself on the same close, so this socket never reconnects.
+  relay.onClose((ev) => {
+    if (ev.code !== 4003) {
+      return;
+    }
+    revoked = true;
+    session.detach();
+    peer?.close();
+    peer = null;
+    keepalive?.stop();
+    relay?.close();
+    view.showForbidden("access revoked");
+  });
 
   async function connect(): Promise<void> {
     const socket = relay;
@@ -604,7 +620,10 @@ export async function mountGuest(root: HTMLElement): Promise<void> {
     try {
       await socket.connect();
     } catch {
-      view.setConnectionState("failed: Could not reach the relay");
+      // A kick racing the open already painted the terminal screen above.
+      if (!revoked) {
+        view.setConnectionState("failed: Could not reach the relay");
+      }
       return;
     }
     const next = new GuestPeer({ relay: socket, ownerUid, hostId, device });
@@ -634,8 +653,9 @@ export async function mountGuest(root: HTMLElement): Promise<void> {
       await next.connect();
     } catch (err) {
       // The failed event above already painted the state; only a setup
-      // failure (TURN, offer) with no event reaches here unpainted.
-      if (!failed) {
+      // failure (TURN, offer) with no event reaches here unpainted. A kick
+      // racing the handshake painted the terminal screen instead.
+      if (!failed && !revoked) {
         view.showConnecting();
         view.setConnectionState(`failed: ${err instanceof Error ? err.message : "Connection failed"}`);
       }

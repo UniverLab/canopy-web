@@ -34,7 +34,9 @@ at most, 20 `pair_init` bodies per 10 minutes, and 30 frames per 10
 seconds per socket — past the budget the socket closes with 4009. Guests
 connect only when the host invited their uid (`{"t":"guest_allow",
 "uids":[...]}` over the host-to-room path, empty denies all), one socket
-per guest login.
+per guest login, and a republished list closes every connected guest it
+drops with 4003 (`not_invited`), announced to the hosts as `device_left`.
+A replaced host socket closes with 4000 (`replaced`).
 
 ## What it stores
 

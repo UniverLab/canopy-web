@@ -40,6 +40,7 @@ export class RelayKeepalive {
   private readonly random: () => number;
   private timer: ReturnType<typeof setInterval> | null = null;
   private unsubscribe: (() => void) | null = null;
+  private closeUnsubscribe: (() => void) | null = null;
   private lastFrameAt = 0;
   private lastPingAt = 0;
   private failures = 0;
@@ -65,6 +66,13 @@ export class RelayKeepalive {
       this.failures = 0;
       this.nextAttemptAt = 0;
     });
+    // A 4003 is a terminal kick, not a dead socket: the guest's access was
+    // revoked, so stop instead of reconnecting into another kick.
+    this.closeUnsubscribe = this.relay.onClose((ev) => {
+      if (ev.code === 4003) {
+        this.stop();
+      }
+    });
     this.timer = setInterval(() => this.tick(), TICK_MS);
   }
 
@@ -75,6 +83,8 @@ export class RelayKeepalive {
     }
     this.unsubscribe?.();
     this.unsubscribe = null;
+    this.closeUnsubscribe?.();
+    this.closeUnsubscribe = null;
   }
 
   private tick(): void {

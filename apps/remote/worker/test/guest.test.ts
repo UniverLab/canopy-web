@@ -482,18 +482,39 @@ describe("guest_allow management", () => {
     expect(device.sent).toEqual([]);
   });
 
-  it("replaces the list wholesale; connected guests are never kicked", async () => {
+  it("pruned_guest_kicked_with_4003", async () => {
     const { state, room } = await setup();
     const host = attachFake(state, "host", { host_id: HOST_ID, label: "devbox" });
+    room.webSocketMessage(host, JSON.stringify({ to: "room", body: { t: "guest_allow", uids: [GUEST_UID] } }));
+    const guest = attachFake(state, "guest");
+    const guestConn = connOf(guest);
+    room.webSocketMessage(host, JSON.stringify({ to: "room", body: { t: "guest_allow", uids: [] } }));
+    expect(room.guestAllow).toEqual([]);
+    expect(guest.closed).toEqual([{ code: 4003, reason: "not_invited" }]);
+    expect(state.getWebSockets()).not.toContain(guest);
+    // Mirror the runtime: the closed socket leaves before its close lands,
+    // and the normal close path announces it to the hosts.
+    room.webSocketClose(guest, 4003, "not_invited");
+    expect(host.frames()).toEqual([
+      {
+        from: "relay",
+        body: { t: "device_left", conn: guestConn, role: "guest", login: GUEST_LOGIN, uid: GUEST_UID },
+      },
+    ]);
+  });
+
+  it("listed_guest_survives_republish", async () => {
+    const { state, room } = await setup();
+    const host = attachFake(state, "host", { host_id: HOST_ID, label: "devbox" });
+    const device = attachFake(state, "device");
+    room.webSocketMessage(host, JSON.stringify({ to: "room", body: { t: "guest_allow", uids: [GUEST_UID] } }));
     const guest = attachFake(state, "guest");
     room.webSocketMessage(host, JSON.stringify({ to: "room", body: { t: "guest_allow", uids: [GUEST_UID] } }));
     expect(room.guestAllow).toEqual([GUEST_UID]);
-    expect(room.guestInvites).toEqual([]);
-    room.webSocketMessage(host, JSON.stringify({ to: "room", body: { t: "guest_allow", uids: [] } }));
-    expect(room.guestAllow).toEqual([]);
-    expect(room.guestInvites).toEqual([]);
-    expect(state.getWebSockets()).toContain(guest);
     expect(guest.closed).toEqual([]);
+    expect(device.closed).toEqual([]);
+    expect(state.getWebSockets()).toContain(guest);
+    expect(host.sent).toEqual([]);
   });
 
   it("bounces malformed bodies with bad_frame and keeps the old list", async () => {
@@ -501,6 +522,7 @@ describe("guest_allow management", () => {
     room.guestAllow = [GUEST_UID];
     room.guestInvites = [{ code_hash: INVITE_HASH_A, uid: GUEST_UID, expires: FAR_FUTURE }];
     const host = attachFake(state, "host", { host_id: HOST_ID, label: "devbox" });
+    const guest = attachFake(state, "guest");
     const malformed: unknown[] = [
       { t: "guest_allow" },
       { uids: [GUEST_UID] },
@@ -533,6 +555,9 @@ describe("guest_allow management", () => {
     expect(room.guestInvites).toEqual([{ code_hash: INVITE_HASH_A, uid: GUEST_UID, expires: FAR_FUTURE }]);
     const error = { from: "relay", body: { t: "error", code: "bad_frame" } };
     expect(host.frames()).toEqual(Array(malformed.length).fill(error));
+    // A rejected list is not a new list: nobody is pruned.
+    expect(guest.closed).toEqual([]);
+    expect(state.getWebSockets()).toContain(guest);
   });
 
   it("answers a non-host sender with forbidden", async () => {
@@ -545,6 +570,9 @@ describe("guest_allow management", () => {
     expect(device.frames()).toEqual([{ from: "relay", body: { t: "error", code: "forbidden" } }]);
     expect(guest.frames()).toEqual([{ from: "relay", body: { t: "error", code: "forbidden" } }]);
     expect(room.guestAllow).toEqual([]);
+    // A bounced sender prunes nobody: both sockets stay open.
+    expect(device.closed).toEqual([]);
+    expect(guest.closed).toEqual([]);
   });
 
   it("old_guest_allow_without_invites_tolerated", async () => {

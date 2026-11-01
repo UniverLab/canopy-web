@@ -48,6 +48,7 @@ describe("RelaySocket", () => {
   it("rejects a pre-open close with that code's message and never opens", async () => {
     const cases: Array<[number, string]> = [
       [4000, "Replaced by a newer connection"],
+      [4003, "access revoked"],
       [4008, "Too many devices connected"],
       [4009, "Too many attempts, try again later"],
       [1013, "Relay is busy, try again"],
@@ -85,6 +86,7 @@ describe("RelaySocket", () => {
 describe("relayCloseMessage", () => {
   it("maps each close code to its own message", () => {
     expect(relayCloseMessage(4000)).toBe("Replaced by a newer connection");
+    expect(relayCloseMessage(4003)).toBe("access revoked");
     expect(relayCloseMessage(4008)).toBe("Too many devices connected");
     expect(relayCloseMessage(4009)).toBe("Too many attempts, try again later");
     expect(relayCloseMessage(1013)).toBe("Relay is busy, try again");

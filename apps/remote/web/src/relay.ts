@@ -24,6 +24,9 @@ export function relayCloseMessage(code: number): string {
   if (code === 4000) {
     return "Replaced by a newer connection";
   }
+  if (code === 4003) {
+    return "access revoked";
+  }
   if (code === 4008) {
     return "Too many devices connected";
   }

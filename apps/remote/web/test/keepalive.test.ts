@@ -181,6 +181,30 @@ describe("RelayKeepalive", () => {
     expect(pingsOf(setup)).toHaveLength(1);
     expect(setup.harness.sockets).toHaveLength(1);
   });
+
+  it("stops itself on a 4003 kick instead of reconnecting", async () => {
+    const setup = createSetup();
+    await openRelay(setup);
+    setup.harness.latest().receive("relay", { t: "hosts", items: [] });
+    await setup.advance(20000);
+    expect(pingsOf(setup)).toHaveLength(1);
+    // The relay kicked this guest: no fresh socket, no further pings.
+    setup.harness.latest().close(4003, "not_invited");
+    await setup.advance(60000);
+    expect(setup.harness.sockets).toHaveLength(1);
+    expect(pingsOf(setup)).toHaveLength(1);
+    setup.keepalive.stop();
+  });
+
+  it("still reconnects after a close that is not a kick", async () => {
+    const setup = createSetup();
+    await openRelay(setup);
+    setup.harness.latest().receive("relay", { t: "hosts", items: [] });
+    setup.harness.latest().close(1006, "lost");
+    await setup.advance(5000);
+    expect(setup.harness.sockets).toHaveLength(2);
+    setup.keepalive.stop();
+  });
 });
 
 describe("jitteredBackoffMs", () => {

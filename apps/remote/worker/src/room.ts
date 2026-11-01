@@ -11,9 +11,10 @@
  * never pair, and every one is announced to the hosts — with its GitHub
  * identity — so the hub can authorize it. The relay enforces admission:
  * only guests with a live invite for their uid connect, one socket per
- * guest login, every socket gets a frame budget, and every frame to a host
- * carries the door-attested login/uid; what an invited guest may do is the
- * hub's call, from the injected identity.
+ * guest login, a republished allowlist kicks the guests it drops, every
+ * socket gets a frame budget, and every frame to a host carries the
+ * door-attested login/uid; what an invited guest may do is the hub's
+ * call, from the injected identity.
  */
 import { decodeLabel } from "./codec.js";
 import {
@@ -289,7 +290,7 @@ function identityFrame(kind: "device_identity" | "device_left", attachment: Room
 
 export class UserRoom {
   pairInit: number[] = [];
-  /** Uids the host listed; parsed and stored, no longer consulted. Set via `guest_allow`. */
+  /** Uids the host listed; a republish kicks connected guests past this list. Set via `guest_allow`. */
   guestAllow: number[] = [];
   /** Live invites the host published; a guest needs one bound to its uid. Set via `guest_allow`. */
   guestInvites: GuestInvite[] = [];
@@ -514,8 +515,11 @@ export class UserRoom {
 
   /**
    * A management frame for this room: the host's invite lists replace the
-   * old ones, silently. Anything else bounces; connected guests are never
-   * kicked, so a (re)connected host re-sends its lists every time.
+   * old ones, silently, and every connected guest whose uid left the list
+   * is closed with 4003 (`not_invited`) — the relay's second barrier when
+   * access is revoked. Anything else bounces. The runtime's webSocketClose
+   * announces each kicked guest to the hosts as `device_left`, the normal
+   * close path, so nothing is emitted here.
    */
   private handleRoomFrame(socket: RoomSocket, body: unknown): void {
     if (socket.deserializeAttachment()?.role !== "host") {
@@ -530,6 +534,24 @@ export class UserRoom {
     this.guestAllow = allow.uids;
     this.guestInvites = allow.invites;
     this.save();
+    this.pruneRevokedGuests(allow.uids);
+  }
+
+  /**
+   * Close every connected guest socket whose uid is no longer listed.
+   * O(connected guests) per `guest_allow`, a rare frame; listed guests,
+   * devices and hosts are untouched.
+   */
+  private pruneRevokedGuests(uids: number[]): void {
+    for (const socket of this.state.getWebSockets()) {
+      const attachment = socket.deserializeAttachment();
+      if (attachment?.role !== "guest") {
+        continue;
+      }
+      if (attachment.uid === undefined || !uids.includes(attachment.uid)) {
+        socket.close(4003, "not_invited");
+      }
+    }
   }
 
   /**
