@@ -8,6 +8,7 @@
  * made it. Closing a fake socket drops it from its state, mirroring the
  * runtime, which removes a closed socket before calling webSocketClose.
  */
+import type { RevokedKV } from "../src/auth.js";
 import type { AssetsFetcher } from "../src/index.js";
 import type { RoomAttachment } from "../src/protocol.js";
 import { HOSTS_PROBE_PATH, type AutoResponsePair, type RoomSocket, type RoomState } from "../src/room.js";
@@ -184,6 +185,40 @@ export class FakeTurnNamespace implements RoomNamespace {
         );
       },
     };
+  }
+}
+
+/**
+ * A Map-backed SESSION_REVOKED namespace: jti -> exp, with every `put`
+ * and the TTL it asked for recorded.
+ */
+export class FakeRevokedKV implements RevokedKV {
+  private entries = new Map<string, string>();
+
+  /** Every `put` the code made, with the TTL it asked for. */
+  putOptions: Array<{ key: string; expirationTtl?: number }> = [];
+
+  get(key: string): Promise<string | null> {
+    return Promise.resolve(this.entries.get(key) ?? null);
+  }
+
+  put(
+    key: string,
+    value: string,
+    options?: { expirationTtl?: number },
+  ): Promise<void> {
+    this.entries.set(key, value);
+    this.putOptions.push(
+      options?.expirationTtl === undefined
+        ? { key }
+        : { key, expirationTtl: options.expirationTtl },
+    );
+    return Promise.resolve();
+  }
+
+  /** True when a jti is stored. */
+  has(key: string): boolean {
+    return this.entries.has(key);
   }
 }
 

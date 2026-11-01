@@ -7,7 +7,7 @@
  * TURN API and are never stored.
  */
 import { parseCookies } from "./codec.js";
-import { verifySession } from "./auth.js";
+import { verifySession, type RevokedKV } from "./auth.js";
 import { verifyHostToken } from "./github.js";
 import { HOSTS_PROBE_PATH } from "./room.js";
 import type { RoomNamespace } from "./ws.js";
@@ -21,6 +21,7 @@ export interface TurnEnv {
   TURN_KEY_API_TOKEN?: string;
   USER_ROOM?: RoomNamespace;
   ALLOWED_ORIGINS?: string;
+  SESSION_REVOKED?: RevokedKV;
 }
 
 /** Credential lifetime requested from Cloudflare, in seconds. */
@@ -85,7 +86,12 @@ async function verifiedCaller(
     const cookies = parseCookies(req.headers.get("cookie"));
     const value = cookies[SESSION_COOKIE];
     if (value) {
-      const session = await verifySession(value, sessionSecret, Math.floor(Date.now() / 1000));
+      const session = await verifySession(
+        value,
+        sessionSecret,
+        Math.floor(Date.now() / 1000),
+        env.SESSION_REVOKED,
+      );
       if (session !== null) {
         return { uid: session.uid, via: "session" };
       }

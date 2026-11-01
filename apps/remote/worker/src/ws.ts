@@ -8,7 +8,7 @@
  * headers set here; what an invited guest may do is the hub's call.
  */
 import { parseCookies } from "./codec.js";
-import { verifySession } from "./auth.js";
+import { verifySession, type RevokedKV } from "./auth.js";
 import { verifyHostToken } from "./github.js";
 import { isOriginAllowed, parseAllowedOrigins } from "./origin.js";
 import {
@@ -37,6 +37,7 @@ export interface WsEnv {
   USER_ROOM: RoomNamespace;
   SESSION_SECRET?: string;
   ALLOWED_ORIGINS?: string;
+  SESSION_REVOKED?: RevokedKV;
 }
 
 const BEARER_PATTERN = /^Bearer (.+)$/;
@@ -103,7 +104,12 @@ export async function handleDeviceWs(req: Request, env: WsEnv): Promise<Response
   if (!value) {
     return json({ error: "unauthorized" }, 401);
   }
-  const session = await verifySession(value, sessionSecret, Math.floor(Date.now() / 1000));
+  const session = await verifySession(
+    value,
+    sessionSecret,
+    Math.floor(Date.now() / 1000),
+    env.SESSION_REVOKED,
+  );
   if (session === null) {
     return json({ error: "unauthorized" }, 401);
   }

@@ -39,6 +39,14 @@ binding = "ASSETS"
 # asked, and only the Worker adds either. The bytes stay the asset's.
 run_worker_first = ["/", "/auth/*", "/ws/*", "/turn", "/.well-known/*"]
 
+# The session revocation set: logout writes the session's jti here (jti ->
+# exp, TTL 43200 like the session itself) and verification refuses revoked
+# jtis. Create once with `wrangler kv namespace create SESSION_REVOKED`
+# and put the returned id below; until then logout only clears the cookie.
+[[kv_namespaces]]
+binding = "SESSION_REVOKED"
+id = "REPLACE_WITH_SESSION_REVOKED_KV_ID"
+
 # One room per GitHub user id. The room uses the WebSocket hibernation API
 # with per-socket attachments only — it never touches the storage API.
 [[durable_objects.bindings]]

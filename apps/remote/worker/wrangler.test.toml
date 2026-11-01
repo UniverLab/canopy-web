@@ -6,6 +6,12 @@ name = "canopy-remote"
 main = "src/index.ts"
 compatibility_date = "2026-10-26"
 
+# The revocation set, in memory like the graphs test namespaces: the unit
+# tests inject their own fake instead, so this binding is never read.
+[[kv_namespaces]]
+binding = "SESSION_REVOKED"
+id = "test-revoked"
+
 [[durable_objects.bindings]]
 name = "USER_ROOM"
 class_name = "UserRoom"

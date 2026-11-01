@@ -9,7 +9,8 @@ import {
   verifySession,
   type AuthEnv,
 } from "../src/auth.js";
-import { fakeFetch } from "./fakes.js";
+import { b64urlDecode, b64urlEncode } from "../src/codec.js";
+import { FakeRevokedKV, fakeFetch } from "./fakes.js";
 
 const ORIGIN = "https://remote.univerlab.org";
 const SECRET = "test-session-secret-that-is-long-enough";
@@ -193,12 +194,117 @@ describe("GET /auth/callback", () => {
 });
 
 describe("POST /auth/logout", () => {
-  it("clears the session cookie", () => {
-    const response = handleLogout(request("/auth/logout", "cr_session=whatever"), env);
+  it("clears the session cookie", async () => {
+    const response = await handleLogout(request("/auth/logout", "cr_session=whatever"), env);
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("/");
     expect(setCookie(response, "cr_session")).toBe("");
     expect(hasAttribute(response, "cr_session", "Max-Age=0")).toBe(true);
+  });
+});
+
+/** The decoded payload of a session cookie. */
+function payloadOf(value: string): Record<string, unknown> {
+  const payload = value.split(".")[0] as string;
+  const bytes = b64urlDecode(payload);
+  if (bytes === null) {
+    throw new Error("undecodable test payload");
+  }
+  return JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>;
+}
+
+/** A pre-jti session: {uid, login, exp} signed the same way signSession signs. */
+async function signLegacy(uid: number, login: string, secret: string, nowSec: number): Promise<string> {
+  const payload = b64urlEncode(
+    new TextEncoder().encode(JSON.stringify({ uid, login, exp: nowSec + 43200 })),
+  );
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload));
+  return `${payload}.${b64urlEncode(new Uint8Array(signature))}`;
+}
+
+describe("session revocation", () => {
+  it("mints a distinct 128-bit jti per session", async () => {
+    const first = payloadOf(await signSession(123, "octo", SECRET, NOW));
+    const second = payloadOf(await signSession(123, "octo", SECRET, NOW));
+    expect(typeof first["jti"]).toBe("string");
+    expect(typeof second["jti"]).toBe("string");
+    expect(first["jti"]).not.toBe(second["jti"]);
+    for (const jti of [first["jti"], second["jti"]] as string[]) {
+      const bytes = b64urlDecode(jti);
+      expect(bytes?.length).toBe(16);
+    }
+  });
+
+  it("logout makes verify fail", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const revoked = new FakeRevokedKV();
+    const value = await signSession(123, "octo", SECRET, now);
+    const response = await handleLogout(request("/auth/logout", `cr_session=${value}`), {
+      ...env,
+      SESSION_REVOKED: revoked,
+    });
+    expect(response.status).toBe(303);
+    expect(await verifySession(value, SECRET, now + 60, revoked)).toBeNull();
+    // The signature still checks out: revocation, not expiry, refuses it.
+    expect(await verifySession(value, SECRET, now + 60)).toEqual({ uid: 123, login: "octo" });
+  });
+
+  it("logout writes jti -> exp with the session TTL", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const revoked = new FakeRevokedKV();
+    const value = await signSession(123, "octo", SECRET, now);
+    await handleLogout(request("/auth/logout", `cr_session=${value}`), {
+      ...env,
+      SESSION_REVOKED: revoked,
+    });
+    const payload = payloadOf(value);
+    expect(revoked.putOptions).toEqual([{ key: payload["jti"], expirationTtl: 43200 }]);
+    expect(await revoked.get(payload["jti"] as string)).toBe(String(payload["exp"]));
+  });
+
+  it("an unknown jti passes", async () => {
+    const value = await signSession(123, "octo", SECRET, NOW);
+    expect(await verifySession(value, SECRET, NOW + 60, new FakeRevokedKV())).toEqual({
+      uid: 123,
+      login: "octo",
+    });
+  });
+
+  it("expired revocation entries are ignored", async () => {
+    const revoked = new FakeRevokedKV();
+    const value = await signSession(123, "octo", SECRET, NOW);
+    const jti = payloadOf(value)["jti"] as string;
+    await revoked.put(jti, String(NOW), { expirationTtl: 43200 });
+    expect(await verifySession(value, SECRET, NOW + 60, revoked)).toEqual({
+      uid: 123,
+      login: "octo",
+    });
+  });
+
+  it("sessions minted before jti validate until natural expiry", async () => {
+    const revoked = new FakeRevokedKV();
+    const value = await signLegacy(123, "octo", SECRET, NOW);
+    expect(payloadOf(value)["jti"]).toBeUndefined();
+    expect(await verifySession(value, SECRET, NOW + 60, revoked)).toEqual({
+      uid: 123,
+      login: "octo",
+    });
+    expect(await verifySession(value, SECRET, NOW + 43201, revoked)).toBeNull();
+  });
+
+  it("logout without the binding still clears the cookie", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const value = await signSession(123, "octo", SECRET, now);
+    const response = await handleLogout(request("/auth/logout", `cr_session=${value}`), env);
+    expect(response.status).toBe(303);
+    expect(setCookie(response, "cr_session")).toBe("");
   });
 });
 

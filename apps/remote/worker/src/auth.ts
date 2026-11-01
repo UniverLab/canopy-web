@@ -2,12 +2,25 @@
 /**
  * GitHub OAuth for browsers: login redirect, code exchange, signed session.
  * The GitHub token is discarded after `/user`; the browser keeps only the
- * `cr_session` cookie, an HMAC-signed {uid, login, exp}.
+ * `cr_session` cookie, an HMAC-signed {uid, login, exp, jti}.
  */
 import { b64urlDecode, b64urlEncode, parseCookies, serializeCookie, timingSafeEqual } from "./codec.js";
 import { SESSION_COOKIE, STATE_COOKIE, applySecurityHeaders } from "./protocol.js";
 import { exchangeCode, fetchUser } from "./github.js";
 import { isOriginAllowed, parseAllowedOrigins } from "./origin.js";
+
+/**
+ * The smallest KV surface session revocation needs. The production
+ * SESSION_REVOKED binding satisfies it, and the tests inject a fake.
+ */
+export interface RevokedKV {
+  get(key: string): Promise<string | null>;
+  put(
+    key: string,
+    value: string,
+    options?: { expirationTtl?: number },
+  ): Promise<void>;
+}
 
 /** The secrets the auth routes need; absent means 500, never a guess. */
 export interface AuthEnv {
@@ -15,6 +28,7 @@ export interface AuthEnv {
   GITHUB_CLIENT_SECRET?: string;
   SESSION_SECRET?: string;
   ALLOWED_ORIGINS?: string;
+  SESSION_REVOKED?: RevokedKV;
 }
 
 export interface Session {
@@ -23,7 +37,7 @@ export interface Session {
 }
 
 /** Session lifetime: 12 hours, in seconds. */
-const SESSION_TTL_S = 43200;
+export const SESSION_TTL_S = 43200;
 
 /** OAuth state lifetime: 10 minutes, in seconds. */
 const STATE_TTL_S = 600;
@@ -40,7 +54,14 @@ async function hmacSha256(secret: string, message: string): Promise<Uint8Array> 
   return new Uint8Array(signature);
 }
 
-/** Sign {uid, login, exp} with SESSION_SECRET. `nowSec` is unix seconds. */
+/** A fresh session id: 16 random bytes (128 bits), base64url. */
+export function newJti(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return b64urlEncode(bytes);
+}
+
+/** Sign {uid, login, exp, jti} with SESSION_SECRET. `nowSec` is unix seconds. */
 export async function signSession(
   uid: number,
   login: string,
@@ -48,18 +69,28 @@ export async function signSession(
   nowSec: number,
 ): Promise<string> {
   const payload = b64urlEncode(
-    new TextEncoder().encode(JSON.stringify({ uid, login, exp: nowSec + SESSION_TTL_S })),
+    new TextEncoder().encode(
+      JSON.stringify({ uid, login, exp: nowSec + SESSION_TTL_S, jti: newJti() }),
+    ),
   );
   const signature = b64urlEncode(await hmacSha256(secret, payload));
   return `${payload}.${signature}`;
 }
 
-/** Verify a session cookie, or null when it is forged, expired or malformed. */
-export async function verifySession(
+/** A session whose signature and expiry checked out, before the revocation consult. */
+interface VerifiedPayload {
+  uid: number;
+  login: string;
+  exp: number;
+  jti: unknown;
+}
+
+/** Check the signature and the shape; null when forged, expired or malformed. */
+async function verifySignature(
   value: string,
   secret: string,
   nowSec: number,
-): Promise<Session | null> {
+): Promise<VerifiedPayload | null> {
   const parts = value.split(".");
   if (parts.length !== 2) {
     return null;
@@ -83,7 +114,7 @@ export async function verifySession(
   if (typeof parsed !== "object" || parsed === null) {
     return null;
   }
-  const { uid, login, exp } = parsed as Record<string, unknown>;
+  const { uid, login, exp, jti } = parsed as Record<string, unknown>;
   if (typeof uid !== "number" || !Number.isInteger(uid)) {
     return null;
   }
@@ -93,7 +124,50 @@ export async function verifySession(
   if (typeof exp !== "number" || !(exp > nowSec)) {
     return null;
   }
-  return { uid, login };
+  return { uid, login, exp, jti };
+}
+
+/**
+ * Verify a session cookie, or null when it is forged, expired, malformed
+ * or revoked. Sessions minted before jti existed carry no jti and validate
+ * until natural expiry; a revoked jti fails only while its entry's exp is
+ * still in the future, so expired entries are ignored. Without the revoked
+ * set (or when it errors) the consult is skipped: an outage must not lock
+ * every session out.
+ */
+export async function verifySession(
+  value: string,
+  secret: string,
+  nowSec: number,
+  revoked?: RevokedKV,
+): Promise<Session | null> {
+  const payload = await verifySignature(value, secret, nowSec);
+  if (payload === null) {
+    return null;
+  }
+  if (payload.jti === undefined) {
+    return { uid: payload.uid, login: payload.login };
+  }
+  if (typeof payload.jti !== "string" || payload.jti === "") {
+    return null;
+  }
+  if (revoked === undefined) {
+    return { uid: payload.uid, login: payload.login };
+  }
+  let entry: string | null;
+  try {
+    entry = await revoked.get(payload.jti);
+  } catch {
+    return { uid: payload.uid, login: payload.login };
+  }
+  if (entry === null) {
+    return { uid: payload.uid, login: payload.login };
+  }
+  const entryExp = Number(entry);
+  if (!Number.isFinite(entryExp) || entryExp <= nowSec) {
+    return { uid: payload.uid, login: payload.login };
+  }
+  return null;
 }
 
 /** Fresh OAuth state: 32 random bytes, base64url. */
@@ -209,10 +283,29 @@ export async function handleCallback(
   return new Response(null, { status: 302, headers });
 }
 
-/** Clear the session cookie. A foreign Origin is denied without clearing. */
-export function handleLogout(req: Request, env: AuthEnv): Response {
+/**
+ * Revoke the session cookie and clear it. A foreign Origin is denied
+ * without clearing or revoking. The revocation is best effort: a missing
+ * binding, an unverifiable cookie or a KV failure still clears the cookie.
+ */
+export async function handleLogout(req: Request, env: AuthEnv): Promise<Response> {
   if (!isOriginAllowed(req.headers.get("origin"), parseAllowedOrigins(env.ALLOWED_ORIGINS))) {
     return json({ error: "forbidden_origin" }, 403);
+  }
+  const revoked = env.SESSION_REVOKED;
+  const sessionSecret = env.SESSION_SECRET;
+  if (revoked !== undefined && sessionSecret) {
+    const value = parseCookies(req.headers.get("cookie"))[SESSION_COOKIE];
+    if (value) {
+      const payload = await verifySignature(value, sessionSecret, Math.floor(Date.now() / 1000));
+      if (payload !== null && typeof payload.jti === "string" && payload.jti !== "") {
+        try {
+          await revoked.put(payload.jti, String(payload.exp), { expirationTtl: SESSION_TTL_S });
+        } catch {
+          // The cookie is still cleared below: logout never fails on KV.
+        }
+      }
+    }
   }
   const headers = applySecurityHeaders(new Headers({ location: "/" }));
   headers.append(
@@ -239,7 +332,12 @@ export async function handleMe(req: Request, env: AuthEnv): Promise<Response> {
   if (!value) {
     return json({ error: "unauthorized" }, 401);
   }
-  const session = await verifySession(value, sessionSecret, Math.floor(Date.now() / 1000));
+  const session = await verifySession(
+    value,
+    sessionSecret,
+    Math.floor(Date.now() / 1000),
+    env.SESSION_REVOKED,
+  );
   if (session === null) {
     return json({ error: "unauthorized" }, 401);
   }

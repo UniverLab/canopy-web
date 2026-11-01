@@ -148,7 +148,7 @@ async function dispatch(pathname: string, req: Request, env: Env): Promise<Respo
       case "/auth/callback":
         return await handleCallback(req, env);
       case "/auth/logout":
-        return handleLogout(req, env);
+        return await handleLogout(req, env);
       case "/auth/me":
         return await handleMe(req, env);
       case "/ws/device":

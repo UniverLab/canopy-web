@@ -193,15 +193,15 @@ describe("GET /ws/device", () => {
 });
 
 describe("POST /auth/logout", () => {
-  it("clears the session for the production origin", () => {
-    const response = handleLogout(logoutRequest(PROD), logoutEnv());
+  it("clears the session for the production origin", async () => {
+    const response = await handleLogout(logoutRequest(PROD), logoutEnv());
     expect(response.status).toBe(303);
     expect(response.headers.getSetCookie().some((header) => header.startsWith("cr_session="))).toBe(true);
   });
 
-  it("denies an evil or sibling origin with 403 and clears nothing", () => {
+  it("denies an evil or sibling origin with 403 and clears nothing", async () => {
     for (const origin of [EVIL, SIBLING]) {
-      const response = handleLogout(logoutRequest(origin), logoutEnv());
+      const response = await handleLogout(logoutRequest(origin), logoutEnv());
       expect(response.status).toBe(403);
       expect(response.headers.getSetCookie()).toEqual([]);
       expect(response.headers.get("location")).toBeNull();
@@ -209,17 +209,17 @@ describe("POST /auth/logout", () => {
   });
 
   it("denies a missing Origin with 403 and clears nothing", async () => {
-    const response = handleLogout(logoutRequest(null), logoutEnv());
+    const response = await handleLogout(logoutRequest(null), logoutEnv());
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({ error: "forbidden_origin" });
     expect(response.headers.getSetCookie()).toEqual([]);
   });
 
-  it("honors an env override: the listed origin passes, production does not", () => {
+  it("honors an env override: the listed origin passes, production does not", async () => {
     const override = "https://preview.example, https://else.example";
-    expect(handleLogout(logoutRequest("https://preview.example"), logoutEnv(override)).status).toBe(303);
-    expect(handleLogout(logoutRequest("https://else.example"), logoutEnv(override)).status).toBe(303);
-    const denied = handleLogout(logoutRequest(PROD), logoutEnv(override));
+    expect((await handleLogout(logoutRequest("https://preview.example"), logoutEnv(override))).status).toBe(303);
+    expect((await handleLogout(logoutRequest("https://else.example"), logoutEnv(override))).status).toBe(303);
+    const denied = await handleLogout(logoutRequest(PROD), logoutEnv(override));
     expect(denied.status).toBe(403);
     expect(denied.headers.getSetCookie()).toEqual([]);
   });
