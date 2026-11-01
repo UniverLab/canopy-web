@@ -4,8 +4,8 @@
  * community content on graphs.univerlab.org) rides the victim's Lax
  * session cookie, so /ws/device, /turn and POST /auth/logout accept only
  * Origins in ALLOWED_ORIGINS — default exactly the production origin.
- * /turn alone lets a missing Origin through, and only with a verified
- * host credential, whose HTTP client sends none.
+ * /turn alone lets a missing Origin through: a verified host credential,
+ * whose HTTP client sends none, or a proven same-origin browser fetch.
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { handleLogout, signSession, type AuthEnv } from "../src/auth.js";

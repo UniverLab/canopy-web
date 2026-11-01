@@ -20,7 +20,12 @@ function turnEnv(rooms: FakeTurnNamespace): TurnEnv {
 
 const UPSTREAM = { iceServers: [{ urls: "turn:turn.example:3478", username: "user", credential: "pass" }] };
 
-function request(cookie?: string, token?: string, origin: string | null = ORIGIN): Request {
+function request(
+  cookie?: string,
+  token?: string,
+  origin: string | null = ORIGIN,
+  extra: Record<string, string> = {},
+): Request {
   const headers = new Headers();
   if (cookie !== undefined) {
     headers.set("cookie", cookie);
@@ -30,6 +35,9 @@ function request(cookie?: string, token?: string, origin: string | null = ORIGIN
   }
   if (origin !== null) {
     headers.set("origin", origin);
+  }
+  for (const [name, value] of Object.entries(extra)) {
+    headers.set(name, value);
   }
   return new Request(new URL("/turn", ORIGIN), { headers });
 }
@@ -190,5 +198,68 @@ describe("GET /turn", () => {
     expect(await response.json()).toEqual({ error: "unauthorized" });
     expect(fake.calls).toEqual([]);
     expect(rooms.names).toEqual([]);
+  });
+
+  it("turn_accepts_same_origin_get_without_origin", async () => {
+    const rooms = new FakeTurnNamespace(true);
+    const fake = fakeFetch([{ url: "credentials/generate-ice-servers", status: 200, body: UPSTREAM }]);
+    const session = await signSession(123, "octo", SECRET, Math.floor(Date.now() / 1000));
+    const response = await handleTurn(
+      request(`cr_session=${session}`, undefined, null, { "sec-fetch-site": "same-origin" }),
+      turnEnv(rooms),
+      fake.fetchImpl,
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      iceServers: [...UPSTREAM.iceServers, { urls: "stun:stun.cloudflare.com:3478" }],
+    });
+    expect(rooms.names).toEqual(["123"]);
+  });
+
+  it("turn_rejects_missing_origin_without_fetch_metadata", async () => {
+    const rooms = new FakeTurnNamespace(true);
+    const fake = fakeFetch([{ url: "credentials/generate-ice-servers", status: 200, body: UPSTREAM }]);
+    const session = await signSession(123, "octo", SECRET, Math.floor(Date.now() / 1000));
+    const response = await handleTurn(
+      request(`cr_session=${session}`, undefined, null),
+      turnEnv(rooms),
+      fake.fetchImpl,
+    );
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "forbidden_origin" });
+    expect(fake.calls).toEqual([]);
+    expect(rooms.names).toEqual([]);
+  });
+
+  it("turn_rejects_cross_site_without_origin", async () => {
+    const rooms = new FakeTurnNamespace(true);
+    const fake = fakeFetch([{ url: "credentials/generate-ice-servers", status: 200, body: UPSTREAM }]);
+    const session = await signSession(123, "octo", SECRET, Math.floor(Date.now() / 1000));
+    const response = await handleTurn(
+      request(`cr_session=${session}`, undefined, null, { "sec-fetch-site": "cross-site" }),
+      turnEnv(rooms),
+      fake.fetchImpl,
+    );
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "forbidden_origin" });
+    expect(fake.calls).toEqual([]);
+    expect(rooms.names).toEqual([]);
+  });
+
+  it("turn_keeps_bearer_without_origin", async () => {
+    const rooms = new FakeTurnNamespace(true);
+    const fake = fakeFetch([
+      { url: "credentials/generate-ice-servers", status: 200, body: UPSTREAM },
+      { url: "api.github.com/user", status: 200, body: { id: 456, login: "host-user" } },
+    ]);
+    const response = await handleTurn(
+      request(undefined, "gho_valid", null),
+      turnEnv(rooms),
+      fake.fetchImpl,
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      iceServers: [...UPSTREAM.iceServers, { urls: "stun:stun.cloudflare.com:3478" }],
+    });
   });
 });

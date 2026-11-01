@@ -50,7 +50,7 @@ function json(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), { status, headers });
 }
 
-/** A verified caller, keyed by the uid the quota counts. `via` decides the missing-Origin bypass. */
+/** A verified caller, keyed by the uid the quota counts. `via` decides the bearer half of the missing-Origin bypass. */
 interface TurnCaller {
   uid: number;
   via: "session" | "bearer";
@@ -74,7 +74,7 @@ async function roomHasHost(uid: number, rooms: RoomNamespace): Promise<boolean> 
 /**
  * Either a valid session cookie or a verified host token names a caller.
  * Null means no valid credential. The session wins when both verify: a
- * browser carrying both is still a browser, and must send an Origin.
+ * browser carrying both is still a browser, and must prove its origin.
  */
 async function verifiedCaller(
   req: Request,
@@ -143,7 +143,16 @@ export async function handleTurn(
     return json({ error: "unauthorized" }, 401);
   }
   const origin = req.headers.get("origin");
-  if (origin === null ? caller.via !== "bearer" : !isOriginAllowed(origin, parseAllowedOrigins(env.ALLOWED_ORIGINS))) {
+  // Browsers never send Origin on a same-origin GET, so a missing Origin
+  // with Sec-Fetch-Site: same-origin is the browser itself — a forbidden
+  // header a web attacker cannot spoof. Anything else without an Origin
+  // stays rejected, verified host credentials excepted.
+  const sameOriginFetch = req.headers.get("sec-fetch-site") === "same-origin";
+  if (
+    origin === null
+      ? caller.via !== "bearer" && !sameOriginFetch
+      : !isOriginAllowed(origin, parseAllowedOrigins(env.ALLOWED_ORIGINS))
+  ) {
     return json({ error: "forbidden_origin" }, 403);
   }
   const rooms = env.USER_ROOM;
