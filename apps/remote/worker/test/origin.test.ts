@@ -136,6 +136,7 @@ describe("the allowlist itself", () => {
     const allowed = parseAllowedOrigins(undefined);
     expect(isOriginAllowed(PROD, allowed)).toBe(true);
     expect(isOriginAllowed(null, allowed)).toBe(false);
+    expect(isOriginAllowed("", allowed)).toBe(false);
     expect(isOriginAllowed(EVIL, allowed)).toBe(false);
     expect(isOriginAllowed(SIBLING, allowed)).toBe(false);
     expect(isOriginAllowed(`${PROD}.evil.example`, allowed)).toBe(false);
@@ -270,6 +271,20 @@ describe("GET /turn", () => {
     const fake = githubStub();
     const response = await handleTurn(
       turnRequest({ cookie: await sessionCookie() }),
+      turnEnv(rooms),
+      fake.fetchImpl,
+    );
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "forbidden_origin" });
+    expect(fake.calls).toEqual([]);
+    expect(rooms.probed).toEqual([]);
+  });
+
+  it("denies a missing Origin when a session verifies, even with a host credential", async () => {
+    const rooms = new FakeTurnNamespace(true);
+    const fake = githubStub();
+    const response = await handleTurn(
+      turnRequest({ cookie: await sessionCookie(), token: "gho_valid" }),
       turnEnv(rooms),
       fake.fetchImpl,
     );
