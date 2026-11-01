@@ -25,6 +25,11 @@ jobs:
       - run: npm ci
       # The Worker serves the browser app from apps/remote/web/dist via the
       # [assets] binding, so the web build must exist before wrangler deploy.
+      # The pages link the shared look kit, which `npm run build:look` copies
+      # into apps/remote/web/public/look: the kit must exist before the web
+      # build runs. Same generator both apps use for the look kit, one source
+      # of truth.
+      - run: npm run build:look
       - run: npm run build:remote-web
       - name: Deploy with Wrangler
         uses: cloudflare/wrangler-action@v3
