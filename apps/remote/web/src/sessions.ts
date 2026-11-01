@@ -7,6 +7,7 @@
 import { formatLastOutput, statusDot, workdirBasename } from "./protocol.js";
 import type { SessionItem } from "./protocol.js";
 import { icon } from "./icons-dom.js";
+import { sessionTitle } from "./titles.js";
 
 export class SessionStore {
   private readonly items = new Map<string, SessionItem>();
@@ -71,6 +72,46 @@ export class SessionStore {
   get size(): number {
     return this.items.size;
   }
+}
+
+// The name the session view opens with: the store's row when it is there
+// (exactly what the list renders), else the spawn's requested name while
+// session_added is still in flight, else the id. The spawned frame lands
+// before session_added, so the store is empty at creation time.
+export function openSessionName(id: string, store: SessionStore, spawnName?: string | null): string {
+  const item = store.get(id);
+  if (item) {
+    return item.name || item.id;
+  }
+  if (spawnName !== undefined && spawnName !== null && spawnName !== "") {
+    return spawnName;
+  }
+  return id;
+}
+
+// The late session_added converges the open view in place: the store row
+// wins, the title and header patch without a full render (which would drop
+// the terminal and the composer's draft). Returns the name to keep.
+export function convergeOpenSessionName(
+  root: HTMLElement,
+  store: SessionStore,
+  sessionId: string,
+  current: string,
+): string {
+  const item = store.get(sessionId);
+  if (!item) {
+    return current;
+  }
+  const next = item.name || item.id;
+  if (next === current) {
+    return current;
+  }
+  document.title = sessionTitle(next);
+  const title = root.querySelector(".session-title");
+  if (title) {
+    title.textContent = next;
+  }
+  return next;
 }
 
 export interface SessionListCallbacks {

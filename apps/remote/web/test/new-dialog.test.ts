@@ -211,7 +211,7 @@ describe("NewDialog", () => {
     submit();
     expect(readLastDir("h1")).toBe("/home/u/demo");
     expect(readRecentDirs()).toEqual(["/home/u/demo"]);
-    expect(dialog.handleSpawned(spawns[0]?.req ?? "")).toBe(true);
+    expect(dialog.handleSpawned(spawns[0]?.req ?? "")).toBe("");
     dialog.open(root);
     expect(query<HTMLInputElement>("#new-directory").value).toBe("/home/u/demo");
     // Other hosts start empty: memory is per host.
@@ -225,9 +225,9 @@ describe("NewDialog", () => {
     query<HTMLInputElement>("#new-directory").value = "/home/u/demo";
     submit();
     const req = spawns[0]?.req ?? "";
-    expect(dialog.handleSpawned("other")).toBe(false);
+    expect(dialog.handleSpawned("other")).toBeNull();
     expect(dialog.isOpen).toBe(true);
-    expect(dialog.handleSpawned(req)).toBe(true);
+    expect(dialog.handleSpawned(req)).toBe("");
     expect(dialog.isOpen).toBe(false);
     expect(root.querySelector(".sheet-overlay")).toBeNull();
   });

@@ -17,7 +17,7 @@ import type { GraphState, GraphSummary, NodeStatus, PromptDraft, SessionItem, Sh
 import { createFrameRouter } from "./router.js";
 import { SessionController } from "./session.js";
 import { ShelfController } from "./shelf-controller.js";
-import { SessionStore } from "./sessions.js";
+import { openSessionName, SessionStore } from "./sessions.js";
 import { hostShelfImage, pushedShelfImage, smokeShelfImages } from "../test/fixtures/shelf-images.js";
 import type { ShelfImage } from "../test/fixtures/shelf-images.js";
 import "./styles.css";
@@ -637,8 +637,8 @@ function main(): void {
       onDisconnect: () => {},
       onRetry: () => {},
       onPairAgain: () => {},
-      onOpenSession: (id) => {
-        shell.showSession(id, store.get(id)?.name ?? id);
+      onOpenSession: (id, spawnName) => {
+        shell.showSession(id, openSessionName(id, store, spawnName));
         controller.open(id);
       },
       onLeaveSession: () => {

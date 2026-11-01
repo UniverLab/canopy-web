@@ -56,6 +56,7 @@ export class NewDialog {
   private hostId: string;
   private form: NewForm = { ...EMPTY_FORM };
   private pending: string | null = null;
+  private pendingName: string | null = null;
   private unsubscribe: (() => void) | null = null;
   private body: HTMLElement | null = null;
   private error: string | null = null;
@@ -96,6 +97,7 @@ export class NewDialog {
     this.error = null;
     this.directoryError = null;
     this.pending = null;
+    this.pendingName = null;
     // Every open starts an agent with yolo off; the directory keeps a
     // cancelled draft, or the last directory used on this host.
     this.form.kind = "agent";
@@ -116,6 +118,7 @@ export class NewDialog {
 
   close(): void {
     this.pending = null;
+    this.pendingName = null;
     this.error = null;
     this.directoryError = null;
     this.unsubscribe?.();
@@ -124,14 +127,16 @@ export class NewDialog {
     this.sheet.close();
   }
 
-  handleSpawned(req: string): boolean {
+  handleSpawned(req: string): string | null {
     if (this.pending === null || this.pending !== req) {
-      return false;
+      return null;
     }
+    const name = this.pendingName ?? "";
     this.pending = null;
+    this.pendingName = null;
     this.form = { ...EMPTY_FORM };
     this.close();
-    return true;
+    return name;
   }
 
   handleError(message: string, req: string | null, code: string): boolean {
@@ -142,6 +147,7 @@ export class NewDialog {
       return false;
     }
     this.pending = null;
+    this.pendingName = null;
     // The host validates the path: workdir complaints land beside the
     // directory field, everything else above the actions. Either way the
     // host's own message shows and the dialog stays open.
@@ -399,8 +405,10 @@ export class NewDialog {
     pushRecentDir(workdir);
     const req = newReqId();
     this.pending = req;
+    this.pendingName = spawn.name ?? "";
     if (!this.callbacks.onSpawn(spawn, req)) {
       this.pending = null;
+      this.pendingName = null;
       this.showError("Not connected");
     }
   }

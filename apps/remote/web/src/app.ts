@@ -25,7 +25,7 @@ import { defaultDeviceLabel } from "./pairing.js";
 import type { PromptDraft, SpawnRequest } from "./protocol.js";
 import type { OnlineHost } from "./relay.js";
 import type { ShelfHandle } from "./shelf-controller.js";
-import type { SessionStore } from "./sessions.js";
+import { convergeOpenSessionName, type SessionStore } from "./sessions.js";
 import { createXtermHandle, TerminalView } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
 import { readFitOnly, writeFitOnly } from "./terminal-prefs.js";
@@ -38,7 +38,7 @@ export interface ShellCallbacks {
   onDisconnect: () => void;
   onRetry: () => void;
   onPairAgain: () => void;
-  onOpenSession: (id: string) => void;
+  onOpenSession: (id: string, spawnName?: string) => void;
   onLeaveSession: () => void;
   /** Sign out through POST /auth/logout, from the header account menu. */
   onSignOut: () => void;
@@ -519,6 +519,8 @@ export function createShell(
   const stopStore = store.subscribe(() => {
     if (route === "sessions") {
       graphRoute.paintHome();
+    } else if (route === "session" && sessionId !== null) {
+      sessionName = convergeOpenSessionName(root, store, sessionId, sessionName);
     }
   });
 
@@ -749,12 +751,13 @@ export function createShell(
       composer?.handleError(message, req);
     },
     sheetSpawned(req: string, id: string): void {
-      if (!newDialog.handleSpawned(req)) {
+      const spawnName = newDialog.handleSpawned(req);
+      if (spawnName === null) {
         return;
       }
       closeSheets();
       spawnFlash = "Session started";
-      callbacks.onOpenSession(id);
+      callbacks.onOpenSession(id, spawnName);
     },
     sheetComposed(req: string, text: string): void {
       builder.handleComposed(req, text);

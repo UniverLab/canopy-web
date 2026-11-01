@@ -22,7 +22,7 @@ import { createFrameRouter } from "./router.js";
 import type { OnlineHost } from "./relay.js";
 import { SessionController } from "./session.js";
 import { ShelfController } from "./shelf-controller.js";
-import { SessionStore } from "./sessions.js";
+import { openSessionName, SessionStore } from "./sessions.js";
 import { clearDevice, getHost, listHosts, loadDeviceKey, saveDeviceKey, saveHost } from "./store.js";
 import type { HostRecord } from "./store.js";
 import { consumePairFragment } from "./ui.js";
@@ -98,8 +98,8 @@ async function main(): Promise<void> {
         metrics.reset();
         shell.showPair();
       },
-      onOpenSession: (id) => {
-        shell.showSession(id, store.get(id)?.name ?? id);
+      onOpenSession: (id, spawnName) => {
+        shell.showSession(id, openSessionName(id, store, spawnName));
         controller.open(id);
       },
       onLeaveSession: () => {

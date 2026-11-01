@@ -5,8 +5,9 @@ import type { Shell, ShellCallbacks } from "../src/app.js";
 import { CatalogStore } from "../src/catalog.js";
 import { connectFailMessage } from "../src/peer.js";
 import type { PromptDraft, SpawnRequest } from "../src/protocol.js";
-import { SessionStore } from "../src/sessions.js";
+import { openSessionName, SessionStore } from "../src/sessions.js";
 import type { TerminalFactory, TerminalHandle } from "../src/terminal.js";
+import { sessionTitle } from "../src/titles.js";
 import type { PairSubmit } from "../src/ui.js";
 
 class FakeHandle implements TerminalHandle {
@@ -614,6 +615,41 @@ describe("createShell", () => {
     // A later render of the same session shows no confirmation.
     shell.showSession("s9", "build");
     expect(root.querySelector("main.session-view > .flash-ok")).toBeNull();
+  });
+
+  it("created_session_shows_name_immediately", () => {
+    calls.onOpenSession = (id: string, spawnName?: string) => {
+      signal().opened.push(id);
+      shell.showSession(id, openSessionName(id, store, spawnName));
+    };
+    shell.showSessions();
+    query<HTMLButtonElement>("#session-new").click();
+    query<HTMLInputElement>("#new-directory").value = "/home/u/demo";
+    query<HTMLInputElement>("#new-name").value = "rubidio";
+    query<HTMLFormElement>("#new-form").dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+    expect(calls.spawns[0]?.spawn.name).toBe("rubidio");
+    const id = "08dbd6bd-7a1c-4d2e-9f3a-5b6c7d8e9f01";
+    shell.sheetSpawned(calls.spawns[0]?.req ?? "", id);
+    expect(signal().opened).toEqual([id]);
+    expect(query(".session-title").textContent).toBe("rubidio");
+    expect(document.title).toBe(sessionTitle("rubidio"));
+    expect(query(".session-title").textContent).not.toContain("08dbd6bd");
+    expect(document.title).not.toContain("08dbd6bd");
+    store.add({
+      id,
+      name: "rubidio",
+      cli: "muse",
+      model: "",
+      workdir: "/home/u/demo",
+      status: "running",
+      lastOutputAt: null,
+    });
+    expect(query(".session-title").textContent).toBe("rubidio");
+    expect(document.title).toBe(sessionTitle("rubidio"));
+    shell.showSessions();
+    expect(root.querySelector(`[data-session="${id}"] .session-name`)?.textContent).toBe("rubidio");
   });
 
   it("keeps the New form when the spawn fails", () => {
