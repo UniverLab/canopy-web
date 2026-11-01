@@ -2,36 +2,48 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Env } from "../src/index.js";
-import { HOSTS_PROBE_PATH, UserRoom } from "../src/room.js";
+import { HOSTS_PROBE_PATH, UserRoom, newConnId } from "../src/room.js";
 import type { RoomAttachment } from "../src/protocol.js";
 import { FakeRoomState, FakeRoomSocket } from "./fakes.js";
-import roomSource from "../src/room.ts?raw";
 
 const HOST_ID = "0123456789abcdef";
 const OTHER_HOST_ID = "fedcba9876543210";
+const GUEST_UID = 222;
+const GUEST_LOGIN = "evicted-guest";
 
-function setup(): { state: FakeRoomState; room: UserRoom } {
+/** A bare v4 UUID, the room's connection id without its `d:` prefix. */
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+async function setup(): Promise<{ state: FakeRoomState; room: UserRoom }> {
   const state = new FakeRoomState();
-  return { state, room: new UserRoom(state) };
+  const room = new UserRoom(state);
+  await room.ready;
+  return { state, room };
 }
 
 /**
- * An accepted fake socket, with the conn the room would have assigned.
+ * An accepted fake socket, with a fresh id like fetch assigns.
  * Mirrors fetch's accept path without the real pair.
  */
 function attachFake(
   state: FakeRoomState,
-  room: UserRoom,
-  role: "device" | "host",
-  extra: { host_id?: string; label?: string } = {},
+  role: "device" | "host" | "guest",
+  extra: { host_id?: string; label?: string; login?: string; uid?: number } = {},
 ): FakeRoomSocket {
   const socket = state.makeSocket();
   state.acceptWebSocket(socket);
-  const conn = String(room.nextConn);
-  room.nextConn += 1;
-  const attachment: RoomAttachment = { role, conn, ...extra };
+  const attachment: RoomAttachment = { role, conn: newConnId(), ...extra };
   socket.serializeAttachment(attachment);
   return socket;
+}
+
+/** The conn of an attached fake socket, failing the test when missing. */
+function connOf(socket: FakeRoomSocket): string {
+  const conn = socket.deserializeAttachment()?.conn;
+  if (conn === undefined) {
+    throw new Error("expected the socket to carry a conn");
+  }
+  return conn;
 }
 
 function upgradeRequest(role: string, extra: Record<string, string> = {}): Request {
@@ -79,14 +91,14 @@ afterEach(() => {
 });
 
 describe("room fetch", () => {
-  it("answers 426 without a websocket upgrade", () => {
-    const { room } = setup();
+  it("answers 426 without a websocket upgrade", async () => {
+    const { room } = await setup();
     const response = room.fetch(new Request("https://user-room/"));
     expect(response.status).toBe(426);
   });
 
-  it("answers 400 for a missing role or a host without an id", () => {
-    const { room } = setup();
+  it("answers 400 for a missing role or a host without an id", async () => {
+    const { room } = await setup();
     const noRole = room.fetch(upgradeRequest("browser"));
     expect(noRole.status).toBe(400);
     const noId = room.fetch(upgradeRequest("host", { "x-relay-label": "devbox" }));
@@ -94,11 +106,13 @@ describe("room fetch", () => {
   });
 
   it("accepts a device and sends it the hosts list", async () => {
-    const { state, room } = setup();
+    const { state, room } = await setup();
     const response = room.fetch(upgradeRequest("device"));
     expect(response.status).toBe(101);
     expect(state.getWebSockets()).toHaveLength(1);
-    expect(state.getWebSockets()[0]?.deserializeAttachment()).toEqual({ role: "device", conn: "1" });
+    const attachment = state.getWebSockets()[0]?.deserializeAttachment();
+    expect(attachment?.role).toBe("device");
+    expect(attachment?.conn).toMatch(UUID_PATTERN);
     const client = clientOf(response);
     client.accept();
     expect(JSON.parse(await nextMessage(client))).toEqual({
@@ -108,7 +122,7 @@ describe("room fetch", () => {
   });
 
   it("broadcasts to every device when a host connects", async () => {
-    const { room } = setup();
+    const { room } = await setup();
     const first = clientOf(room.fetch(upgradeRequest("device")));
     first.accept();
     expect(JSON.parse(await nextMessage(first))).toEqual({
@@ -132,7 +146,7 @@ describe("room fetch", () => {
   });
 
   it("broadcasts to every device when a host disconnects", async () => {
-    const { state, room } = setup();
+    const { state, room } = await setup();
     const device = clientOf(room.fetch(upgradeRequest("device")));
     device.accept();
     await nextMessage(device);
@@ -155,7 +169,7 @@ describe("room fetch", () => {
   });
 
   it("replaces a host that reconnects with the same id", async () => {
-    const { state, room } = setup();
+    const { state, room } = await setup();
     const first = clientOf(
       room.fetch(upgradeRequest("host", { "x-relay-host-id": HOST_ID, "x-relay-label": "old" })),
     );
@@ -181,7 +195,7 @@ describe("room fetch", () => {
   });
 
   it("decodes a percent-encoded accented label on ingest", async () => {
-    const { room } = setup();
+    const { room } = await setup();
     const device = clientOf(room.fetch(upgradeRequest("device")));
     device.accept();
     expect(JSON.parse(await nextMessage(device))).toEqual({
@@ -202,7 +216,7 @@ describe("room fetch", () => {
 
   it("leaves plain ASCII and plus signs untouched", async () => {
     for (const label of ["devbox", "devbox+v2", "a+b c"]) {
-      const { room } = setup();
+      const { room } = await setup();
       const device = clientOf(room.fetch(upgradeRequest("device")));
       device.accept();
       expect(JSON.parse(await nextMessage(device))).toEqual({
@@ -223,7 +237,7 @@ describe("room fetch", () => {
 
   it("falls back to the raw string on malformed sequences without a 400", async () => {
     for (const raw of ["100%", "bad%2", "%ZZ", "%E0%A4%A", "caf%C3%A9%zz"]) {
-      const { room } = setup();
+      const { room } = await setup();
       const device = clientOf(room.fetch(upgradeRequest("device")));
       device.accept();
       expect(JSON.parse(await nextMessage(device))).toEqual({
@@ -243,7 +257,7 @@ describe("room fetch", () => {
   });
 
   it("refuses the 9th device with 429 before the upgrade", async () => {
-    const { state, room } = setup();
+    const { state, room } = await setup();
     for (let index = 0; index < 8; index += 1) {
       const response = room.fetch(upgradeRequest("device"));
       expect(response.status).toBe(101);
@@ -262,17 +276,17 @@ describe("room fetch", () => {
 
 describe("hosts probe", () => {
   it("answers false with no host attached, without needing an upgrade", async () => {
-    const { state, room } = setup();
-    attachFake(state, room, "device");
+    const { state, room } = await setup();
+    attachFake(state, "device");
     const response = room.fetch(new Request(`https://user-room${HOSTS_PROBE_PATH}`));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ hasHost: false });
   });
 
   it("answers true while a host is attached and false after it leaves", async () => {
-    const { state, room } = setup();
-    attachFake(state, room, "device");
-    const host = attachFake(state, room, "host", { host_id: HOST_ID, label: "devbox" });
+    const { state, room } = await setup();
+    attachFake(state, "device");
+    const host = attachFake(state, "host", { host_id: HOST_ID, label: "devbox" });
     const present = room.fetch(new Request(`https://user-room${HOSTS_PROBE_PATH}`));
     expect(present.status).toBe(200);
     expect(await present.json()).toEqual({ hasHost: true });
@@ -282,8 +296,8 @@ describe("hosts probe", () => {
     expect(await gone.json()).toEqual({ hasHost: false });
   });
 
-  it("keeps the upgrade check for every other non-upgrade path", () => {
-    const { room } = setup();
+  it("keeps the upgrade check for every other non-upgrade path", async () => {
+    const { room } = await setup();
     expect(room.fetch(new Request("https://user-room/")).status).toBe(426);
     const post = room.fetch(new Request(`https://user-room${HOSTS_PROBE_PATH}`, { method: "POST" }));
     expect(post.status).toBe(426);
@@ -291,17 +305,17 @@ describe("hosts probe", () => {
 });
 
 describe("close handshake", () => {
-  it("echoes the client's close code and reason", () => {
-    const { state, room } = setup();
-    const device = attachFake(state, room, "device");
+  it("echoes the client's close code and reason", async () => {
+    const { state, room } = await setup();
+    const device = attachFake(state, "device");
     room.webSocketClose(device, 1000, "gone");
     expect(device.closed).toEqual([{ code: 1000, reason: "gone" }]);
   });
 
-  it("still announces the gone socket after echoing its close", () => {
-    const { state, room } = setup();
-    const device = attachFake(state, room, "device");
-    attachFake(state, room, "host", { host_id: HOST_ID, label: "devbox" });
+  it("still announces the gone socket after echoing its close", async () => {
+    const { state, room } = await setup();
+    const device = attachFake(state, "device");
+    attachFake(state, "host", { host_id: HOST_ID, label: "devbox" });
     const hostSocket = state.getWebSockets().find(
       (socket) => socket.deserializeAttachment()?.role === "host",
     );
@@ -312,10 +326,10 @@ describe("close handshake", () => {
     expect(device.frames()).toEqual([{ from: "relay", body: { t: "hosts", items: [] } }]);
   });
 
-  it("still announces the gone socket when the echo throws", () => {
-    const { state, room } = setup();
-    const device = attachFake(state, room, "device");
-    const host = attachFake(state, room, "host", { host_id: HOST_ID, label: "devbox" });
+  it("still announces the gone socket when the echo throws", async () => {
+    const { state, room } = await setup();
+    const device = attachFake(state, "device");
+    const host = attachFake(state, "host", { host_id: HOST_ID, label: "devbox" });
     host.close = () => {
       state.remove(host);
       throw new Error("echo failed");
@@ -326,33 +340,35 @@ describe("close handshake", () => {
 });
 
 describe("routing", () => {
-  it("delivers device to host and host to device with rewritten sources", () => {
-    const { state, room } = setup();
-    const device = attachFake(state, room, "device");
-    const host = attachFake(state, room, "host", { host_id: HOST_ID, label: "devbox" });
+  it("delivers device to host and host to device with rewritten sources", async () => {
+    const { state, room } = await setup();
+    const device = attachFake(state, "device");
+    const host = attachFake(state, "host", { host_id: HOST_ID, label: "devbox" });
+    const deviceConn = connOf(device);
     room.webSocketMessage(device, JSON.stringify({ to: `h:${HOST_ID}`, body: { t: "offer", sdp: "v=0" } }));
-    expect(host.frames()).toEqual([{ from: "d:1", body: { t: "offer", sdp: "v=0" } }]);
-    room.webSocketMessage(host, JSON.stringify({ to: "d:1", body: { t: "answer", sdp: "v=0" } }));
+    expect(host.frames()).toEqual([{ from: `d:${deviceConn}`, body: { t: "offer", sdp: "v=0" } }]);
+    room.webSocketMessage(host, JSON.stringify({ to: `d:${deviceConn}`, body: { t: "answer", sdp: "v=0" } }));
     expect(device.frames()).toEqual([{ from: `h:${HOST_ID}`, body: { t: "answer", sdp: "v=0" } }]);
   });
 
-  it("bounces unknown targets and role-mismatched prefixes", () => {
-    const { state, room } = setup();
-    const device = attachFake(state, room, "device");
-    const host = attachFake(state, room, "host", { host_id: HOST_ID, label: "devbox" });
+  it("bounces unknown targets and role-mismatched prefixes", async () => {
+    const { state, room } = await setup();
+    const device = attachFake(state, "device");
+    const host = attachFake(state, "host", { host_id: HOST_ID, label: "devbox" });
+    const deviceConn = connOf(device);
     room.webSocketMessage(device, JSON.stringify({ to: "h:deadbeefdeadbeef", body: { t: "offer" } }));
-    room.webSocketMessage(device, JSON.stringify({ to: "d:1", body: { t: "offer" } }));
-    room.webSocketMessage(host, JSON.stringify({ to: "d:999", body: { t: "answer" } }));
+    room.webSocketMessage(device, JSON.stringify({ to: `d:${deviceConn}`, body: { t: "offer" } }));
+    room.webSocketMessage(host, JSON.stringify({ to: `d:${newConnId()}`, body: { t: "answer" } }));
     room.webSocketMessage(host, JSON.stringify({ to: `h:${HOST_ID}`, body: { t: "answer" } }));
     const errors = [{ from: "relay", body: { t: "error", code: "no_target" } }];
     expect(device.frames()).toEqual([...errors, ...errors]);
     expect(host.frames()).toEqual([...errors, ...errors]);
   });
 
-  it("drops frames over 64 KiB and delivers frames of exactly 64 KiB", () => {
-    const { state, room } = setup();
-    const device = attachFake(state, room, "device");
-    const host = attachFake(state, room, "host", { host_id: HOST_ID, label: "devbox" });
+  it("drops frames over 64 KiB and delivers frames of exactly 64 KiB", async () => {
+    const { state, room } = await setup();
+    const device = attachFake(state, "device");
+    const host = attachFake(state, "host", { host_id: HOST_ID, label: "devbox" });
     const prefix = `{"to":"h:${HOST_ID}","body":"`;
     const suffix = `"}`;
     const fitting = `${prefix}${"x".repeat(65536 - prefix.length - suffix.length)}${suffix}`;
@@ -365,13 +381,14 @@ describe("routing", () => {
     expect(device.frames()).toEqual([{ from: "relay", body: { t: "error", code: "too_large" } }]);
   });
 
-  it("pins the exact envelope bytes a host matches", () => {
-    const { state, room } = setup();
-    const device = attachFake(state, room, "device");
-    const host = attachFake(state, room, "host", { host_id: HOST_ID, label: "devbox" });
+  it("pins the exact envelope bytes a host matches", async () => {
+    const { state, room } = await setup();
+    const device = attachFake(state, "device");
+    const host = attachFake(state, "host", { host_id: HOST_ID, label: "devbox" });
+    const deviceConn = connOf(device);
     room.webSocketMessage(device, JSON.stringify({ to: `h:${HOST_ID}`, body: { t: "offer", sdp: "v=0" } }));
-    expect(host.sent).toEqual([`{"from":"d:1","body":{"t":"offer","sdp":"v=0"}}`]);
-    room.webSocketMessage(host, JSON.stringify({ to: "d:1", body: { t: "answer" } }));
+    expect(host.sent).toEqual([`{"from":"d:${deviceConn}","body":{"t":"offer","sdp":"v=0"}}`]);
+    room.webSocketMessage(host, JSON.stringify({ to: `d:${deviceConn}`, body: { t: "answer" } }));
     room.webSocketMessage(device, JSON.stringify({ to: "h:deadbeefdeadbeef", body: { t: "offer" } }));
     expect(device.sent).toEqual([
       `{"from":"h:${HOST_ID}","body":{"t":"answer"}}`,
@@ -380,7 +397,7 @@ describe("routing", () => {
   });
 
   it("pins the exact hosts notice bytes", async () => {
-    const { room } = setup();
+    const { room } = await setup();
     const device = clientOf(room.fetch(upgradeRequest("device")));
     device.accept();
     expect(await nextMessage(device)).toBe(`{"from":"relay","body":{"t":"hosts","items":[]}}`);
@@ -391,9 +408,9 @@ describe("routing", () => {
     );
   });
 
-  it("rejects malformed and binary frames", () => {
-    const { state, room } = setup();
-    const device = attachFake(state, room, "device");
+  it("rejects malformed and binary frames", async () => {
+    const { state, room } = await setup();
+    const device = attachFake(state, "device");
     room.webSocketMessage(device, "not json");
     room.webSocketMessage(device, JSON.stringify({ body: 1 }));
     room.webSocketMessage(device, JSON.stringify({ to: 42 }));
@@ -404,15 +421,16 @@ describe("routing", () => {
 });
 
 describe("pair_init rate limit", () => {
-  it("allows 20 pair_init frames per 10 minutes from either role", () => {
+  it("allows 20 pair_init frames per 10 minutes from either role", async () => {
     vi.useFakeTimers();
-    const { state, room } = setup();
-    const device = attachFake(state, room, "device");
-    const host = attachFake(state, room, "host", { host_id: HOST_ID, label: "devbox" });
+    const { state, room } = await setup();
+    const device = attachFake(state, "device");
+    const host = attachFake(state, "host", { host_id: HOST_ID, label: "devbox" });
+    const deviceConn = connOf(device);
     for (let index = 0; index < 19; index += 1) {
       room.webSocketMessage(device, JSON.stringify({ to: `h:${HOST_ID}`, body: { t: "pair_init" } }));
     }
-    room.webSocketMessage(host, JSON.stringify({ to: "d:1", body: { t: "pair_init" } }));
+    room.webSocketMessage(host, JSON.stringify({ to: `d:${deviceConn}`, body: { t: "pair_init" } }));
     expect(host.sent).toHaveLength(19);
     expect(device.sent).toHaveLength(1);
     room.webSocketMessage(device, JSON.stringify({ to: `h:${HOST_ID}`, body: { t: "pair_init" } }));
@@ -425,11 +443,11 @@ describe("pair_init rate limit", () => {
     expect(host.sent).toHaveLength(20);
   });
 
-  it("opens the window again after 10 minutes", () => {
+  it("opens the window again after 10 minutes", async () => {
     vi.useFakeTimers();
-    const { state, room } = setup();
-    const device = attachFake(state, room, "device");
-    attachFake(state, room, "host", { host_id: HOST_ID, label: "devbox" });
+    const { state, room } = await setup();
+    const device = attachFake(state, "device");
+    attachFake(state, "host", { host_id: HOST_ID, label: "devbox" });
     for (let index = 0; index < 20; index += 1) {
       room.webSocketMessage(device, JSON.stringify({ to: `h:${HOST_ID}`, body: { t: "pair_init" } }));
     }
@@ -442,11 +460,11 @@ describe("pair_init rate limit", () => {
 });
 
 describe("per-socket frame budget", () => {
-  it("passes 30 frames, then closes the 31st with 4009 without forwarding", () => {
+  it("passes 30 frames, then closes the 31st with 4009 without forwarding", async () => {
     vi.useFakeTimers();
-    const { state, room } = setup();
-    const device = attachFake(state, room, "device");
-    const host = attachFake(state, room, "host", { host_id: HOST_ID, label: "devbox" });
+    const { state, room } = await setup();
+    const device = attachFake(state, "device");
+    const host = attachFake(state, "host", { host_id: HOST_ID, label: "devbox" });
     const frame = JSON.stringify({ to: `h:${HOST_ID}`, body: { t: "offer" } });
     for (let index = 0; index < 30; index += 1) {
       room.webSocketMessage(device, frame);
@@ -459,11 +477,11 @@ describe("per-socket frame budget", () => {
     expect(device.sent).toEqual([]);
   });
 
-  it("passes a paced trickle of 60 frames over 30 seconds", () => {
+  it("passes a paced trickle of 60 frames over 30 seconds", async () => {
     vi.useFakeTimers();
-    const { state, room } = setup();
-    const device = attachFake(state, room, "device");
-    const host = attachFake(state, room, "host", { host_id: HOST_ID, label: "devbox" });
+    const { state, room } = await setup();
+    const device = attachFake(state, "device");
+    const host = attachFake(state, "host", { host_id: HOST_ID, label: "devbox" });
     const frame = JSON.stringify({ to: `h:${HOST_ID}`, body: { t: "offer" } });
     for (let index = 0; index < 60; index += 1) {
       room.webSocketMessage(device, frame);
@@ -473,12 +491,12 @@ describe("per-socket frame budget", () => {
     expect(device.closed).toEqual([]);
   });
 
-  it("budgets each socket apart: one burst never closes its neighbor", () => {
+  it("budgets each socket apart: one burst never closes its neighbor", async () => {
     vi.useFakeTimers();
-    const { state, room } = setup();
-    const first = attachFake(state, room, "device");
-    const second = attachFake(state, room, "device");
-    const host = attachFake(state, room, "host", { host_id: HOST_ID, label: "devbox" });
+    const { state, room } = await setup();
+    const first = attachFake(state, "device");
+    const second = attachFake(state, "device");
+    const host = attachFake(state, "host", { host_id: HOST_ID, label: "devbox" });
     const frame = JSON.stringify({ to: `h:${HOST_ID}`, body: { t: "offer" } });
     for (let index = 0; index < 31; index += 1) {
       room.webSocketMessage(first, frame);
@@ -489,11 +507,11 @@ describe("per-socket frame budget", () => {
     expect(host.sent).toHaveLength(31);
   });
 
-  it("charges binary and oversized frames against the budget too", () => {
+  it("charges binary and oversized frames against the budget too", async () => {
     vi.useFakeTimers();
-    const { state, room } = setup();
-    const device = attachFake(state, room, "device");
-    attachFake(state, room, "host", { host_id: HOST_ID, label: "devbox" });
+    const { state, room } = await setup();
+    const device = attachFake(state, "device");
+    attachFake(state, "host", { host_id: HOST_ID, label: "devbox" });
     for (let index = 0; index < 15; index += 1) {
       room.webSocketMessage(device, new ArrayBuffer(4));
       room.webSocketMessage(device, "x".repeat(65537));
@@ -505,11 +523,11 @@ describe("per-socket frame budget", () => {
     expect(device.sent).toHaveLength(30);
   });
 
-  it("refills the budget after the window passes", () => {
+  it("refills the budget after the window passes", async () => {
     vi.useFakeTimers();
-    const { state, room } = setup();
-    const device = attachFake(state, room, "device");
-    const host = attachFake(state, room, "host", { host_id: HOST_ID, label: "devbox" });
+    const { state, room } = await setup();
+    const device = attachFake(state, "device");
+    const host = attachFake(state, "host", { host_id: HOST_ID, label: "devbox" });
     const frame = JSON.stringify({ to: `h:${HOST_ID}`, body: { t: "offer" } });
     for (let index = 0; index < 30; index += 1) {
       room.webSocketMessage(device, frame);
@@ -522,26 +540,26 @@ describe("per-socket frame budget", () => {
 });
 
 describe("keepalive", () => {
-  it("enables auto-response for plain-text pings in the constructor", () => {
-    const { state } = setup();
+  it("enables auto-response for plain-text pings in the constructor", async () => {
+    const { state } = await setup();
     const pair = state.getWebSocketAutoResponse();
     expect(pair?.request).toBe("ping");
     expect(pair?.response).toBe("pong");
   });
 
-  it("answers app pings to the relay with a pong", () => {
-    const { state, room } = setup();
-    const device = attachFake(state, room, "device");
+  it("answers app pings to the relay with a pong", async () => {
+    const { state, room } = await setup();
+    const device = attachFake(state, "device");
     room.webSocketMessage(device, JSON.stringify({ to: "relay", body: { t: "ping" } }));
     expect(device.frames()).toEqual([{ from: "relay", body: { t: "pong" } }]);
     expect(device.sent).toEqual([`{"from":"relay","body":{"t":"pong"}}`]);
   });
 
-  it("keeps pings outside the pair_init quota", () => {
+  it("keeps pings outside the pair_init quota", async () => {
     vi.useFakeTimers();
-    const { state, room } = setup();
-    const device = attachFake(state, room, "device");
-    attachFake(state, room, "host", { host_id: HOST_ID, label: "devbox" });
+    const { state, room } = await setup();
+    const device = attachFake(state, "device");
+    attachFake(state, "host", { host_id: HOST_ID, label: "devbox" });
     for (let index = 0; index < 20; index += 1) {
       room.webSocketMessage(device, JSON.stringify({ to: `h:${HOST_ID}`, body: { t: "pair_init" } }));
     }
@@ -556,9 +574,66 @@ describe("keepalive", () => {
   });
 });
 
-describe("no storage", () => {
-  it("never touches the storage API: the source says so", () => {
-    expect(roomSource).not.toContain(".storage");
+describe("connection ids", () => {
+  it("conn_ids_are_unique_uuids", () => {
+    const ids = Array.from({ length: 100 }, () => `d:${newConnId()}`);
+    expect(new Set(ids).size).toBe(100);
+    for (const id of ids) {
+      expect(id).toMatch(/^d:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    }
+  });
+});
+
+describe("eviction", () => {
+  it("room_state_survives_eviction", async () => {
+    // Workerd never evicts on demand, so the test replays one by hand: a
+    // room populates its state, its writes drain, and a fresh room over
+    // the same storage adopts the carried sockets.
+    const shared = new Map<string, unknown>();
+    const firstState = new FakeRoomState(shared);
+    const first = new UserRoom(firstState);
+    await first.ready;
+    const device = attachFake(firstState, "device");
+    const deviceConn = connOf(device);
+    const guest = attachFake(firstState, "guest", { login: GUEST_LOGIN, uid: GUEST_UID });
+    const guestConn = connOf(guest);
+    const host = attachFake(firstState, "host", { host_id: HOST_ID, label: "devbox" });
+    first.webSocketMessage(host, JSON.stringify({ to: "room", body: { t: "guest_allow", uids: [GUEST_UID] } }));
+    for (let index = 0; index < 20; index += 1) {
+      first.webSocketMessage(device, JSON.stringify({ to: `h:${HOST_ID}`, body: { t: "pair_init" } }));
+    }
+    expect(host.sent).toHaveLength(20);
+    await firstState.drainWrites();
+
+    const secondState = new FakeRoomState(shared);
+    secondState.adopt(firstState.getWebSockets());
+    const second = new UserRoom(secondState);
+    await second.ready;
+    expect(second.guestAllow).toEqual([GUEST_UID]);
+    expect(second.pairInit).toEqual(first.pairInit);
+    expect(second.pairInit).toHaveLength(20);
+
+    // Carried sockets keep routing under their old addresses.
+    second.webSocketMessage(device, JSON.stringify({ to: `h:${HOST_ID}`, body: { t: "offer" } }));
+    expect(host.frames().at(-1)).toEqual({ from: `d:${deviceConn}`, body: { t: "offer" } });
+    second.webSocketMessage(host, JSON.stringify({ to: `d:${deviceConn}`, body: { t: "answer" } }));
+    expect(device.frames().at(-1)).toEqual({ from: `h:${HOST_ID}`, body: { t: "answer" } });
+    second.webSocketMessage(guest, JSON.stringify({ to: `h:${HOST_ID}`, body: { t: "offer" } }));
+    expect(host.frames().at(-1)).toEqual({ from: `d:${guestConn}`, body: { t: "offer" } });
+
+    // The allowlist survived: the invited guest connects, a stranger 403s.
+    const invited = second.fetch(
+      upgradeRequest("guest", { "x-relay-login": "second", "x-relay-uid": String(GUEST_UID) }),
+    );
+    expect(invited.status).toBe(101);
+    const stranger = second.fetch(
+      upgradeRequest("guest", { "x-relay-login": "stranger", "x-relay-uid": "999" }),
+    );
+    expect(stranger.status).toBe(403);
+
+    // The pair quota survived too: the next attempt rate-limits.
+    second.webSocketMessage(device, JSON.stringify({ to: `h:${HOST_ID}`, body: { t: "pair_init" } }));
+    expect(device.frames().at(-1)).toEqual({ from: "relay", body: { t: "error", code: "rate_limited" } });
   });
 });
 

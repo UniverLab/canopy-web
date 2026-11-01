@@ -3,10 +3,11 @@
  * Fakes the worker tests inject instead of stubbing globals.
  *
  * fakeFetch answers from a route table and records every URL it was asked
- * for. FakeRoomState is a Map-free hibernation stand-in whose `storage`
- * getter throws, so any accidental storage touch fails the test that
- * made it. Closing a fake socket drops it from its state, mirroring the
- * runtime, which removes a closed socket before calling webSocketClose.
+ * for. FakeRoomState is a hibernation stand-in over a Map-backed storage:
+ * two states sharing one map model an eviction, the second room loading
+ * what the first saved. Closing a fake socket drops it from its state,
+ * mirroring the runtime, which removes a closed socket before calling
+ * webSocketClose.
  */
 import type { RevokedKV } from "../src/auth.js";
 import type { AssetsFetcher } from "../src/index.js";
@@ -93,13 +94,60 @@ export class FakeRoomSocket implements RoomSocket {
   }
 }
 
-/** Hibernation state for direct room tests; storage access throws. */
+/**
+ * A Map-backed stand-in for the object's storage. One map shared by two
+ * states models an eviction: the second room loads what the first saved.
+ */
+export class FakeStorage {
+  constructor(private readonly entries: Map<string, unknown> = new Map()) {}
+
+  get(keys: string[]): Promise<Map<string, unknown>> {
+    const found = new Map<string, unknown>();
+    for (const key of keys) {
+      if (this.entries.has(key)) {
+        found.set(key, this.entries.get(key));
+      }
+    }
+    return Promise.resolve(found);
+  }
+
+  put(entries: Record<string, unknown>): Promise<void> {
+    for (const [key, value] of Object.entries(entries)) {
+      this.entries.set(key, value);
+    }
+    return Promise.resolve();
+  }
+}
+
+/** Hibernation state for direct room tests, over a Map-backed storage. */
 export class FakeRoomState implements RoomState {
+  readonly storage: FakeStorage;
   private sockets: RoomSocket[] = [];
   private autoResponse: AutoResponsePair | null = null;
+  private pending: Array<Promise<unknown>> = [];
 
-  get storage(): never {
-    throw new Error("UserRoom must never touch storage");
+  constructor(shared?: Map<string, unknown>) {
+    this.storage = new FakeStorage(shared);
+  }
+
+  blockConcurrencyWhile<T>(callback: () => Promise<T>): Promise<T> {
+    return callback();
+  }
+
+  waitUntil(promise: Promise<unknown>): void {
+    this.pending.push(promise);
+  }
+
+  /** Await every storage write the room handed to `waitUntil`. */
+  drainWrites(): Promise<void> {
+    const writes = this.pending;
+    this.pending = [];
+    return Promise.all(writes).then(() => undefined);
+  }
+
+  /** Adopt carried sockets, modelling the sockets an eviction keeps. */
+  adopt(sockets: RoomSocket[]): void {
+    this.sockets.push(...sockets);
   }
 
   acceptWebSocket(socket: RoomSocket): void {

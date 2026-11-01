@@ -99,6 +99,7 @@ describe("security headers", () => {
 
   it("carries the headers on the room's 429 refusal", async () => {
     const room = new UserRoom(new FakeRoomState());
+    await room.ready;
     const deviceUpgrade = (): Request =>
       new Request("https://user-room/", {
         headers: { upgrade: "websocket", "x-relay-role": "device" },
@@ -112,8 +113,9 @@ describe("security headers", () => {
     expectSecurityHeaders(ninth);
   });
 
-  it("carries the headers on the room's 426 and 400", () => {
+  it("carries the headers on the room's 426 and 400", async () => {
     const room = new UserRoom(new FakeRoomState());
+    await room.ready;
     const upgrade = new Request("https://user-room/", {
       headers: { upgrade: "websocket", "x-relay-role": "browser" },
     });

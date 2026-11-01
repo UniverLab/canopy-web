@@ -47,8 +47,9 @@ run_worker_first = ["/", "/auth/*", "/ws/*", "/turn", "/.well-known/*"]
 binding = "SESSION_REVOKED"
 id = "7d0227b847184c6a9dbcd3ca71019753"
 
-# One room per GitHub user id. The room uses the WebSocket hibernation API
-# with per-socket attachments only — it never touches the storage API.
+# One room per GitHub user id. The room uses the WebSocket hibernation API:
+# per-socket attachments plus the guest allowlist and pair-init counters in
+# storage, so an evicted room wakes with its state intact.
 [[durable_objects.bindings]]
 name = "USER_ROOM"
 class_name = "UserRoom"

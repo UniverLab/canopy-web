@@ -36,13 +36,14 @@ connect only when the host invited their uid (`{"t":"guest_allow",
 "uids":[...]}` over the host-to-room path, empty denies all), one socket
 per guest login.
 
-## What it stores: revoked sessions only
+## What it stores
 
 One KV namespace, `SESSION_REVOKED`: logout writes the session's jti here
 (jti → exp, TTL 43200 like the session itself) and verification refuses
-revoked jtis. Nothing else persists — no D1, no R2, no Durable Object
-storage. Room state is per-socket attachments plus three in-memory fields;
-when the sockets close, nothing of the user survives. The GitHub token is
+revoked jtis. Nothing else persists — no D1, no R2. Room state is
+per-socket attachments plus the guest allowlist and pair-init counters in
+Durable Object storage, so an evicted room wakes with its state intact;
+connection ids are random UUIDs, never reused. The GitHub token is
 discarded after `/user`, and host token verifications live at most 5
 minutes in isolate memory.
 
@@ -55,7 +56,7 @@ npm run test:remote-worker     # apps/remote/worker suite, in the Workers runtim
 The suite covers session sign/verify and tamper rejection, OAuth state
 mismatch, host checks with a mocked GitHub, routing both ways, the hosts
 list on connect/disconnect, host replacement, every limit, `/turn` with a
-mocked Cloudflare API, and that the room never touches the storage API.
+mocked Cloudflare API, and that room state survives an eviction.
 `npm test` runs it together with the validator and catalogue suites. Tests
 use injected fakes (`apps/remote/worker/test/fakes.ts`), never stubbed
 globals.

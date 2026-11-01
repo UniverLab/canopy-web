@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
  * One UserRoom per GitHub user: it forwards opaque signaling envelopes
- * between that user's devices, guests and hosts and remembers nothing
- * past the sockets. State lives only in per-socket attachments plus three
- * instance fields; when the last socket closes, nothing of the user
- * remains. Guests are another user's browsers, admitted through the
- * `guest_of` door: they route like devices but never see the hosts list,
- * never pair, and every one is announced to the hosts — with its GitHub
- * identity — so the hub can authorize it. The relay enforces admission:
- * only host-invited uids connect, one socket per guest login, and every
- * socket gets a frame budget; what an invited guest may do is the hub's
- * call, from the identity notice.
+ * between that user's devices, guests and hosts. Connection ids are random
+ * UUIDs, so an evicted room never reissues an id a live socket still
+ * holds. State lives in per-socket attachments plus the guest allowlist
+ * and pair-init counters in storage, reloaded before the first event, so
+ * a fresh instance over warm storage behaves like the evicted one. Guests
+ * are another user's browsers, admitted through the `guest_of` door: they
+ * route like devices but never see the hosts list, never pair, and every
+ * one is announced to the hosts — with its GitHub identity — so the hub
+ * can authorize it. The relay enforces admission: only host-invited uids
+ * connect, one socket per guest login, and every socket gets a frame
+ * budget; what an invited guest may do is the hub's call, from the
+ * identity notice.
  */
 import { decodeLabel } from "./codec.js";
 import {
@@ -47,12 +49,21 @@ export interface AutoResponsePair {
   readonly response: string;
 }
 
+/** The object's storage, narrowed to the two calls the room makes. */
+export interface RoomStorage {
+  get(keys: string[]): Promise<Map<string, unknown>>;
+  put(entries: Record<string, unknown>): Promise<void>;
+}
+
 /** The hibernation state, narrowed to what the room uses. */
 export interface RoomState {
+  readonly storage: RoomStorage;
   acceptWebSocket(socket: RoomSocket): void;
   getWebSockets(): RoomSocket[];
   setWebSocketAutoResponse(pair?: AutoResponsePair): void;
   getWebSocketAutoResponse(): AutoResponsePair | null;
+  blockConcurrencyWhile<T>(callback: () => Promise<T>): Promise<T>;
+  waitUntil(promise: Promise<unknown>): void;
 }
 
 /** A freshly split WebSocket pair: index 0 is the client side. */
@@ -76,6 +87,41 @@ declare const WebSocketRequestResponsePair: new (
  * only the Worker binding calls it, never a browser.
  */
 export const HOSTS_PROBE_PATH = "/internal/hosts";
+
+/** The storage keys holding the guest allowlist and the pair-init stamps. */
+const GUEST_ALLOW_KEY = "guestAllow";
+const PAIR_INIT_KEY = "pairInit";
+
+/**
+ * A fresh connection id: a bare UUID, serialized on the wire as `d:<uuid>`.
+ * Random, so a room woken from eviction never reissues an id a carried
+ * socket still holds.
+ */
+export function newConnId(): string {
+  return crypto.randomUUID();
+}
+
+/** A stored allowlist, or empty when the stored value is malformed. */
+function parseStoredUids(value: unknown): number[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const uids: number[] = [];
+  for (const uid of value) {
+    if (typeof uid === "number" && Number.isSafeInteger(uid) && uid > 0 && !uids.includes(uid)) {
+      uids.push(uid);
+    }
+  }
+  return uids;
+}
+
+/** Stored pair-init stamps, or empty when the stored value is malformed. */
+function parseStoredStamps(value: unknown): number[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((stamp): stamp is number => typeof stamp === "number" && Number.isFinite(stamp));
+}
 
 /** A 101 carrying `client`, with the relay's security headers. */
 function upgradeResponse(client: RoomSocket): Response {
@@ -146,15 +192,25 @@ function identityFrame(kind: "device_identity" | "device_left", attachment: Room
 }
 
 export class UserRoom {
-  nextConn = 1;
   pairInit: number[] = [];
   /** Uids the host invited; empty denies every guest. Set via `guest_allow`. */
   guestAllow: number[] = [];
+  /** Resolves once the stored guest list and pair counters have loaded. */
+  readonly ready: Promise<void>;
 
   constructor(private readonly state: RoomState) {
     // Hosts ping with plain-text pings (protocol pings never reach us):
     // the edge answers without waking this room.
     this.state.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
+    // Hibernation evicts this object while its sockets stay connected and
+    // replays the constructor on wake: the guest list and pair counters
+    // reload here, gated before the first event, so a fresh instance over
+    // warm storage behaves exactly like the evicted one.
+    this.ready = this.state.blockConcurrencyWhile(async () => {
+      const stored = await this.state.storage.get([GUEST_ALLOW_KEY, PAIR_INIT_KEY]);
+      this.guestAllow = parseStoredUids(stored.get(GUEST_ALLOW_KEY));
+      this.pairInit = parseStoredStamps(stored.get(PAIR_INIT_KEY));
+    });
   }
 
   fetch(request: Request): Response {
@@ -203,9 +259,8 @@ export class UserRoom {
     this.state.acceptWebSocket(server);
     const attachment: RoomAttachment = {
       role,
-      conn: String(this.nextConn),
+      conn: newConnId(),
     };
-    this.nextConn += 1;
     if (role === "host") {
       attachment.host_id = hostId as string;
       attachment.label = decodeLabel(request.headers.get(RELAY_LABEL_HEADER) ?? "");
@@ -297,6 +352,7 @@ export class UserRoom {
         return;
       }
       this.pairInit.push(now);
+      this.save();
     }
     this.route(socket, to, body);
   }
@@ -369,6 +425,19 @@ export class UserRoom {
       return;
     }
     this.guestAllow = uids;
+    this.save();
+  }
+
+  /**
+   * Persist the guest list and pair counters for the next eviction. Called
+   * only on guest/pair mutations — never per frame or per ping.
+   */
+  private save(): void {
+    const write = this.state.storage.put({
+      [GUEST_ALLOW_KEY]: [...this.guestAllow],
+      [PAIR_INIT_KEY]: [...this.pairInit],
+    });
+    this.state.waitUntil(write);
   }
 
   /** True when the body is an object whose `t` is `pair_init`. */
