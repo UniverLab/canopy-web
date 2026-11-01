@@ -2,7 +2,7 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Env } from "../src/index.js";
-import { UserRoom } from "../src/room.js";
+import { HOSTS_PROBE_PATH, UserRoom } from "../src/room.js";
 import type { RoomAttachment } from "../src/protocol.js";
 import { FakeRoomState, FakeRoomSocket } from "./fakes.js";
 import roomSource from "../src/room.ts?raw";
@@ -195,6 +195,36 @@ describe("room fetch", () => {
     // No 101, so no socket to open: the browser never sees an open event.
     expect((ninth as unknown as { webSocket?: unknown }).webSocket ?? null).toBeNull();
     expect(state.getWebSockets()).toHaveLength(8);
+  });
+});
+
+describe("hosts probe", () => {
+  it("answers false with no host attached, without needing an upgrade", async () => {
+    const { state, room } = setup();
+    attachFake(state, room, "device");
+    const response = room.fetch(new Request(`https://user-room${HOSTS_PROBE_PATH}`));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ hasHost: false });
+  });
+
+  it("answers true while a host is attached and false after it leaves", async () => {
+    const { state, room } = setup();
+    attachFake(state, room, "device");
+    const host = attachFake(state, room, "host", { host_id: HOST_ID, label: "devbox" });
+    const present = room.fetch(new Request(`https://user-room${HOSTS_PROBE_PATH}`));
+    expect(present.status).toBe(200);
+    expect(await present.json()).toEqual({ hasHost: true });
+    host.close();
+    const gone = room.fetch(new Request(`https://user-room${HOSTS_PROBE_PATH}`));
+    expect(gone.status).toBe(200);
+    expect(await gone.json()).toEqual({ hasHost: false });
+  });
+
+  it("keeps the upgrade check for every other non-upgrade path", () => {
+    const { room } = setup();
+    expect(room.fetch(new Request("https://user-room/")).status).toBe(426);
+    const post = room.fetch(new Request(`https://user-room${HOSTS_PROBE_PATH}`, { method: "POST" }));
+    expect(post.status).toBe(426);
   });
 });
 

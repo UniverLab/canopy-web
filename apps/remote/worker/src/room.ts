@@ -65,6 +65,13 @@ declare const WebSocketRequestResponsePair: new (
   response: string,
 ) => AutoResponsePair;
 
+/**
+ * The Worker's internal probe: `GET /internal/hosts` answers whether this
+ * room holds at least one connected host. Served before the upgrade check;
+ * only the Worker binding calls it, never a browser.
+ */
+export const HOSTS_PROBE_PATH = "/internal/hosts";
+
 /** A 101 carrying `client`, with the relay's security headers. */
 function upgradeResponse(client: RoomSocket): Response {
   const headers = applySecurityHeaders(new Headers());
@@ -119,6 +126,9 @@ export class UserRoom {
   }
 
   fetch(request: Request): Response {
+    if (request.method === "GET" && new URL(request.url).pathname === HOSTS_PROBE_PATH) {
+      return json({ hasHost: this.hasHost() }, 200);
+    }
     if ((request.headers.get("upgrade") ?? "").toLowerCase() !== "websocket") {
       return json({ error: "upgrade_required" }, 426);
     }
@@ -324,6 +334,16 @@ export class UserRoom {
         socket.close(4000, "replaced");
       }
     }
+  }
+
+  /** True when at least one host socket is attached. */
+  private hasHost(): boolean {
+    for (const socket of this.state.getWebSockets()) {
+      if (socket.deserializeAttachment()?.role === "host") {
+        return true;
+      }
+    }
+    return false;
   }
 
   /** The current hosts, sorted by id. */

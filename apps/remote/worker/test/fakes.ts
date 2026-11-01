@@ -10,7 +10,8 @@
  */
 import type { AssetsFetcher } from "../src/index.js";
 import type { RoomAttachment } from "../src/protocol.js";
-import type { AutoResponsePair, RoomSocket, RoomState } from "../src/room.js";
+import { HOSTS_PROBE_PATH, type AutoResponsePair, type RoomSocket, type RoomState } from "../src/room.js";
+import type { RoomNamespace, RoomStub } from "../src/ws.js";
 
 /** One stubbed upstream answer. `body` is JSON-encoded, `text` stays raw. */
 export interface Stub {
@@ -127,6 +128,62 @@ export class FakeRoomState implements RoomState {
   /** A fresh fake socket bound to this state. */
   makeSocket(): FakeRoomSocket {
     return new FakeRoomSocket(this);
+  }
+}
+
+/**
+ * How the TURN room stand-in answers the hosts probe: a boolean serves
+ * `{hasHost}` for every room, while the strings fail the probe the way a
+ * sick room would — a throw, a 500, or a 200 without `hasHost`.
+ */
+export type TurnRoomBehavior = boolean | "throw" | "bad-status" | "malformed";
+
+/**
+ * A room binding for TURN tests: it records which room each grant probed
+ * and answers the hosts probe per `behavior`. Any non-probe path 404s,
+ * so a query to the wrong path fails the test that made it.
+ */
+export class FakeTurnNamespace implements RoomNamespace {
+  names: string[] = [];
+  probed: string[] = [];
+
+  constructor(private readonly behavior: TurnRoomBehavior = true) {}
+
+  idFromName(name: string): unknown {
+    this.names.push(name);
+    return name;
+  }
+
+  get(id: unknown): RoomStub {
+    void id;
+    return {
+      fetch: (request: Request): Promise<Response> => {
+        this.probed.push(new URL(request.url).pathname);
+        if (new URL(request.url).pathname !== HOSTS_PROBE_PATH) {
+          return Promise.resolve(new Response("{}", { status: 404 }));
+        }
+        if (this.behavior === "throw") {
+          throw new Error("room down");
+        }
+        if (this.behavior === "bad-status") {
+          return Promise.resolve(new Response("{}", { status: 500 }));
+        }
+        if (this.behavior === "malformed") {
+          return Promise.resolve(
+            new Response(JSON.stringify({ hosts: [] }), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            }),
+          );
+        }
+        return Promise.resolve(
+          new Response(JSON.stringify({ hasHost: this.behavior }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      },
+    };
   }
 }
 
