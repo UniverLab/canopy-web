@@ -21,10 +21,13 @@ const env: AuthEnv = {
   SESSION_SECRET: SECRET,
 };
 
-function request(path: string, cookie?: string): Request {
+function request(path: string, cookie?: string, origin: string | null = ORIGIN): Request {
   const headers = new Headers();
   if (cookie !== undefined) {
     headers.set("cookie", cookie);
+  }
+  if (origin !== null) {
+    headers.set("origin", origin);
   }
   return new Request(new URL(path, ORIGIN), { headers });
 }

@@ -108,7 +108,7 @@ class FakeNamespace implements RoomNamespace {
 
 async function guestRequest(guestOf: string | null, cookie?: string): Promise<Request> {
   const url = guestOf === null ? "/ws/device" : `/ws/device?guest_of=${guestOf}`;
-  const headers = new Headers({ upgrade: "websocket" });
+  const headers = new Headers({ upgrade: "websocket", origin: ORIGIN });
   const session = await signSession(GUEST_UID, GUEST_LOGIN, SECRET, Math.floor(Date.now() / 1000));
   headers.set("cookie", cookie ?? `cr_session=${session}`);
   return new Request(new URL(url, ORIGIN), { headers });

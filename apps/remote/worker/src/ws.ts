@@ -10,6 +10,7 @@
 import { parseCookies } from "./codec.js";
 import { verifySession } from "./auth.js";
 import { verifyHostToken } from "./github.js";
+import { isOriginAllowed, parseAllowedOrigins } from "./origin.js";
 import {
   RELAY_HOST_ID_HEADER,
   RELAY_LABEL_HEADER,
@@ -35,6 +36,7 @@ export interface RoomNamespace {
 export interface WsEnv {
   USER_ROOM: RoomNamespace;
   SESSION_SECRET?: string;
+  ALLOWED_ORIGINS?: string;
 }
 
 const BEARER_PATTERN = /^Bearer (.+)$/;
@@ -92,6 +94,9 @@ export async function handleDeviceWs(req: Request, env: WsEnv): Promise<Response
   const sessionSecret = env.SESSION_SECRET;
   if (!sessionSecret) {
     return json({ error: "misconfigured" }, 500);
+  }
+  if (!isOriginAllowed(req.headers.get("origin"), parseAllowedOrigins(env.ALLOWED_ORIGINS))) {
+    return json({ error: "forbidden_origin" }, 403);
   }
   const cookies = parseCookies(req.headers.get("cookie"));
   const value = cookies[SESSION_COOKIE];

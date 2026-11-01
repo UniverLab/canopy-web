@@ -35,10 +35,13 @@ function setup(): { namespace: FakeNamespace; env: WsEnv } {
   return { namespace, env: { USER_ROOM: namespace, SESSION_SECRET: SECRET } };
 }
 
-function deviceRequest(cookie?: string): Request {
+function deviceRequest(cookie?: string, origin: string | null = ORIGIN): Request {
   const headers = new Headers({ upgrade: "websocket" });
   if (cookie !== undefined) {
     headers.set("cookie", cookie);
+  }
+  if (origin !== null) {
+    headers.set("origin", origin);
   }
   return new Request(new URL("/ws/device", ORIGIN), { headers });
 }

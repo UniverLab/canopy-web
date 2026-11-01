@@ -11,6 +11,7 @@ import { verifySession } from "./auth.js";
 import { verifyHostToken } from "./github.js";
 import { HOSTS_PROBE_PATH } from "./room.js";
 import type { RoomNamespace } from "./ws.js";
+import { isOriginAllowed, parseAllowedOrigins } from "./origin.js";
 import { SESSION_COOKIE, applySecurityHeaders } from "./protocol.js";
 
 /** The secrets the TURN route needs; absent means 500, never a guess. */
@@ -19,6 +20,7 @@ export interface TurnEnv {
   TURN_KEY_ID?: string;
   TURN_KEY_API_TOKEN?: string;
   USER_ROOM?: RoomNamespace;
+  ALLOWED_ORIGINS?: string;
 }
 
 /** Credential lifetime requested from Cloudflare, in seconds. */
@@ -47,9 +49,10 @@ function json(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), { status, headers });
 }
 
-/** A caller the room probe cleared, keyed by the uid the quota counts. */
+/** A verified caller, keyed by the uid the quota counts. `via` decides the missing-Origin bypass. */
 interface TurnCaller {
   uid: number;
+  via: "session" | "bearer";
 }
 
 /** Whether the room for `uid` holds a connected host; errors mean no. */
@@ -68,20 +71,15 @@ async function roomHasHost(uid: number, rooms: RoomNamespace): Promise<boolean> 
 }
 
 /**
- * Either a valid session cookie or a verified host token unlocks TURN —
- * but only when the caller's room holds a connected host. Null means no
- * valid credential; "no_host" means a valid credential with no host (or
- * an unreadable room: the probe fails closed).
+ * Either a valid session cookie or a verified host token names a caller.
+ * Null means no valid credential. The session wins when both verify: a
+ * browser carrying both is still a browser, and must send an Origin.
  */
-async function authorized(
+async function verifiedCaller(
   req: Request,
   env: TurnEnv,
   fetchImpl: typeof fetch,
-): Promise<TurnCaller | "no_host" | null> {
-  const rooms = env.USER_ROOM;
-  if (rooms === undefined) {
-    return "no_host";
-  }
+): Promise<TurnCaller | null> {
   const sessionSecret = env.SESSION_SECRET;
   if (sessionSecret) {
     const cookies = parseCookies(req.headers.get("cookie"));
@@ -89,7 +87,7 @@ async function authorized(
     if (value) {
       const session = await verifySession(value, sessionSecret, Math.floor(Date.now() / 1000));
       if (session !== null) {
-        return (await roomHasHost(session.uid, rooms)) ? { uid: session.uid } : "no_host";
+        return { uid: session.uid, via: "session" };
       }
     }
   }
@@ -102,7 +100,7 @@ async function authorized(
   if (user === null) {
     return null;
   }
-  return (await roomHasHost(user.id, rooms)) ? { uid: user.id } : "no_host";
+  return { uid: user.id, via: "bearer" };
 }
 
 /** True when `uid` already spent its grants window. */
@@ -134,11 +132,16 @@ export async function handleTurn(
   if (!env.SESSION_SECRET || !keyId || !apiToken || !env.USER_ROOM) {
     return json({ error: "misconfigured" }, 500);
   }
-  const caller = await authorized(req, env, fetchImpl);
+  const caller = await verifiedCaller(req, env, fetchImpl);
   if (caller === null) {
     return json({ error: "unauthorized" }, 401);
   }
-  if (caller === "no_host") {
+  const origin = req.headers.get("origin");
+  if (origin === null ? caller.via !== "bearer" : !isOriginAllowed(origin, parseAllowedOrigins(env.ALLOWED_ORIGINS))) {
+    return json({ error: "forbidden_origin" }, 403);
+  }
+  const rooms = env.USER_ROOM;
+  if (rooms === undefined || !(await roomHasHost(caller.uid, rooms))) {
     return json({ error: "no_host" }, 403);
   }
   if (isRateLimited(caller.uid, Date.now())) {

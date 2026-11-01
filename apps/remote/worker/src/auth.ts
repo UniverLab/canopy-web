@@ -7,12 +7,14 @@
 import { b64urlDecode, b64urlEncode, parseCookies, serializeCookie, timingSafeEqual } from "./codec.js";
 import { SESSION_COOKIE, STATE_COOKIE, applySecurityHeaders } from "./protocol.js";
 import { exchangeCode, fetchUser } from "./github.js";
+import { isOriginAllowed, parseAllowedOrigins } from "./origin.js";
 
 /** The secrets the auth routes need; absent means 500, never a guess. */
 export interface AuthEnv {
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
   SESSION_SECRET?: string;
+  ALLOWED_ORIGINS?: string;
 }
 
 export interface Session {
@@ -207,10 +209,11 @@ export async function handleCallback(
   return new Response(null, { status: 302, headers });
 }
 
-/** Clear the session cookie. */
-export function handleLogout(_req: Request, _env: AuthEnv): Response {
-  void _req;
-  void _env;
+/** Clear the session cookie. A foreign Origin is denied without clearing. */
+export function handleLogout(req: Request, env: AuthEnv): Response {
+  if (!isOriginAllowed(req.headers.get("origin"), parseAllowedOrigins(env.ALLOWED_ORIGINS))) {
+    return json({ error: "forbidden_origin" }, 403);
+  }
   const headers = applySecurityHeaders(new Headers({ location: "/" }));
   headers.append(
     "set-cookie",

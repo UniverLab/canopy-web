@@ -14,6 +14,12 @@ account_id = "d7b81bdd721f503968523dd903d967be"
 
 routes = [{ pattern = "remote.univerlab.org/*", zone_name = "univerlab.org" }]
 
+# The browser origins allowed through the cookie-bearing doors (/ws/device,
+# /turn, POST /auth/logout). Exact match; the code defaults to this same
+# value when the variable is absent.
+[vars]
+ALLOWED_ORIGINS = "https://remote.univerlab.org"
+
 # Serve the built browser app from apps/remote/web/dist on the same origin,
 # so the page and its WebSocket share remote.univerlab.org. Paths matching
 # `run_worker_first` always reach the Worker code first; everything else

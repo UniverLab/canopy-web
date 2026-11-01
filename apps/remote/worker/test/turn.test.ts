@@ -20,13 +20,16 @@ function turnEnv(rooms: FakeTurnNamespace): TurnEnv {
 
 const UPSTREAM = { iceServers: [{ urls: "turn:turn.example:3478", username: "user", credential: "pass" }] };
 
-function request(cookie?: string, token?: string): Request {
+function request(cookie?: string, token?: string, origin: string | null = ORIGIN): Request {
   const headers = new Headers();
   if (cookie !== undefined) {
     headers.set("cookie", cookie);
   }
   if (token !== undefined) {
     headers.set("authorization", `Bearer ${token}`);
+  }
+  if (origin !== null) {
+    headers.set("origin", origin);
   }
   return new Request(new URL("/turn", ORIGIN), { headers });
 }

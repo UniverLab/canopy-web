@@ -37,10 +37,14 @@ const env: Env = {
   TURN_KEY_API_TOKEN: "turn-api-token",
 };
 
-function request(path: string, options: { method?: string; cookie?: string } = {}): Request {
+function request(path: string, options: { method?: string; cookie?: string; origin?: string | null } = {}): Request {
   const headers = new Headers();
   if (options.cookie !== undefined) {
     headers.set("cookie", options.cookie);
+  }
+  const origin = options.origin === undefined ? ORIGIN : options.origin;
+  if (origin !== null) {
+    headers.set("origin", origin);
   }
   return new Request(new URL(path, ORIGIN), { method: options.method ?? "GET", headers });
 }
