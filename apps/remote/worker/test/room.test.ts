@@ -379,6 +379,86 @@ describe("pair_init rate limit", () => {
   });
 });
 
+describe("per-socket frame budget", () => {
+  it("passes 30 frames, then closes the 31st with 4009 without forwarding", () => {
+    vi.useFakeTimers();
+    const { state, room } = setup();
+    const device = attachFake(state, room, "device");
+    const host = attachFake(state, room, "host", { host_id: HOST_ID, label: "devbox" });
+    const frame = JSON.stringify({ to: `h:${HOST_ID}`, body: { t: "offer" } });
+    for (let index = 0; index < 30; index += 1) {
+      room.webSocketMessage(device, frame);
+    }
+    expect(host.sent).toHaveLength(30);
+    expect(device.closed).toEqual([]);
+    room.webSocketMessage(device, frame);
+    expect(device.closed).toEqual([{ code: 4009, reason: "rate_limited" }]);
+    expect(host.sent).toHaveLength(30);
+    expect(device.sent).toEqual([]);
+  });
+
+  it("passes a paced trickle of 60 frames over 30 seconds", () => {
+    vi.useFakeTimers();
+    const { state, room } = setup();
+    const device = attachFake(state, room, "device");
+    const host = attachFake(state, room, "host", { host_id: HOST_ID, label: "devbox" });
+    const frame = JSON.stringify({ to: `h:${HOST_ID}`, body: { t: "offer" } });
+    for (let index = 0; index < 60; index += 1) {
+      room.webSocketMessage(device, frame);
+      vi.advanceTimersByTime(500);
+    }
+    expect(host.sent).toHaveLength(60);
+    expect(device.closed).toEqual([]);
+  });
+
+  it("budgets each socket apart: one burst never closes its neighbor", () => {
+    vi.useFakeTimers();
+    const { state, room } = setup();
+    const first = attachFake(state, room, "device");
+    const second = attachFake(state, room, "device");
+    const host = attachFake(state, room, "host", { host_id: HOST_ID, label: "devbox" });
+    const frame = JSON.stringify({ to: `h:${HOST_ID}`, body: { t: "offer" } });
+    for (let index = 0; index < 31; index += 1) {
+      room.webSocketMessage(first, frame);
+    }
+    expect(first.closed).toEqual([{ code: 4009, reason: "rate_limited" }]);
+    room.webSocketMessage(second, frame);
+    expect(second.closed).toEqual([]);
+    expect(host.sent).toHaveLength(31);
+  });
+
+  it("charges binary and oversized frames against the budget too", () => {
+    vi.useFakeTimers();
+    const { state, room } = setup();
+    const device = attachFake(state, room, "device");
+    attachFake(state, room, "host", { host_id: HOST_ID, label: "devbox" });
+    for (let index = 0; index < 15; index += 1) {
+      room.webSocketMessage(device, new ArrayBuffer(4));
+      room.webSocketMessage(device, "x".repeat(65537));
+    }
+    expect(device.sent).toHaveLength(30);
+    expect(device.closed).toEqual([]);
+    room.webSocketMessage(device, JSON.stringify({ to: `h:${HOST_ID}`, body: { t: "offer" } }));
+    expect(device.closed).toEqual([{ code: 4009, reason: "rate_limited" }]);
+    expect(device.sent).toHaveLength(30);
+  });
+
+  it("refills the budget after the window passes", () => {
+    vi.useFakeTimers();
+    const { state, room } = setup();
+    const device = attachFake(state, room, "device");
+    const host = attachFake(state, room, "host", { host_id: HOST_ID, label: "devbox" });
+    const frame = JSON.stringify({ to: `h:${HOST_ID}`, body: { t: "offer" } });
+    for (let index = 0; index < 30; index += 1) {
+      room.webSocketMessage(device, frame);
+    }
+    vi.advanceTimersByTime(10000);
+    room.webSocketMessage(device, frame);
+    expect(device.closed).toEqual([]);
+    expect(host.sent).toHaveLength(31);
+  });
+});
+
 describe("keepalive", () => {
   it("enables auto-response for plain-text pings in the constructor", () => {
     const { state } = setup();
@@ -489,5 +569,26 @@ describe("live room", () => {
       from: "relay",
       body: { t: "pong" },
     });
+  });
+
+  it("closes a bursting socket with 4009 on the real object", async () => {
+    const namespace = (env as unknown as Env).USER_ROOM;
+    const stub = namespace.get(namespace.idFromName("room-self-budget"));
+    const deviceResponse = await stub.fetch(upgradeRequest("device"));
+    expect(deviceResponse.status).toBe(101);
+    const device = clientOf(deviceResponse);
+    device.accept();
+    await nextMessage(device);
+    const hostResponse = await stub.fetch(
+      upgradeRequest("host", { "x-relay-host-id": OTHER_HOST_ID, "x-relay-label": "live" }),
+    );
+    expect(hostResponse.status).toBe(101);
+    clientOf(hostResponse).accept();
+    const closed = nextClose(device);
+    const frame = JSON.stringify({ to: `h:${OTHER_HOST_ID}`, body: { t: "offer" } });
+    for (let index = 0; index < 60; index += 1) {
+      device.send(frame);
+    }
+    expect(await closed).toBe(4009);
   });
 });

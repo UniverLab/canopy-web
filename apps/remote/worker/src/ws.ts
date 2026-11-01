@@ -3,8 +3,9 @@
  * The two WebSocket doors: browsers prove the session cookie, hosts prove
  * a GitHub token plus their id and label. Browsers land in their own
  * UserRoom, or — with `?guest_of=<uid>` — in that owner's room as guests,
- * carrying their own GitHub identity for the hub to authorize. The room
- * itself only trusts the X-Relay-* headers set here.
+ * carrying their own GitHub identity. The room admits only host-invited
+ * guest uids, one socket per login, and only trusts the X-Relay-*
+ * headers set here; what an invited guest may do is the hub's call.
  */
 import { parseCookies } from "./codec.js";
 import { verifySession } from "./auth.js";
@@ -83,8 +84,9 @@ function roomFor(env: WsEnv, uid: number): RoomStub {
 /**
  * A browser socket: the session cookie names its room — or, with a
  * `guest_of` query, the owner's room, as a guest carrying the caller's
- * own GitHub identity. The relay never authorizes the guest; the hub
- * does, from the identity headers forwarded here.
+ * own GitHub identity. The room admits the guest only when the host
+ * invited its uid; the hub authorizes what it may do, from the identity
+ * headers forwarded here.
  */
 export async function handleDeviceWs(req: Request, env: WsEnv): Promise<Response> {
   const sessionSecret = env.SESSION_SECRET;

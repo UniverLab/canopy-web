@@ -29,13 +29,17 @@ One Durable Object (`UserRoom`) per GitHub user id forwards envelopes
 between that user's devices and hosts: a device frame `{to:"h:<host_id>",
 body}` reaches the host as `{from:"d:<conn>", body}`, and back. Devices
 also get `{t:"hosts"}` whenever the host list changes. Caps per room:
-frames over 64 KiB are dropped, 8 device sockets at most, 20 `pair_init`
-bodies per 10 minutes.
+frames over 64 KiB are dropped, 8 device sockets at most, 8 guest sockets
+at most, 20 `pair_init` bodies per 10 minutes, and 30 frames per 10
+seconds per socket — past the budget the socket closes with 4009. Guests
+connect only when the host invited their uid (`{"t":"guest_allow",
+"uids":[...]}` over the host-to-room path, empty denies all), one socket
+per guest login.
 
 ## What it stores: nothing
 
 No KV, no D1, no R2, no Durable Object storage. Room state is per-socket
-attachments plus two in-memory fields; when the sockets close, nothing of
+attachments plus three in-memory fields; when the sockets close, nothing of
 the user survives. The GitHub token is discarded after `/user`, and host
 token verifications live at most 5 minutes in isolate memory.
 

@@ -34,6 +34,12 @@ export const PAIR_INIT_MAX = 20;
 /** The `pair_init` window, in milliseconds. */
 export const PAIR_INIT_WINDOW_MS = 600000;
 
+/** Most frames one socket sends per rate window; relay traffic is signaling-only. */
+export const SOCKET_RATE_MAX = 30;
+
+/** The per-socket frame budget window, in milliseconds. */
+export const SOCKET_RATE_WINDOW_MS = 10000;
+
 /** How long a verified host token stays cached, in seconds. */
 export const HOST_CACHE_TTL_S = 300;
 
@@ -61,6 +67,8 @@ export interface RoomAttachment {
   /** The guest's GitHub login and id; set on guest sockets only. */
   login?: string;
   uid?: number;
+  /** The frame budget, lazily set at the first frame: tokens left and when. */
+  rate?: { tokens: number; at: number };
 }
 
 /** One host entry in the `hosts` notice. */

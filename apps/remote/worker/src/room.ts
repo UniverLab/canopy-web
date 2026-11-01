@@ -2,13 +2,15 @@
 /**
  * One UserRoom per GitHub user: it forwards opaque signaling envelopes
  * between that user's devices, guests and hosts and remembers nothing
- * past the sockets. State lives only in per-socket attachments plus two
+ * past the sockets. State lives only in per-socket attachments plus three
  * instance fields; when the last socket closes, nothing of the user
  * remains. Guests are another user's browsers, admitted through the
  * `guest_of` door: they route like devices but never see the hosts list,
  * never pair, and every one is announced to the hosts — with its GitHub
- * identity — so the hub can authorize it. The relay itself authorizes
- * nothing.
+ * identity — so the hub can authorize it. The relay enforces admission:
+ * only host-invited uids connect, one socket per guest login, and every
+ * socket gets a frame budget; what an invited guest may do is the hub's
+ * call, from the identity notice.
  */
 import {
   FRAME_MAX_BYTES,
@@ -21,6 +23,8 @@ import {
   RELAY_LOGIN_HEADER,
   RELAY_ROLE_HEADER,
   RELAY_UID_HEADER,
+  SOCKET_RATE_MAX,
+  SOCKET_RATE_WINDOW_MS,
   applySecurityHeaders,
   type HostItem,
   type RelayErrorCode,
@@ -107,6 +111,31 @@ function parseUid(value: string | null): number | null {
   return Number.isSafeInteger(uid) ? uid : null;
 }
 
+/**
+ * The host's invite list, or null when the body is malformed. The shape is
+ * exactly `{"t":"guest_allow","uids":[...]}`: no more keys, no fewer, and
+ * every uid a positive safe integer. Duplicates collapse, order kept.
+ */
+function parseGuestAllow(body: unknown): number[] | null {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return null;
+  }
+  const record = body as Record<string, unknown>;
+  if (Object.keys(record).length !== 2 || record["t"] !== "guest_allow" || !Array.isArray(record["uids"])) {
+    return null;
+  }
+  const uids: number[] = [];
+  for (const uid of record["uids"] as unknown[]) {
+    if (typeof uid !== "number" || !Number.isSafeInteger(uid) || uid <= 0) {
+      return null;
+    }
+    if (!uids.includes(uid)) {
+      uids.push(uid);
+    }
+  }
+  return uids;
+}
+
 /** A guest's announcement to the hosts: who this conn belongs to. */
 function identityFrame(kind: "device_identity" | "device_left", attachment: RoomAttachment): string {
   return JSON.stringify({
@@ -118,6 +147,8 @@ function identityFrame(kind: "device_identity" | "device_left", attachment: Room
 export class UserRoom {
   nextConn = 1;
   pairInit: number[] = [];
+  /** Uids the host invited; empty denies every guest. Set via `guest_allow`. */
+  guestAllow: number[] = [];
 
   constructor(private readonly state: RoomState) {
     // Hosts ping with plain-text pings (protocol pings never reach us):
@@ -147,11 +178,21 @@ export class UserRoom {
     if (role === "guest" && (login === null || login === "" || uid === null)) {
       return json({ error: "bad_request" }, 400);
     }
+    // Strangers cannot squat a room: only uids the host invited connect,
+    // and an empty or absent list denies all.
+    if (role === "guest" && (uid === null || !this.guestAllow.includes(uid))) {
+      return this.refuse("not_invited", 403);
+    }
+    // One socket per guest login: the newest duplicate is refused, the
+    // first stays connected.
+    if (role === "guest" && this.hasGuestLogin(login as string)) {
+      return this.refuse("guest_duplicate", 409);
+    }
     if (role === "device" && this.deviceCount() >= MAX_DEVICES) {
-      return this.refuse("too_many_devices");
+      return this.refuse("too_many_devices", 429);
     }
     if (role === "guest" && this.guestCount() >= MAX_GUESTS) {
-      return this.refuse("too_many_guests");
+      return this.refuse("too_many_guests", 429);
     }
     if (role === "host") {
       this.closeHost(hostId as string);
@@ -189,12 +230,17 @@ export class UserRoom {
     return upgradeResponse(pair[0]);
   }
 
-  /** A full room refuses before the upgrade: no 101, no socket. */
-  private refuse(reason: string): Response {
-    return json({ error: reason }, 429);
+  /** A refused socket never upgrades: no 101, no socket. */
+  private refuse(reason: string, status: number): Response {
+    return json({ error: reason }, status);
   }
 
   webSocketMessage(socket: RoomSocket, message: string | ArrayBuffer): void {
+    // Signaling is small: every frame costs one token, and a socket that
+    // spends its budget is closed instead of answered.
+    if (!this.spendToken(socket)) {
+      return;
+    }
     if (typeof message !== "string") {
       socket.send(errorFrame("bad_frame"));
       return;
@@ -228,6 +274,12 @@ export class UserRoom {
       if (this.isPing(body)) {
         socket.send(pongFrame());
       }
+      return;
+    }
+    if (to === "room") {
+      // The host-to-room path: management frames for this room, handled
+      // here and never routed.
+      this.handleRoomFrame(socket, body);
       return;
     }
     // Guests never pair: pairing binds a device to the owner's hub, and a
@@ -274,6 +326,50 @@ export class UserRoom {
     }
   }
 
+  /**
+   * Spend one frame token, refilling from the clock. True spends and the
+   * frame proceeds; a socket past its budget is closed with 4009 and its
+   * frame dropped, with no error frame. The attachment is re-serialized
+   * on every spend so hibernation keeps the budget.
+   */
+  private spendToken(socket: RoomSocket): boolean {
+    const attachment = socket.deserializeAttachment();
+    if (attachment === null) {
+      return true;
+    }
+    const now = Date.now();
+    const rate = attachment.rate ?? { tokens: SOCKET_RATE_MAX, at: now };
+    const refilled = Math.min(
+      SOCKET_RATE_MAX,
+      rate.tokens + ((now - rate.at) * SOCKET_RATE_MAX) / SOCKET_RATE_WINDOW_MS,
+    );
+    if (refilled < 1) {
+      socket.close(4009, "rate_limited");
+      return false;
+    }
+    attachment.rate = { tokens: refilled - 1, at: now };
+    socket.serializeAttachment(attachment);
+    return true;
+  }
+
+  /**
+   * A management frame for this room: the host's invite list replaces the
+   * old one, silently. Anything else bounces; connected guests are never
+   * kicked, so a (re)connected host re-sends its list every time.
+   */
+  private handleRoomFrame(socket: RoomSocket, body: unknown): void {
+    if (socket.deserializeAttachment()?.role !== "host") {
+      socket.send(errorFrame("forbidden"));
+      return;
+    }
+    const uids = parseGuestAllow(body);
+    if (uids === null) {
+      socket.send(errorFrame("bad_frame"));
+      return;
+    }
+    this.guestAllow = uids;
+  }
+
   /** True when the body is an object whose `t` is `pair_init`. */
   private isPairInit(body: unknown): boolean {
     return (
@@ -312,6 +408,17 @@ export class UserRoom {
       }
     }
     return count;
+  }
+
+  /** True when a guest socket already holds `login`. */
+  private hasGuestLogin(login: string): boolean {
+    for (const socket of this.state.getWebSockets()) {
+      const attachment = socket.deserializeAttachment();
+      if (attachment?.role === "guest" && attachment.login === login) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /** Every attached guest's attachment, for a (re)connected host. */
