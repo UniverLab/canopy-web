@@ -10,7 +10,7 @@ same GitHub account, and forward opaque signaling messages between them.
 |---|---|
 | `GET /auth/login` | 302 to GitHub's authorize page (identity only, no scope) |
 | `GET /auth/callback` | exchanges the code, sets the `cr_session` cookie, 302 to `/` |
-| `POST /auth/logout` | clears the session cookie, 303 to `/` |
+| `POST /auth/logout` | revokes the session server-side, clears the cookie, 303 to `/` |
 | `GET /auth/me` | `{login}` for the session cookie, else 401 |
 | `GET /ws/device` | upgrades a browser socket into the user's room (cookie) |
 | `GET /ws/host` | upgrades a host socket into the user's room (GitHub token + id + label) |
@@ -36,12 +36,15 @@ connect only when the host invited their uid (`{"t":"guest_allow",
 "uids":[...]}` over the host-to-room path, empty denies all), one socket
 per guest login.
 
-## What it stores: nothing
+## What it stores: revoked sessions only
 
-No KV, no D1, no R2, no Durable Object storage. Room state is per-socket
-attachments plus three in-memory fields; when the sockets close, nothing of
-the user survives. The GitHub token is discarded after `/user`, and host
-token verifications live at most 5 minutes in isolate memory.
+One KV namespace, `SESSION_REVOKED`: logout writes the session's jti here
+(jti → exp, TTL 43200 like the session itself) and verification refuses
+revoked jtis. Nothing else persists — no D1, no R2, no Durable Object
+storage. Room state is per-socket attachments plus three in-memory fields;
+when the sockets close, nothing of the user survives. The GitHub token is
+discarded after `/user`, and host token verifications live at most 5
+minutes in isolate memory.
 
 ## Tests
 
@@ -69,7 +72,11 @@ globals.
    `wrangler secret put` for `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`,
    `SESSION_SECRET`, `TURN_KEY_ID` and `TURN_KEY_API_TOKEN` (the last two
    from a Cloudflare Realtime TURN key). Never in the repo.
-4. **Set the repository secret** — `CLOUDFLARE_API_TOKEN`, a token with
+4. **Create the revocation namespace** — from `apps/remote/worker/`:
+   `wrangler kv namespace create SESSION_REVOKED`, then put the returned
+   id in `wrangler.toml` (it ships as `REPLACE_WITH_SESSION_REVOKED_KV_ID`).
+   Until then logout only clears the cookie.
+5. **Set the repository secret** — `CLOUDFLARE_API_TOKEN`, a token with
    *Edit Workers*. The account id is inlined in `wrangler.toml`, so no
    second secret is needed.
 

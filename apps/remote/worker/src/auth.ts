@@ -130,10 +130,11 @@ async function verifySignature(
 /**
  * Verify a session cookie, or null when it is forged, expired, malformed
  * or revoked. Sessions minted before jti existed carry no jti and validate
- * until natural expiry; a revoked jti fails only while its entry's exp is
- * still in the future, so expired entries are ignored. Without the revoked
- * set (or when it errors) the consult is skipped: an outage must not lock
- * every session out.
+ * until natural expiry; a revoked jti fails unless its entry proves the
+ * session already expired, so expired entries are ignored while a present
+ * but unreadable entry still refuses. Without the revoked set (or when it
+ * errors) the consult is skipped: an outage must not lock every session
+ * out.
  */
 export async function verifySession(
   value: string,
@@ -163,8 +164,10 @@ export async function verifySession(
   if (entry === null) {
     return { uid: payload.uid, login: payload.login };
   }
+  // The entry must prove expiry: a present but unreadable value fails
+  // closed, so corruption can never un-revoke a session.
   const entryExp = Number(entry);
-  if (!Number.isFinite(entryExp) || entryExp <= nowSec) {
+  if (entry.trim() !== "" && Number.isFinite(entryExp) && entryExp <= nowSec) {
     return { uid: payload.uid, login: payload.login };
   }
   return null;

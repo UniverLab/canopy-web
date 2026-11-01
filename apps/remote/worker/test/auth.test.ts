@@ -288,6 +288,16 @@ describe("session revocation", () => {
     });
   });
 
+  it("a present but unreadable revocation entry still refuses", async () => {
+    for (const entry of ["not-a-number", "", "   ", "Infinity"]) {
+      const revoked = new FakeRevokedKV();
+      const value = await signSession(123, "octo", SECRET, NOW);
+      const jti = payloadOf(value)["jti"] as string;
+      await revoked.put(jti, entry, { expirationTtl: 43200 });
+      expect(await verifySession(value, SECRET, NOW + 60, revoked)).toBeNull();
+    }
+  });
+
   it("sessions minted before jti validate until natural expiry", async () => {
     const revoked = new FakeRevokedKV();
     const value = await signLegacy(123, "octo", SECRET, NOW);
