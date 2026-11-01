@@ -126,6 +126,9 @@ function plateStyle(): string {
     `.plate-svg .edge.fail{stroke:#ff6b6b;stroke-dasharray:1.4 1.1;opacity:.7}` +
     `.plate-svg .edge.error{stroke:currentColor;stroke-width:.3;stroke-dasharray:.4 .8;opacity:.45}` +
     `.plate-svg .edge.order{stroke:currentColor;stroke-width:.3;stroke-dasharray:.5 1.1;stroke-linecap:round;opacity:.9}` +
+    `.plate-svg #plate-arrow path{fill:var(--canopy,#00a9a0);fill-opacity:.85}` +
+    `.plate-svg #plate-arrow-fail path{fill:#ff6b6b;fill-opacity:.7}` +
+    `.plate-svg #plate-arrow-error path{fill:#e8f6f1;fill-opacity:.45}` +
     `.plate-svg .node .shape{fill:color-mix(in srgb, var(--nc, var(--canopy, #00a9a0)) 22%, #04110f);stroke:var(--nc, var(--canopy, #00a9a0));stroke-width:.45}` +
     `.plate-svg .shape-chip .shape{fill:#0c1416;stroke:var(--ink-dim,#9a9890)}` +
     `.plate-svg .shape-check .shape,.plate-svg .shape-gate .shape{fill:#0c1416;stroke:#e8f6f1}` +
@@ -202,6 +205,36 @@ function renderLitEdge(edge: PlacedEdge, legs: number[], total: number, seconds:
   );
 }
 
+/**
+ * One marker per flow class (pass/fail/error share the shape, the CSS
+ * paints each): a 1.3-unit head in user units, tip at the path end.
+ * Order edges are layout guides, not flow, so they carry no marker.
+ */
+function plateMarkers(): string {
+  const marker = (id: string): string =>
+    `<marker id="${id}" viewBox="0 0 10 10" refX="8" refY="5" ` +
+    `markerWidth="1.3" markerHeight="1.3" markerUnits="userSpaceOnUse" ` +
+    `orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>`;
+  return (
+    `<defs>${marker("plate-arrow")}${marker("plate-arrow-fail")}` +
+    `${marker("plate-arrow-error")}</defs>`
+  );
+}
+
+/** The marker-end for a flow edge, or nothing for order guides. */
+function edgeMarker(cls: string): string {
+  if (cls === "fail") {
+    return ` marker-end="url(#plate-arrow-fail)"`;
+  }
+  if (cls === "error") {
+    return ` marker-end="url(#plate-arrow-error)"`;
+  }
+  if (cls === "order") {
+    return "";
+  }
+  return ` marker-end="url(#plate-arrow)"`;
+}
+
 function renderEdges(layout: PlateLayout): string {
   const litOf = new Map(layout.walkFails.map((lit) => [`${lit.from}→${lit.to}`, lit.legs]));
   const total = Math.round(layout.walkSeconds / STEP_SECONDS);
@@ -213,7 +246,7 @@ function renderEdges(layout: PlateLayout): string {
   return edges
     .map((edge) => {
       const base =
-        `<path class="edge ${edge.cls}" d="${edge.d}" ` +
+        `<path class="edge ${edge.cls}" d="${edge.d}"${edgeMarker(edge.cls)} ` +
         `data-from="${escape(edge.from)}" data-to="${escape(edge.to)}"/>`;
       const legs = edge.cls === "fail" ? litOf.get(`${edge.from}→${edge.to}`) : undefined;
       return legs === undefined || legs.length === 0 || total <= 0
@@ -420,6 +453,7 @@ function renderLayout(layout: PlateLayout, state: PlateState | undefined): strin
     `<title>${escape(layout.name)}</title>` +
     `<desc>${escape(desc)}</desc>` +
     `<style>${style}</style>` +
+    plateMarkers() +
     `<g class="edges">${renderEdges(layout)}</g>` +
     `<g class="groups">${renderGroups(layout, state)}</g>` +
     `<g class="nodes">${renderNodes(layout, state)}</g>` +

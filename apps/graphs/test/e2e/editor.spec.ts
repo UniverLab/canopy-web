@@ -134,6 +134,17 @@ for (const viewport of VIEWPORTS) {
       .evaluate((el) => getComputedStyle(el).stroke);
     expect(failStroke).toBe("rgb(255, 107, 107)");
 
+    // Directed edges carry arrowheads: one marker per flow class, wired
+    // to its edge lines.
+    await expect(page.locator("#editor-canvas marker#edge-arrow")).toHaveCount(1);
+    await expect(page.locator("#editor-canvas marker#edge-arrow-fail")).toHaveCount(1);
+    const markers = await page
+      .locator("#editor-canvas g.edge .edge-line")
+      .evaluateAll((els) => els.map((el) => el.getAttribute("marker-end")));
+    expect(markers).toHaveLength(3);
+    expect(markers.filter((marker) => marker === "url(#edge-arrow)")).toHaveLength(2);
+    expect(markers.filter((marker) => marker === "url(#edge-arrow-fail)")).toHaveLength(1);
+
     // Deselect into the graph view and give the graph its slug name.
     await page.locator("#editor-canvas").click({ position: { x: 4, y: 4 } });
     await expect(page.locator("#graph-name")).toHaveValue("untitled");

@@ -69,11 +69,62 @@ function nodeBoxes(svg: string): Box[] {
 /** The drawn edges: classes and endpoints from their data attributes. */
 function drawnEdges(svg: string): Edge[] {
   const edges: Edge[] = [];
-  const pattern = /<path class="edge ([a-z]+)" d="[^"]*" data-from="([^"]+)" data-to="([^"]+)"\/>/g;
+  const pattern =
+    /<path class="edge ([a-z]+)" d="[^"]*"( marker-end="url\(#[a-z-]+\)")? data-from="([^"]+)" data-to="([^"]+)"\/>/g;
   for (const match of svg.matchAll(pattern)) {
-    edges.push({ cls: match[1] ?? "", from: match[2] ?? "", to: match[3] ?? "" });
+    edges.push({ cls: match[1] ?? "", from: match[3] ?? "", to: match[4] ?? "" });
   }
   return edges;
+}
+
+interface DrawnPath {
+  cls: string;
+  d: string;
+  marker: string | null;
+  to: string;
+}
+
+/** The drawn edge paths with their marker-end and data, for arrowhead checks. */
+function drawnPaths(svg: string): DrawnPath[] {
+  const paths: DrawnPath[] = [];
+  const pattern =
+    /<path class="edge ([a-z]+)" d="([^"]*)"( marker-end="url\(#([a-z-]+)\)")? data-from="[^"]+" data-to="([^"]+)"\/>/g;
+  for (const match of svg.matchAll(pattern)) {
+    paths.push({ cls: match[1] ?? "", d: match[2] ?? "", marker: match[4] ?? null, to: match[5] ?? "" });
+  }
+  return paths;
+}
+
+/** The drawn ensemble boxes: name and outline rect. */
+function groupBoxes(svg: string): Box[] {
+  const boxes: Box[] = [];
+  const pattern =
+    /<g class="ensemble" data-name="([^"]+)"><rect class="group-box" x="(-?[\d.]+)" y="(-?[\d.]+)" width="(-?[\d.]+)" height="(-?[\d.]+)"[^>]*>/g;
+  for (const match of svg.matchAll(pattern)) {
+    const x = Number(match[2]);
+    const y = Number(match[3]);
+    const w = Number(match[4]);
+    const h = Number(match[5]);
+    boxes.push({ name: match[1] ?? "", cx: x + w / 2, cy: y + h / 2, w, h, lane: "main" });
+  }
+  return boxes;
+}
+
+/** The last endpoint of a cubic path string. */
+function pathEnd(d: string): [number, number] {
+  const nums = (d.match(/-?[\d.]+/g) ?? []).map(Number);
+  return [nums[nums.length - 2] ?? Number.NaN, nums[nums.length - 1] ?? Number.NaN];
+}
+
+/**
+ * Whether a point sits inside a box. The box shrinks by a hair so a tip
+ * exactly on the border (a group endpoint, already exact) counts as out,
+ * while a tip at the centre — the bug this guards — still counts as in.
+ */
+function inside(box: Box, x: number, y: number): boolean {
+  const w = box.w / 2 - 0.05;
+  const h = box.h / 2 - 0.05;
+  return x >= box.cx - w && x <= box.cx + w && y >= box.cy - h && y <= box.cy + h;
 }
 
 /** The drawn ensemble names. */
@@ -397,6 +448,56 @@ describe("fallback colours", () => {
     expect(style).toContain(".plate-svg .member-shape{fill:color-mix(in srgb, var(--nc, var(--canopy, #00a9a0)) 22%, #04110f)");
     expect(style).toContain(".plate-svg .shape-commit .shape{fill:color-mix(in srgb, var(--canopy, #00a9a0) 35%, #04110f)");
   });
+});
+
+describe("plate arrowheads", () => {
+  const MARKER_OF: Record<string, string | null> = {
+    pass: "plate-arrow",
+    fail: "plate-arrow-fail",
+    error: "plate-arrow-error",
+    order: null,
+  };
+  for (const [name, document] of GRAPHS) {
+    const svg = renderPlate(document);
+    it(`${name}: every flow edge carries its class marker, order edges none`, () => {
+      expect(svg).toContain(`<marker id="plate-arrow"`);
+      expect(svg).toContain(`<marker id="plate-arrow-fail"`);
+      expect(svg).toContain(`<marker id="plate-arrow-error"`);
+      const paths = drawnPaths(svg);
+      expect(paths.length).toBeGreaterThan(0);
+      for (const path of paths) {
+        expect(path.marker, `${path.cls} marker`).toBe(MARKER_OF[path.cls] ?? null);
+      }
+    });
+
+    it(`${name}: arrow tips land outside the target shape`, () => {
+      const boxes = new Map(
+        [...nodeBoxes(svg), ...groupBoxes(svg)].map((box) => [box.name, box] as const),
+      );
+      for (const path of drawnPaths(svg)) {
+        if (path.cls === "order") {
+          continue;
+        }
+        const box = boxes.get(path.to);
+        expect(box, `target box ${path.to}`).toBeDefined();
+        if (box === undefined) {
+          continue;
+        }
+        const [x, y] = pathEnd(path.d);
+        expect(inside(box, x, y), `${path.to} tip at ${x},${y}`).toBe(false);
+      }
+    });
+
+    it(`${name}: the vertical plate carries arrowheads too`, () => {
+      const vertical = renderPlate(document, "vertical");
+      expect(vertical).toContain(`<marker id="plate-arrow"`);
+      const paths = drawnPaths(vertical);
+      expect(paths.length).toBeGreaterThan(0);
+      for (const path of paths) {
+        expect(path.marker, `${path.cls} marker`).toBe(MARKER_OF[path.cls] ?? null);
+      }
+    });
+  }
 });
 
 describe("the pattern figures", () => {

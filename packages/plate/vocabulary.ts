@@ -105,3 +105,36 @@ export function edgePath(a: Pt, b: Pt, fail: boolean, lift = 0, forceArc = false
   const rise = Math.min(a.y, b.y) - 8 - Math.abs(a.x - b.x) * 0.1 - lift;
   return `M${a.x} ${a.y - 3} C${a.x} ${rise} ${b.x} ${rise} ${b.x} ${b.y - 3}`;
 }
+
+/** Gap between an arrowhead tip and the target border, in plate units. */
+export const ARROW_MARGIN = 0.8;
+
+/**
+ * Pull an edge endpoint back so an arrowhead tip lands on the target's
+ * border instead of hiding under its shape. `half` is the target's
+ * half-extent along the arrival `axis`, `arrive` the arrival direction
+ * (+1/-1; null follows the endpoint delta, for S-curves), and `bias` the
+ * offset the path builder already applies on that axis (arcs end 3 short
+ * of b). Returns b unchanged when the bias already covers the pullback
+ * or the endpoints overlap with no room to shorten.
+ */
+export function shortenEdgeEnd(
+  a: Pt,
+  b: Pt,
+  half: number,
+  axis: "x" | "y",
+  arrive: 1 | -1 | null,
+  bias = 0,
+  margin = ARROW_MARGIN,
+): Pt {
+  const pull = half + margin - bias;
+  if (pull <= 0) {
+    return b;
+  }
+  const delta = axis === "x" ? b.x - a.x : b.y - a.y;
+  const dir = arrive ?? (delta === 0 ? 1 : Math.sign(delta));
+  if (arrive === null && Math.abs(delta) < pull + 1.5) {
+    return b;
+  }
+  return axis === "x" ? { x: b.x - dir * pull, y: b.y } : { x: b.x, y: b.y - dir * pull };
+}

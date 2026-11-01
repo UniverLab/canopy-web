@@ -48,7 +48,7 @@ import {
 } from "./layout.js";
 import { rankUnits } from "./rank.js";
 import { generateWalk, happyRandom } from "./walk.js";
-import { GEOM, TYPE, type Pt } from "./vocabulary.js";
+import { GEOM, TYPE, shortenEdgeEnd, type Pt } from "./vocabulary.js";
 
 /** Gap between two units side by side in one rank (viewBox units). */
 const UNIT_GAP = 8;
@@ -400,14 +400,38 @@ export function layoutPlateVertical(
       member.y = num(member.y + dy);
     }
   }
-  const edges: PlacedEdge[] = raw.map((edge) => ({
-    from: edge.from,
-    to: edge.to,
-    cls: edge.cls,
-    d: smooth(
-      edgePathV(shift(edge.a), shift(edge.b), edge.cls === "fail", lifts.get(edge) ?? 0, edge.forceArc),
-    ),
-  }));
+  const targetOf = new Map<string, { hx: number; hy: number; group: boolean }>();
+  for (const node of nodes) {
+    const rot = GEOM[node.shape].rot !== 0;
+    targetOf.set(node.name, {
+      hx: ((rot ? node.w * Math.SQRT2 : node.w) / 2),
+      hy: ((rot ? node.h * Math.SQRT2 : node.h) / 2),
+      group: false,
+    });
+  }
+  for (const group of groups) {
+    targetOf.set(group.name, { hx: group.w / 2, hy: group.h / 2, group: true });
+  }
+  const edges: PlacedEdge[] = raw.map((edge) => {
+    const a = shift(edge.a);
+    const b = shift(edge.b);
+    // Mirror of the horizontal plate: S-curves arrive along the column
+    // (shorten nodes in y), arcs arrive from the left (shorten in x).
+    const target = edge.cls === "order" ? undefined : targetOf.get(edge.to);
+    const arc = arcs(edge);
+    let end = b;
+    if (target !== undefined && (!target.group || arc)) {
+      end = arc
+        ? shortenEdgeEnd(a, b, target.hx, "x", 1, 3)
+        : shortenEdgeEnd(a, b, target.hy, "y", null, 0);
+    }
+    return {
+      from: edge.from,
+      to: edge.to,
+      cls: edge.cls,
+      d: smooth(edgePathV(a, end, edge.cls === "fail", lifts.get(edge) ?? 0, arc)),
+    };
+  });
 
   // The token walks the walk — the pass chain with its fail detours —
   // through this orientation's curves. A fail leg rides the arc of the

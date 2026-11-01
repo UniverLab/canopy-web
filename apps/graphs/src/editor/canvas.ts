@@ -20,7 +20,7 @@
  * hook. Selection is announced through `select`; a finished drag through
  * `changed`, which is where the app autosaves.
  */
-import { GEOM, PALETTE, TYPE, edgePath, type Pt } from "../../../../packages/plate/vocabulary.js";
+import { GEOM, PALETTE, TYPE, edgePath, shortenEdgeEnd, type Pt } from "../../../../packages/plate/vocabulary.js";
 import { LIFT_STEP, PLATE_SCALE, labelHalfOf, nodeBottom, plateLabel } from "../../../../packages/plate/layout.js";
 import { classOf, type EdgeClass } from "../../../../packages/plate/document.js";
 import { shapeOfKind } from "./kinds.js";
@@ -90,9 +90,35 @@ function canvasStyle(): string {
     `.editor-svg .edge.fail .edge-line{stroke:${PALETTE.red};stroke-dasharray:1 .8}` +
     `.editor-svg .edge.error .edge-line{stroke:currentColor;stroke-width:.1;stroke-dasharray:.4 .7;opacity:.5}` +
     `.editor-svg .edge.selected .edge-line{stroke-width:.26;opacity:1}` +
+    `.editor-svg #edge-arrow path{fill:var(--canopy,#00a9a0);fill-opacity:.85}` +
+    `.editor-svg #edge-arrow-fail path{fill:${PALETTE.red};fill-opacity:.85}` +
+    `.editor-svg #edge-arrow-error path{fill:${PALETTE.label};fill-opacity:.5}` +
     `.editor-svg .edge-hit{fill:none;stroke:transparent;stroke-width:1.6;pointer-events:stroke;cursor:pointer}` +
     `.editor-svg .rubber{fill:none;stroke:var(--teal,#00a9a0);stroke-width:.12;stroke-dasharray:.6 .5;pointer-events:none}`
   );
+}
+
+/** One arrowhead marker per flow class; the CSS above paints each. */
+function canvasMarkers(): string {
+  const marker = (id: string): string =>
+    `<marker id="${id}" viewBox="0 0 10 10" refX="8" refY="5" ` +
+    `markerWidth="1.3" markerHeight="1.3" markerUnits="userSpaceOnUse" ` +
+    `orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>`;
+  return (
+    `<defs>${marker("edge-arrow")}${marker("edge-arrow-fail")}` +
+    `${marker("edge-arrow-error")}</defs>`
+  );
+}
+
+/** The marker-end for an edge class. */
+function edgeMarker(cls: string): string {
+  if (cls === "fail") {
+    return "edge-arrow-fail";
+  }
+  if (cls === "error") {
+    return "edge-arrow-error";
+  }
+  return "edge-arrow";
 }
 
 export class Canvas {
@@ -116,7 +142,7 @@ export class Canvas {
       host.prepend(svg);
     }
     this.svg = svg;
-    svg.innerHTML = `<style>${canvasStyle()}</style><g class="world"></g>`;
+    svg.innerHTML = `<style>${canvasStyle()}</style>${canvasMarkers()}<g class="world"></g>`;
     this.world = svg.querySelector("g.world") as SVGGElement;
     svg.addEventListener("pointerdown", (event) => this.down(event));
     svg.addEventListener("pointermove", (event) => this.move(event));
@@ -248,17 +274,23 @@ export class Canvas {
       .map(({ edge, cls, from, to }) => {
         const a: Pt = { x: from.x / SCALE, y: from.y / SCALE };
         const b: Pt = { x: to.x / SCALE, y: to.y / SCALE };
+        const arc = cls === "fail" && Math.abs(b.y - a.y) <= 6;
         let lift = 0;
-        if (cls === "fail" && Math.abs(b.y - a.y) <= 6) {
+        if (arc) {
           lift = (arcIndex.get(edge.to) ?? 0) * LIFT_STEP;
           arcIndex.set(edge.to, (arcIndex.get(edge.to) ?? 0) + 1);
         }
-        const d = edgePath(a, b, cls === "fail", lift);
+        const geom = GEOM[shapeOfKind(to.kind)];
+        const rot = geom.rot !== 0;
+        const end = arc
+          ? shortenEdgeEnd(a, b, (rot ? geom.h * Math.SQRT2 : geom.h) / 2, "y", 1, 3)
+          : shortenEdgeEnd(a, b, (rot ? geom.w * Math.SQRT2 : geom.w) / 2, "x", null, 0);
+        const d = edgePath(a, end, cls === "fail", lift, arc);
         const selected = this.selected.edge === edge.id;
         return (
           `<g class="edge ${cls}${selected ? " selected" : ""}" data-edge="${edge.id}">` +
           `<path class="edge-hit" d="${d}" transform="scale(${SCALE})"/>` +
-          `<path class="edge-line" d="${d}" transform="scale(${SCALE})"/>` +
+          `<path class="edge-line" d="${d}" marker-end="url(#${edgeMarker(cls)})" transform="scale(${SCALE})"/>` +
           `</g>`
         );
       })
@@ -279,7 +311,7 @@ export class Canvas {
     const at = this.toWorld(this.interaction.cx, this.interaction.cy);
     const a: Pt = { x: from.x / SCALE, y: from.y / SCALE };
     const b: Pt = { x: at.x / SCALE, y: at.y / SCALE };
-    return `<path class="rubber" d="${edgePath(a, b, false)}" transform="scale(${SCALE})"/>`;
+    return `<path class="rubber" d="${edgePath(a, b, false)}" marker-end="url(#edge-arrow)" transform="scale(${SCALE})"/>`;
   }
 
   /** One node: plate geometry, the truncated label, the output handle. */

@@ -18,7 +18,7 @@
 import { classOf, parseDocument, shapeOf, type EdgeClass, type Strategy } from "./document.js";
 import { rankUnits } from "./rank.js";
 import { generateWalk, happyRandom, STEP_SECONDS, type WalkStep } from "./walk.js";
-import { GEOM, TYPE, edgePath, type Kind, type Pt } from "./vocabulary.js";
+import { GEOM, TYPE, edgePath, shortenEdgeEnd, type Kind, type Pt } from "./vocabulary.js";
 
 /** The plate's two orientations: ranks left to right, or top to bottom. */
 export type Orientation = "horizontal" | "vertical";
@@ -515,14 +515,39 @@ export function layoutPlate(document: unknown, random: () => number = happyRando
       member.y = num(member.y + dy);
     }
   }
-  const edges: PlacedEdge[] = raw.map((edge) => ({
-    from: edge.from,
-    to: edge.to,
-    cls: edge.cls,
-    d: smooth(
-      edgePath(shift(edge.a), shift(edge.b), edge.cls === "fail", lifts.get(edge) ?? 0, edge.forceArc),
-    ),
-  }));
+  const targetOf = new Map<string, { hx: number; hy: number; group: boolean }>();
+  for (const node of nodes) {
+    const rot = GEOM[node.shape].rot !== 0;
+    targetOf.set(node.name, {
+      hx: ((rot ? node.w * Math.SQRT2 : node.w) / 2),
+      hy: ((rot ? node.h * Math.SQRT2 : node.h) / 2),
+      group: false,
+    });
+  }
+  for (const group of groups) {
+    targetOf.set(group.name, { hx: group.w / 2, hy: group.h / 2, group: true });
+  }
+  const edges: PlacedEdge[] = raw.map((edge) => {
+    const a = shift(edge.a);
+    const b = shift(edge.b);
+    // Arrowhead tips land on the target border: node endpoints sit on
+    // centres, so both branches shorten; group endpoints already sit on
+    // the box border, except arcs, whose -3 end dives inside the box.
+    const target = edge.cls === "order" ? undefined : targetOf.get(edge.to);
+    const arc = arcs(edge);
+    let end = b;
+    if (target !== undefined && (!target.group || arc)) {
+      end = arc
+        ? shortenEdgeEnd(a, b, target.hy, "y", 1, 3)
+        : shortenEdgeEnd(a, b, target.hx, "x", null, 0);
+    }
+    return {
+      from: edge.from,
+      to: edge.to,
+      cls: edge.cls,
+      d: smooth(edgePath(a, end, edge.cls === "fail", lifts.get(edge) ?? 0, arc)),
+    };
+  });
 
   // The token walks the walk — the pass chain with its fail detours —
   // through this orientation's curves. A fail leg rides the arc of the
