@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, expect, it } from "vitest";
 import { signSession } from "../src/auth.js";
+import { sha256Hex } from "../src/codec.js";
 import type { RoomAttachment } from "../src/protocol.js";
 import { UserRoom, newConnId } from "../src/room.js";
 import { handleDeviceWs, type RoomNamespace, type RoomStub, type WsEnv } from "../src/ws.js";
@@ -12,6 +13,10 @@ const HOST_ID = "0123456789abcdef";
 const OWNER_UID = 111;
 const GUEST_UID = 222;
 const GUEST_LOGIN = "guest-user";
+const INVITE_CODE = "CNR-0123456789ABCDEF";
+const INVITE_HASH_A = "a1".repeat(32);
+const INVITE_HASH_B = "b2".repeat(32);
+const FAR_FUTURE = 9999999999;
 
 function upgradeRequest(role: string, extra: Record<string, string> = {}): Request {
   const headers = new Headers({ upgrade: "websocket", "x-relay-role": role, ...extra });
@@ -20,6 +25,10 @@ function upgradeRequest(role: string, extra: Record<string, string> = {}): Reque
 
 function guestHeaders(extra: Record<string, string> = {}): Record<string, string> {
   return { "x-relay-login": GUEST_LOGIN, "x-relay-uid": String(GUEST_UID), ...extra };
+}
+
+function inviteHeaders(hash: string, extra: Record<string, string> = {}): Record<string, string> {
+  return guestHeaders({ "x-relay-invite-hash": hash, ...extra });
 }
 
 /** A real client socket, narrowed to what the tests drive. */
@@ -115,8 +124,34 @@ class FakeNamespace implements RoomNamespace {
   }
 }
 
-async function guestRequest(guestOf: string | null, cookie?: string): Promise<Request> {
-  const url = guestOf === null ? "/ws/device" : `/ws/device?guest_of=${guestOf}`;
+/** A room binding that runs the door's forward against a real room. */
+class RoomBackedNamespace implements RoomNamespace {
+  names: string[] = [];
+
+  constructor(private readonly room: UserRoom) {}
+
+  idFromName(name: string): unknown {
+    this.names.push(name);
+    return name;
+  }
+
+  get(id: unknown): RoomStub {
+    void id;
+    const room = this.room;
+    return {
+      fetch: (request: Request): Promise<Response> => Promise.resolve(room.fetch(request)),
+    };
+  }
+}
+
+async function guestRequest(guestOf: string | null, cookie?: string, invite?: string): Promise<Request> {
+  let url = "/ws/device";
+  if (guestOf !== null) {
+    url = `/ws/device?guest_of=${guestOf}`;
+    if (invite !== undefined) {
+      url += `&invite=${encodeURIComponent(invite)}`;
+    }
+  }
   const headers = new Headers({ upgrade: "websocket", origin: ORIGIN });
   const session = await signSession(GUEST_UID, GUEST_LOGIN, SECRET, Math.floor(Date.now() / 1000));
   headers.set("cookie", cookie ?? `cr_session=${session}`);
@@ -131,21 +166,32 @@ describe("GET /ws/device?guest_of", () => {
 
   it("forwards a guest to the owner's room with its own identity", async () => {
     const { namespace, env } = setupDoor();
-    const response = await handleDeviceWs(await guestRequest(String(OWNER_UID)), env);
+    const response = await handleDeviceWs(await guestRequest(String(OWNER_UID), undefined, INVITE_CODE), env);
     expect(response.status).toBe(200);
     expect(namespace.names).toEqual([String(OWNER_UID)]);
     const forwarded = namespace.forwarded[0] as Request;
     expect(forwarded.headers.get("x-relay-role")).toBe("guest");
     expect(forwarded.headers.get("x-relay-login")).toBe(GUEST_LOGIN);
     expect(forwarded.headers.get("x-relay-uid")).toBe(String(GUEST_UID));
+    expect(forwarded.headers.get("x-relay-invite-hash")).toBe(await sha256Hex(INVITE_CODE));
     expect(forwarded.headers.get("cookie")).toBeNull();
     expect(forwarded.headers.get("authorization")).toBeNull();
+  });
+
+  it("answers 403 without an invite and never reaches a room", async () => {
+    const { namespace, env } = setupDoor();
+    for (const invite of [undefined, ""]) {
+      const response = await handleDeviceWs(await guestRequest(String(OWNER_UID), undefined, invite), env);
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ error: "bad_invite" });
+    }
+    expect(namespace.names).toEqual([]);
   });
 
   it("answers 401 without a session or with a forged one, even as a guest", async () => {
     const { namespace, env } = setupDoor();
     for (const cookie of ["other=1", "cr_session=forged.value"]) {
-      const response = await handleDeviceWs(await guestRequest(String(OWNER_UID), cookie), env);
+      const response = await handleDeviceWs(await guestRequest(String(OWNER_UID), cookie, INVITE_CODE), env);
       expect(response.status).toBe(401);
       expect(await response.json()).toEqual({ error: "unauthorized" });
     }
@@ -157,7 +203,7 @@ describe("GET /ws/device?guest_of", () => {
     // 9007199254740993 is 2^53 + 1: well-formed digits that lose
     // precision in a Number, so they must fail closed, not land elsewhere.
     for (const guestOf of ["0", "-7", "abc", "12x", "", " 42", "4.5", "9007199254740993"]) {
-      const response = await handleDeviceWs(await guestRequest(guestOf), env);
+      const response = await handleDeviceWs(await guestRequest(guestOf, undefined, INVITE_CODE), env);
       expect(response.status).toBe(400);
       expect(await response.json()).toEqual({ error: "bad_guest" });
     }
@@ -171,17 +217,17 @@ describe("GET /ws/device?guest_of", () => {
     expect(namespace.names).toEqual([String(GUEST_UID)]);
     const forwarded = namespace.forwarded[0] as Request;
     expect(forwarded.headers.get("x-relay-role")).toBe("device");
-    expect(forwarded.headers.get("x-relay-login")).toBeNull();
-    expect(forwarded.headers.get("x-relay-uid")).toBeNull();
+    expect(forwarded.headers.get("x-relay-login")).toBe(GUEST_LOGIN);
+    expect(forwarded.headers.get("x-relay-uid")).toBe(String(GUEST_UID));
   });
 });
 
 describe("guest fetch", () => {
   it("accepts a guest without any hosts frame", async () => {
     const { state, room } = await setup();
-    room.guestAllow = [GUEST_UID];
+    room.guestInvites = [{ code_hash: INVITE_HASH_A, uid: GUEST_UID, expires: FAR_FUTURE }];
     attachFake(state, "host", { host_id: HOST_ID, label: "devbox" });
-    const response = room.fetch(upgradeRequest("guest", guestHeaders()));
+    const response = room.fetch(upgradeRequest("guest", inviteHeaders(INVITE_HASH_A)));
     expect(response.status).toBe(101);
     const attachment = state.getWebSockets()[1]?.deserializeAttachment();
     expect(attachment?.role).toBe("guest");
@@ -212,9 +258,9 @@ describe("guest fetch", () => {
 
   it("announces each guest to the hosts with its GitHub identity", async () => {
     const { state, room } = await setup();
-    room.guestAllow = [GUEST_UID];
+    room.guestInvites = [{ code_hash: INVITE_HASH_A, uid: GUEST_UID, expires: FAR_FUTURE }];
     const host = attachFake(state, "host", { host_id: HOST_ID, label: "devbox" });
-    room.fetch(upgradeRequest("guest", guestHeaders()));
+    room.fetch(upgradeRequest("guest", inviteHeaders(INVITE_HASH_A)));
     const guestConn = state.getWebSockets()[1]?.deserializeAttachment()?.conn;
     expect(host.frames()).toEqual([
       {
@@ -242,8 +288,8 @@ describe("guest fetch", () => {
 
   it("keeps guests out of the hosts broadcasts", async () => {
     const { state, room } = await setup();
-    room.guestAllow = [GUEST_UID];
-    const guest = clientOf(room.fetch(upgradeRequest("guest", guestHeaders())));
+    room.guestInvites = [{ code_hash: INVITE_HASH_A, uid: GUEST_UID, expires: FAR_FUTURE }];
+    const guest = clientOf(room.fetch(upgradeRequest("guest", inviteHeaders(INVITE_HASH_A))));
     guest.accept();
     const device = clientOf(room.fetch(upgradeRequest("device")));
     device.accept();
@@ -264,13 +310,13 @@ describe("guest fetch", () => {
 
   it("refuses the 9th guest with 429, apart from the device cap", async () => {
     const { state, room } = await setup();
-    room.guestAllow = [GUEST_UID];
+    room.guestInvites = [{ code_hash: INVITE_HASH_A, uid: GUEST_UID, expires: FAR_FUTURE }];
     for (let index = 0; index < 8; index += 1) {
       attachFake(state, "device");
       attachFake(state, "guest", { login: `guest-${index}`, uid: 1000 + index });
     }
     const started = Date.now();
-    const ninthGuest = room.fetch(upgradeRequest("guest", guestHeaders()));
+    const ninthGuest = room.fetch(upgradeRequest("guest", inviteHeaders(INVITE_HASH_A)));
     expect(Date.now() - started).toBeLessThan(1000);
     expect(ninthGuest.status).toBe(429);
     expect(await ninthGuest.json()).toEqual({ error: "too_many_guests" });
@@ -310,7 +356,9 @@ describe("guest routing", () => {
     const host = attachFake(state, "host", { host_id: HOST_ID, label: "devbox" });
     const guestConn = connOf(guest);
     room.webSocketMessage(guest, JSON.stringify({ to: `h:${HOST_ID}`, body: { t: "offer", sdp: "v=0" } }));
-    expect(host.frames()).toEqual([{ from: `d:${guestConn}`, body: { t: "offer", sdp: "v=0" } }]);
+    expect(host.frames()).toEqual([
+      { from: `d:${guestConn}`, login: GUEST_LOGIN, uid: GUEST_UID, body: { t: "offer", sdp: "v=0" } },
+    ]);
     room.webSocketMessage(host, JSON.stringify({ to: `d:${guestConn}`, body: { t: "answer", sdp: "v=0" } }));
     expect(guest.frames()).toEqual([{ from: `h:${HOST_ID}`, body: { t: "answer", sdp: "v=0" } }]);
   });
@@ -355,10 +403,12 @@ describe("guest routing", () => {
 
   it("pins the exact identity notice bytes the hub matches", async () => {
     const { state, room } = await setup();
-    room.guestAllow = [7];
+    room.guestInvites = [{ code_hash: INVITE_HASH_A, uid: 7, expires: FAR_FUTURE }];
     const host = attachFake(state, "host", { host_id: HOST_ID, label: "devbox" });
     attachFake(state, "guest");
-    room.fetch(upgradeRequest("guest", guestHeaders({ "x-relay-login": "pinned", "x-relay-uid": "7" })));
+    room.fetch(
+      upgradeRequest("guest", inviteHeaders(INVITE_HASH_A, { "x-relay-login": "pinned", "x-relay-uid": "7" })),
+    );
     const pinnedConn = state.getWebSockets()[2]?.deserializeAttachment()?.conn;
     expect(host.sent).toEqual([
       `{"from":"relay","body":{"t":"device_identity","conn":"${pinnedConn}","role":"guest","login":"pinned","uid":7}}`,
@@ -369,33 +419,33 @@ describe("guest routing", () => {
 describe("guest allowlist", () => {
   it("refuses an unlisted guest with 403, before the upgrade", async () => {
     const { state, room } = await setup();
-    room.guestAllow = [999];
-    const refused = room.fetch(upgradeRequest("guest", guestHeaders()));
+    room.guestInvites = [{ code_hash: INVITE_HASH_B, uid: 999, expires: FAR_FUTURE }];
+    const refused = room.fetch(upgradeRequest("guest", inviteHeaders(INVITE_HASH_A)));
     expect(refused.status).toBe(403);
-    expect(await refused.json()).toEqual({ error: "not_invited" });
+    expect(await refused.json()).toEqual({ error: "bad_invite" });
     expect((refused as unknown as { webSocket?: unknown }).webSocket ?? null).toBeNull();
     expect(state.getWebSockets()).toHaveLength(0);
   });
 
   it("denies every guest on an empty list", async () => {
     const { room } = await setup();
-    room.guestAllow = [];
-    const refused = room.fetch(upgradeRequest("guest", guestHeaders()));
+    room.guestInvites = [];
+    const refused = room.fetch(upgradeRequest("guest", inviteHeaders(INVITE_HASH_A)));
     expect(refused.status).toBe(403);
-    expect(await refused.json()).toEqual({ error: "not_invited" });
+    expect(await refused.json()).toEqual({ error: "bad_invite" });
   });
 
   it("denies every guest when no host ever sent a list", async () => {
     const { room } = await setup();
-    const refused = room.fetch(upgradeRequest("guest", guestHeaders()));
+    const refused = room.fetch(upgradeRequest("guest", inviteHeaders(INVITE_HASH_A)));
     expect(refused.status).toBe(403);
-    expect(await refused.json()).toEqual({ error: "not_invited" });
+    expect(await refused.json()).toEqual({ error: "bad_invite" });
   });
 
   it("passes a listed guest with 101", async () => {
     const { state, room } = await setup();
-    room.guestAllow = [GUEST_UID];
-    const response = room.fetch(upgradeRequest("guest", guestHeaders()));
+    room.guestInvites = [{ code_hash: INVITE_HASH_A, uid: GUEST_UID, expires: FAR_FUTURE }];
+    const response = room.fetch(upgradeRequest("guest", inviteHeaders(INVITE_HASH_A)));
     expect(response.status).toBe(101);
     expect(state.getWebSockets()).toHaveLength(1);
   });
@@ -403,8 +453,18 @@ describe("guest allowlist", () => {
   it("admits through the real frame a host fake sends", async () => {
     const { state, room } = await setup();
     const host = attachFake(state, "host", { host_id: HOST_ID, label: "devbox" });
-    room.webSocketMessage(host, JSON.stringify({ to: "room", body: { t: "guest_allow", uids: [GUEST_UID] } }));
-    const response = room.fetch(upgradeRequest("guest", guestHeaders()));
+    room.webSocketMessage(
+      host,
+      JSON.stringify({
+        to: "room",
+        body: {
+          t: "guest_allow",
+          uids: [GUEST_UID],
+          invites: [{ code_hash: INVITE_HASH_A, uid: GUEST_UID, expires: FAR_FUTURE }],
+        },
+      }),
+    );
+    const response = room.fetch(upgradeRequest("guest", inviteHeaders(INVITE_HASH_A)));
     expect(response.status).toBe(101);
     expect(state.getWebSockets()).toHaveLength(2);
   });
@@ -417,6 +477,7 @@ describe("guest_allow management", () => {
     const device = attachFake(state, "device");
     room.webSocketMessage(host, JSON.stringify({ to: "room", body: { t: "guest_allow", uids: [7, 7, 222] } }));
     expect(room.guestAllow).toEqual([7, 222]);
+    expect(room.guestInvites).toEqual([]);
     expect(host.sent).toEqual([]);
     expect(device.sent).toEqual([]);
   });
@@ -427,8 +488,10 @@ describe("guest_allow management", () => {
     const guest = attachFake(state, "guest");
     room.webSocketMessage(host, JSON.stringify({ to: "room", body: { t: "guest_allow", uids: [GUEST_UID] } }));
     expect(room.guestAllow).toEqual([GUEST_UID]);
+    expect(room.guestInvites).toEqual([]);
     room.webSocketMessage(host, JSON.stringify({ to: "room", body: { t: "guest_allow", uids: [] } }));
     expect(room.guestAllow).toEqual([]);
+    expect(room.guestInvites).toEqual([]);
     expect(state.getWebSockets()).toContain(guest);
     expect(guest.closed).toEqual([]);
   });
@@ -436,6 +499,7 @@ describe("guest_allow management", () => {
   it("bounces malformed bodies with bad_frame and keeps the old list", async () => {
     const { state, room } = await setup();
     room.guestAllow = [GUEST_UID];
+    room.guestInvites = [{ code_hash: INVITE_HASH_A, uid: GUEST_UID, expires: FAR_FUTURE }];
     const host = attachFake(state, "host", { host_id: HOST_ID, label: "devbox" });
     const malformed: unknown[] = [
       { t: "guest_allow" },
@@ -448,6 +512,15 @@ describe("guest_allow management", () => {
       { t: "guest_allow", uids: [1.5] },
       { t: "guest_allow", uids: [Number.MAX_SAFE_INTEGER + 1] },
       { t: "guest_allow", uids: null },
+      { t: "guest_allow", uids: [GUEST_UID], invites: "not-an-array" },
+      { t: "guest_allow", uids: [GUEST_UID], invites: [{ code_hash: "short", uid: GUEST_UID, expires: FAR_FUTURE }] },
+      { t: "guest_allow", uids: [GUEST_UID], invites: [{ code_hash: INVITE_HASH_A, uid: 0, expires: FAR_FUTURE }] },
+      { t: "guest_allow", uids: [GUEST_UID], invites: [{ code_hash: INVITE_HASH_A, uid: GUEST_UID }] },
+      {
+        t: "guest_allow",
+        uids: [GUEST_UID],
+        invites: [{ code_hash: INVITE_HASH_A, uid: GUEST_UID, expires: FAR_FUTURE, extra: 1 }],
+      },
       { t: "other", uids: [GUEST_UID] },
       "guest_allow",
       null,
@@ -457,6 +530,7 @@ describe("guest_allow management", () => {
       room.webSocketMessage(host, JSON.stringify({ to: "room", body }));
     }
     expect(room.guestAllow).toEqual([GUEST_UID]);
+    expect(room.guestInvites).toEqual([{ code_hash: INVITE_HASH_A, uid: GUEST_UID, expires: FAR_FUTURE }]);
     const error = { from: "relay", body: { t: "error", code: "bad_frame" } };
     expect(host.frames()).toEqual(Array(malformed.length).fill(error));
   });
@@ -472,15 +546,27 @@ describe("guest_allow management", () => {
     expect(guest.frames()).toEqual([{ from: "relay", body: { t: "error", code: "forbidden" } }]);
     expect(room.guestAllow).toEqual([]);
   });
+
+  it("old_guest_allow_without_invites_tolerated", async () => {
+    const { state, room } = await setup();
+    const host = attachFake(state, "host", { host_id: HOST_ID, label: "devbox" });
+    room.webSocketMessage(host, JSON.stringify({ to: "room", body: { t: "guest_allow", uids: [GUEST_UID] } }));
+    expect(room.guestAllow).toEqual([GUEST_UID]);
+    expect(room.guestInvites).toEqual([]);
+    expect(host.sent).toEqual([]);
+    const refused = room.fetch(upgradeRequest("guest", inviteHeaders(INVITE_HASH_A)));
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toEqual({ error: "bad_invite" });
+  });
 });
 
 describe("guest duplicate", () => {
   it("refuses the newest duplicate login with 409 and keeps the first", async () => {
     const { state, room } = await setup();
-    room.guestAllow = [GUEST_UID];
-    const first = room.fetch(upgradeRequest("guest", guestHeaders()));
+    room.guestInvites = [{ code_hash: INVITE_HASH_A, uid: GUEST_UID, expires: FAR_FUTURE }];
+    const first = room.fetch(upgradeRequest("guest", inviteHeaders(INVITE_HASH_A)));
     expect(first.status).toBe(101);
-    const duplicate = room.fetch(upgradeRequest("guest", guestHeaders()));
+    const duplicate = room.fetch(upgradeRequest("guest", inviteHeaders(INVITE_HASH_A)));
     expect(duplicate.status).toBe(409);
     expect(await duplicate.json()).toEqual({ error: "guest_duplicate" });
     expect((duplicate as unknown as { webSocket?: unknown }).webSocket ?? null).toBeNull();
@@ -489,10 +575,13 @@ describe("guest duplicate", () => {
 
   it("admits a second guest under another login", async () => {
     const { state, room } = await setup();
-    room.guestAllow = [GUEST_UID, 333];
-    expect(room.fetch(upgradeRequest("guest", guestHeaders())).status).toBe(101);
+    room.guestInvites = [
+      { code_hash: INVITE_HASH_A, uid: GUEST_UID, expires: FAR_FUTURE },
+      { code_hash: INVITE_HASH_B, uid: 333, expires: FAR_FUTURE },
+    ];
+    expect(room.fetch(upgradeRequest("guest", inviteHeaders(INVITE_HASH_A))).status).toBe(101);
     const second = room.fetch(
-      upgradeRequest("guest", guestHeaders({ "x-relay-login": "second", "x-relay-uid": "333" })),
+      upgradeRequest("guest", inviteHeaders(INVITE_HASH_B, { "x-relay-login": "second", "x-relay-uid": "333" })),
     );
     expect(second.status).toBe(101);
     expect(state.getWebSockets()).toHaveLength(2);
@@ -500,8 +589,8 @@ describe("guest duplicate", () => {
 
   it("frees the login once the first socket leaves", async () => {
     const { state, room } = await setup();
-    room.guestAllow = [GUEST_UID];
-    expect(room.fetch(upgradeRequest("guest", guestHeaders())).status).toBe(101);
+    room.guestInvites = [{ code_hash: INVITE_HASH_A, uid: GUEST_UID, expires: FAR_FUTURE }];
+    expect(room.fetch(upgradeRequest("guest", inviteHeaders(INVITE_HASH_A))).status).toBe(101);
     const first = state.getWebSockets()[0];
     if (first === undefined) {
       throw new Error("expected the guest socket to be attached");
@@ -510,7 +599,104 @@ describe("guest duplicate", () => {
     first.close(1000, "gone");
     state.remove(first);
     room.webSocketClose(first);
-    expect(room.fetch(upgradeRequest("guest", guestHeaders())).status).toBe(101);
+    expect(room.fetch(upgradeRequest("guest", inviteHeaders(INVITE_HASH_A))).status).toBe(101);
     expect(state.getWebSockets()).toHaveLength(1);
+  });
+});
+
+describe("forwarded identity", () => {
+  it("injected_identity_overwrites_spoofed_body", async () => {
+    const { state, room } = await setup();
+    const guest = attachFake(state, "guest");
+    const host = attachFake(state, "host", { host_id: HOST_ID, label: "devbox" });
+    const guestConn = connOf(guest);
+    room.webSocketMessage(
+      guest,
+      JSON.stringify({
+        to: `h:${HOST_ID}`,
+        login: "spoofed-login",
+        uid: 999,
+        body: { t: "offer", sdp: "v=0", login: "spoofed-login", uid: 999 },
+      }),
+    );
+    expect(host.sent).toHaveLength(1);
+    const forwarded = JSON.parse(host.sent[0] as string) as {
+      from: string;
+      login: string;
+      uid: number;
+      body: unknown;
+    };
+    expect(forwarded.from).toBe(`d:${guestConn}`);
+    expect(forwarded.login).toBe(GUEST_LOGIN);
+    expect(forwarded.uid).toBe(GUEST_UID);
+    expect(forwarded.body).toEqual({ t: "offer", sdp: "v=0", login: "spoofed-login", uid: 999 });
+    expect(forwarded.login).not.toBe("spoofed-login");
+    expect(forwarded.uid).not.toBe(999);
+    expect(host.sent[0]).toBe(
+      `{"from":"d:${guestConn}","login":"${GUEST_LOGIN}","uid":${GUEST_UID},` +
+        `"body":{"t":"offer","sdp":"v=0","login":"spoofed-login","uid":999}}`,
+    );
+  });
+});
+
+describe("invite door", () => {
+  const UNKNOWN_CODE = "CNR-FFFFFFFFFFFFFFFF";
+
+  async function roomWithInvites(invites: Array<{ code_hash: string; uid: number; expires: number }>): Promise<{
+    state: FakeRoomState;
+    room: UserRoom;
+  }> {
+    const { state, room } = await setup();
+    const host = attachFake(state, "host", { host_id: HOST_ID, label: "devbox" });
+    room.webSocketMessage(
+      host,
+      JSON.stringify({ to: "room", body: { t: "guest_allow", uids: [GUEST_UID], invites } }),
+    );
+    return { state, room };
+  }
+
+  it("invite_door_accepts_valid", async () => {
+    const hash = await sha256Hex(INVITE_CODE);
+    const nowSec = Math.floor(Date.now() / 1000);
+    const { room } = await roomWithInvites([{ code_hash: hash, uid: GUEST_UID, expires: nowSec + 3600 }]);
+    const namespace = new RoomBackedNamespace(room);
+    const env: WsEnv = { USER_ROOM: namespace, SESSION_SECRET: SECRET };
+    const response = await handleDeviceWs(await guestRequest(String(OWNER_UID), undefined, INVITE_CODE), env);
+    expect(response.status).toBe(101);
+    expect(namespace.names).toEqual([String(OWNER_UID)]);
+  });
+
+  it("invite_door_rejects_unknown_code", async () => {
+    const hash = await sha256Hex(INVITE_CODE);
+    const nowSec = Math.floor(Date.now() / 1000);
+    const { state, room } = await roomWithInvites([{ code_hash: hash, uid: GUEST_UID, expires: nowSec + 3600 }]);
+    const namespace = new RoomBackedNamespace(room);
+    const env: WsEnv = { USER_ROOM: namespace, SESSION_SECRET: SECRET };
+    const response = await handleDeviceWs(await guestRequest(String(OWNER_UID), undefined, UNKNOWN_CODE), env);
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "bad_invite" });
+    expect(state.getWebSockets()).toHaveLength(1);
+  });
+
+  it("invite_door_rejects_expired", async () => {
+    const hash = await sha256Hex(INVITE_CODE);
+    const nowSec = Math.floor(Date.now() / 1000);
+    const { room } = await roomWithInvites([{ code_hash: hash, uid: GUEST_UID, expires: nowSec - 10 }]);
+    const namespace = new RoomBackedNamespace(room);
+    const env: WsEnv = { USER_ROOM: namespace, SESSION_SECRET: SECRET };
+    const response = await handleDeviceWs(await guestRequest(String(OWNER_UID), undefined, INVITE_CODE), env);
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "bad_invite" });
+  });
+
+  it("invite_door_rejects_uid_mismatch", async () => {
+    const hash = await sha256Hex(INVITE_CODE);
+    const nowSec = Math.floor(Date.now() / 1000);
+    const { room } = await roomWithInvites([{ code_hash: hash, uid: 999, expires: nowSec + 3600 }]);
+    const namespace = new RoomBackedNamespace(room);
+    const env: WsEnv = { USER_ROOM: namespace, SESSION_SECRET: SECRET };
+    const response = await handleDeviceWs(await guestRequest(String(OWNER_UID), undefined, INVITE_CODE), env);
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "bad_invite" });
   });
 });

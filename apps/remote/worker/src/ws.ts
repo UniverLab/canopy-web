@@ -2,17 +2,19 @@
 /**
  * The two WebSocket doors: browsers prove the session cookie, hosts prove
  * a GitHub token plus their id and label. Browsers land in their own
- * UserRoom, or — with `?guest_of=<uid>` — in that owner's room as guests,
- * carrying their own GitHub identity. The room admits only host-invited
- * guest uids, one socket per login, and only trusts the X-Relay-*
- * headers set here; what an invited guest may do is the hub's call.
+ * UserRoom, or — with `?guest_of=<uid>&invite=<code>` — in that owner's
+ * room as guests, carrying their own GitHub identity. The room admits only
+ * guests whose invite hash matches a live host-published invite for their
+ * uid, one socket per login, and only trusts the X-Relay-* headers set
+ * here; what an invited guest may do is the hub's call.
  */
-import { parseCookies } from "./codec.js";
+import { parseCookies, sha256Hex } from "./codec.js";
 import { verifySession, type RevokedKV } from "./auth.js";
 import { verifyHostToken } from "./github.js";
 import { isOriginAllowed, parseAllowedOrigins } from "./origin.js";
 import {
   RELAY_HOST_ID_HEADER,
+  RELAY_INVITE_HASH_HEADER,
   RELAY_LABEL_HEADER,
   RELAY_LOGIN_HEADER,
   RELAY_ROLE_HEADER,
@@ -62,6 +64,7 @@ function forward(
   label?: string,
   login?: string,
   uid?: number,
+  inviteHash?: string,
 ): Promise<Response> {
   const headers = new Headers(req.headers);
   headers.delete("cookie");
@@ -77,6 +80,9 @@ function forward(
     headers.set(RELAY_LOGIN_HEADER, login);
     headers.set(RELAY_UID_HEADER, String(uid));
   }
+  if (inviteHash !== undefined) {
+    headers.set(RELAY_INVITE_HASH_HEADER, inviteHash);
+  }
   return room.fetch(new Request("https://user-room/", { headers }));
 }
 
@@ -87,9 +93,14 @@ function roomFor(env: WsEnv, uid: number): RoomStub {
 /**
  * A browser socket: the session cookie names its room — or, with a
  * `guest_of` query, the owner's room, as a guest carrying the caller's
- * own GitHub identity. The room admits the guest only when the host
- * invited its uid; the hub authorizes what it may do, from the identity
- * headers forwarded here.
+ * own GitHub identity. The room admits the guest only when the invite hash
+ * matches a live host-published invite for its uid; the hub authorizes
+ * what it may do, from the identity headers forwarded here.
+ *
+ * Door errors: `misconfigured` (500, no secret), `forbidden_origin` (403,
+ * foreign Origin), `unauthorized` (401, no or bad session), `bad_guest`
+ * (400, malformed guest_of), `bad_invite` (403, missing invite here or no
+ * live matching invite in the room).
  */
 export async function handleDeviceWs(req: Request, env: WsEnv): Promise<Response> {
   const sessionSecret = env.SESSION_SECRET;
@@ -113,9 +124,10 @@ export async function handleDeviceWs(req: Request, env: WsEnv): Promise<Response
   if (session === null) {
     return json({ error: "unauthorized" }, 401);
   }
-  const guestOf = new URL(req.url).searchParams.get("guest_of");
+  const params = new URL(req.url).searchParams;
+  const guestOf = params.get("guest_of");
   if (guestOf === null || guestOf === String(session.uid)) {
-    return forward(req, roomFor(env, session.uid), "device");
+    return forward(req, roomFor(env, session.uid), "device", undefined, undefined, session.login, session.uid);
   }
   if (!/^[1-9][0-9]*$/.test(guestOf)) {
     return json({ error: "bad_guest" }, 400);
@@ -126,7 +138,22 @@ export async function handleDeviceWs(req: Request, env: WsEnv): Promise<Response
   if (!Number.isSafeInteger(ownerUid)) {
     return json({ error: "bad_guest" }, 400);
   }
-  return forward(req, roomFor(env, ownerUid), "guest", undefined, undefined, session.login, session.uid);
+  const invite = params.get("invite");
+  if (invite === null || invite === "") {
+    return json({ error: "bad_invite" }, 403);
+  }
+  // The room compares hashes; the cleartext code never leaves this door.
+  const inviteHash = await sha256Hex(invite);
+  return forward(
+    req,
+    roomFor(env, ownerUid),
+    "guest",
+    undefined,
+    undefined,
+    session.login,
+    session.uid,
+    inviteHash,
+  );
 }
 
 /** A host socket: GitHub token plus id and label, verified then forwarded. */

@@ -3,16 +3,17 @@
  * One UserRoom per GitHub user: it forwards opaque signaling envelopes
  * between that user's devices, guests and hosts. Connection ids are random
  * UUIDs, so an evicted room never reissues an id a live socket still
- * holds. State lives in per-socket attachments plus the guest allowlist
- * and pair-init counters in storage, reloaded before the first event, so
- * a fresh instance over warm storage behaves like the evicted one. Guests
- * are another user's browsers, admitted through the `guest_of` door: they
- * route like devices but never see the hosts list, never pair, and every
- * one is announced to the hosts — with its GitHub identity — so the hub
- * can authorize it. The relay enforces admission: only host-invited uids
- * connect, one socket per guest login, and every socket gets a frame
- * budget; what an invited guest may do is the hub's call, from the
- * identity notice.
+ * holds. State lives in per-socket attachments plus the guest allowlist,
+ * the guest invites and pair-init counters in storage, reloaded before the
+ * first event, so a fresh instance over warm storage behaves like the
+ * evicted one. Guests are another user's browsers, admitted through the
+ * `guest_of` door: they route like devices but never see the hosts list,
+ * never pair, and every one is announced to the hosts — with its GitHub
+ * identity — so the hub can authorize it. The relay enforces admission:
+ * only guests with a live invite for their uid connect, one socket per
+ * guest login, every socket gets a frame budget, and every frame to a host
+ * carries the door-attested login/uid; what an invited guest may do is the
+ * hub's call, from the injected identity.
  */
 import { decodeLabel } from "./codec.js";
 import {
@@ -22,6 +23,7 @@ import {
   PAIR_INIT_MAX,
   PAIR_INIT_WINDOW_MS,
   RELAY_HOST_ID_HEADER,
+  RELAY_INVITE_HASH_HEADER,
   RELAY_LABEL_HEADER,
   RELAY_LOGIN_HEADER,
   RELAY_ROLE_HEADER,
@@ -88,9 +90,19 @@ declare const WebSocketRequestResponsePair: new (
  */
 export const HOSTS_PROBE_PATH = "/internal/hosts";
 
-/** The storage keys holding the guest allowlist and the pair-init stamps. */
+/** The storage keys holding the guest allowlist, invites and pair-init stamps. */
 const GUEST_ALLOW_KEY = "guestAllow";
+const GUEST_INVITES_KEY = "guestInvites";
 const PAIR_INIT_KEY = "pairInit";
+
+/** One host-published guest invite: hash of the code, bound uid, unix expiry. */
+export interface GuestInvite {
+  code_hash: string;
+  uid: number;
+  expires: number;
+}
+
+const INVITE_HASH_PATTERN = /^[0-9a-f]{64}$/;
 
 /**
  * A fresh connection id: a bare UUID, serialized on the wire as `d:<uuid>`.
@@ -113,6 +125,36 @@ function parseStoredUids(value: unknown): number[] {
     }
   }
   return uids;
+}
+
+/** Stored invites, or empty when the stored value is malformed. */
+function parseStoredInvites(value: unknown): GuestInvite[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const invites: GuestInvite[] = [];
+  const seen = new Set<string>();
+  for (const entry of value) {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      continue;
+    }
+    const record = entry as Record<string, unknown>;
+    const hash = record["code_hash"];
+    const uid = record["uid"];
+    const expires = record["expires"];
+    if (typeof hash !== "string" || !INVITE_HASH_PATTERN.test(hash) || seen.has(hash)) {
+      continue;
+    }
+    if (typeof uid !== "number" || !Number.isSafeInteger(uid) || uid <= 0) {
+      continue;
+    }
+    if (typeof expires !== "number" || !Number.isSafeInteger(expires)) {
+      continue;
+    }
+    seen.add(hash);
+    invites.push({ code_hash: hash, uid, expires });
+  }
+  return invites;
 }
 
 /** Stored pair-init stamps, or empty when the stored value is malformed. */
@@ -159,16 +201,31 @@ function parseUid(value: string | null): number | null {
 }
 
 /**
- * The host's invite list, or null when the body is malformed. The shape is
- * exactly `{"t":"guest_allow","uids":[...]}`: no more keys, no fewer, and
- * every uid a positive safe integer. Duplicates collapse, order kept.
+ * The host's invite list, or null when the body is malformed. New hosts send
+ * `{"t":"guest_allow","uids":[...],"invites":[{code_hash,uid,expires}]}`; old
+ * hosts omit `invites`, which reads tolerantly as `[]`, never rejected.
+ * Every uid is a positive safe integer, every invite a 64-hex hash with a
+ * bound uid and a unix expiry. Duplicates collapse, order kept.
  */
-function parseGuestAllow(body: unknown): number[] | null {
+function parseGuestAllow(body: unknown): { uids: number[]; invites: GuestInvite[] } | null {
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
     return null;
   }
   const record = body as Record<string, unknown>;
-  if (Object.keys(record).length !== 2 || record["t"] !== "guest_allow" || !Array.isArray(record["uids"])) {
+  const keys = Object.keys(record);
+  const hasInvites = keys.length === 3;
+  if (record["t"] !== "guest_allow" || !Array.isArray(record["uids"])) {
+    return null;
+  }
+  if (keys.length === 2) {
+    if (!keys.includes("t") || !keys.includes("uids")) {
+      return null;
+    }
+  } else if (hasInvites) {
+    if (!keys.includes("t") || !keys.includes("uids") || !keys.includes("invites")) {
+      return null;
+    }
+  } else {
     return null;
   }
   const uids: number[] = [];
@@ -180,7 +237,46 @@ function parseGuestAllow(body: unknown): number[] | null {
       uids.push(uid);
     }
   }
-  return uids;
+  if (!hasInvites) {
+    return { uids, invites: [] };
+  }
+  if (!Array.isArray(record["invites"])) {
+    return null;
+  }
+  const invites: GuestInvite[] = [];
+  const seen = new Set<string>();
+  for (const entry of record["invites"] as unknown[]) {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      return null;
+    }
+    const invite = entry as Record<string, unknown>;
+    const inviteKeys = Object.keys(invite);
+    if (
+      inviteKeys.length !== 3 ||
+      !inviteKeys.includes("code_hash") ||
+      !inviteKeys.includes("uid") ||
+      !inviteKeys.includes("expires")
+    ) {
+      return null;
+    }
+    const hash = invite["code_hash"];
+    const uid = invite["uid"];
+    const expires = invite["expires"];
+    if (typeof hash !== "string" || !INVITE_HASH_PATTERN.test(hash)) {
+      return null;
+    }
+    if (typeof uid !== "number" || !Number.isSafeInteger(uid) || uid <= 0) {
+      return null;
+    }
+    if (typeof expires !== "number" || !Number.isSafeInteger(expires)) {
+      return null;
+    }
+    if (!seen.has(hash)) {
+      seen.add(hash);
+      invites.push({ code_hash: hash, uid, expires });
+    }
+  }
+  return { uids, invites };
 }
 
 /** A guest's announcement to the hosts: who this conn belongs to. */
@@ -193,9 +289,11 @@ function identityFrame(kind: "device_identity" | "device_left", attachment: Room
 
 export class UserRoom {
   pairInit: number[] = [];
-  /** Uids the host invited; empty denies every guest. Set via `guest_allow`. */
+  /** Uids the host listed; parsed and stored, no longer consulted. Set via `guest_allow`. */
   guestAllow: number[] = [];
-  /** Resolves once the stored guest list and pair counters have loaded. */
+  /** Live invites the host published; a guest needs one bound to its uid. Set via `guest_allow`. */
+  guestInvites: GuestInvite[] = [];
+  /** Resolves once the stored guest lists and pair counters have loaded. */
   readonly ready: Promise<void>;
 
   constructor(private readonly state: RoomState) {
@@ -203,12 +301,13 @@ export class UserRoom {
     // the edge answers without waking this room.
     this.state.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
     // Hibernation evicts this object while its sockets stay connected and
-    // replays the constructor on wake: the guest list and pair counters
+    // replays the constructor on wake: the guest lists and pair counters
     // reload here, gated before the first event, so a fresh instance over
     // warm storage behaves exactly like the evicted one.
     this.ready = this.state.blockConcurrencyWhile(async () => {
-      const stored = await this.state.storage.get([GUEST_ALLOW_KEY, PAIR_INIT_KEY]);
+      const stored = await this.state.storage.get([GUEST_ALLOW_KEY, GUEST_INVITES_KEY, PAIR_INIT_KEY]);
       this.guestAllow = parseStoredUids(stored.get(GUEST_ALLOW_KEY));
+      this.guestInvites = parseStoredInvites(stored.get(GUEST_INVITES_KEY));
       this.pairInit = parseStoredStamps(stored.get(PAIR_INIT_KEY));
     });
   }
@@ -235,10 +334,10 @@ export class UserRoom {
     if (role === "guest" && (login === null || login === "" || uid === null)) {
       return json({ error: "bad_request" }, 400);
     }
-    // Strangers cannot squat a room: only uids the host invited connect,
-    // and an empty or absent list denies all.
-    if (role === "guest" && (uid === null || !this.guestAllow.includes(uid))) {
-      return this.refuse("not_invited", 403);
+    // Strangers cannot squat a room: the invite hash must match a live
+    // invite bound to this uid. One error for every failure, no oracle.
+    if (role === "guest" && !this.hasLiveInvite(request, uid as number)) {
+      return this.refuse("bad_invite", 403);
     }
     // One socket per guest login: the newest duplicate is refused, the
     // first stays connected.
@@ -268,6 +367,10 @@ export class UserRoom {
     if (role === "guest") {
       attachment.login = login as string;
       attachment.uid = uid as number;
+    }
+    if (role === "device" && login !== null && login !== "" && uid !== null) {
+      attachment.login = login;
+      attachment.uid = uid;
     }
     server.serializeAttachment(attachment);
     if (role === "device") {
@@ -410,34 +513,54 @@ export class UserRoom {
   }
 
   /**
-   * A management frame for this room: the host's invite list replaces the
-   * old one, silently. Anything else bounces; connected guests are never
-   * kicked, so a (re)connected host re-sends its list every time.
+   * A management frame for this room: the host's invite lists replace the
+   * old ones, silently. Anything else bounces; connected guests are never
+   * kicked, so a (re)connected host re-sends its lists every time.
    */
   private handleRoomFrame(socket: RoomSocket, body: unknown): void {
     if (socket.deserializeAttachment()?.role !== "host") {
       socket.send(errorFrame("forbidden"));
       return;
     }
-    const uids = parseGuestAllow(body);
-    if (uids === null) {
+    const allow = parseGuestAllow(body);
+    if (allow === null) {
       socket.send(errorFrame("bad_frame"));
       return;
     }
-    this.guestAllow = uids;
+    this.guestAllow = allow.uids;
+    this.guestInvites = allow.invites;
     this.save();
   }
 
   /**
-   * Persist the guest list and pair counters for the next eviction. Called
+   * Persist the guest lists and pair counters for the next eviction. Called
    * only on guest/pair mutations — never per frame or per ping.
    */
   private save(): void {
     const write = this.state.storage.put({
       [GUEST_ALLOW_KEY]: [...this.guestAllow],
+      [GUEST_INVITES_KEY]: this.guestInvites.map((invite) => ({ ...invite })),
       [PAIR_INIT_KEY]: [...this.pairInit],
     });
     this.state.waitUntil(write);
+  }
+
+  /**
+   * True when the invite hash header matches a live invite bound to `uid`.
+   * O(invites) per guest door hit; every failure looks the same.
+   */
+  private hasLiveInvite(request: Request, uid: number): boolean {
+    const hash = request.headers.get(RELAY_INVITE_HASH_HEADER);
+    if (hash === null || !INVITE_HASH_PATTERN.test(hash)) {
+      return false;
+    }
+    const nowSec = Math.floor(Date.now() / 1000);
+    for (const invite of this.guestInvites) {
+      if (invite.code_hash === hash && invite.uid === uid && invite.expires > nowSec) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /** True when the body is an object whose `t` is `pair_init`. */
@@ -563,11 +686,12 @@ export class UserRoom {
       return;
     }
     // Guests ride the same d:<conn> addresses as devices; the hub tells
-    // them apart by the device_identity notice, not the address.
+    // them apart by the injected identity, not the address. The top-level
+    // login/uid overwrite any client bytes — old hosts ignore the siblings.
     if ((sender.role === "device" || sender.role === "guest") && to.startsWith("h:")) {
       const target = this.findHost(to.slice(2));
       if (target !== null) {
-        target.send(JSON.stringify({ from: `d:${sender.conn}`, body }));
+        target.send(JSON.stringify({ from: `d:${sender.conn}`, login: sender.login, uid: sender.uid, body }));
         return;
       }
     } else if (sender.role === "host" && to.startsWith("d:")) {

@@ -101,6 +101,12 @@ export function decodeLabel(label: string): string {
   }
 }
 
+/** SHA-256 hex of `text`, lowercase. Used for invite codes and token cache keys. */
+export async function sha256Hex(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 /** Build a Set-Cookie value. Values are the relay's own tokens, never quoted. */
 export function serializeCookie(name: string, value: string, options: CookieOptions): string {
   const parts = [`${name}=${value}`];

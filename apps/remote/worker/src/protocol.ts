@@ -15,9 +15,11 @@ export const STATE_COOKIE = "cr_oauth_state";
 export const RELAY_ROLE_HEADER = "X-Relay-Role";
 export const RELAY_HOST_ID_HEADER = "X-Relay-Host-Id";
 export const RELAY_LABEL_HEADER = "X-Relay-Label";
-/** The guest's GitHub identity; set only on guest forwards. */
+/** The browser's GitHub identity; set on device and guest forwards. */
 export const RELAY_LOGIN_HEADER = "X-Relay-Login";
 export const RELAY_UID_HEADER = "X-Relay-Uid";
+/** SHA-256 hex of the guest's invite code; set only on guest forwards. */
+export const RELAY_INVITE_HASH_HEADER = "X-Relay-Invite-Hash";
 
 /** Largest accepted WebSocket frame, in bytes. */
 export const FRAME_MAX_BYTES = 65536;
@@ -52,9 +54,14 @@ export interface IncomingFrame {
   body: unknown;
 }
 
-/** An envelope the room delivers: a source plus the untouched body. */
+/**
+ * An envelope the room delivers: a source plus the untouched body. Frames to
+ * a host also carry the door-attested login/uid as top-level siblings.
+ */
 export interface OutgoingFrame {
   from: string;
+  login?: string;
+  uid?: number;
   body: unknown;
 }
 
@@ -64,7 +71,7 @@ export interface RoomAttachment {
   host_id?: string;
   label?: string;
   conn: string;
-  /** The guest's GitHub login and id; set on guest sockets only. */
+  /** The browser's GitHub login and id; set on device and guest sockets. */
   login?: string;
   uid?: number;
   /** The frame budget, lazily set at the first frame: tokens left and when. */

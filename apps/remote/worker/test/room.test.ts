@@ -598,7 +598,18 @@ describe("eviction", () => {
     const guest = attachFake(firstState, "guest", { login: GUEST_LOGIN, uid: GUEST_UID });
     const guestConn = connOf(guest);
     const host = attachFake(firstState, "host", { host_id: HOST_ID, label: "devbox" });
-    first.webSocketMessage(host, JSON.stringify({ to: "room", body: { t: "guest_allow", uids: [GUEST_UID] } }));
+    const inviteHash = "e7".repeat(32);
+    first.webSocketMessage(
+      host,
+      JSON.stringify({
+        to: "room",
+        body: {
+          t: "guest_allow",
+          uids: [GUEST_UID],
+          invites: [{ code_hash: inviteHash, uid: GUEST_UID, expires: 9999999999 }],
+        },
+      }),
+    );
     for (let index = 0; index < 20; index += 1) {
       first.webSocketMessage(device, JSON.stringify({ to: `h:${HOST_ID}`, body: { t: "pair_init" } }));
     }
@@ -610,6 +621,7 @@ describe("eviction", () => {
     const second = new UserRoom(secondState);
     await second.ready;
     expect(second.guestAllow).toEqual([GUEST_UID]);
+    expect(second.guestInvites).toEqual([{ code_hash: inviteHash, uid: GUEST_UID, expires: 9999999999 }]);
     expect(second.pairInit).toEqual(first.pairInit);
     expect(second.pairInit).toHaveLength(20);
 
@@ -619,15 +631,28 @@ describe("eviction", () => {
     second.webSocketMessage(host, JSON.stringify({ to: `d:${deviceConn}`, body: { t: "answer" } }));
     expect(device.frames().at(-1)).toEqual({ from: `h:${HOST_ID}`, body: { t: "answer" } });
     second.webSocketMessage(guest, JSON.stringify({ to: `h:${HOST_ID}`, body: { t: "offer" } }));
-    expect(host.frames().at(-1)).toEqual({ from: `d:${guestConn}`, body: { t: "offer" } });
+    expect(host.frames().at(-1)).toEqual({
+      from: `d:${guestConn}`,
+      login: GUEST_LOGIN,
+      uid: GUEST_UID,
+      body: { t: "offer" },
+    });
 
-    // The allowlist survived: the invited guest connects, a stranger 403s.
+    // The invites survived: the invited guest connects, a stranger 403s.
     const invited = second.fetch(
-      upgradeRequest("guest", { "x-relay-login": "second", "x-relay-uid": String(GUEST_UID) }),
+      upgradeRequest("guest", {
+        "x-relay-login": "second",
+        "x-relay-uid": String(GUEST_UID),
+        "x-relay-invite-hash": inviteHash,
+      }),
     );
     expect(invited.status).toBe(101);
     const stranger = second.fetch(
-      upgradeRequest("guest", { "x-relay-login": "stranger", "x-relay-uid": "999" }),
+      upgradeRequest("guest", {
+        "x-relay-login": "stranger",
+        "x-relay-uid": "999",
+        "x-relay-invite-hash": inviteHash,
+      }),
     );
     expect(stranger.status).toBe(403);
 

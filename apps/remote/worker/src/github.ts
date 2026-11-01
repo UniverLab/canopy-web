@@ -5,6 +5,7 @@
  * cached per isolate, keyed by the token's SHA-256 — the token itself is
  * never stored.
  */
+import { sha256Hex } from "./codec.js";
 import { HOST_CACHE_TTL_S } from "./protocol.js";
 
 /** A GitHub user, as far as the relay cares. */
@@ -30,11 +31,6 @@ const hostCache = new Map<string, CacheEntry>();
 /** Test-only: drop every cached verification. */
 export function __clearHostCache(): void {
   hostCache.clear();
-}
-
-async function sha256Hex(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 /** Exchange an OAuth code for a token, or null when GitHub refuses. */
