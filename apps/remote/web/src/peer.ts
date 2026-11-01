@@ -102,17 +102,51 @@ export function isBye(body: unknown): boolean {
   );
 }
 
+// Backup ICE servers when /turn fails: one attempt, then this list, no retry.
+// Mirrors the host fallback FALLBACK_STUN_URL in
+// harness-canopy/src/remote/peer_ice.rs. Keep the URIs identical; if the host
+// list ever changes, update this one literal.
+export const FALLBACK_STUN_ICE_SERVERS: RTCIceServer[] = [
+  { urls: "stun:stun.l.google.com:19302" },
+];
+
+// Loads TURN credentials from the relay. Never throws: on any /turn failure
+// (network error, non-2xx, malformed body) it warns and continues with the
+// backup STUN servers so one failing endpoint never aborts the connection.
 export async function loadIceServers(fetchTurn: TurnFetcher): Promise<RTCIceServer[]> {
-  const res = await fetchTurn("/turn");
-  if (!res.ok) {
-    throw new Error("Could not load TURN credentials");
+  const fallback = (): RTCIceServer[] => [...FALLBACK_STUN_ICE_SERVERS];
+  let res: { ok: boolean; json(): Promise<unknown> };
+  try {
+    res = await fetchTurn("/turn");
+  } catch (err) {
+    console.warn(
+      `remote: /turn fetch failed (${err instanceof Error ? err.message : String(err)}); falling back to STUN`,
+    );
+    return fallback();
   }
-  const data = await res.json();
+  if (!res.ok) {
+    console.warn("remote: /turn returned a non-2xx response; falling back to STUN");
+    return fallback();
+  }
+  let data: unknown;
+  try {
+    data = await res.json();
+  } catch (err) {
+    console.warn(
+      `remote: /turn returned an unreadable body (${err instanceof Error ? err.message : String(err)}); falling back to STUN`,
+    );
+    return fallback();
+  }
   const servers = Array.isArray(data)
     ? data
     : (data as { iceServers?: unknown } | null)?.iceServers;
   if (!Array.isArray(servers)) {
-    throw new Error("Could not load TURN credentials");
+    console.warn("remote: /turn returned a malformed body; falling back to STUN");
+    return fallback();
+  }
+  if (servers.length === 0) {
+    console.warn("remote: /turn returned no ICE servers; falling back to STUN");
+    return fallback();
   }
   return servers as RTCIceServer[];
 }

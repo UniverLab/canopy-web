@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { b64decode, generateDeviceKey, importSpkiVerifyKey } from "../src/crypto.js";
 import type { DeviceKey } from "../src/crypto.js";
-import { HostPeer, asIceCandidate } from "../src/peer.js";
+import { FALLBACK_STUN_ICE_SERVERS, HostPeer, asIceCandidate, loadIceServers } from "../src/peer.js";
 import type { PeerEvent } from "../src/peer.js";
 import {
   connectRelay,
@@ -22,6 +22,7 @@ interface PeerSetup {
   relayHarness: RelayHarness;
   ws: FakeWebSocket;
   peerHarness: PeerHarness;
+  turnCalls: string[];
   device: DeviceKey;
   host: TestHost;
   events: PeerEvent[];
@@ -45,7 +46,7 @@ async function setupPeer(turnOk = true): Promise<PeerSetup> {
     nowMs: () => 1793100000_000,
   });
   peer.onEvent((ev) => events.push(ev));
-  return { relayHarness, ws, peerHarness, device, host, events, peer };
+  return { relayHarness, ws, peerHarness, turnCalls: turn.calls, device, host, events, peer };
 }
 
 function offerBody(setup: PeerSetup): { device_id: string; ts: string; sdp: string; sig: string } {
@@ -206,15 +207,62 @@ describe("HostPeer", () => {
     expect(setup.events).toContainEqual({ type: "closed" });
   });
 
-  it("fails when TURN credentials cannot load", async () => {
-    const setup = await setupPeer(false);
-    await expect(setup.peer.connect()).rejects.toThrow("Could not load TURN credentials");
+  it("turn_failure_falls_back_to_stun", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const setup = await setupPeer(false);
+      const pending = setup.peer.connect();
+      await waitForSend(setup.ws);
+      // Exactly one /turn attempt, then the backup STUN list: no retry, no throw.
+      expect(setup.turnCalls).toEqual(["/turn"]);
+      expect(setup.peerHarness.latest().config.iceServers).toEqual(FALLBACK_STUN_ICE_SERVERS);
+      expect(FALLBACK_STUN_ICE_SERVERS).toEqual([{ urls: "stun:stun.l.google.com:19302" }]);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("/turn"));
+      await answerHandshake(setup);
+      setup.peerHarness.latest().firstChannel().remoteOpen();
+      await pending;
+      expect(setup.events).toContainEqual({ type: "open" });
+      expect(setup.events.filter((ev) => ev.type === "failed")).toHaveLength(0);
+    } finally {
+      warn.mockRestore();
+    }
   });
 
-  it("sends no bye when the offer was never sent", async () => {
-    const setup = await setupPeer(false);
-    await expect(setup.peer.connect()).rejects.toThrow("Could not load TURN credentials");
-    expect(setup.ws.envelopes().filter((e) => e.body.t === "bye")).toHaveLength(0);
+  it("falls back to STUN when the /turn fetch rejects", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const servers = await loadIceServers(() => Promise.reject(new Error("boom")));
+      expect(servers).toEqual(FALLBACK_STUN_ICE_SERVERS);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("/turn"));
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("falls back to STUN on a malformed /turn body", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const servers = await loadIceServers(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve({ nope: 1 }) }),
+      );
+      expect(servers).toEqual(FALLBACK_STUN_ICE_SERVERS);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("/turn"));
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("falls back to STUN when /turn returns no ICE servers", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const servers = await loadIceServers(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve({ iceServers: [] }) }),
+      );
+      expect(servers).toEqual(FALLBACK_STUN_ICE_SERVERS);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("/turn"));
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("ignores a second answer after the handshake completed", async () => {

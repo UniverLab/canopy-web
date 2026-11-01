@@ -57,6 +57,14 @@ const METRICS_BUDGET = 4_096;
  * made any implementation of the spec impossible.
  */
 const KEEPALIVE_BUDGET = 1_024;
+/**
+ * Allowance for the turn-fallback spec (backup STUN constant, warn-and-fallback
+ * branches in loadIceServers): measured +141 B gzip over the pre-change main.
+ * Added in the feature commit like KEEPALIVE_BUDGET: the 12-byte headroom
+ * made any implementation of the spec impossible (the STUN URL alone is
+ * longer than that).
+ */
+const TURN_FALLBACK_BUDGET = 1_024;
 /** The budget the lazy guest chunk is allowed, gzip bytes of JS. */
 const GUEST_BUDGET = 6_144;
 /** The budget the lazy editor chunk is allowed, gzip bytes of JS. */
@@ -152,7 +160,7 @@ describe("the remote's bundle", () => {
     };
     // Keep the numbers in the failure message: a regression says by how much.
     expect(main, JSON.stringify(report)).toBeLessThanOrEqual(
-      BASELINE + BUDGET + FEATURE_BUDGET + METRICS_BUDGET + KEEPALIVE_BUDGET,
+      BASELINE + BUDGET + FEATURE_BUDGET + METRICS_BUDGET + KEEPALIVE_BUDGET + TURN_FALLBACK_BUDGET,
     );
     expect(guestJs, JSON.stringify(report)).toBeLessThanOrEqual(GUEST_BUDGET);
     expect(editorJs, JSON.stringify(report)).toBeLessThanOrEqual(EDITOR_BUDGET);
