@@ -36,13 +36,6 @@ export interface ColophonOptions {
   product: string;
   exp: string;
   links: ColophonLink[];
-  /**
-   * Wrap each link and its trailing middot in one nowrap unit, the
-   * separator a span outside the anchor so it never underlines and a
-   * wrapped line never starts with "·". Opt-in: omitted, the markup is
-   * byte-identical to before (the graphs app relies on it).
-   */
-  outsideSeparators?: boolean;
 }
 
 /** The lab's privacy and terms, in every colophon's UniverLab link group. */
@@ -61,18 +54,11 @@ export function renderColophon(opts: ColophonOptions): string {
   const exp = escapeHtml(opts.exp);
   const all = [...opts.links, ...LEGAL];
   const items = all
-    .map((link, index) => {
+    .map((link) => {
       const href = safeHref(link.href);
       const external = isExternal(href) ? ` target="_blank" rel="noopener noreferrer"` : ``;
       const anchor = `<a href="${escapeHtml(href)}"${external}>${escapeHtml(link.label)}</a>`;
-      if (opts.outsideSeparators !== true) {
-        return `      ${anchor}`;
-      }
-      // The middot trails its link inside the unit: a wrapped line starts
-      // with a link, never with "·". The last link carries no separator.
-      const sep =
-        index < all.length - 1 ? `<span class="colophon-sep" aria-hidden="true">·</span>` : ``;
-      return `      <span class="colophon-link-unit">${anchor}${sep}</span>`;
+      return `      ${anchor}`;
     })
     .join("\n");
   return [

@@ -110,76 +110,59 @@ test("ends the graph and SysInfo views in the footer at 390x844", async ({ page 
   expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
 });
 
-test("footer_separators_stay_with_links: no wrapped line starts with · at 320px", async ({
+test("footer_separators_are_gone: no dangling middot at a wrapped line edge at 320px", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 844 });
   await page.goto("/fake.html");
   await expect(page.locator('[data-session="smoke"]')).toBeVisible();
   await expect(page.locator("#app > footer.look-colophon")).toBeVisible();
-  // No separator hides inside an anchor, where it would underline.
-  expect(await page.locator(".colophon-col a .colophon-sep").count()).toBe(0);
-  await expect(page.locator(".colophon-col .colophon-link-unit")).toHaveCount(5);
   const report = await page.evaluate(() => {
-    const units = [...document.querySelectorAll(".colophon-col .colophon-link-unit")];
-    const rows = new Set(
-      units.map((unit) => Math.round(unit.getBoundingClientRect().top)),
+    const nav = document.querySelector("#app > footer.look-colophon .colophon-col");
+    if (nav === null) {
+      throw new Error("footer link row missing");
+    }
+    const links = [...nav.querySelectorAll("a")];
+    const tops: number[] = [];
+    const rows: string[][] = [];
+    for (const link of links) {
+      const top = Math.round(link.getBoundingClientRect().top);
+      let row = tops.findIndex((value) => Math.abs(value - top) <= 1);
+      if (row === -1) {
+        row = tops.push(top) - 1;
+      }
+      (rows[row] ??= []).push(link.textContent ?? "");
+    }
+    // The kit paints the separator as a + a::before; the remote overrides
+    // it, so no generated middot can lead a wrapped line either.
+    const generated = links.flatMap((link) =>
+      ["::before", "::after"].map((pseudo) => getComputedStyle(link, pseudo).content),
     );
-    const seps = [...document.querySelectorAll(".colophon-col .colophon-sep")];
-    // Every unit — including the last, separator-less one — starts with
-    // its link and never breaks, so no wrapped line starts with ·.
-    const unitChecks = units.map((unit) => {
-      const link = unit.querySelector("a")?.getBoundingClientRect();
-      return {
-        startsWithLink: (link?.left ?? 1) <= unit.getBoundingClientRect().left + 1,
-        nowrap: getComputedStyle(unit).whiteSpace === "nowrap",
-      };
-    });
-    const checks = seps.map((sep) => {
-      const box = sep.getBoundingClientRect();
-      const unit = sep.parentElement;
-      const anchor = unit?.querySelector("a") as Element;
-      const link = anchor?.getBoundingClientRect();
-      const mid = box.top + box.height / 2;
-      const linkMid = (link?.top ?? 0) + (link?.height ?? 0) / 2;
-      const sepStyle = getComputedStyle(sep);
-      const linkStyle = getComputedStyle(anchor);
-      return {
-        // Outside the anchor, on its link's line, after its link's text.
-        outsideAnchor: sep.closest("a") === null,
-        sameLineAsLink: Math.abs(mid - linkMid) < 4,
-        afterLink: box.left >= (link?.right ?? 0) - 1,
-        notUnderlined: sepStyle.textDecorationLine === "none",
-        // The kit's separator was the anchor's ::before: same face, same
-        // size, so desktop widths render exactly as before.
-        sameFontAsLink:
-          sepStyle.fontFamily === linkStyle.fontFamily &&
-          sepStyle.fontSize === linkStyle.fontSize,
-      };
-    });
     return {
-      unitCount: units.length,
-      rowCount: rows.size,
-      sepCount: seps.length,
-      unitChecks,
-      checks,
+      linkCount: links.length,
+      spanCount: nav.querySelectorAll("span").length,
+      middotInText: (nav.textContent ?? "").includes("·"),
+      generated,
+      rowCount: rows.length,
+      rows,
+      columnGap: parseFloat(getComputedStyle(nav).columnGap),
+      rootSize: parseFloat(getComputedStyle(document.documentElement).fontSize),
     };
   });
-  expect(report.unitCount).toBe(5);
-  expect(report.sepCount).toBe(4);
+  expect(report.linkCount).toBe(5);
+  expect(report.spanCount).toBe(0);
+  expect(report.middotInText).toBe(false);
+  for (const content of report.generated) {
+    expect(content).not.toContain("·");
+  }
+  // 2 × 0.75em × the 1.15rem link face: the old whitespace rhythm, now
+  // carried by the flex gap.
+  expect(report.columnGap).toBeCloseTo(1.725 * report.rootSize, 1);
   // The narrow viewport forces the wrap this test guards.
   expect(report.rowCount).toBeGreaterThan(1);
-  for (const check of report.unitChecks) {
-    expect(check).toEqual({ startsWithLink: true, nowrap: true });
-  }
-  for (const check of report.checks) {
-    expect(check).toEqual({
-      outsideAnchor: true,
-      sameLineAsLink: true,
-      afterLink: true,
-      notUnderlined: true,
-      sameFontAsLink: true,
-    });
+  for (const row of report.rows) {
+    expect(row[0]?.startsWith("·")).toBe(false);
+    expect(row[row.length - 1]?.endsWith("·")).toBe(false);
   }
 });
 

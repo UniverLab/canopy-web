@@ -66,21 +66,20 @@ describe("renderColophon", () => {
     expect(nav).toContain('href="https://univerlab.org/terms/"');
   });
 
-  it("keeps separators outside the anchors when asked, byte-identical otherwise", () => {
-    const plain = renderColophon({ product: "Canopy", exp: "EXP-001", links: LINKS });
-    expect(plain).not.toContain("colophon-link-unit");
-    const html = renderColophon({
-      product: "Canopy",
-      exp: "EXP-001",
-      links: LINKS,
-      outsideSeparators: true,
-    });
-    // Three links plus Privacy and Terms, each in its own unit; the last
-    // unit trails no separator, and every link keeps its anchor.
-    expect(html.match(/colophon-link-unit/g)?.length).toBe(5);
-    expect(html.match(/colophon-sep/g)?.length).toBe(4);
-    expect(html).toContain('<span class="colophon-sep" aria-hidden="true">·</span>');
-    expect(html).toContain(">Terms</a></span>");
+  it("keeps the link row free of middot separators", () => {
+    const html = renderColophon({ product: "Canopy", exp: "EXP-001", links: LINKS });
+    const nav = html.slice(html.indexOf('<nav class="colophon-col"'), html.indexOf("</nav>"));
+    // No middot text nodes, spans or units between the links: the space
+    // between them carries the separation, so nothing can dangle when
+    // the row wraps. The product line above keeps its own middot.
+    expect(nav).not.toContain("·");
+    expect(nav).not.toContain("colophon-sep");
+    expect(nav).not.toContain("colophon-link-unit");
+    // Five anchors, direct siblings, in order (the three links plus the
+    // lab's Privacy and Terms).
+    expect(nav.match(/<a /g)?.length).toBe(5);
+    expect(nav.indexOf(">Canopy</a>")).toBeGreaterThan(0);
+    expect(nav.indexOf(">Canopy</a>")).toBeLessThan(nav.indexOf(">Privacy</a>"));
   });
 
   it("escapes the product, the experiment and the links", () => {
