@@ -9,6 +9,8 @@
 @import url("./terminal-font.css");
 
 :root {
+  /* Intentional: the app is dark-only by design, there is no light
+   * theme to offer — dark widgets, scrollbars and form controls. */
   color-scheme: dark;
   --bg: var(--surface-bg);
   --ink: var(--surface-ink);
@@ -120,6 +122,22 @@ main a,
 #app > .look-colophon .colophon-col a,
 #app > .look-colophon .colophon-credits a {
   color: var(--teal);
+}
+
+/* Audit E4: every colophon link meets the 44x44 touch floor. The kit
+ * gives the column links 32 px and the credits link none; the extra
+ * reach is hit area only, the faces stay the kit's. The credits link
+ * is inline in the kit, so it becomes inline-flex for the height to
+ * land. */
+#app > .look-colophon .colophon-col a,
+#app > .look-colophon .colophon-credits a {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+#app > .look-colophon .colophon-credits a {
+  display: inline-flex;
+  align-items: center;
 }
 
 h1,
@@ -373,6 +391,7 @@ label > textarea {
 .topbar #conn-disconnect {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.35rem;
   font-family: var(--font-mono);
   font-size: 0.75rem;
@@ -381,7 +400,9 @@ label > textarea {
   border-radius: var(--radius);
   color: var(--muted);
   background: transparent;
-  min-height: 0;
+  /* Audit E4: the 44x44 touch floor; the chip face stays compact. */
+  min-height: 44px;
+  min-width: 44px;
   flex-shrink: 0;
   cursor: pointer;
 }
@@ -798,6 +819,12 @@ label > textarea {
   gap: 0.4rem;
   border: 1px solid transparent;
   border-radius: var(--radius);
+  /* Audit E4: the whole label is the target — hit padding around the
+   * wrapped checkbox, like the kind options below. */
+  padding: 0.5rem 0.6rem;
+  min-height: 44px;
+  min-width: 44px;
+  cursor: pointer;
 }
 
 .yolo-row input {
@@ -837,7 +864,8 @@ label > textarea {
   gap: 0.4rem;
   margin: 0;
   padding: 0.5rem 0.6rem;
-  min-height: 2.75rem;
+  /* Audit E4: the 44 px floor holds whatever the root size is. */
+  min-height: max(2.75rem, 44px);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   cursor: pointer;
@@ -1643,8 +1671,9 @@ label > textarea {
   border-radius: var(--radius);
   color: var(--muted);
   background: transparent;
-  min-height: 0;
-  min-width: 0;
+  /* Audit E4: the 44x44 touch floor; the strip face stays compact. */
+  min-height: 44px;
+  min-width: 44px;
   flex-shrink: 1;
   overflow: hidden;
   text-overflow: ellipsis;
