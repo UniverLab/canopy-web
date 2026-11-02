@@ -307,4 +307,12 @@ describe("NewDialog", () => {
     expect(dialog.isOpen).toBe(false);
     expect(root.querySelector(".sheet-overlay")).toBeNull();
   });
+
+  it("directory_label_has_space", () => {
+    const labelText = (): string =>
+      query<HTMLInputElement>("#new-directory").closest("label")?.textContent ?? "";
+    expect(labelText()).toContain("📁 Directory");
+    pickKind("terminal");
+    expect(labelText()).toContain("📁 Directory");
+  });
 });

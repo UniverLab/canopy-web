@@ -220,7 +220,7 @@ export class NewDialog {
       .map((dir) => `<option value="${esc(dir)}"></option>`)
       .join("");
     return `
-        <label>${icon("folder")}Directory
+        <label>📁 Directory
           <input id="new-directory" name="directory" autocomplete="off" spellcheck="false"
             placeholder="/home/user/project" list="new-directory-list" value="${esc(this.form.directory)}">
         </label>

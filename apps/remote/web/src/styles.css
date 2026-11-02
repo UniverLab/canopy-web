@@ -849,6 +849,12 @@ label > textarea {
   display: none;
 }
 
+.pair-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0.25rem 0 0.75rem;
+}
+
 /* The New dialog's Agent/Terminal segmented control. */
 .kind-segment {
   display: flex;

@@ -81,6 +81,7 @@ export function renderPair(root: HTMLElement, hooks: EntryViewHooks): void {
           <input id="pair-code" name="code" autocomplete="off" autocapitalize="characters"
             spellcheck="false" value="${esc(draft.code)}"${busy ? " disabled" : ""}>
         </label>
+        <p class="pair-hint">Run <code>canopy remote pair</code> on your machine to get a code</p>
         <label>Host
           <select id="pair-host" name="host"${busy || online.length === 0 ? " disabled" : ""}>
             ${renderHostOptions(online, draft.hostId)}
