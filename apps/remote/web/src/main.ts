@@ -11,6 +11,7 @@ import { CatalogStore } from "./catalog.js";
 import { createChannelHandler } from "./channel.js";
 import { generateDeviceKey } from "./crypto.js";
 import type { DeviceKey } from "./crypto.js";
+import { redirectUnknownRoute } from "./entry-path.js";
 import { GraphStore } from "./graph-store.js";
 import { MetricsStore } from "./metrics-store.js";
 import { buildCatalog, buildCompose, buildList, buildSpawn, newReqId } from "./protocol.js";
@@ -45,6 +46,10 @@ async function main(): Promise<void> {
   if (!root) {
     throw new Error("Missing #app element");
   }
+  // A mistyped URL goes home first, in this document: the editor and
+  // guest checks below then read "/" and never match, and the app boots
+  // on its own route — no reload, no round-trip, query and hash kept.
+  redirectUnknownRoute(globalThis.location, globalThis.history);
   // The graph editor rides its own lazy chunk: no relay, no pairing, no
   // login — the drafts API it posts to is public and CORS-open.
   if (globalThis.location?.pathname.startsWith("/editor") === true) {

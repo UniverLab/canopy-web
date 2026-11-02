@@ -56,6 +56,22 @@ test("falls back to the app on a guest link", async ({ page }) => {
   await expect(page).toHaveTitle("Sign in · Canopy remote");
 });
 
+test("unknown_route_redirects_home", async ({ page }) => {
+  // The Worker serves the shell for the extensionless probe, so the app
+  // itself has to send the mistyped URL home — in this document, never
+  // to the pairing form.
+  const response = await page.goto("/does/not/exist");
+  expect(response?.status()).toBe(200);
+  await expect
+    .poll(() => new URL(page.url()).pathname, {
+      message: "the unknown path did not settle on home",
+    })
+    .toBe("/");
+  await expect(page.locator("main.signin")).toBeVisible();
+  await expect(page.locator("#pair-form")).toHaveCount(0);
+  await expect(page).toHaveTitle("Sign in · Canopy remote");
+});
+
 test("answers /auth/me with 401 JSON without a session", async ({ request }) => {
   const response = await request.get("/auth/me");
   expect(response.status()).toBe(401);
