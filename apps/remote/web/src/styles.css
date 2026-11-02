@@ -385,6 +385,20 @@ label > textarea {
   text-align: left;
 }
 
+/* Audit E8: on desktop the account chip keeps its place at the right edge
+ * of the header content (margin-left: auto in the topbar row); the open
+ * menu anchors to the chip's right edge so it never clips past the bar. */
+@media (min-width: 640px) {
+  .topbar .account {
+    margin-left: auto;
+  }
+
+  .topbar .account-menu {
+    left: auto;
+    right: 0;
+  }
+}
+
 /* The header Disconnect: an icon button beside the host chip, dressed as
  * a chip so the 390 px header keeps banner, chips and menu on two rows
  * at most; it wraps with the row rather than pushing it sideways. */
