@@ -161,6 +161,19 @@ describe("NewDialog", () => {
     expect(hint.textContent).toBe(YOLO_HINT);
   });
 
+  it("yolo_disabled_when_unsupported", () => {
+    expect(query<HTMLInputElement>("#new-yolo").disabled).toBe(false);
+    expect(query<HTMLElement>("#new-yolo-hint").hidden).toBe(true);
+    changeSelect("#new-cli", "claude");
+    expect(query<HTMLInputElement>("#new-yolo").disabled).toBe(true);
+    const hint = query<HTMLElement>("#new-yolo-hint");
+    expect(hint.hidden).toBe(false);
+    expect(hint.textContent).toBe(YOLO_HINT);
+    changeSelect("#new-cli", "muse");
+    expect(query<HTMLInputElement>("#new-yolo").disabled).toBe(false);
+    expect(query<HTMLElement>("#new-yolo-hint").hidden).toBe(true);
+  });
+
   it("sends yolo only when checked, and never remembers it", () => {
     const box = query<HTMLInputElement>("#new-yolo");
     box.checked = true;

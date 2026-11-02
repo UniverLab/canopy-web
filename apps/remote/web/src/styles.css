@@ -160,9 +160,10 @@ button:active {
   filter: brightness(0.94);
 }
 
-button.primary {
-  background: var(--cta-gradient);
-  color: #011d1c;
+button.primary,
+.composer-send {
+  background: var(--accent);
+  color: var(--accent-ink);
   border-color: transparent;
 }
 
@@ -780,9 +781,6 @@ label > textarea {
 }
 
 .composer-send {
-  background: var(--accent);
-  color: var(--accent-ink);
-  border-color: transparent;
   margin-left: auto;
 }
 

@@ -117,7 +117,7 @@ export function createApp(root: HTMLElement, callbacks: UiCallbacks): AppUi {
         <input id="pair-label" name="label" autocomplete="off" value="${esc(draft.label)}"${pairBusy ? " disabled" : ""}>
       </label>
       <p id="pair-error" role="alert">${pairError === null ? "" : esc(pairError)}</p>
-      <button type="submit"${pairBusy ? " disabled" : ""}>${pairBusy ? "Pairing…" : "Pair"}</button>
+      <button type="submit" class="primary"${pairBusy ? " disabled" : ""}>${pairBusy ? "Pairing…" : "Pair"}</button>
     </form>
     <p><a href="/auth/login">Sign in with GitHub</a></p>`;
 

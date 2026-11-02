@@ -79,7 +79,7 @@ export class Composer {
     builder.hidden = !this.showBuilder;
     const send = document.createElement("button");
     send.type = "button";
-    send.className = "composer-send";
+    send.className = "composer-send primary";
     send.setAttribute("aria-label", "Send the prompt");
     const sendIcon = document.createElement("span");
     sendIcon.className = "icon-slot";

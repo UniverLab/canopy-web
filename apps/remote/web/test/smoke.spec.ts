@@ -241,7 +241,7 @@ for (const viewport of [
         .filter((button) => getComputedStyle(button).backgroundColor === "rgb(63, 184, 176)")
         .map((button) => button.className),
     );
-    expect(teal).toEqual(["composer-send"]);
+    expect(teal).toEqual(["composer-send primary"]);
     const shot = await page.screenshot({ path: testInfo.outputPath(`stage-${viewport.label}.png`) });
     await testInfo.attach(`stage-${viewport.label}`, { body: shot, contentType: "image/png" });
   });

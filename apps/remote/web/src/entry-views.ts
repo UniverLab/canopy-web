@@ -90,7 +90,7 @@ export function renderPair(root: HTMLElement, hooks: EntryViewHooks): void {
           <input id="pair-label" name="label" autocomplete="off" value="${esc(draft.label)}"${busy ? " disabled" : ""}>
         </label>
         <p id="pair-error" role="alert">${error === null ? "" : esc(error)}</p>
-        <button type="submit"${busy ? " disabled" : ""}>${busy ? "Pairing…" : "Pair"}</button>
+        <button type="submit" class="primary"${busy ? " disabled" : ""}>${busy ? "Pairing…" : "Pair"}</button>
       </form>
     </main>
     ${REMOTE_FOOTER}`;
