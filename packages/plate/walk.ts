@@ -9,7 +9,9 @@
  * unit carrying an outgoing fail edge — a node's `fail` edge or an
  * ensemble's `on_fail_to` exit — the walk first draws `random()`: below
  * FAIL_CHANCE it rides a fail edge instead (uniformly, when several),
- * looping back along the red curve before the unit finally gets through.
+ * but only when the landing can return to the main flow, looping back
+ * along the red curve before the unit finally gets through. Fail edges
+ * into terminal units are never ridden: the dot stays on the happy path.
  * One walk rides at most FAIL_CAP fail edges; after the third every unit
  * passes, so every walk reaches the end and the animation restarts.
  *
@@ -84,6 +86,39 @@ export function walkUnits(parsed: ParsedGraph): Set<string> {
 }
 
 /**
+ * Whether a fail landing can return to the main flow: true when the
+ * destination itself is on it, or the pass chain from it reaches the
+ * flow before a revisit or a dead end. Cycles and terminal units fail.
+ */
+export function canReturnToFlow(
+  pass: ReadonlyMap<string, string>,
+  flow: ReadonlySet<string>,
+  destination: string,
+): boolean {
+  const seen = new Set<string>();
+  let current: string | undefined = destination;
+  while (current !== undefined && !seen.has(current)) {
+    if (flow.has(current)) {
+      return true;
+    }
+    seen.add(current);
+    current = pass.get(current);
+  }
+  return false;
+}
+
+/** The main flow: the pass chain from the entry, bounded by a revisit. */
+function mainFlowOf(pass: ReadonlyMap<string, string>, entry: string | null): Set<string> {
+  const flow = new Set<string>();
+  let current: string | null | undefined = entry;
+  while (current !== null && current !== undefined && !flow.has(current)) {
+    flow.add(current);
+    current = pass.get(current) ?? null;
+  }
+  return flow;
+}
+
+/**
  * Each unit's outgoing edges for the walk: its first pass edge in
  * document order — node pass/always/route edges, an ensemble's entry and
  * `on_pass_to` exits, the happy path exactly — and its fail edges in
@@ -99,6 +134,14 @@ function outgoing(parsed: ParsedGraph, drawn: ReadonlySet<string>): {
   const fail = new Map<string, string[]>();
   const addFail = (from: string, to: string): void => {
     fail.set(from, [...(fail.get(from) ?? []), to]);
+  };
+  const passTarget = (target: string | null): string | null => {
+    const id = unitOf(parsed, target);
+    if (id === null) {
+      return null;
+    }
+    const name = drawnName(id);
+    return drawn.has(name) ? name : null;
   };
   for (const edge of parsed.edges) {
     const from = unitOf(parsed, edge.from);
@@ -120,20 +163,18 @@ function outgoing(parsed: ParsedGraph, drawn: ReadonlySet<string>): {
     }
   }
   for (const ensemble of parsed.ensembles) {
+    const entryId = passTarget(ensemble.entryFrom);
     if (
-      ensemble.entryFrom !== null &&
-      !ensemble.entryFrom.startsWith("ensemble:") &&
-      !pass.has(ensemble.entryFrom) &&
+      entryId !== null &&
+      entryId !== ensemble.name &&
+      !pass.has(entryId) &&
       isRankCondition(ensemble.entryCondition)
     ) {
-      pass.set(ensemble.entryFrom, ensemble.name);
+      pass.set(entryId, ensemble.name);
     }
-    if (
-      ensemble.onPassTo !== null &&
-      !ensemble.onPassTo.startsWith("ensemble:") &&
-      nodeNames.has(ensemble.onPassTo)
-    ) {
-      pass.set(ensemble.name, ensemble.onPassTo);
+    const passId = passTarget(ensemble.onPassTo);
+    if (passId !== null && passId !== ensemble.name) {
+      pass.set(ensemble.name, passId);
     }
     const onFail = unitOf(parsed, ensemble.onFailTo);
     if (onFail !== null && onFail !== `ensemble:${ensemble.name}` && drawn.has(drawnName(onFail))) {
@@ -145,11 +186,13 @@ function outgoing(parsed: ParsedGraph, drawn: ReadonlySet<string>): {
 
 /**
  * One walk of the graph: from the entry, each unit's pass edge, with one
- * draw at every fail-carrying unit while the walk still has fail edges
- * left to spend — below FAIL_CHANCE it rides a fail edge instead. A fail
- * landing clears the visited set, so the loop-back re-walks ground and
- * still gets through; a pass landing stops the walk at a revisit, which
- * bounds every segment. Empty without a drawn entry.
+ * draw at every unit whose fail edges can return to the main flow while
+ * the walk still has fail edges left to spend — below FAIL_CHANCE it
+ * rides one instead. A fail landing clears the visited set, so the
+ * loop-back re-walks ground and still gets through; a pass landing stops
+ * the walk at a revisit, which bounds every segment. Fail edges into
+ * terminal units are never ridden and consume no draw. Empty without a
+ * drawn entry.
  */
 export function generateWalk(
   parsed: ParsedGraph,
@@ -161,12 +204,14 @@ export function generateWalk(
     return [];
   }
   const { pass, fail } = outgoing(parsed, drawn);
+  const flow = mainFlowOf(pass, entry);
   const steps: WalkStep[] = [];
   const seen = new Set<string>([entry]);
   let current = entry;
   let fails = 0;
   for (;;) {
-    const targets = fails < FAIL_CAP ? fail.get(current) ?? [] : [];
+    const targets =
+      fails < FAIL_CAP ? (fail.get(current) ?? []).filter((to) => canReturnToFlow(pass, flow, to)) : [];
     if (targets.length > 0 && random() < FAIL_CHANCE) {
       const pick =
         targets.length > 1 ? Math.min(targets.length - 1, Math.floor(random() * targets.length)) : 0;

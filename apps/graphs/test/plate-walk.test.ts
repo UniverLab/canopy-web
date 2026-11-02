@@ -4,19 +4,25 @@
  * the injected draws, never from chance in the test — the pure happy
  * path, one draw taking its fail edge, three fails then the run home, a
  * node without a fail edge never taking one, and an ensemble's
- * `on_fail_to` counting as its fail edge. Plus the seeded PRNG's replay
- * and the lit twin the renderer leaves behind for the legs a walk rode —
- * string assertions on the svg, no DOM.
+ * `on_fail_to` counting as its fail edge. Then the returnable-fail rule:
+ * the predicate's own cases, a terminal verdict never ridden even when
+ * every draw dips, and 500 seeded walks over each official graph reaching
+ * the end. Plus the seeded PRNG's replay and the lit twin the renderer
+ * leaves behind for the legs a walk rode — string assertions on the svg,
+ * no DOM.
  */
 import { describe, expect, it } from "vitest";
 import { parseDocument, type GraphDocument } from "../../../packages/plate/document.js";
 import { renderPlate } from "../../../packages/plate/render.js";
 import {
+  canReturnToFlow,
   generateWalk,
   mulberry32,
   walkUnits,
   type WalkStep,
 } from "../../../packages/plate/walk.js";
+import adversarialDeveloper from "./fixtures/graphs/adversarial-developer/graph.json" with { type: "json" };
+import canopyBuilder from "./fixtures/graphs/canopy-builder/graph.json" with { type: "json" };
 
 /** The loop fixture: a gate that may fail back to fix, then gets through. */
 const LOOP: GraphDocument = {
@@ -73,6 +79,22 @@ const FORK: GraphDocument = {
     { from_node: "gate", to_node: "done", condition: "pass" },
     { from_node: "left", to_node: "done", condition: "pass" },
     { from_node: "right", to_node: "done", condition: "pass" },
+  ],
+};
+
+/** A gate whose only fail edge lands on a terminal verdict: never ridden. */
+const TERMINAL: GraphDocument = {
+  name: "walk-terminal",
+  nodes: [
+    { name: "start", kind: "check", position: 1, config: {} },
+    { name: "gate", kind: "gate", position: 2, config: {} },
+    { name: "verdict", kind: "check", position: 3, config: {} },
+    { name: "done", kind: "check", position: 4, config: {} },
+  ],
+  edges: [
+    { from_node: "start", to_node: "gate", condition: "pass" },
+    { from_node: "gate", to_node: "verdict", condition: "fail" },
+    { from_node: "gate", to_node: "done", condition: "pass" },
   ],
 };
 
@@ -164,6 +186,14 @@ describe("the walk generator", () => {
     ]);
   });
 
+  it("never rides a fail edge into a terminal unit, even when every draw dips", () => {
+    // The gate's only fail edge lands on the verdict, which has no way
+    // back — so the walk stays on the happy path with no detour at all.
+    const steps = walkWith([0], TERMINAL);
+    expect(words(steps)).toEqual(["start→gate", "gate→done"]);
+    expect(steps.some((step) => step.fail)).toBe(false);
+  });
+
   it("walks both orientations the same fail edges from one shared seed", () => {
     // The pages replay one seed per orientation's own generator, so the
     // H/V pair carries the same walk — same length, same lit windows.
@@ -215,5 +245,67 @@ describe("the lit fail edges", () => {
     expect(svg).not.toContain("edge-lit");
     expect(svg).not.toContain("data-lit");
     expect(svg).not.toContain(`@media (prefers-reduced-motion:reduce){.plate-svg .edge-lit`);
+  });
+});
+
+describe("the can-return predicate", () => {
+  const pass = new Map([
+    ["entry", "gate"],
+    ["gate", "done"],
+    ["fix", "gate"],
+    ["trapA", "trapB"],
+    ["trapB", "trapA"],
+  ]);
+  const flow = new Set(["entry", "gate", "done"]);
+
+  it("accepts a destination already on the flow", () => {
+    expect(canReturnToFlow(pass, flow, "done")).toBe(true);
+  });
+
+  it("accepts a destination whose pass chain rejoins the flow", () => {
+    expect(canReturnToFlow(pass, flow, "fix")).toBe(true);
+  });
+
+  it("rejects a terminal destination with no pass edge out", () => {
+    expect(canReturnToFlow(pass, flow, "verdict")).toBe(false);
+  });
+
+  it("rejects a cycle that never rejoins the flow", () => {
+    expect(canReturnToFlow(pass, flow, "trapA")).toBe(false);
+    expect(canReturnToFlow(pass, flow, "trapB")).toBe(false);
+  });
+});
+
+describe("the seeded walks over the official graphs", () => {
+  /** Walk one document from Start on seeds 0–499; count the ends reached. */
+  function completed(document: unknown, end: string): { reached: number; failLegs: number } {
+    const parsed = parseDocument(document);
+    if (parsed === null) {
+      throw new Error("the fixture must parse");
+    }
+    const units = walkUnits(parsed);
+    let reached = 0;
+    let failLegs = 0;
+    for (let seed = 0; seed < 500; seed += 1) {
+      const steps = generateWalk(parsed, "Start", units, mulberry32(seed));
+      if (steps.at(-1)?.to === end) {
+        reached += 1;
+      }
+      failLegs += steps.filter((step) => step.fail).length;
+      expect(steps.some((step) => step.to === "Human verdict")).toBe(false);
+    }
+    return { reached, failLegs };
+  }
+
+  it("walks canopy-builder home on all 500 seeds, riding loops but never the verdict", () => {
+    const builder = completed(canopyBuilder, "Relock repo");
+    expect(builder.reached).toBe(500);
+    expect(builder.failLegs).toBeGreaterThan(0);
+  });
+
+  it("still rides fail loops on adversarial-developer on all 500 seeds", () => {
+    const adversarial = completed(adversarialDeveloper, "Commit");
+    expect(adversarial.reached).toBe(500);
+    expect(adversarial.failLegs).toBeGreaterThan(0);
   });
 });

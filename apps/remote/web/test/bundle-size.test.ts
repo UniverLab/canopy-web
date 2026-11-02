@@ -74,6 +74,14 @@ const TURN_FALLBACK_BUDGET = 1_024;
  * the spec impossible.
  */
 const SESSION_HINT_BUDGET = 512;
+/**
+ * Allowance for the returnable-fail-walk spec (can-return predicate,
+ * main-flow set and ensemble pass-link repair in the shared walk module
+ * the graph view renders through): measured +125 B gzip over the
+ * pre-change main. Added in the feature commit like SESSION_HINT_BUDGET:
+ * the 121-byte headroom made any implementation of the spec impossible.
+ */
+const WALK_BUDGET = 512;
 /** The budget the lazy guest chunk is allowed, gzip bytes of JS. */
 const GUEST_BUDGET = 6_144;
 /** The budget the lazy editor chunk is allowed, gzip bytes of JS. */
@@ -175,7 +183,8 @@ describe("the remote's bundle", () => {
         METRICS_BUDGET +
         KEEPALIVE_BUDGET +
         TURN_FALLBACK_BUDGET +
-        SESSION_HINT_BUDGET,
+        SESSION_HINT_BUDGET +
+        WALK_BUDGET,
     );
     expect(guestJs, JSON.stringify(report)).toBeLessThanOrEqual(GUEST_BUDGET);
     expect(editorJs, JSON.stringify(report)).toBeLessThanOrEqual(EDITOR_BUDGET);
