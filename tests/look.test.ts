@@ -66,6 +66,23 @@ describe("renderColophon", () => {
     expect(nav).toContain('href="https://univerlab.org/terms/"');
   });
 
+  it("keeps separators outside the anchors when asked, byte-identical otherwise", () => {
+    const plain = renderColophon({ product: "Canopy", exp: "EXP-001", links: LINKS });
+    expect(plain).not.toContain("colophon-link-unit");
+    const html = renderColophon({
+      product: "Canopy",
+      exp: "EXP-001",
+      links: LINKS,
+      outsideSeparators: true,
+    });
+    // Three links plus Privacy and Terms, each in its own unit; the last
+    // unit trails no separator, and every link keeps its anchor.
+    expect(html.match(/colophon-link-unit/g)?.length).toBe(5);
+    expect(html.match(/colophon-sep/g)?.length).toBe(4);
+    expect(html).toContain('<span class="colophon-sep" aria-hidden="true">·</span>');
+    expect(html).toContain(">Terms</a></span>");
+  });
+
   it("escapes the product, the experiment and the links", () => {
     const html = renderColophon({
       product: "<img src=x>",

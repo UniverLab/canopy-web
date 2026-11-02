@@ -89,6 +89,39 @@ main {
   width: 100%;
 }
 
+/* The footer link row keeps each middot with its link: renderColophon
+ * wraps them in .colophon-link-unit spans (outsideSeparators), and the
+ * unit never breaks — a wrapped line starts with a link, never with
+ * "·". The separator is a span outside the anchor, so it never
+ * underlines. Its margins match the kit's a+a::before (which no longer
+ * matches once the anchors stop being siblings), so desktop widths
+ * render exactly as before. */
+#app > .look-colophon .colophon-col .colophon-link-unit {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+#app > .look-colophon .colophon-col .colophon-sep {
+  margin: 0 0.75em;
+  color: var(--f-ink-faint);
+  /* The kit's separator was the anchor's ::before, so it wore the link
+   * face; the span inherits the colophon body instead — pin the link
+   * face (colophon.css .colophon-col a) so desktop widths render
+   * exactly as before, margins included (they ride on em). */
+  font-family: var(--font-display, 'Old Standard TT', Georgia, serif);
+  font-size: 1.15rem;
+}
+
+/* The one link color: the palette teal, on the landing note and in the
+ * footer. Teal on the page (#011d1c) is 7.28:1, on the footer black
+ * 8.69:1 — both clear the 4.5:1 floor. */
+main a,
+#app > .look-colophon .colophon-col a,
+#app > .look-colophon .colophon-credits a {
+  color: var(--teal);
+}
+
 h1,
 h2,
 h3 {
