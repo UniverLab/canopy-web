@@ -96,12 +96,16 @@ function plateFigure(document: JsonValue, kind: PageRef["kind"]): string {
   // render, so the walk looks alive across reloads. (One shared generator
   // would walk the vertical plate from where the horizontal one stopped.)
   const seed = Date.now() >>> 0;
+  // The marker ids ride the same seed as a tag, so the two orientations
+  // of this figure never share an id — the hidden twin's markers stay
+  // out of the visible plate's `url(#…)` resolution.
+  const markerSeed = seed.toString(36);
   const horizontal = kind === "graph"
-    ? renderPlate(document as unknown as GraphDocument, "horizontal", undefined, mulberry32(seed))
-    : renderNodePlate(document as unknown as NodeDocument, "horizontal");
+    ? renderPlate(document as unknown as GraphDocument, "horizontal", undefined, mulberry32(seed), markerSeed)
+    : renderNodePlate(document as unknown as NodeDocument, "horizontal", markerSeed);
   const vertical = kind === "graph"
-    ? renderPlate(document as unknown as GraphDocument, "vertical", undefined, mulberry32(seed))
-    : renderNodePlate(document as unknown as NodeDocument, "vertical");
+    ? renderPlate(document as unknown as GraphDocument, "vertical", undefined, mulberry32(seed), markerSeed)
+    : renderNodePlate(document as unknown as NodeDocument, "vertical", markerSeed);
   return horizontal === "" && vertical === ""
     ? ""
     : `<figure class="plate">${horizontal}${vertical}</figure>`;

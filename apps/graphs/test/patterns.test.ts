@@ -550,7 +550,7 @@ describe("the body sanitizer", () => {
     const html = patternPage({
       ...stored,
       body: "# evil\n\n<script>alert(1)</script>\n\n<img src=x onerror=\"alert(2)\">\n",
-    }, []).html;
+    }, [], first.slug).html;
     const body = html.slice(html.indexOf(`<div class="readme">`));
     expect(body).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
     expect(body).toContain("&lt;img src=x onerror=");
@@ -573,7 +573,7 @@ describe("the body sanitizer", () => {
         { title: "Bad", url: "javascript:alert(1)" },
       ],
     };
-    const html = patternPage(page, []).html;
+    const html = patternPage(page, [], first.slug).html;
     expect(html).toContain(`${PATTERN_SOURCES_HEADING}</span>`);
     expect(html).toContain(
       `<a href="https://example.com/good" target="_blank" rel="nofollow noopener noreferrer">Good</a>`,
@@ -582,7 +582,7 @@ describe("the body sanitizer", () => {
     expect(html).toContain(`<li>Bad</li>`);
     // The twin degrades the same URL to text: it generates this link
     // itself, so it never hands agents a target the page would refuse.
-    const twin = patternPage(page, []).markdown;
+    const twin = patternPage(page, [], first.slug).markdown;
     expect(twin).toContain(`- [Good](https://example.com/good)`);
     expect(twin).not.toContain(`javascript:`);
     expect(twin.split("\n")).toContain(`- Bad`);
@@ -604,7 +604,7 @@ describe("the body's leading title", () => {
   function readme(body: string): string {
     expect(BUNDLED_PATTERNS.length).toBeGreaterThan(0);
     const figure = JSON.parse(BUNDLED_PATTERNS[0].figure) as StoredPattern["figure"];
-    const html = patternPage({ ...pattern, figure, body }, []).html;
+    const html = patternPage({ ...pattern, figure, body }, [], BUNDLED_PATTERNS[0].slug).html;
     return /<div class="readme">[\s\S]*?<\/div>/.exec(html)?.[0] ?? "";
   }
 

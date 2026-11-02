@@ -23,11 +23,15 @@
 import { GEOM, PALETTE, TYPE, edgePath, shortenEdgeEnd, type Pt } from "../../../../packages/plate/vocabulary.js";
 import { LIFT_STEP, PLATE_SCALE, labelHalfOf, nodeBottom, plateLabel } from "../../../../packages/plate/layout.js";
 import { classOf, type EdgeClass } from "../../../../packages/plate/document.js";
+import { markerCss, markerDefs, markerId } from "../../../../packages/plate/markers.js";
 import { shapeOfKind } from "./kinds.js";
 import type { CanvasNode, EditorState } from "./state.js";
 
 /** Plate units in canvas pixels at zoom 1. */
 export const SCALE = 12;
+
+/** The canvas's fixed marker prefix: it is the only drawing on its page. */
+const MARKER_PREFIX = "edge";
 
 /** A node label, in units: the plate's own rendered label size, reused. */
 const LABEL_SIZE = (TYPE.label * PLATE_SCALE) / SCALE;
@@ -90,35 +94,20 @@ function canvasStyle(): string {
     `.editor-svg .edge.fail .edge-line{stroke:${PALETTE.red};stroke-dasharray:1 .8}` +
     `.editor-svg .edge.error .edge-line{stroke:currentColor;stroke-width:.1;stroke-dasharray:.4 .7;opacity:.5}` +
     `.editor-svg .edge.selected .edge-line{stroke-width:.26;opacity:1}` +
-    `.editor-svg #edge-arrow path{fill:var(--canopy,#00a9a0);fill-opacity:.85}` +
-    `.editor-svg #edge-arrow-fail path{fill:${PALETTE.red};fill-opacity:.85}` +
-    `.editor-svg #edge-arrow-error path{fill:${PALETTE.label};fill-opacity:.5}` +
+    markerCss(".editor-svg", MARKER_PREFIX, {
+      pass: "fill:var(--canopy,#00a9a0);fill-opacity:.85",
+      fail: `fill:${PALETTE.red};fill-opacity:.85`,
+      error: `fill:${PALETTE.label};fill-opacity:.5`,
+    }) +
     `.editor-svg .edge-hit{fill:none;stroke:transparent;stroke-width:1.6;pointer-events:stroke;cursor:pointer}` +
     `.editor-svg .rubber{fill:none;stroke:var(--teal,#00a9a0);stroke-width:.12;stroke-dasharray:.6 .5;pointer-events:none}`
   );
 }
 
-/** One arrowhead marker per flow class; the CSS above paints each. */
-function canvasMarkers(): string {
-  const marker = (id: string): string =>
-    `<marker id="${id}" viewBox="0 0 10 10" refX="8" refY="5" ` +
-    `markerWidth="1.3" markerHeight="1.3" markerUnits="userSpaceOnUse" ` +
-    `orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>`;
-  return (
-    `<defs>${marker("edge-arrow")}${marker("edge-arrow-fail")}` +
-    `${marker("edge-arrow-error")}</defs>`
-  );
-}
-
-/** The marker-end for an edge class. */
+/** The marker-end for an edge class; order guides keep the pass arrow. */
 function edgeMarker(cls: string): string {
-  if (cls === "fail") {
-    return "edge-arrow-fail";
-  }
-  if (cls === "error") {
-    return "edge-arrow-error";
-  }
-  return "edge-arrow";
+  const id = markerId(MARKER_PREFIX, cls === "order" ? "pass" : cls);
+  return id ?? `${MARKER_PREFIX}-arrow`;
 }
 
 export class Canvas {
@@ -142,7 +131,7 @@ export class Canvas {
       host.prepend(svg);
     }
     this.svg = svg;
-    svg.innerHTML = `<style>${canvasStyle()}</style>${canvasMarkers()}<g class="world"></g>`;
+    svg.innerHTML = `<style>${canvasStyle()}</style>${markerDefs(MARKER_PREFIX)}<g class="world"></g>`;
     this.world = svg.querySelector("g.world") as SVGGElement;
     svg.addEventListener("pointerdown", (event) => this.down(event));
     svg.addEventListener("pointermove", (event) => this.move(event));
@@ -311,7 +300,7 @@ export class Canvas {
     const at = this.toWorld(this.interaction.cx, this.interaction.cy);
     const a: Pt = { x: from.x / SCALE, y: from.y / SCALE };
     const b: Pt = { x: at.x / SCALE, y: at.y / SCALE };
-    return `<path class="rubber" d="${edgePath(a, b, false)}" marker-end="url(#edge-arrow)" transform="scale(${SCALE})"/>`;
+    return `<path class="rubber" d="${edgePath(a, b, false)}" marker-end="url(#${edgeMarker("pass")})" transform="scale(${SCALE})"/>`;
   }
 
   /** One node: plate geometry, the truncated label, the output handle. */

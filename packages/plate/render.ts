@@ -38,6 +38,7 @@ import { V_HARNESS_DY, V_LABEL_DX, V_LABEL_DY, layoutPlateVertical } from "./ver
 import { GEOM, TYPE, harnessColor } from "./vocabulary.js";
 import { happyRandom, STEP_SECONDS } from "./walk.js";
 import { isArray, isNumber, isRecord, isString } from "./guards.js";
+import { markerCss, markerDefs, markerId } from "./markers.js";
 
 /** A node or ensemble member's run state, as the live overlay carries it. */
 export type PlateNodeState = "running" | "pass" | "fail";
@@ -117,18 +118,21 @@ function groupLabelX(group: { x: number; w: number }): number {
  * The svg's own stylesheet. Node fills follow the Canopy page's GraphMorph:
  * the harness accent at 22% over the deep, chips/checks/gates dark, commits
  * filled teal. Kind rules come after the base node rule so they win the
- * specificity tie.
+ * specificity tie. The marker rules carry the plate's own id prefix, so
+ * this style never paints another plate's arrowheads.
  */
-function plateStyle(): string {
+function plateStyle(prefix: string): string {
   return (
     `.plate-svg text{font-family:var(--font-mono,'Sometype Mono',ui-monospace,Menlo,monospace)}` +
     `.plate-svg .edge{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.45;opacity:.85}` +
     `.plate-svg .edge.fail{stroke:#ff6b6b;stroke-dasharray:1.4 1.1;opacity:.7}` +
     `.plate-svg .edge.error{stroke:currentColor;stroke-width:.3;stroke-dasharray:.4 .8;opacity:.45}` +
     `.plate-svg .edge.order{stroke:currentColor;stroke-width:.3;stroke-dasharray:.5 1.1;stroke-linecap:round;opacity:.9}` +
-    `.plate-svg #plate-arrow path{fill:var(--canopy,#00a9a0);fill-opacity:.85}` +
-    `.plate-svg #plate-arrow-fail path{fill:#ff6b6b;fill-opacity:.7}` +
-    `.plate-svg #plate-arrow-error path{fill:#e8f6f1;fill-opacity:.45}` +
+    markerCss(".plate-svg", prefix, {
+      pass: "fill:var(--canopy,#00a9a0);fill-opacity:.85",
+      fail: "fill:#ff6b6b;fill-opacity:.7",
+      error: "fill:#e8f6f1;fill-opacity:.45",
+    }) +
     `.plate-svg .node .shape{fill:color-mix(in srgb, var(--nc, var(--canopy, #00a9a0)) 22%, #04110f);stroke:var(--nc, var(--canopy, #00a9a0));stroke-width:.45}` +
     `.plate-svg .shape-chip .shape{fill:#0c1416;stroke:var(--ink-dim,#9a9890)}` +
     `.plate-svg .shape-check .shape,.plate-svg .shape-gate .shape{fill:#0c1416;stroke:#e8f6f1}` +
@@ -205,37 +209,13 @@ function renderLitEdge(edge: PlacedEdge, legs: number[], total: number, seconds:
   );
 }
 
-/**
- * One marker per flow class (pass/fail/error share the shape, the CSS
- * paints each): a 1.3-unit head in user units, tip at the path end.
- * Order edges are layout guides, not flow, so they carry no marker.
- */
-function plateMarkers(): string {
-  const marker = (id: string): string =>
-    `<marker id="${id}" viewBox="0 0 10 10" refX="8" refY="5" ` +
-    `markerWidth="1.3" markerHeight="1.3" markerUnits="userSpaceOnUse" ` +
-    `orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>`;
-  return (
-    `<defs>${marker("plate-arrow")}${marker("plate-arrow-fail")}` +
-    `${marker("plate-arrow-error")}</defs>`
-  );
-}
-
 /** The marker-end for a flow edge, or nothing for order guides. */
-function edgeMarker(cls: string): string {
-  if (cls === "fail") {
-    return ` marker-end="url(#plate-arrow-fail)"`;
-  }
-  if (cls === "error") {
-    return ` marker-end="url(#plate-arrow-error)"`;
-  }
-  if (cls === "order") {
-    return "";
-  }
-  return ` marker-end="url(#plate-arrow)"`;
+function edgeMarker(prefix: string, cls: string): string {
+  const id = markerId(prefix, cls);
+  return id === null ? "" : ` marker-end="url(#${id})"`;
 }
 
-function renderEdges(layout: PlateLayout): string {
+function renderEdges(layout: PlateLayout, prefix: string): string {
   const litOf = new Map(layout.walkFails.map((lit) => [`${lit.from}→${lit.to}`, lit.legs]));
   const total = Math.round(layout.walkSeconds / STEP_SECONDS);
   const edges = [...layout.edges].sort(
@@ -246,7 +226,7 @@ function renderEdges(layout: PlateLayout): string {
   return edges
     .map((edge) => {
       const base =
-        `<path class="edge ${edge.cls}" d="${edge.d}"${edgeMarker(edge.cls)} ` +
+        `<path class="edge ${edge.cls}" d="${edge.d}"${edgeMarker(prefix, edge.cls)} ` +
         `data-from="${escape(edge.from)}" data-to="${escape(edge.to)}"/>`;
       const legs = edge.cls === "fail" ? litOf.get(`${edge.from}→${edge.to}`) : undefined;
       return legs === undefined || legs.length === 0 || total <= 0
@@ -432,7 +412,7 @@ function renderToken(layout: PlateLayout, state: PlateState | undefined): string
   );
 }
 
-function renderLayout(layout: PlateLayout, state: PlateState | undefined): string {
+function renderLayout(layout: PlateLayout, state: PlateState | undefined, prefix: string): string {
   const ensembles = layout.groups.map((group) => group.name);
   const parts = [
     layout.order.length === 0 ? null : `Nodes in order: ${layout.order.join(", ")}.`,
@@ -443,7 +423,7 @@ function renderLayout(layout: PlateLayout, state: PlateState | undefined): strin
   // The overlays' CSS rides only on a stateful or a fail-lit render: a
   // plain plate stays byte-identical to the catalogue's own drawing.
   const style =
-    plateStyle() +
+    plateStyle(prefix) +
     (state === undefined ? "" : stateStyle()) +
     (layout.walkFails.length === 0 ? "" : litStyle());
   return (
@@ -453,8 +433,8 @@ function renderLayout(layout: PlateLayout, state: PlateState | undefined): strin
     `<title>${escape(layout.name)}</title>` +
     `<desc>${escape(desc)}</desc>` +
     `<style>${style}</style>` +
-    plateMarkers() +
-    `<g class="edges">${renderEdges(layout)}</g>` +
+    markerDefs(prefix) +
+    `<g class="edges">${renderEdges(layout, prefix)}</g>` +
     `<g class="groups">${renderGroups(layout, state)}</g>` +
     `<g class="nodes">${renderNodes(layout, state)}</g>` +
     renderToken(layout, state) +
@@ -479,26 +459,38 @@ function renderLayout(layout: PlateLayout, state: PlateState | undefined): strin
  * walk, and the ridden edge lights while the walker is on it. The default
  * draw never fails a unit — the pure happy path — so a caller that passes
  * none keeps the old walk, byte for byte.
+ *
+ * The optional `markerSeed` scopes the arrowhead marker ids with the
+ * orientation — `{orientation}-{seed}-arrow` — so two plates in one page
+ * (one of them `display:none` at the current width) each resolve their
+ * markers inside their own svg. The default keeps single-plate pages
+ * working unchanged.
  */
 export function renderPlate(
   document: GraphDocument,
   orientation: Orientation = "horizontal",
   state?: PlateState,
   random: () => number = happyRandom,
+  markerSeed = "plate",
 ): string {
   const layout =
     orientation === "vertical"
       ? layoutPlateVertical(document, random)
       : layoutPlate(document, random);
-  return layout === null ? "" : renderLayout(layout, state);
+  return layout === null ? "" : renderLayout(layout, state, `${orientation}-${markerSeed}`);
 }
 
 /**
  * Render one node document as a plate: the single node (or ensemble) drawn
  * with the same vocabulary, by running it through the same layout as a
- * one-unit graph. An unreadable document draws nothing.
+ * one-unit graph. An unreadable document draws nothing. The optional
+ * `markerSeed` scopes the marker ids like `renderPlate`'s.
  */
-export function renderNodePlate(document: NodeDocument, orientation: Orientation = "horizontal"): string {
+export function renderNodePlate(
+  document: NodeDocument,
+  orientation: Orientation = "horizontal",
+  markerSeed = "plate",
+): string {
   if (!isRecord(document) || !isString(document["name"]) || !isString(document["kind"])) {
     return "";
   }
@@ -524,12 +516,12 @@ export function renderNodePlate(document: NodeDocument, orientation: Orientation
         },
       ],
     };
-    return renderPlate(graph, orientation);
+    return renderPlate(graph, orientation, undefined, undefined, markerSeed);
   }
   const graph: GraphDocument = {
     name,
     nodes: [{ name, kind, position: 1, config }],
     edges: [],
   };
-  return renderPlate(graph, orientation);
+  return renderPlate(graph, orientation, undefined, undefined, markerSeed);
 }

@@ -21,6 +21,7 @@ import {
 import { renderNodePlate, renderPlate } from "../../../packages/plate/render.js";
 import { PLATE_SCALE, layoutPlate } from "../../../packages/plate/layout.js";
 import { layoutPlateVertical } from "../../../packages/plate/vertical.js";
+import { mulberry32 } from "../../../packages/plate/walk.js";
 import { ROUND_ROBIN_GRAPH, TUI_POLISH_GRAPH, sixtyNodeGraph } from "./plate-fixture.js";
 
 const GRAPHS: Array<[string, GraphDocument]> = [
@@ -70,7 +71,7 @@ function nodeBoxes(svg: string): Box[] {
 function drawnEdges(svg: string): Edge[] {
   const edges: Edge[] = [];
   const pattern =
-    /<path class="edge ([a-z]+)" d="[^"]*"( marker-end="url\(#[a-z-]+\)")? data-from="([^"]+)" data-to="([^"]+)"\/>/g;
+    /<path class="edge ([a-z]+)" d="[^"]*"( marker-end="url\(#[a-z0-9-]+\)")? data-from="([^"]+)" data-to="([^"]+)"\/>/g;
   for (const match of svg.matchAll(pattern)) {
     edges.push({ cls: match[1] ?? "", from: match[3] ?? "", to: match[4] ?? "" });
   }
@@ -88,7 +89,7 @@ interface DrawnPath {
 function drawnPaths(svg: string): DrawnPath[] {
   const paths: DrawnPath[] = [];
   const pattern =
-    /<path class="edge ([a-z]+)" d="([^"]*)"( marker-end="url\(#([a-z-]+)\)")? data-from="[^"]+" data-to="([^"]+)"\/>/g;
+    /<path class="edge ([a-z]+)" d="([^"]*)"( marker-end="url\(#([a-z0-9-]+)\)")? data-from="[^"]+" data-to="([^"]+)"\/>/g;
   for (const match of svg.matchAll(pattern)) {
     paths.push({ cls: match[1] ?? "", d: match[2] ?? "", marker: match[4] ?? null, to: match[5] ?? "" });
   }
@@ -451,22 +452,27 @@ describe("fallback colours", () => {
 });
 
 describe("plate arrowheads", () => {
-  const MARKER_OF: Record<string, string | null> = {
-    pass: "plate-arrow",
-    fail: "plate-arrow-fail",
-    error: "plate-arrow-error",
+  const MARKER_SUFFIX: Record<string, string | null> = {
+    pass: "arrow",
+    fail: "arrow-fail",
+    error: "arrow-error",
     order: null,
+  };
+  /** The marker id a class ends in under a plate's own id prefix. */
+  const markerOf = (prefix: string, cls: string): string | null => {
+    const suffix = MARKER_SUFFIX[cls];
+    return suffix === null ? null : `${prefix}-${suffix}`;
   };
   for (const [name, document] of GRAPHS) {
     const svg = renderPlate(document);
     it(`${name}: every flow edge carries its class marker, order edges none`, () => {
-      expect(svg).toContain(`<marker id="plate-arrow"`);
-      expect(svg).toContain(`<marker id="plate-arrow-fail"`);
-      expect(svg).toContain(`<marker id="plate-arrow-error"`);
+      expect(svg).toContain(`<marker id="horizontal-plate-arrow"`);
+      expect(svg).toContain(`<marker id="horizontal-plate-arrow-fail"`);
+      expect(svg).toContain(`<marker id="horizontal-plate-arrow-error"`);
       const paths = drawnPaths(svg);
       expect(paths.length).toBeGreaterThan(0);
       for (const path of paths) {
-        expect(path.marker, `${path.cls} marker`).toBe(MARKER_OF[path.cls] ?? null);
+        expect(path.marker, `${path.cls} marker`).toBe(markerOf("horizontal-plate", path.cls));
       }
     });
 
@@ -490,14 +496,74 @@ describe("plate arrowheads", () => {
 
     it(`${name}: the vertical plate carries arrowheads too`, () => {
       const vertical = renderPlate(document, "vertical");
-      expect(vertical).toContain(`<marker id="plate-arrow"`);
+      expect(vertical).toContain(`<marker id="vertical-plate-arrow"`);
       const paths = drawnPaths(vertical);
       expect(paths.length).toBeGreaterThan(0);
       for (const path of paths) {
-        expect(path.marker, `${path.cls} marker`).toBe(MARKER_OF[path.cls] ?? null);
+        expect(path.marker, `${path.cls} marker`).toBe(markerOf("vertical-plate", path.cls));
       }
     });
   }
+});
+
+describe("marker scoping", () => {
+  // documentPage's figure: both orientations of one figure under one
+  // seed. The horizontal twin is display:none under 640 px (the vertical
+  // one above it), and Chrome paints no marker from a hidden subtree —
+  // while url(#…) resolves to the FIRST marker in the document. So the
+  // visible plate's ids must not be defined by its hidden twin.
+  const figureOf = (seed: string): { figure: string; horizontal: string; vertical: string } => {
+    const horizontal = renderPlate(helloGraph as unknown as GraphDocument, "horizontal", undefined, mulberry32(7), seed);
+    const vertical = renderPlate(helloGraph as unknown as GraphDocument, "vertical", undefined, mulberry32(7), seed);
+    return { figure: `<figure class="plate">${horizontal}${vertical}</figure>`, horizontal, vertical };
+  };
+
+  it("every flow edge of the visible plate resolves to a marker inside its own svg", () => {
+    const { figure, horizontal, vertical } = figureOf("9f3");
+    expect(horizontal).not.toBe("");
+    expect(vertical).not.toBe("");
+    // Both views: the phone hides the horizontal twin, the desktop the
+    // vertical one — in each, the first definition of every marker an
+    // edge points at lies inside the visible plate, never the hidden one.
+    for (const [visible, hidden] of [[vertical, horizontal], [horizontal, vertical]] as const) {
+      const start = figure.indexOf(visible);
+      const end = start + visible.length;
+      expect(start).toBeGreaterThanOrEqual(0);
+      let flow = 0;
+      for (const path of drawnPaths(visible)) {
+        if (path.marker === null) {
+          continue;
+        }
+        flow += 1;
+        const first = figure.indexOf(`<marker id="${path.marker}"`);
+        expect(first, `${path.cls} → ${path.marker}`).toBeGreaterThanOrEqual(start);
+        expect(first, `${path.cls} → ${path.marker}`).toBeLessThan(end);
+        expect(hidden, `${path.cls} → ${path.marker}`).not.toContain(`<marker id="${path.marker}"`);
+      }
+      expect(flow).toBeGreaterThan(0);
+    }
+  });
+
+  it("scopes distinct marker ids to two renders with different seeds", () => {
+    const one = renderPlate(helloGraph as unknown as GraphDocument, "horizontal", undefined, mulberry32(7), "seed-one");
+    const two = renderPlate(helloGraph as unknown as GraphDocument, "horizontal", undefined, mulberry32(7), "seed-two");
+    const ids = (svg: string): string[] =>
+      [...svg.matchAll(/<marker id="([^"]+)"/g)].map((match) => match[1] ?? "");
+    expect(ids(one)).toEqual([
+      "horizontal-seed-one-arrow",
+      "horizontal-seed-one-arrow-fail",
+      "horizontal-seed-one-arrow-error",
+    ]);
+    expect(ids(two)).toEqual([
+      "horizontal-seed-two-arrow",
+      "horizontal-seed-two-arrow-fail",
+      "horizontal-seed-two-arrow-error",
+    ]);
+    expect(ids(one).some((id) => ids(two).includes(id))).toBe(false);
+    // The stylesheet follows the ids into the plate's own style block.
+    expect(one).toContain(`.plate-svg #horizontal-seed-one-arrow path{`);
+    expect(one).not.toContain(`#plate-arrow`);
+  });
 });
 
 describe("the pattern figures", () => {

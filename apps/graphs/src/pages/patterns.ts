@@ -54,12 +54,14 @@ function statusBadge(status: PatternStatus): string {
  * The drawing is decorative beside the words around it, so it hides from
  * assistive tech; the page's own plate carries the labelled drawing.
  */
-function thumbFigure(figure: JsonValue, label: string): string {
+function thumbFigure(figure: JsonValue, label: string, markerSeed: string): string {
   // One seed per figure, replayed by each orientation's own generator,
   // so both plates walk the same fail edges — a fresh one per render.
+  // The marker ids take the caller's slug instead: every figure on the
+  // page renders within one clock tick, and the ids must not collide.
   const seed = Date.now() >>> 0;
-  const horizontal = renderPlate(figure as unknown as GraphDocument, "horizontal", undefined, mulberry32(seed));
-  const vertical = renderPlate(figure as unknown as GraphDocument, "vertical", undefined, mulberry32(seed));
+  const horizontal = renderPlate(figure as unknown as GraphDocument, "horizontal", undefined, mulberry32(seed), markerSeed);
+  const vertical = renderPlate(figure as unknown as GraphDocument, "vertical", undefined, mulberry32(seed), markerSeed);
   return horizontal === "" && vertical === ""
     ? ""
     : `<figure class="plate thumb" aria-hidden="true">${horizontal}${vertical}<figcaption class="sr-only">${escapeHtml(label)}</figcaption></figure>`;
@@ -70,7 +72,7 @@ function patternCard(entry: PatternEntry): string {
   const href = `/patterns/${entry.slug}`;
   return (
     `<li class="card">` +
-    `<a class="card-link" href="${href}">${thumbFigure(entry.figure, entry.title)}` +
+    `<a class="card-link" href="${href}">${thumbFigure(entry.figure, entry.title, entry.slug)}` +
     `<span class="card-title">${escapeHtml(entry.title)}</span></a>` +
     statusBadge(entry.status) +
     `<span class="card-summary">${escapeHtml(entry.summary)}</span>` +
@@ -118,7 +120,7 @@ export interface ImplementsRow {
 /** One known ref: the catalogue's index row, a graph's small plate below. */
 function implementsItem(row: ImplementsRow): string {
   const doc = row.doc as Doc;
-  const thumb = row.figure === null ? "" : thumbFigure(row.figure, doc.name);
+  const thumb = row.figure === null ? "" : thumbFigure(row.figure, doc.name, row.ref.slug);
   return `<li class="row">${docRowInner(doc)}${thumb}</li>`;
 }
 
@@ -172,15 +174,17 @@ export function dropLeadingTitle(body: string, title: string): string {
 
 /**
  * One pattern page: the figure's plate at the top, full width, then the
- * status badge (an experiment carries its one-line notice), the body, the
- * sources as links, and Implemented-by. The twin carries the same order,
- * with the figure as a fenced JSON block.
+ * status badge (an experiment carries its one-line notice), the body,
+ * the sources as links, and Implemented-by. The twin carries the same
+ * order, with the figure as a fenced JSON block. The route's `slug`
+ * scopes the plate's marker ids among the page's other figures.
  */
-export function patternPage(pattern: StoredPattern, rows: ImplementsRow[]): Page {
-  // One seed for the figure's H/V pair, like the thumbnails'.
+export function patternPage(pattern: StoredPattern, rows: ImplementsRow[], slug: string): Page {
+  // One seed for the figure's H/V pair, like the thumbnails'; the marker
+  // ids take the pattern's slug, which is unique among the page's figures.
   const seed = Date.now() >>> 0;
-  const horizontal = renderPlate(pattern.figure as unknown as GraphDocument, "horizontal", undefined, mulberry32(seed));
-  const vertical = renderPlate(pattern.figure as unknown as GraphDocument, "vertical", undefined, mulberry32(seed));
+  const horizontal = renderPlate(pattern.figure as unknown as GraphDocument, "horizontal", undefined, mulberry32(seed), slug);
+  const vertical = renderPlate(pattern.figure as unknown as GraphDocument, "vertical", undefined, mulberry32(seed), slug);
   const plate = horizontal === "" && vertical === ""
     ? ""
     : `<figure class="plate">${horizontal}${vertical}</figure>`;

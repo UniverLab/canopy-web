@@ -456,7 +456,7 @@ async function patternResponse(
     }
     rows.push({ ref, doc: rowFromEntry(entry), figure });
   }
-  return page(req, patternPage(stored, rows));
+  return page(req, patternPage(stored, rows, slug));
 }
 
 /**
