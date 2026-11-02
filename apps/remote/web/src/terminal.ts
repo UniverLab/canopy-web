@@ -21,7 +21,7 @@ import "@xterm/xterm/css/xterm.css";
 import { Terminal } from "@xterm/xterm";
 import {
   TERMINAL_FONT_FAMILY,
-  TERMINAL_FONT_SIZE,
+  terminalFontSizeForDpr,
   terminalFontGate,
 } from "./terminal-font.js";
 import { THEME } from "./terminal-theme.js";
@@ -106,11 +106,17 @@ export function createXtermHandle(
   cols: number,
   rows: number,
 ): TerminalHandle {
+  // DPR-gated size: at DPR 1 the WebGL backing store is the CSS size and
+  // 14 px glyphs rasterise a hyphen into a single ~1 px row that reads
+  // away; double the source size and let the fit scale bring it back
+  // (see terminal-font.ts). The size is fixed at open — a later browser
+  // zoom lands as layout and the fit scale absorbs it, no re-open.
+  const dpr = typeof devicePixelRatio === "number" ? devicePixelRatio : undefined;
   const terminal = new Terminal({
     cols,
     rows,
     scrollback: 2000,
-    fontSize: TERMINAL_FONT_SIZE,
+    fontSize: terminalFontSizeForDpr(dpr),
     fontFamily: TERMINAL_FONT_FAMILY,
     fontWeight: 400,
     fontWeightBold: 700,

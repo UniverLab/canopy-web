@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  TERMINAL_DPR_1_LIMIT,
+  TERMINAL_FONT_SIZE,
+  TERMINAL_FONT_SIZE_DPR1,
   TERMINAL_FONT_SPEC,
   TERMINAL_FONT_TIMEOUT_MS,
   terminalFontGate,
+  terminalFontSizeForDpr,
 } from "../src/terminal-font.js";
 
 function installFonts(load: (font: string) => Promise<unknown>): void {
@@ -48,5 +52,40 @@ describe("terminalFontGate", () => {
     expect(settled).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
     expect(settled).toBe(true);
+  });
+});
+
+// The DPR gate carves out the ~1-DPR displays only: the default size
+// (14, the measured face size) stays for DPR 2+, where the WebGL backing
+// store already rasterises every glyph at twice the density, and only a
+// display below the limit opens at the double size.
+describe("terminalFontSizeForDpr", () => {
+  it("defaults to 14: the measured size stays the default", () => {
+    expect(TERMINAL_FONT_SIZE).toBe(14);
+    expect(TERMINAL_FONT_SIZE_DPR1).toBe(28);
+  });
+
+  it("opens at the double size at DPR 1 and below", () => {
+    expect(terminalFontSizeForDpr(1)).toBe(TERMINAL_FONT_SIZE_DPR1);
+    expect(terminalFontSizeForDpr(0.5)).toBe(TERMINAL_FONT_SIZE_DPR1);
+  });
+
+  it("opens at the double size when the DPR is unknown or broken", () => {
+    expect(terminalFontSizeForDpr(undefined)).toBe(TERMINAL_FONT_SIZE_DPR1);
+    expect(terminalFontSizeForDpr(null)).toBe(TERMINAL_FONT_SIZE_DPR1);
+    expect(terminalFontSizeForDpr(0)).toBe(TERMINAL_FONT_SIZE_DPR1);
+  });
+
+  it("keeps the double size at fractional DPRs just below the limit", () => {
+    // A 1.05 DPR (105 % browser zoom over a 1-DPR display) is still DPR 1's
+    // thin raster; 1.1 is not.
+    expect(terminalFontSizeForDpr(TERMINAL_DPR_1_LIMIT)).toBe(TERMINAL_FONT_SIZE_DPR1);
+    expect(terminalFontSizeForDpr(TERMINAL_DPR_1_LIMIT + 0.001)).toBe(TERMINAL_FONT_SIZE);
+  });
+
+  it("opens at 14 at DPR 2+: those rasters are already dense", () => {
+    expect(terminalFontSizeForDpr(2)).toBe(TERMINAL_FONT_SIZE);
+    expect(terminalFontSizeForDpr(3)).toBe(TERMINAL_FONT_SIZE);
+    expect(terminalFontSizeForDpr(1.25)).toBe(TERMINAL_FONT_SIZE);
   });
 });
