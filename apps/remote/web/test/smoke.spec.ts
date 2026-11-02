@@ -74,43 +74,61 @@ test("renders a legible 80-column session at 390x844", async ({ page }, testInfo
     })),
   );
   expect(faces).toContainEqual({ family: "JetBrains Mono", status: "loaded" });
-  // Fit off (the default): the readable floor keeps a row at 11 CSS px.
+  // Always fitted: the terminal fits the pane with Fit untouched (off),
+  // so the rightmost column reads with no manual press. Glyph legibility
+  // itself is the sibling spec's font-size concern, not a scale floor.
   await expect
     .poll(() =>
       page.evaluate(() => {
         if (innerWidth !== 390) {
-          return 0;
+          return 99;
         }
+        const pane = document.querySelector(".term-pane") as HTMLElement | null;
         const fit = document.querySelector(".term-fit") as HTMLElement | null;
-        const screen = document.querySelector(".xterm-screen") as HTMLElement | null;
-        if (!fit || !screen) {
-          return 0;
+        if (!pane || !fit) {
+          return 99;
         }
-        return (screen.offsetHeight / 24) * Number(fit.dataset.scale);
+        if (!(Number(fit.dataset.scale) > 0)) {
+          return 99;
+        }
+        return pane.scrollWidth - pane.clientWidth;
       }),
     )
-    .toBeGreaterThanOrEqual(11);
+    .toBeLessThanOrEqual(1);
   const measured = await page.evaluate(() => {
     const pane = document.querySelector(".term-pane") as HTMLElement;
     const fit = document.querySelector(".term-fit") as HTMLElement;
-    const screen = document.querySelector(".xterm-screen") as HTMLElement;
+    const scaler = document.querySelector(".term-scale") as HTMLElement;
     const doc = document.scrollingElement ?? document.documentElement;
     const style = getComputedStyle(pane);
+    const paneBox = pane.getBoundingClientRect();
+    const scalerBox = scaler.getBoundingClientRect();
     return {
       fontOk: document.fonts.check('14px "JetBrains Mono"'),
       fit: fit.dataset.fit,
-      rowHeight: (screen.offsetHeight / 24) * Number(fit.dataset.scale),
+      scale: Number(fit.dataset.scale),
       pageOverflow: doc.scrollWidth - doc.clientWidth,
       paneScroll: pane.scrollWidth - pane.clientWidth,
+      scrollLeft: pane.scrollLeft,
+      scalerLeft: scalerBox.left,
+      scalerRight: scalerBox.right,
+      contentLeft:
+        paneBox.left + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft),
+      contentRight:
+        paneBox.right - parseFloat(style.borderRightWidth) - parseFloat(style.paddingRight),
       panePadding: parseFloat(style.paddingLeft),
     };
   });
   expect(measured.fontOk).toBe(true);
   expect(measured.fit).toBe("off");
-  expect(measured.rowHeight).toBeGreaterThanOrEqual(11);
-  // The session pans inside its card; the page itself never scrolls sideways.
-  expect(measured.paneScroll).toBeGreaterThan(0);
+  expect(measured.scale).toBeGreaterThan(0);
+  // The session fits inside its card with the line start at the left edge;
+  // the page itself never scrolls sideways.
+  expect(measured.paneScroll).toBeLessThanOrEqual(1);
   expect(measured.pageOverflow).toBeLessThanOrEqual(1);
+  expect(measured.scrollLeft).toBeLessThanOrEqual(1);
+  expect(measured.scalerLeft).toBeGreaterThanOrEqual(measured.contentLeft - 1);
+  expect(measured.scalerRight).toBeLessThanOrEqual(measured.contentRight + 1);
   const shot = await page.screenshot({ path: testInfo.outputPath("session-390x844.png") });
   await testInfo.attach("session-390x844", { body: shot, contentType: "image/png" });
 });
@@ -135,6 +153,10 @@ test("keeps the terminal text off its border at 1280x900", async ({ page }) => {
 test("shows all nine keys inside the viewport at 360x640", async ({ page }) => {
   const keys = page.locator("#keybar .key");
   await expect(keys).toHaveCount(9);
+  // The keybar follows the terminal's first fit, which lands after its
+  // face loads — measuring before that blames the placeholder height
+  // (the 46dvh fallback) for keys the settled layout holds in view.
+  await settledBox(page, "#keybar");
   const boxes = await keys.evaluateAll((els) =>
     els.map((el) => {
       const r = el.getBoundingClientRect();
@@ -427,7 +449,7 @@ test("builder picks sections by kind at 390x844", async ({ page }, testInfo) => 
 test("terminal pans when zoomed", async ({ page }) => {
   const fit = page.locator("#term-fit");
   await expect(fit).toHaveAttribute("aria-pressed", "false");
-  // Fit on: pure fit-to-width, so only the zoom makes it overflow.
+  // Always fitted, so only the zoom makes it overflow.
   await fit.click();
   await expect(fit).toHaveAttribute("aria-pressed", "true");
   await page.locator("#term-zoom-in").click();

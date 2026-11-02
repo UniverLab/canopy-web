@@ -7,7 +7,7 @@ describe("terminal prefs", () => {
     localStorage.clear();
   });
 
-  it("defaults to the readable floor (Fit off)", () => {
+  it("defaults to Fit off", () => {
     expect(readFitOnly()).toBe(false);
   });
 

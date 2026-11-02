@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-// Per-device terminal preferences. The readable floor is the default on
-// phones (Fit off); Fit on is pure fit-to-width for a wide screen. Every
-// storage access is guarded: Safari private mode and embedded webviews
-// throw on localStorage, and a terminal must still open without it.
+// Per-device terminal preferences. The terminal always fits the pane width;
+// Fit stays as a harmless remembered affordance. Every storage access is
+// guarded: Safari private mode and embedded webviews throw on localStorage,
+// and a terminal must still open without it.
 
 export const FIT_ONLY_KEY = "canopy.remote.term.fitOnly";
 

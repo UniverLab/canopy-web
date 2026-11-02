@@ -259,7 +259,8 @@ describe("TerminalView", () => {
   it("scales once into the visual box and reports the scale", () => {
     const { parent, view } = setup();
     view.mount(parent, 80, 24);
-    // Pure fit-to-width (Fit on), so the expected scale is pane / content.
+    // Always fit-to-width, so the expected scale is pane / content; the
+    // Fit toggle is a no-op that must not change it.
     view.setFitOnly(true);
     const fit = parent.querySelector<HTMLElement>(".term-fit");
     const scaler = parent.querySelector<HTMLElement>(".term-scale");
@@ -284,7 +285,7 @@ describe("TerminalView", () => {
     view.dispose();
   });
 
-  it("applies the 11 px readable floor unless Fit is on", () => {
+  it("always fits the pane width with Fit off, and Fit is a no-op", () => {
     const { parent, view } = setup();
     view.mount(parent, 80, 24);
     const fit = parent.querySelector<HTMLElement>(".term-fit");
@@ -295,22 +296,85 @@ describe("TerminalView", () => {
     }
     Object.defineProperty(fit, "clientWidth", { value: 356, configurable: true });
     Object.defineProperty(host, "scrollWidth", { value: 672, configurable: true });
-    // 24 rows × 17 px: the floor is 11 / 17, wider than the pane.
+    // 24 rows × 17 px: the old 11 px floor would be 11 / 17 here, wider
+    // than the pane. The view ignores it now — the rightmost column fits
+    // with no manual Fit press.
     Object.defineProperty(host, "scrollHeight", { value: 408, configurable: true });
+    // A stale horizontal scroll from before the refit (open, resize, zoom
+    // out): the refit must anchor the pane back at the line start.
+    parent.scrollLeft = 48;
     view.refit();
-    const floor = computeMinScale(17);
+    const fitted = 356 / 672;
     expect(view.isFitOnly).toBe(false);
-    expect(host.style.transform).toBe(`scale(${floor})`);
+    expect(host.style.transform).toBe(`scale(${fitted})`);
     expect(fit.dataset.fit).toBe("off");
-    // The visual box is wider than the pane, which is what makes the pane
-    // scroll horizontally instead of shrinking the glyphs.
-    expect(parseFloat(scaler.style.width)).toBeCloseTo(672 * floor, 3);
-    expect(672 * floor).toBeGreaterThan(356);
+    expect(scaler.style.width).toBe(`${672 * fitted}px`);
+    expect(672 * fitted).toBeCloseTo(356, 6);
+    expect(parent.scrollLeft).toBe(0);
+    // Fit on changes nothing but the remembered toggle: same scale, same
+    // box, still anchored left.
     view.setFitOnly(true);
     expect(view.isFitOnly).toBe(true);
     expect(fit.dataset.fit).toBe("on");
-    expect(host.style.transform).toBe(`scale(${356 / 672})`);
-    expect(672 * (356 / 672)).toBeCloseTo(356, 6);
+    expect(host.style.transform).toBe(`scale(${fitted})`);
+    expect(scaler.style.width).toBe(`${672 * fitted}px`);
+    expect(parent.scrollLeft).toBe(0);
+    view.setFitOnly(false);
+    expect(host.style.transform).toBe(`scale(${fitted})`);
+    view.dispose();
+  });
+
+  it("keeps the line start visible when zoom overflows the pane", () => {
+    const { parent, view } = setup();
+    view.mount(parent, 80, 24);
+    const fit = parent.querySelector<HTMLElement>(".term-fit");
+    const scaler = parent.querySelector<HTMLElement>(".term-scale");
+    const host = parent.querySelector<HTMLElement>(".term-host");
+    if (!fit || !scaler || !host) {
+      throw new Error("missing scaffold");
+    }
+    Object.defineProperty(fit, "clientWidth", { value: 356, configurable: true });
+    Object.defineProperty(host, "scrollWidth", { value: 672, configurable: true });
+    Object.defineProperty(host, "scrollHeight", { value: 408, configurable: true });
+    view.refit();
+    expect(parent.scrollLeft).toBe(0);
+    // 200 % zoom overflows to the right (the pane pans), but the refit
+    // re-anchors the pane so the line start stays visible.
+    parent.scrollLeft = 120;
+    view.setZoom(2);
+    const zoomed = (356 / 672) * 2;
+    expect(host.style.transform).toBe(`scale(${zoomed})`);
+    expect(parseFloat(scaler.style.width)).toBeCloseTo(672 * zoomed, 3);
+    expect(672 * zoomed).toBeGreaterThan(356);
+    expect(parent.scrollLeft).toBe(0);
+    view.dispose();
+  });
+
+  it("keeps a manual pan when Fit is toggled", () => {
+    const { parent, view } = setup();
+    view.mount(parent, 80, 24);
+    const fit = parent.querySelector<HTMLElement>(".term-fit");
+    const host = parent.querySelector<HTMLElement>(".term-host");
+    if (!fit || !host) {
+      throw new Error("missing scaffold");
+    }
+    Object.defineProperty(fit, "clientWidth", { value: 356, configurable: true });
+    Object.defineProperty(host, "scrollWidth", { value: 672, configurable: true });
+    Object.defineProperty(host, "scrollHeight", { value: 408, configurable: true });
+    view.setZoom(2);
+    const zoomed = (356 / 672) * 2;
+    expect(host.style.transform).toBe(`scale(${zoomed})`);
+    // The user pans right to read the zoomed line's end; toggling Fit is a
+    // harmless no-op, so the pan and the scale must survive it.
+    parent.scrollLeft = 120;
+    view.setFitOnly(true);
+    expect(fit.dataset.fit).toBe("on");
+    expect(host.style.transform).toBe(`scale(${zoomed})`);
+    expect(parent.scrollLeft).toBe(120);
+    view.setFitOnly(false);
+    expect(fit.dataset.fit).toBe("off");
+    expect(host.style.transform).toBe(`scale(${zoomed})`);
+    expect(parent.scrollLeft).toBe(120);
     view.dispose();
   });
 });

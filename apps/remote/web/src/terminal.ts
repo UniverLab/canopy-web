@@ -4,16 +4,18 @@
 // exactly once. .term-host keeps xterm's natural pixel size and
 // transform:scale(s) does the scaling; the surrounding .term-scale is the
 // visual box (natural × s) and .term-fit holds it. The pane itself is the
-// scroller (overflow:auto), so when the readable floor wins on a phone the
-// 80-column session pans inside the terminal card and the page never
-// scrolls sideways. Pinch or the +/− buttons zoom on top of either mode,
-// output follows the bottom unless the user scrolled up, and tapping the
-// terminal focuses xterm's hidden textarea so the soft keyboard opens and
-// typed characters come back through onData as input.
+// scroller (overflow:auto), so a zoomed session pans inside the terminal
+// card and the page never scrolls sideways. Pinch or the +/− buttons zoom
+// on top of the fit, output follows the bottom unless the user scrolled
+// up, and tapping the terminal focuses xterm's hidden textarea so the soft
+// keyboard opens and typed characters come back through onData as input.
 //
-// The fitted scale is max(paneWidth / terminalWidth, minScale), where
-// minScale = 11 / rowHeight: a phone never renders a session smaller than
-// an 11 CSS px glyph. The Fit toggle drops the floor and fits the width.
+// The fitted scale is always paneWidth / terminalWidth times the zoom:
+// the terminal fits its panel on open, on panel resize and on zoom change
+// with no manual Fit press. Every refit anchors the pane at scrollLeft 0,
+// so the line start stays visible and a stale scroll never clips the left
+// edge. The Fit toggle remains as a harmless remembered affordance that no
+// longer changes the scale.
 
 import "@xterm/xterm/css/xterm.css";
 import { Terminal } from "@xterm/xterm";
@@ -45,7 +47,11 @@ export interface TerminalHandle {
 export type TerminalFactory = (host: HTMLElement, cols: number, rows: number) => TerminalHandle;
 
 export interface TerminalViewOptions {
-  /** Pure fit-to-width when true; the readable floor when false. */
+  /**
+   * Remembered Fit affordance only: the view always fits the pane width,
+   * so this no longer changes the scale. Kept so the button's wiring and
+   * the per-device preference keep working as a harmless no-op.
+   */
   fitOnly?: boolean;
 }
 
@@ -69,8 +75,9 @@ export function computeMinScale(rowHeight: number): number {
   return MIN_GLYPH_PX / rowHeight;
 }
 
-// Base scale: the larger of fit-to-width and the readable floor, times the
-// zoom. A minScale of 0 is pure fit-to-width (the Fit toggle).
+// Base scale: the larger of fit-to-width and minScale, times the zoom. The
+// view always passes a minScale of 0 (pure fit-to-width); the parameter
+// stays for the scale-math unit tests.
 export function computeScale(
   paneWidth: number,
   contentWidth: number,
@@ -205,6 +212,11 @@ export class TerminalView {
     const refit = () => this.refit();
     if (typeof ResizeObserver !== "undefined") {
       const observer = new ResizeObserver(refit);
+      // Both boxes: the pane carries the panel resize (and the browser
+      // zoom, which lands as layout), the fit carries the visual-height
+      // settle. Neither write feeds back into the pane's own size, so the
+      // observer fires at most once more per change — never a loop.
+      observer.observe(parent);
       observer.observe(fit);
       this.stopObserving = () => observer.disconnect();
     } else {
@@ -287,12 +299,19 @@ export class TerminalView {
     this.setZoom(this.zoom / ZOOM_STEP);
   }
 
+  /**
+   * The Fit button's remembered state; kept as a harmless no-op (the view
+   * always fits). It mirrors the flag to the dataset only — never a refit,
+   * which would yank a manual pan back to the left edge.
+   */
   setFitOnly(fitOnly: boolean): void {
     if (this.fitOnly === fitOnly) {
       return;
     }
     this.fitOnly = fitOnly;
-    this.refit();
+    if (this.fit) {
+      this.fit.dataset.fit = fitOnly ? "on" : "off";
+    }
   }
 
   scrollToLatest(): void {
@@ -318,8 +337,11 @@ export class TerminalView {
     // Both renderers size .xterm-screen in layout px (a CSS transform does
     // not affect offsetHeight), so this is the unscaled row height.
     const rowHeight = this.rows > 0 ? naturalHeight / this.rows : FALLBACK_ROW_HEIGHT;
-    const minScale = this.fitOnly ? 0 : computeMinScale(rowHeight);
-    const scale = computeScale(fit.clientWidth, naturalWidth, this.zoom, minScale);
+    // Always pure fit-to-width: the floor is gone, so the rightmost column
+    // is readable with no manual Fit press. Fit-to-width wins over zoom
+    // fidelity in one sense only — the left anchor below — while the zoom
+    // still scales on top and pans to the right when it overflows.
+    const scale = computeScale(fit.clientWidth, naturalWidth, this.zoom, 0);
     // One scale, applied once: the host is natural-size and carries the
     // transform; the scaler is the visual box (natural × scale) that
     // clips it, so the terminal never renders at scale².
@@ -330,6 +352,13 @@ export class TerminalView {
     fit.dataset.rowHeight = `${rowHeight}`;
     fit.dataset.fit = this.fitOnly ? "on" : "off";
     this.pane?.style.setProperty("--term-visual-h", `${naturalHeight * scale}px`);
+    // A stale horizontal scroll would clip the line start after the scale
+    // shrinks (open, resize, zoom out): anchor the pane at the left edge so
+    // the line start is always visible. Panning right stays the user's own
+    // move — scrolls never refit, so this never yanks a manual pan back.
+    if (this.pane) {
+      this.pane.scrollLeft = 0;
+    }
   }
 
   dispose(): void {

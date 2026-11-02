@@ -346,8 +346,8 @@ export function createShell(
     syncFilesBadge();
     root.querySelector("#term-zoom-in")?.addEventListener("click", () => terminalView?.zoomIn());
     root.querySelector("#term-zoom-out")?.addEventListener("click", () => terminalView?.zoomOut());
-    // Fit off (default) keeps the readable floor; Fit on is pure
-    // fit-to-width. The choice is remembered per device.
+    // The terminal always fits the pane width; Fit stays as a harmless
+    // remembered affordance that is never needed to read the line.
     const fitButton = root.querySelector<HTMLButtonElement>("#term-fit");
     fitButton?.addEventListener("click", () => {
       const next = fitButton.getAttribute("aria-pressed") !== "true";

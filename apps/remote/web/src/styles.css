@@ -551,9 +551,9 @@ label > textarea {
 
 /* The terminal card follows the fitted terminal's height (refit writes
  * --term-visual-h), capped at 60vh; before the snapshot arrives the
- * placeholder holds the pane open. The pane is the scroller: when the
- * readable floor wins on a phone the 80-column session pans inside the
- * card (never the page), and the 8 px inset keeps text off the border. */
+ * placeholder holds the pane open. The pane is the scroller: a zoomed
+ * session pans inside the card (never the page), and the 8 px inset keeps
+ * text off the border. */
 .term-pane {
   background: var(--term-bg);
   border: 1px solid var(--stage-line);
@@ -581,8 +581,8 @@ label > textarea {
 }
 
 /* The visual box: natural size × the scale refit wrote, clipping the
- * transformed host so the terminal scales exactly once. Wider than the
- * fit when the readable floor wins; the pane scrolls it. */
+ * transformed host so the terminal scales exactly once. At zoom 1 it
+ * matches the fit exactly; zoomed wider, the pane scrolls it. */
 .term-scale {
   overflow: hidden;
 }
@@ -658,7 +658,8 @@ label > textarea {
  * and the nine keys must sit inside the viewport without scrolling. The
  * terminal keeps its 24 rows, so the chrome around it tightens instead:
  * topbar padding and row gap, the column gaps, the keybar padding and gap.
- * Reclaims 12.8 px; the second key row ends at 632 px. */
+ * Reclaims 12.8 px; the fitted terminal is shorter still, so the second
+ * key row ends at 577 px. */
 @media (max-width: 639px) {
   .topbar-inner {
     padding-top: max(0.5rem, env(safe-area-inset-top));
