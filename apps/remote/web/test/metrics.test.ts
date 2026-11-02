@@ -221,6 +221,18 @@ describe("metricsStripHtml", () => {
     expect(html).not.toContain("GPU");
     expect(html).toContain('data-level="na"');
   });
+
+  it("metrics_strip_hides_missing_temp", () => {
+    const missing = metricsStripHtml(
+      frameWith({ cpu_usage: 11, cpu_temperature_c: null, memory_used_mb: 3200, memory_total_mb: 8192 }),
+    );
+    expect(missing).toContain('<span class="m-seg">CPU <b data-level="ok">11%</b></span>');
+    expect(missing).not.toContain("n/a");
+    const present = metricsStripHtml(
+      frameWith({ cpu_usage: 11, cpu_temperature_c: 45, memory_used_mb: 3200, memory_total_mb: 8192 }),
+    );
+    expect(present).toContain('<span class="m-seg">CPU <b data-level="ok">11%</b> <b data-level="ok">45°</b>');
+  });
 });
 
 describe("the formatters", () => {

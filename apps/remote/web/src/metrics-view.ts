@@ -48,9 +48,10 @@ function val(text: string, level: MetricLevel): string {
   return `<b data-level="${level}">${esc(text)}</b>`;
 }
 
-// The strip: CPU % and °C, memory used/total, GPU % and °C when the host
-// reports a GPU. Nulls read "n/a"; the strip stays hidden until the first
-// frame, so an older host shows no strip at all.
+// The strip: CPU % (+ °C when the host reports one), memory used/total,
+// GPU % and °C when the host reports a GPU. The CPU °C segment drops
+// when the host has no sensor (the SysInfo view explains why); other
+// nulls read "n/a". Hidden until the first frame lands.
 export function metricsStripHtml(frame: HostMetricsFrame | null): string {
   if (frame === null) {
     return "";
@@ -62,15 +63,20 @@ export function metricsStripHtml(frame: HostMetricsFrame | null): string {
     gpu === null
       ? ""
       : `<span class="m-sep" aria-hidden="true">·</span><span class="m-seg">GPU ${val(formatPct(gpu.usage), usageLevel(gpu.usage))} ${val(formatTempShort(gpu.temperature_c), gpuTempLevel(gpu.temperature_c))}</span>`;
+  const cpuTemp = metrics.cpu_temperature_c;
+  const cpuTempSeg =
+    cpuTemp === null
+      ? ""
+      : ` ${val(formatTempShort(cpuTemp), cpuTempLevel(cpuTemp))}`;
   const label =
-    `CPU ${formatPct(metrics.cpu_usage)} ${formatTempShort(metrics.cpu_temperature_c)}, ` +
+    `CPU ${formatPct(metrics.cpu_usage)}${cpuTemp === null ? "" : ` ${formatTempShort(cpuTemp)}`}, ` +
     `memory ${mem}` +
     (gpu === null
       ? ""
       : `, GPU ${formatPct(gpu.usage)} ${formatTempShort(gpu.temperature_c)}`);
   return (
     `<button type="button" id="metrics-strip" class="metrics-strip chip" aria-label="Host metrics: ${esc(label)}, open SysInfo">` +
-    `<span class="m-seg">CPU ${val(formatPct(metrics.cpu_usage), usageLevel(metrics.cpu_usage))} ${val(formatTempShort(metrics.cpu_temperature_c), cpuTempLevel(metrics.cpu_temperature_c))}</span>` +
+    `<span class="m-seg">CPU ${val(formatPct(metrics.cpu_usage), usageLevel(metrics.cpu_usage))}${cpuTempSeg}</span>` +
     `<span class="m-sep" aria-hidden="true">·</span>` +
     `<span class="m-seg">MEM ${val(mem, usageLevel(memPct(metrics.memory_used_mb, metrics.memory_total_mb)))}</span>` +
     gpuSeg +
