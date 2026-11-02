@@ -79,6 +79,49 @@ test("answers /auth/me with 401 JSON without a session", async ({ request }) => 
   expect(await response.json()).toEqual({ error: "unauthorized" });
 });
 
+test("landing_console_is_clean", async ({ page }) => {
+  // U9: the signed-out landing used to log an expected-but-noisy 401 from
+  // /auth/me plus a 404 for the implicit favicon. The client now skips
+  // /auth/me without a session hint and the page ships its own icon, so
+  // the landing loads clean. Per-page assertion only: nothing here
+  // silences any other page.
+  const errors: string[] = [];
+  const failed: string[] = [];
+  const authMe: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") {
+      errors.push(message.text());
+    }
+  });
+  page.on("requestfailed", (request) => {
+    failed.push(request.url());
+  });
+  page.on("response", (response) => {
+    if (response.status() >= 400) {
+      failed.push(`${response.status()} ${response.url()}`);
+    }
+  });
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/auth/me") {
+      authMe.push(request.url());
+    }
+  });
+  await page.goto("/");
+  await expect(page.locator("main.signin")).toBeVisible();
+  await expect(page).toHaveTitle("Sign in · Canopy remote");
+  await page.waitForLoadState("networkidle");
+  expect(authMe).toEqual([]);
+  expect(failed).toEqual([]);
+  expect(errors).toEqual([]);
+  // The 404's source, pinned directly: the landing ships its own icon, so
+  // no browser falls back to the implicit /favicon.ico the relay honestly
+  // 404s. Headless Chrome never makes that implicit request, so without
+  // this pin the fix would be headed-only and unguarded.
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", "/favicon.svg");
+  const icon = await page.request.get("/favicon.svg");
+  expect(icon.status()).toBe(200);
+});
+
 test("serves robots.txt as static text that keeps crawlers out", async ({
   request,
 }) => {

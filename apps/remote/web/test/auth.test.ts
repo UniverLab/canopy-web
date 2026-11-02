@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
-import { describe, expect, it, vi } from "vitest";
-import { fetchLogin, signOut } from "../src/auth.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { SESSION_COOKIE } from "../../worker/src/protocol.js";
+import {
+  armSessionHint,
+  clearSessionHint,
+  fetchLogin,
+  SESSION_HINT_KEY,
+  signOut,
+} from "../src/auth.js";
 
 function stubFetch(responder: (url: string, init?: RequestInit) => Response | Promise<Response>): {
   fetchImpl: typeof fetch;
@@ -17,36 +24,137 @@ function stubFetch(responder: (url: string, init?: RequestInit) => Response | Pr
 const json = (body: unknown, status: number): Response =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
+function clearCookies(): void {
+  for (const part of document.cookie.split(";")) {
+    const name = part.split("=")[0]?.trim();
+    if (name) {
+      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+    }
+  }
+}
+
+beforeEach(() => {
+  localStorage.clear();
+  clearCookies();
+});
+
+function breakStorage(): { restore: () => void } {
+  const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    get() {
+      throw new Error("storage is blocked");
+    },
+  });
+  return {
+    restore: () => {
+      if (original) {
+        Object.defineProperty(globalThis, "localStorage", original);
+      } else {
+        Reflect.deleteProperty(globalThis, "localStorage");
+      }
+    },
+  };
+}
+
 describe("fetchLogin", () => {
-  it("returns the login behind the session cookie", async () => {
+  it("skips the request without a session hint or cookie", async () => {
+    const { fetchImpl, calls } = stubFetch(() => json({ login: "octo" }, 200));
+    await expect(fetchLogin(fetchImpl)).resolves.toBeNull();
+    expect(calls).toEqual([]);
+  });
+
+  it("fetches when a readable session cookie is present, hint or not", async () => {
+    document.cookie = `${SESSION_COOKIE}=signed-value; path=/`;
+    const { fetchImpl, calls } = stubFetch(() => json({ login: "octo" }, 200));
+    await expect(fetchLogin(fetchImpl)).resolves.toBe("octo");
+    expect(calls).toHaveLength(1);
+  });
+
+  it("ignores a cookie whose name merely contains the session name", async () => {
+    document.cookie = `other_${SESSION_COOKIE}=signed-value; path=/`;
+    const { fetchImpl, calls } = stubFetch(() => json({ login: "octo" }, 200));
+    await expect(fetchLogin(fetchImpl)).resolves.toBeNull();
+    expect(calls).toEqual([]);
+  });
+
+  it("returns the login behind the session cookie and keeps the hint armed", async () => {
+    armSessionHint();
     const { fetchImpl, calls } = stubFetch(() => json({ login: "octo" }, 200));
     await expect(fetchLogin(fetchImpl)).resolves.toBe("octo");
     expect(calls).toEqual([{ url: "/auth/me", init: undefined }]);
+    expect(localStorage.getItem(SESSION_HINT_KEY)).toBe("1");
   });
 
-  it("returns null on 401", async () => {
+  it("arms the hint on 200", async () => {
+    document.cookie = `${SESSION_COOKIE}=signed-value; path=/`;
+    expect(localStorage.getItem(SESSION_HINT_KEY)).toBeNull();
+    const { fetchImpl } = stubFetch(() => json({ login: "octo" }, 200));
+    await expect(fetchLogin(fetchImpl)).resolves.toBe("octo");
+    expect(localStorage.getItem(SESSION_HINT_KEY)).toBe("1");
+  });
+
+  it("returns null on 401 and clears the hint", async () => {
+    armSessionHint();
     const { fetchImpl } = stubFetch(() => json({ error: "unauthorized" }, 401));
     await expect(fetchLogin(fetchImpl)).resolves.toBeNull();
+    expect(localStorage.getItem(SESSION_HINT_KEY)).toBeNull();
   });
 
-  it("returns null when the relay is unreachable or answers nonsense", async () => {
+  it("keeps the hint when the relay is unreachable or answers nonsense", async () => {
+    armSessionHint();
     const down = stubFetch(() => {
       throw new TypeError("fetch failed");
     });
     await expect(fetchLogin(down.fetchImpl)).resolves.toBeNull();
     const broken = stubFetch(() => json({ user: "octo" }, 200));
     await expect(fetchLogin(broken.fetchImpl)).resolves.toBeNull();
+    expect(localStorage.getItem(SESSION_HINT_KEY)).toBe("1");
+  });
+
+  it("fetches when storage is denied (fail open)", async () => {
+    const storage = breakStorage();
+    try {
+      const { fetchImpl, calls } = stubFetch(() => json({ login: "octo" }, 200));
+      await expect(fetchLogin(fetchImpl)).resolves.toBe("octo");
+      expect(calls).toHaveLength(1);
+    } finally {
+      storage.restore();
+    }
+  });
+});
+
+describe("session hint", () => {
+  it("arms and clears", () => {
+    expect(localStorage.getItem(SESSION_HINT_KEY)).toBeNull();
+    armSessionHint();
+    expect(localStorage.getItem(SESSION_HINT_KEY)).toBe("1");
+    clearSessionHint();
+    expect(localStorage.getItem(SESSION_HINT_KEY)).toBeNull();
+  });
+
+  it("survives a storage that throws (private mode)", () => {
+    const storage = breakStorage();
+    try {
+      expect(() => armSessionHint()).not.toThrow();
+      expect(() => clearSessionHint()).not.toThrow();
+    } finally {
+      storage.restore();
+    }
   });
 });
 
 describe("signOut", () => {
-  it("POSTs /auth/logout and resolves on success", async () => {
+  it("POSTs /auth/logout, resolves on success and clears the hint", async () => {
+    armSessionHint();
     const { fetchImpl, calls } = stubFetch(() => new Response(null, { status: 200 }));
     await expect(signOut(fetchImpl)).resolves.toBeUndefined();
     expect(calls).toEqual([{ url: "/auth/logout", init: { method: "POST" } }]);
+    expect(localStorage.getItem(SESSION_HINT_KEY)).toBeNull();
   });
 
-  it("throws when the relay refuses or is unreachable", async () => {
+  it("throws when the relay refuses or is unreachable, and keeps the hint", async () => {
+    armSessionHint();
     const refused = stubFetch(() => new Response(null, { status: 500 }));
     await expect(signOut(refused.fetchImpl)).rejects.toThrow("Could not sign out (500)");
     expect(refused.calls).toHaveLength(1);
@@ -54,6 +162,7 @@ describe("signOut", () => {
       throw new TypeError("fetch failed");
     });
     await expect(signOut(down.fetchImpl)).rejects.toThrow("Could not reach the relay");
+    expect(localStorage.getItem(SESSION_HINT_KEY)).toBe("1");
   });
 
   it("defaults to the global fetch", async () => {

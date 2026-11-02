@@ -65,6 +65,15 @@ const KEEPALIVE_BUDGET = 1_024;
  * longer than that).
  */
 const TURN_FALLBACK_BUDGET = 1_024;
+/**
+ * Allowance for the landing-console spec (U9 session hint: skip /auth/me
+ * when neither the hint nor a readable session cookie says so, arm on
+ * sign-in click + 200, clear on 401 + logout): measured +177 B gzip over
+ * the pre-change main. Added in the feature commit like
+ * TURN_FALLBACK_BUDGET: the 20-byte headroom made any implementation of
+ * the spec impossible.
+ */
+const SESSION_HINT_BUDGET = 512;
 /** The budget the lazy guest chunk is allowed, gzip bytes of JS. */
 const GUEST_BUDGET = 6_144;
 /** The budget the lazy editor chunk is allowed, gzip bytes of JS. */
@@ -160,7 +169,13 @@ describe("the remote's bundle", () => {
     };
     // Keep the numbers in the failure message: a regression says by how much.
     expect(main, JSON.stringify(report)).toBeLessThanOrEqual(
-      BASELINE + BUDGET + FEATURE_BUDGET + METRICS_BUDGET + KEEPALIVE_BUDGET + TURN_FALLBACK_BUDGET,
+      BASELINE +
+        BUDGET +
+        FEATURE_BUDGET +
+        METRICS_BUDGET +
+        KEEPALIVE_BUDGET +
+        TURN_FALLBACK_BUDGET +
+        SESSION_HINT_BUDGET,
     );
     expect(guestJs, JSON.stringify(report)).toBeLessThanOrEqual(GUEST_BUDGET);
     expect(editorJs, JSON.stringify(report)).toBeLessThanOrEqual(EDITOR_BUDGET);

@@ -5,6 +5,7 @@
 // paint or change. A pairing complaint and a changed host list repaint
 // from the shell, so the views never render themselves.
 
+import { armSessionHint } from "./auth.js";
 import { renderHostOptions } from "./chrome.js";
 import { REMOTE_FOOTER } from "./footer.js";
 import type { OnlineHost } from "./relay.js";
@@ -56,6 +57,11 @@ export function renderSignIn(root: HTMLElement, hooks: EntryViewHooks): void {
     </main>
     ${REMOTE_FOOTER}`;
   root.querySelector("#signin-go")?.addEventListener("click", () => {
+    // Arm the session hint before leaving for /auth/login: the OAuth
+    // landing sets the HttpOnly cookie this page cannot see, so the trip
+    // back must fetch /auth/me. A cancelled login self-heals — the next
+    // 401 clears the hint again.
+    armSessionHint();
     globalThis.location.href = "/auth/login";
   });
 }

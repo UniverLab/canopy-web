@@ -8,6 +8,7 @@
 // sharing the main bundle's chunk. No pairing, no picker, no hub-level
 // control of any kind.
 
+import { armSessionHint } from "./auth.js";
 import { renderTopbar, wireAccount } from "./chrome.js";
 import { syncHeaderFondo } from "./fondo.js";
 import { Composer } from "./composer.js";
@@ -141,6 +142,11 @@ export function createGuestView(
     ${REMOTE_FOOTER}`;
     wireChrome();
     root.querySelector("#signin-go")?.addEventListener("click", () => {
+      // Arm the session hint before leaving for /auth/login: the OAuth
+      // landing sets the HttpOnly cookie this page cannot see, so the trip
+      // back must fetch /auth/me. A cancelled login self-heals — the next
+      // 401 clears the hint again.
+      armSessionHint();
       globalThis.location.href = "/auth/login";
     });
   }
