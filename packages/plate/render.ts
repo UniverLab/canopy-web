@@ -17,10 +17,11 @@
  *
  * The svg carries its own `<style>`: colours come from the look kit tokens
  * (`--canopy`, `--ink-dim`, `--font-mono`) when the kit is present and fall
- * back to the Canopy values otherwise; the fail red stays `#ff6b6b`. The
- * token is a declarative SMIL animation hidden under
- * `prefers-reduced-motion`, so the static drawing is complete without motion
- * and without any script.
+ * back to the Canopy values otherwise; the fail red stays `#ff6b6b`, and an
+ * error edge draws in the attention amber — never `currentColor`, which on
+ * a page reads as the teal of the flow. The token is a declarative SMIL
+ * animation hidden under `prefers-reduced-motion`, so the static drawing is
+ * complete without motion and without any script.
  */
 import { type GraphDocument, type NodeDocument } from "./document.js";
 import {
@@ -118,20 +119,23 @@ function groupLabelX(group: { x: number; w: number }): number {
  * The svg's own stylesheet. Node fills follow the Canopy page's GraphMorph:
  * the harness accent at 22% over the deep, chips/checks/gates dark, commits
  * filled teal. Kind rules come after the base node rule so they win the
- * specificity tie. The marker rules carry the plate's own id prefix, so
- * this style never paints another plate's arrowheads.
+ * specificity tie. Error edges and their marks carry the attention amber,
+ * buses draw a touch heavier than the edges they replace, and the `✓ done`
+ * terminal keeps the flow's teal. The marker rules carry the plate's own id
+ * prefix, so this style never paints another plate's arrowheads.
  */
 function plateStyle(prefix: string): string {
   return (
     `.plate-svg text{font-family:var(--font-mono,'Sometype Mono',ui-monospace,Menlo,monospace)}` +
     `.plate-svg .edge{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.45;opacity:.85}` +
     `.plate-svg .edge.fail{stroke:#ff6b6b;stroke-dasharray:1.4 1.1;opacity:.7}` +
-    `.plate-svg .edge.error{stroke:currentColor;stroke-width:.3;stroke-dasharray:.4 .8;opacity:.45}` +
+    `.plate-svg .edge.error{stroke:var(--attention,#ffb454);stroke-width:.3;stroke-dasharray:.4 .8;opacity:.55}` +
+    `.plate-svg .edge.bus{stroke-width:.5;opacity:.85}` +
     `.plate-svg .edge.order{stroke:currentColor;stroke-width:.3;stroke-dasharray:.5 1.1;stroke-linecap:round;opacity:.9}` +
     markerCss(".plate-svg", prefix, {
       pass: "fill:var(--canopy,#00a9a0);fill-opacity:.85",
       fail: "fill:#ff6b6b;fill-opacity:.7",
-      error: "fill:#e8f6f1;fill-opacity:.45",
+      error: "fill:var(--attention,#ffb454);fill-opacity:.7",
     }) +
     `.plate-svg .node .shape{fill:color-mix(in srgb, var(--nc, var(--canopy, #00a9a0)) 22%, #04110f);stroke:var(--nc, var(--canopy, #00a9a0));stroke-width:.45}` +
     `.plate-svg .shape-chip .shape{fill:#0c1416;stroke:var(--ink-dim,#9a9890)}` +
@@ -143,6 +147,9 @@ function plateStyle(prefix: string): string {
     `.plate-svg .group-title,.plate-svg .group-subtitle{font-size:1.9px;fill:var(--canopy,#00a9a0);letter-spacing:.14em;text-transform:uppercase}` +
     `.plate-svg .member-shape{fill:color-mix(in srgb, var(--nc, var(--canopy, #00a9a0)) 22%, #04110f);stroke:var(--nc, var(--canopy, #00a9a0));stroke-width:.3}` +
     `.plate-svg .member-label{font-size:1.9px;fill:#e8f6f1;text-anchor:middle}` +
+    `.plate-svg .mark-error{fill:var(--attention,#ffb454);font-size:2.6px;text-anchor:middle}` +
+    `.plate-svg .mark-fail{fill:none;stroke:#ff6b6b;stroke-width:.5;stroke-dasharray:.6 .5}` +
+    `.plate-svg .done{font-size:2px;fill:var(--canopy,#00a9a0);letter-spacing:.04em}` +
     `.plate-svg .token{fill:var(--canopy,#00a9a0)}` +
     `@media (prefers-reduced-motion:reduce){.plate-svg .token{display:none}}`
   );
@@ -236,6 +243,40 @@ function renderEdges(layout: PlateLayout, prefix: string): string {
     .join("");
 }
 
+/** The grouped inputs' marks: one amber bolt or one red dash per source. */
+function renderMarks(layout: PlateLayout): string {
+  return layout.marks
+    .map((mark) => {
+      const data = `data-mark="${mark.cls}" data-from="${escape(mark.source)}"`;
+      return mark.cls === "error"
+        ? `<text class="mark mark-error" x="${num2(mark.x)}" y="${num2(mark.y)}" dy="0.9" ${data}>⚡</text>`
+        : `<path class="mark mark-fail" d="M${num2(mark.x - 1.2)} ${num2(mark.y)}h2.4" ${data}/>`;
+    })
+    .join("");
+}
+
+/** The grouped inputs' buses: one line per handler and class, arrow included. */
+function renderBuses(layout: PlateLayout, prefix: string): string {
+  return layout.buses
+    .map(
+      (bus) =>
+        `<path class="edge ${bus.cls} bus" d="${bus.d}"${edgeMarker(prefix, bus.cls)} ` +
+        `data-bus="${escape(bus.to)}"/>`,
+    )
+    .join("");
+}
+
+/** The flow's ends: the `✓ done` terminal under each node with no pass exit. */
+function renderDones(layout: PlateLayout): string {
+  return layout.dones
+    .map(
+      (done) =>
+        `<text class="done" x="${num2(done.x)}" y="${num2(done.y)}" text-anchor="middle" ` +
+        `data-done="${escape(done.name)}">✓ done</text>`,
+    )
+    .join("");
+}
+
 /** The `--nc` accent of a harness stem, as a style attribute or nothing. */
 function harnessStyle(harness: string | null): string {
   const color = harnessColor(harness);
@@ -319,12 +360,16 @@ function renderNode(node: PlacedNode, orientation: Orientation, mark: Mark | nul
   const geom = GEOM[node.shape];
   const rotate = geom.rot === 0 ? "" : ` transform="rotate(${geom.rot} ${node.x} ${node.y})"`;
   const dataHarness = node.harness === null ? "" : ` data-harness="${escape(node.harness)}"`;
-  const label = orientation === "vertical"
+  // The lane's units label beneath their shapes in both orientations: the
+  // column already keeps its labels to the right, and the channel beside
+  // the lane has to stay clear for the routes and the bus.
+  const labelsRight = orientation === "vertical" && node.lane !== "handler";
+  const label = labelsRight
     ? `<text class="label" x="${num2(node.x + node.w / 2 + V_LABEL_DX)}" y="${node.y}" dy="${V_LABEL_DY}" text-anchor="start">${escape(plateLabel(node.name))}</text>`
     : `<text class="label" x="${node.x}" y="${node.y}" dy="${TYPE.labelDy}" text-anchor="middle">${escape(plateLabel(node.name))}</text>`;
   const harness = node.harness === null
     ? ""
-    : orientation === "vertical"
+    : labelsRight
       ? `<text class="harness" x="${num2(node.x + node.w / 2 + V_LABEL_DX)}" y="${node.y}" dy="${V_HARNESS_DY}" text-anchor="start">${escape(node.harness)}</text>`
       : `<text class="harness" x="${node.x}" y="${node.y}" dy="${TYPE.harnessDy}" text-anchor="middle">${escape(node.harness)}</text>`;
   // With a state the title names the state — the palette alone cannot tell
@@ -343,7 +388,7 @@ function renderNode(node: PlacedNode, orientation: Orientation, mark: Mark | nul
   return (
     `<g class="node shape-${node.shape}${stateCls}" data-name="${escape(node.name)}" ` +
     `data-cx="${node.x}" data-cy="${node.y}" data-w="${node.w}" data-h="${node.h}" ` +
-    `data-rank="${node.rank}" data-lane="${node.infra ? "infra" : "main"}"${stateData}${dataHarness}${harnessStyle(node.harness)}>` +
+    `data-rank="${node.rank}" data-lane="${node.lane}"${stateData}${dataHarness}${harnessStyle(node.harness)}>` +
     title +
     `<rect class="shape" x="${node.x - geom.w / 2}" y="${node.y - geom.h / 2}" ` +
     `width="${geom.w}" height="${geom.h}" rx="${geom.rx}"${rotate}/>` +
@@ -434,9 +479,11 @@ function renderLayout(layout: PlateLayout, state: PlateState | undefined, prefix
     `<desc>${escape(desc)}</desc>` +
     `<style>${style}</style>` +
     markerDefs(prefix) +
-    `<g class="edges">${renderEdges(layout, prefix)}</g>` +
+    `<g class="edges">${renderEdges(layout, prefix)}${renderBuses(layout, prefix)}</g>` +
     `<g class="groups">${renderGroups(layout, state)}</g>` +
     `<g class="nodes">${renderNodes(layout, state)}</g>` +
+    `<g class="marks">${renderMarks(layout)}</g>` +
+    `<g class="dones">${renderDones(layout)}</g>` +
     renderToken(layout, state) +
     `</svg>`
   );

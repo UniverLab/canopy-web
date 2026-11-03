@@ -21,10 +21,10 @@ async function litNodeKey(page: Page): Promise<string | null> {
 test.beforeEach(async ({ page }) => {
   await page.goto("/fake.html");
   await page.locator('[data-tab="graphs"]').click();
-  await expect(page.locator(".graph-row")).toHaveCount(2);
+  await expect(page.locator(".graph-row")).toHaveCount(3);
 });
 
-test("lists both graphs with chips, fractions, specs and workdirs", async ({ page }) => {
+test("lists the three graphs with chips, fractions, specs and workdirs", async ({ page }) => {
   // Showing the tab asked the host for the list.
   const sent = await page.evaluate(() => window.__fake.sent());
   expect(sent).toContainEqual(expect.objectContaining({ t: "graphs" }));
@@ -40,6 +40,11 @@ test("lists both graphs with chips, fractions, specs and workdirs", async ({ pag
   await expect(done.locator(".graph-name")).toHaveText("quality-bubble");
   await expect(done.locator(".status-chip")).toHaveAttribute("data-status", "completed");
   await expect(done.locator(".graph-count")).toHaveText("3/3");
+
+  const builder = page.locator('[data-graph="g-builder"]');
+  await expect(builder.locator(".graph-name")).toHaveText("canopy-builder");
+  await expect(builder.locator(".status-chip")).toHaveAttribute("data-status", "running");
+  await expect(builder.locator(".graph-count")).toHaveText("0/3");
 });
 
 test("watches the running graph live on its plate and checklist", async ({ page }) => {
@@ -104,4 +109,60 @@ test("draws the plate vertical on a phone, horizontal past 720 px", async ({ pag
   await expect(plate).toHaveClass(/plate-v/);
   await page.setViewportSize({ width: 800, height: 600 });
   await expect(plate).toHaveClass(/plate-h/);
+});
+
+test("draws the builder plate with its handlers in the side lane at 390 px", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('[data-graph="g-builder"]').click();
+  await expect(page.locator("main.graph-view")).toBeVisible();
+  const plate = page.locator("#graph-stage .plate-svg");
+  await expect(plate).toHaveClass(/plate-v/);
+
+  // The failure terminals sit in a lane left of the column, the flow's end
+  // under Relock repo, and one amber bus enters Resilience.
+  const measured = await page.evaluate(() => {
+    const svg = document.querySelector("#graph-stage .plate-svg");
+    if (svg === null) {
+      return null;
+    }
+    const nodes = [...svg.querySelectorAll("g.node")].map((node) => ({
+      name: node.getAttribute("data-name") ?? "",
+      lane: node.getAttribute("data-lane") ?? "",
+      cx: Number(node.getAttribute("data-cx")),
+      hw: Number(node.getAttribute("data-w")) / 2,
+    }));
+    const main = nodes.filter((node) => node.lane === "main");
+    return {
+      mainLeft: Math.min(...main.map((node) => node.cx - node.hw)),
+      handlers: nodes
+        .filter((node) => node.lane === "handler")
+        .map((node) => `${node.name}:${(node.cx + node.hw).toFixed(2)}`),
+    };
+  });
+  expect(measured).not.toBeNull();
+  expect(measured?.handlers.map((handler) => handler.split(":")[0]).sort()).toEqual([
+    "Human verdict",
+    "Resilience",
+  ]);
+  for (const handler of measured?.handlers ?? []) {
+    expect(Number(handler.split(":")[1])).toBeLessThan(measured?.mainLeft ?? 0);
+  }
+
+  await expect(plate.locator(".done")).toHaveText("✓ done");
+  await expect(plate.locator('[data-done="Relock repo"]')).toHaveCount(1);
+  await expect(plate.locator('[data-bus="Resilience"]')).toHaveCount(1);
+  await expect(plate.locator('path.edge.error')).toHaveCount(1);
+
+  // Every flow edge — buses included — carries an arrowhead: a plate where
+  // a grouped edge lost its marker reads as an unfinished drawing.
+  const missing = await plate.locator("path.edge:not(.order)").evaluateAll((paths) =>
+    paths.filter((path) => path.getAttribute("marker-end") === null).length,
+  );
+  expect(missing).toBe(0);
+
+  // The capture: the whole drawing at phone width, lane and done terminal
+  // included — the acceptance surface for this geometry.
+  await plate.evaluate((svg) => svg.scrollIntoView({ block: "start" }));
+  const shot = await plate.screenshot({ path: testInfo.outputPath("canopy-builder-390x844.png") });
+  await testInfo.attach("canopy-builder-390x844", { body: shot, contentType: "image/png" });
 });

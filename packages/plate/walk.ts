@@ -23,6 +23,7 @@
  * the plate drew before, step for step.
  */
 import { classOf, isRankCondition, type ParsedGraph } from "./document.js";
+import { num, smooth, type Pt } from "./vocabulary.js";
 
 /** The chance a fail-carrying unit takes a fail edge on any one step. */
 export const FAIL_CHANCE = 0.2;
@@ -233,3 +234,57 @@ export function generateWalk(
   }
   return steps;
 }
+
+/**
+ * One drawn fail edge the walk rode, and the legs — zero-based indices
+ * into the walk — it rode them on: the renderer lights exactly these.
+ */
+export interface WalkFail {
+  from: string;
+  to: string;
+  legs: number[];
+}
+
+/**
+ * The token's path over the walk's steps: one leg per step through the
+ * orientation's own edge curve, at STEP_SECONDS a leg — fail legs alike,
+ * at the same speed as pass ones. Each ridden fail edge is reported back
+ * with the legs it carried, so the renderer can light it. Null when the
+ * walk has no legs.
+ */
+export function plateWalk(
+  steps: WalkStep[],
+  centres: Map<string, Pt>,
+  curve: (a: Pt, b: Pt, step: WalkStep) => string,
+): { walk: string | null; seconds: number; fails: WalkFail[] } {
+  const first = steps[0];
+  const start = first === undefined ? undefined : centres.get(first.from);
+  const legs: string[] = [];
+  const fails = new Map<string, WalkFail>();
+  if (start === undefined) {
+    return { walk: null, seconds: 0, fails: [] };
+  }
+  for (const [index, step] of steps.entries()) {
+    const a = centres.get(step.from);
+    const b = centres.get(step.to);
+    if (a === undefined || b === undefined) {
+      break;
+    }
+    legs.push(smooth(curve(a, b, step)).replace(/^M[^C]+/, ""));
+    if (step.fail) {
+      const key = `${step.from}→${step.to}`;
+      const ridden = fails.get(key) ?? { from: step.from, to: step.to, legs: [] };
+      ridden.legs.push(index);
+      fails.set(key, ridden);
+    }
+  }
+  if (legs.length === 0) {
+    return { walk: null, seconds: 0, fails: [] };
+  }
+  return {
+    walk: `M${start.x} ${start.y}${legs.join("")}`,
+    seconds: num(legs.length * STEP_SECONDS),
+    fails: [...fails.values()],
+  };
+}
+

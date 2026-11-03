@@ -53,7 +53,7 @@ interface Edge {
 function nodeBoxes(svg: string): Box[] {
   const boxes: Box[] = [];
   const pattern =
-    /<g class="node shape-[a-z]+" data-name="([^"]+)" data-cx="(-?[\d.]+)" data-cy="(-?[\d.]+)" data-w="(-?[\d.]+)" data-h="(-?[\d.]+)" data-rank="\d+" data-lane="(main|infra)"[^>]*>/g;
+    /<g class="node shape-[a-z]+" data-name="([^"]+)" data-cx="(-?[\d.]+)" data-cy="(-?[\d.]+)" data-w="(-?[\d.]+)" data-h="(-?[\d.]+)" data-rank="\d+" data-lane="(main|infra|handler)"[^>]*>/g;
   for (const match of svg.matchAll(pattern)) {
     boxes.push({
       name: match[1] ?? "",
@@ -204,28 +204,56 @@ describe("plate invariants", () => {
     });
   }
 
-  it("hello-graph: the infra node sits alone in the lower lane", () => {
+  it("hello-graph: the error destination leaves the column for the lane", () => {
     const svg = renderPlate(helloGraph as unknown as GraphDocument);
     const boxes = nodeBoxes(svg);
-    const infra = boxes.filter((box) => box.lane === "infra");
-    expect(infra.map((box) => box.name)).toEqual(["tests"]);
-    const mainBottom = Math.max(
-      ...boxes.filter((box) => box.lane === "main").map((box) => box.cy),
-      ...memberCentres(svg),
+    // `tests` is the infra node and an error destination: the lane wins, and
+    // no unit keeps the lower row.
+    expect(boxes.filter((box) => box.lane === "handler").map((box) => box.name)).toEqual(["tests"]);
+    expect(boxes.some((box) => box.lane === "infra")).toBe(false);
+    const mainLeft = Math.min(
+      ...boxes.filter((box) => box.lane === "main").map((box) => box.cx - box.w / 2),
     );
-    expect((infra[0] as Box).cy).toBeGreaterThan(mainBottom);
+    const tests = boxes.find((box) => box.name === "tests") as Box;
+    expect(tests.cx + tests.w / 2).toBeLessThan(mainLeft);
   });
 
-  it("canopy-tui-polish: resilience sits in the lower lane, Commit is filled", () => {
-    const svg = renderPlate(TUI_POLISH_GRAPH);
+  it("an infra node the flow still passes draws in the lower lane", () => {
+    const document: GraphDocument = {
+      name: "infra-lane",
+      nodes: [
+        { name: "start", kind: "check", position: 1, config: {} },
+        { name: "work", kind: "agent", position: 2, config: {} },
+        { name: "monitor", kind: "agent", position: 3, config: {} },
+      ],
+      edges: [
+        { from_node: "start", to_node: "work", condition: "pass" },
+        { from_node: "work", to_node: "monitor", condition: "always" },
+      ],
+      infra_node: "monitor",
+    };
+    const svg = renderPlate(document);
     const boxes = nodeBoxes(svg);
-    expect(boxes.filter((box) => box.lane === "infra").map((box) => box.name)).toEqual(["resilience"]);
+    expect(boxes.filter((box) => box.lane === "infra").map((box) => box.name)).toEqual(["monitor"]);
     const mainBottom = Math.max(
       ...boxes.filter((box) => box.lane === "main").map((box) => box.cy),
       ...memberCentres(svg),
     );
+    const monitor = boxes.find((box) => box.name === "monitor") as Box;
+    expect(monitor.cy).toBeGreaterThan(mainBottom);
+  });
+
+  it("canopy-tui-polish: resilience leaves the column, Commit is filled", () => {
+    const svg = renderPlate(TUI_POLISH_GRAPH);
+    const boxes = nodeBoxes(svg);
+    expect(boxes.filter((box) => box.lane === "handler").map((box) => box.name)).toEqual([
+      "resilience",
+    ]);
+    const mainLeft = Math.min(
+      ...boxes.filter((box) => box.lane === "main").map((box) => box.cx - box.w / 2),
+    );
     const resilience = boxes.find((box) => box.name === "resilience") as Box;
-    expect(resilience.cy).toBeGreaterThan(mainBottom);
+    expect(resilience.cx + resilience.w / 2).toBeLessThan(mainLeft);
     expect(svg).toContain(`<g class="node shape-commit" data-name="Commit"`);
     expect(svg).toContain("PARALLEL · 2/3");
     expect(svg).toContain("CASCADE · 2");
@@ -233,13 +261,18 @@ describe("plate invariants", () => {
     expect(svg).toContain(`<g class="member" data-name="proposers" data-i="3"`);
   });
 
-  it("hello-graph: the escalate route reads as pass, the error as error", () => {
+  it("hello-graph: the escalate route reads as pass, the error as a mark and a bus", () => {
     const svg = renderPlate(helloGraph as unknown as GraphDocument);
     const edges = drawnEdges(svg);
     const escalate = edges.find((edge) => edge.from === "triage" && edge.to === "implementer");
     expect(escalate?.cls).toBe("pass");
-    const error = edges.find((edge) => edge.from === "implementer" && edge.to === "tests");
-    expect(error?.cls).toBe("error");
+    // implementer → tests is an error into the error destination: grouped as
+    // one short mark and one amber bus, never a drawn edge across the plate.
+    expect(edges.some((edge) => edge.cls === "error" && edge.to === "tests")).toBe(false);
+    expect(svg).toContain(`<text class="mark mark-error"`);
+    expect(svg).toContain(`data-from="implementer">⚡</text>`);
+    expect(svg).toContain(`<path class="edge error bus"`);
+    expect(svg).toContain(`data-bus="tests"`);
   });
 
   it("single-committer: the entry check is a chip, the router-less gate a diamond", () => {
@@ -247,6 +280,14 @@ describe("plate invariants", () => {
     expect(svg).toContain(`<g class="node shape-chip" data-name="start-check"`);
     expect(svg).toContain(`<g class="node shape-agent" data-name="committer"`);
     expect(svg).toContain("PARALLEL · 2/2");
+  });
+
+  it("paints the error arrowhead amber over the flow's teal", () => {
+    const svg = renderPlate(TUI_POLISH_GRAPH);
+    expect(svg).toContain(
+      `.plate-svg #horizontal-plate-arrow-error path{fill:var(--attention,#ffb454);fill-opacity:.7}`,
+    );
+    expect(svg).not.toContain(`#horizontal-plate-arrow-error path{fill:#e8f6f1`);
   });
 
   it("draws a round-robin group's third subtitle shape", () => {
@@ -439,6 +480,7 @@ describe("fallback colours", () => {
       expect(style, `${name} --canopy`).not.toMatch(/var\(--canopy(?!,)/);
       expect(style, `${name} --ink-dim`).not.toMatch(/var\(--ink-dim(?!,)/);
       expect(style, `${name} --font-mono`).not.toMatch(/var\(--font-mono(?!,)/);
+      expect(style, `${name} --attention`).not.toMatch(/var\(--attention(?!,)/);
     }
   });
 
@@ -584,7 +626,7 @@ describe("the pattern figures", () => {
     expect(c2x).toBe(bx);
     expect(c1y).toBe(c2y);
     const rowTop = Math.min(
-      ...(layout?.nodes ?? []).filter((node) => !node.infra).map((node) => node.y - node.h / 2),
+      ...(layout?.nodes ?? []).filter((node) => node.lane === "main").map((node) => node.y - node.h / 2),
     );
     expect(c1y ?? Number.POSITIVE_INFINITY).toBeLessThan(rowTop);
   });
@@ -599,7 +641,7 @@ describe("the pattern figures", () => {
     expect(c2y).toBe(by);
     expect(c1x).toBe(c2x);
     const columnLeft = Math.min(
-      ...(layout?.nodes ?? []).filter((node) => !node.infra).map((node) => node.x - node.w / 2),
+      ...(layout?.nodes ?? []).filter((node) => node.lane === "main").map((node) => node.x - node.w / 2),
     );
     expect(c1x ?? Number.POSITIVE_INFINITY).toBeLessThan(columnLeft);
   });

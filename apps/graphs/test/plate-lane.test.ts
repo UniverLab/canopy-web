@@ -1,0 +1,244 @@
+// SPDX-License-Identifier: Apache-2.0
+/**
+ * The canopy-builder plate's lanes, in both orientations: the reader must
+ * see the flow, and see where failure goes without counting nine long lines
+ * that read as the main path. These tests hold the drawing to the shape of
+ * the graph — handlers out of the column, one bus per class into each, one
+ * `✓ done` under the flow's real end, and no edge crossing a node.
+ */
+import { describe, expect, it } from "vitest";
+import builder from "./fixtures/graphs/canopy-builder/graph.json" with { type: "json" };
+import { renderPlate } from "../../../packages/plate/render.js";
+import type { GraphDocument } from "../../../packages/plate/document.js";
+
+const DOC = builder as unknown as GraphDocument;
+
+interface Box {
+  name: string;
+  cx: number;
+  cy: number;
+  hw: number;
+  hh: number;
+  lane: string;
+}
+
+interface Path {
+  cls: string;
+  d: string;
+  from: string;
+  to: string;
+  bus: string | null;
+}
+
+/** The drawn nodes: their centres, drawn half extents and lanes. */
+function boxes(svg: string): Box[] {
+  const pattern =
+    /<g class="node shape-([a-z]+)" data-name="([^"]+)" data-cx="(-?[\d.]+)" data-cy="(-?[\d.]+)" data-w="(-?[\d.]+)" data-h="(-?[\d.]+)" data-rank="\d+" data-lane="(main|infra|handler)"[^>]*>/g;
+  return [...svg.matchAll(pattern)].map((match) => {
+    const rot = match[1] === "gate";
+    const w = Number(match[5]);
+    const h = Number(match[6]);
+    return {
+      name: match[2] ?? "",
+      cx: Number(match[3]),
+      cy: Number(match[4]),
+      hw: (rot ? w * Math.SQRT2 : w) / 2,
+      hh: (rot ? h * Math.SQRT2 : h) / 2,
+      lane: match[7] ?? "main",
+    };
+  });
+}
+
+/** The drawn groups' outlines, as boxes. */
+function groupBoxes(svg: string): Box[] {
+  const pattern =
+    /<g class="ensemble" data-name="([^"]+)"><rect class="group-box" x="(-?[\d.]+)" y="(-?[\d.]+)" width="(-?[\d.]+)" height="(-?[\d.]+)"/g;
+  return [...svg.matchAll(pattern)].map((match) => {
+    const w = Number(match[4]);
+    const h = Number(match[5]);
+    return {
+      name: match[1] ?? "",
+      cx: Number(match[2]) + w / 2,
+      cy: Number(match[3]) + h / 2,
+      hw: w / 2,
+      hh: h / 2,
+      lane: "main",
+    };
+  });
+}
+
+/** The drawn flow edges and buses, with their endpoints and data. */
+function paths(svg: string): Path[] {
+  const pattern =
+    /<path class="edge ([a-z]+)( bus)?" d="([^"]*)"( marker-end="url\(#[a-z0-9-]+\)")? data-(?:bus="([^"]+)"|from="([^"]+)" data-to="([^"]+)")/g;
+  return [...svg.matchAll(pattern)].map((match) => ({
+    cls: match[1] ?? "",
+    d: match[3] ?? "",
+    from: match[6] ?? "",
+    to: match[7] ?? match[5] ?? "",
+    bus: match[5] ?? null,
+  }));
+}
+
+/** The marks the grouped inputs carry: bolts and dashes, by source. */
+function marks(svg: string): Array<{ cls: string; from: string }> {
+  const all = [
+    ...svg.matchAll(/<text class="mark mark-error"[^>]*data-mark="error" data-from="([^"]+)"/g),
+  ].map((match) => ({ cls: "error", from: match[1] ?? "" }));
+  for (const match of svg.matchAll(/<path class="mark mark-fail"[^>]*data-mark="fail" data-from="([^"]+)"/g)) {
+    all.push({ cls: "fail", from: match[1] ?? "" });
+  }
+  return all;
+}
+
+/** The `✓ done` terminals, by the node they sit under. */
+function dones(svg: string): string[] {
+  return [...svg.matchAll(/<text class="done"[^>]*data-done="([^"]+)">✓ done<\/text>/g)].map(
+    (match) => match[1] ?? "",
+  );
+}
+
+/** Sample a path's points: every M/L endpoint and 24 points per cubic. */
+function samples(d: string): Array<[number, number]> {
+  const points: Array<[number, number]> = [];
+  let cursor: [number, number] = [0, 0];
+  for (const part of d.matchAll(/([MLC])([^MLC]*)/g)) {
+    const nums = (part[2] ?? "").match(/-?[\d.]+/g)?.map(Number) ?? [];
+    if (part[1] === "M" || part[1] === "L") {
+      cursor = [nums[0] ?? 0, nums[1] ?? 0];
+      points.push(cursor);
+    } else if (part[1] === "C") {
+      const [x0, y0] = cursor;
+      const [x1, y1, x2, y2, x3, y3] = nums;
+      for (let step = 1; step <= 24; step += 1) {
+        const t = step / 24;
+        const u = 1 - t;
+        points.push([
+          u * u * u * x0 + 3 * u * u * t * (x1 ?? 0) + 3 * u * t * t * (x2 ?? 0) + t * t * t * (x3 ?? 0),
+          u * u * u * y0 + 3 * u * u * t * (y1 ?? 0) + 3 * u * t * t * (y2 ?? 0) + t * t * t * (y3 ?? 0),
+        ]);
+      }
+      cursor = [x3 ?? 0, y3 ?? 0];
+    }
+  }
+  return points;
+}
+
+/** The last endpoint of a path. */
+function endOf(d: string): [number, number] {
+  const points = samples(d);
+  return points[points.length - 1] ?? [Number.NaN, Number.NaN];
+}
+
+describe.each(["horizontal", "vertical"] as const)("canopy-builder %s", (orientation) => {
+  const svg = renderPlate(DOC, orientation);
+  const nodes = boxes(svg);
+  const all = [...nodes, ...groupBoxes(svg)];
+  const main = nodes.filter((node) => node.lane === "main");
+
+  it("lays out only the failure terminals in the side lane", () => {
+    expect(nodes.filter((node) => node.lane === "handler").map((node) => node.name)).toEqual([
+      "Human verdict",
+      "Resilience",
+    ]);
+    // Outside the column: every lane unit sits left of every flow unit.
+    const columnLeft = Math.min(...main.map((node) => node.cx - node.hw));
+    for (const node of nodes.filter((candidate) => candidate.lane === "handler")) {
+      expect(node.cx + node.hw, node.name).toBeLessThan(columnLeft);
+    }
+    // Human verdict above Resilience, at the column's mid height.
+    const verdict = nodes.find((node) => node.name === "Human verdict");
+    const resilience = nodes.find((node) => node.name === "Resilience");
+    expect(verdict?.cy ?? 0).toBeLessThan(resilience?.cy ?? 0);
+  });
+
+  it("ends the flow with one done terminal under Relock repo", () => {
+    expect(dones(svg)).toEqual(["Relock repo"]);
+    const relock = nodes.find((node) => node.name === "Relock repo");
+    expect(relock).toBeDefined();
+    const done = /<text class="done" x="(-?[\d.]+)" y="(-?[\d.]+)"/.exec(svg);
+    expect(Number(done?.[1])).toBe(relock?.cx);
+    expect(Number(done?.[2])).toBeGreaterThan((relock?.cy ?? 0) + (relock?.hh ?? 0));
+  });
+
+  it("groups the errors into one bus per handler and class", () => {
+    const buses = paths(svg).filter((path) => path.bus !== null);
+    expect(buses.map((bus) => `${bus.bus}:${bus.cls}`).sort()).toEqual([
+      "Human verdict:fail",
+      "Resilience:error",
+    ]);
+    const into = buses.filter((bus) => bus.to === "Resilience");
+    expect(into).toHaveLength(1);
+    const resilience = nodes.find((node) => node.name === "Resilience");
+    const [x, y] = endOf(into[0]?.d ?? "");
+    expect(x).toBeCloseTo((resilience?.cx ?? 0) - (resilience?.hw ?? 0), 1);
+    expect(y).toBeCloseTo(resilience?.cy ?? 0, 1);
+  });
+
+  it("marks every grouped source once per class, and draws no grouped edge", () => {
+    const drawn = marks(svg);
+    expect(drawn.filter((mark) => mark.cls === "error")).toHaveLength(8);
+    expect(drawn.filter((mark) => mark.cls === "fail")).toHaveLength(6);
+    expect(drawn.filter((mark) => mark.cls === "error").map((mark) => mark.from)).toEqual([
+      "Lock repo",
+      "Plan check",
+      "Full gates",
+      "Full gates after auditor",
+      "Commit spec",
+      "Unlock for documenter",
+      "Check docs committed",
+      "Relock repo",
+    ]);
+    const edges = paths(svg).filter((path) => path.bus === null);
+    expect(edges.some((edge) => edge.cls === "error" && edge.to === "Resilience")).toBe(false);
+    expect(edges.some((edge) => edge.cls === "fail" && edge.to === "Human verdict")).toBe(false);
+  });
+
+  it("keeps the fail edge from the Designer to Resilience, outside the column", () => {
+    const kept = paths(svg).find(
+      (path) => path.bus === null && path.cls === "fail" && path.from === "Designer" && path.to === "Resilience",
+    );
+    expect(kept).toBeDefined();
+    // The arc leaves the column on the side this orientation puts failure
+    // on — above the row, left of the column — instead of cutting across.
+    const points = samples(kept?.d ?? "");
+    if (orientation === "horizontal") {
+      expect(Math.min(...points.map((point) => point[1]))).toBeLessThan(
+        Math.min(...all.map((box) => box.cy - box.hh)),
+      );
+    } else {
+      expect(Math.min(...points.map((point) => point[0]))).toBeLessThan(
+        Math.min(...main.map((box) => box.cx - box.hw)),
+      );
+    }
+  });
+
+  it("never crosses a drawn node or group", () => {
+    const crossings: string[] = [];
+    for (const edge of paths(svg)) {
+      for (const [x, y] of samples(edge.d)) {
+        for (const box of all) {
+          if (box.name === edge.from || box.name === edge.to) {
+            continue;
+          }
+          if (
+            x > box.cx - box.hw + 0.01 &&
+            x < box.cx + box.hw - 0.01 &&
+            y > box.cy - box.hh + 0.01 &&
+            y < box.cy + box.hh - 0.01
+          ) {
+            crossings.push(`${edge.cls} ${edge.from}→${edge.to} in ${box.name}`);
+          }
+        }
+      }
+    }
+    expect([...new Set(crossings)]).toEqual([]);
+  });
+
+  it("paints errors in the attention amber, never currentColor", () => {
+    expect(svg).toContain(".plate-svg .edge.error{stroke:var(--attention,#ffb454)");
+    expect(svg).toContain(".plate-svg .mark-error{fill:var(--attention,#ffb454)");
+    expect(svg).toContain(`data-bus="Resilience"`);
+    expect(svg).not.toContain(".plate-svg .edge.error{stroke:currentColor");
+  });
+});

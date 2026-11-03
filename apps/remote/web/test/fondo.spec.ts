@@ -82,7 +82,7 @@ test("confines the honeycomb on the owner screens", async ({ page }) => {
   await page.locator("#session-back").click();
   await expect(page.locator('[data-session="smoke"]')).toBeVisible();
   await page.locator('[data-tab="graphs"]').click();
-  await expect(page.locator(".graph-row")).toHaveCount(2);
+  await expect(page.locator(".graph-row")).toHaveCount(3);
   await expectHeaderBand(page);
 
   await page.locator('[data-graph="g-loop"]').click();
@@ -90,7 +90,7 @@ test("confines the honeycomb on the owner screens", async ({ page }) => {
   await expectHeaderBand(page);
 
   await page.locator("#graph-back").click();
-  await expect(page.locator(".graph-row")).toHaveCount(2);
+  await expect(page.locator(".graph-row")).toHaveCount(3);
   await page.locator("#metrics-strip").click();
   await expect(page.locator("main.metrics-view")).toBeVisible();
   await expectHeaderBand(page);

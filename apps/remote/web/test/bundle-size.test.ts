@@ -82,6 +82,15 @@ const SESSION_HINT_BUDGET = 512;
  * the 121-byte headroom made any implementation of the spec impossible.
  */
 const WALK_BUDGET = 512;
+/**
+ * Allowance for the lane-geometry spec (handler side lane in both
+ * orientations, grouped marks and buses, `done` terminals, and arcs that
+ * clear every unit box): measured +2 998 B gzip over the pre-change main,
+ * JS only — the stylesheet is untouched. Added in the feature commit like
+ * WALK_BUDGET: the 508-byte headroom made any implementation of the spec
+ * impossible (the shared plate code rides the main bundle).
+ */
+const LANE_BUDGET = 4_096;
 /** The budget the lazy guest chunk is allowed, gzip bytes of JS. */
 const GUEST_BUDGET = 6_144;
 /** The budget the lazy editor chunk is allowed, gzip bytes of JS. */
@@ -184,7 +193,8 @@ describe("the remote's bundle", () => {
         KEEPALIVE_BUDGET +
         TURN_FALLBACK_BUDGET +
         SESSION_HINT_BUDGET +
-        WALK_BUDGET,
+        WALK_BUDGET +
+        LANE_BUDGET,
     );
     expect(guestJs, JSON.stringify(report)).toBeLessThanOrEqual(GUEST_BUDGET);
     expect(editorJs, JSON.stringify(report)).toBeLessThanOrEqual(EDITOR_BUDGET);

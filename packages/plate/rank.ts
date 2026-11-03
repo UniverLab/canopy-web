@@ -21,6 +21,7 @@ import {
   type NodeView,
   type ParsedGraph,
 } from "./document.js";
+import { handlersOf, type Handlers } from "./handlers.js";
 
 /** One layout unit: a node or an ensemble, with its document order. */
 export interface Unit {
@@ -90,14 +91,14 @@ export interface RankedGraph {
 
 /**
  * Lift fail-only nodes into a rank right after the unit that fails into
- * them: a node — never the infra node — whose incoming edges are all fail or
- * error (node edges or an ensemble's `on_fail_to`), with no incoming rank
- * edge, and every outgoing edge back to an earlier unit. Without the lift
- * such a node sits at rank 0 with long fail arcs crossing the whole plate;
- * later units shift right to open the rank. Nodes failed into from the same
- * rank share the opened rank, in document order, so their fail arcs never
- * leap over one another. Returns whether any rank moved; ranks only ever
- * rise, to a fixpoint, so the sweep always settles.
+ * them: a node — never the infra node, never a handler — whose incoming
+ * edges are all fail or error (node edges or an ensemble's `on_fail_to`),
+ * with no incoming rank edge, and every outgoing edge back to an earlier
+ * unit. Without the lift such a node sits at rank 0 with long fail arcs
+ * crossing the whole plate; later units shift right to open the rank. Nodes
+ * failed into from the same rank share the opened rank, in document order,
+ * so their fail arcs never leap over one another. Returns whether any rank
+ * moved; ranks only ever rise, to a fixpoint, so the sweep always settles.
  */
 function rerankFailOnly(
   parsed: ParsedGraph,
@@ -105,6 +106,7 @@ function rerankFailOnly(
   rankEdges: RankEdge[],
   rankOf: Map<string, number>,
   unitId: (name: string) => string | null,
+  handlers: Handlers,
 ): boolean {
   const orderOf = new Map(units.map((unit) => [unit.id, unit.order]));
   const rankTargeted = new Set(rankEdges.map((edge) => edge.to));
@@ -162,7 +164,7 @@ function rerankFailOnly(
   const candidates = [...parsed.nodes]
     .sort((a, b) => (orderOf.get(a.name) ?? 0) - (orderOf.get(b.name) ?? 0))
     .filter((node) => {
-      if (node.name === parsed.infra || rankTargeted.has(node.name)) {
+      if (node.name === parsed.infra || handlers.has(node.name) || rankTargeted.has(node.name)) {
         return false;
       }
       if ((failSources.get(node.name) ?? []).length === 0) {
@@ -292,7 +294,14 @@ export function rankUnits(parsed: ParsedGraph): RankedGraph {
 
   // Fail-only targets rank after the unit that fails into them, and the
   // lift can empty rank 0 — compact so the plate still opens at the entry.
-  if (rerankFailOnly(parsed, units, rankEdges, rankOf, unitId)) {
+  // Handlers are ranked where they are: their lane places them.
+  const orderOf = new Map(units.map((unit) => [unit.id, unit.order]));
+  const handlers = handlersOf(
+    parsed,
+    unitId,
+    (id) => orderOf.get(id) ?? Number.MAX_SAFE_INTEGER,
+  );
+  if (rerankFailOnly(parsed, units, rankEdges, rankOf, unitId, handlers)) {
     const levels = [...new Set(rankOf.values())].sort((a, b) => a - b);
     const dense = new Map(levels.map((level, index) => [level, index]));
     for (const [id, rank] of rankOf) {

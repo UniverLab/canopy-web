@@ -89,21 +89,42 @@ export interface Pt {
   y: number;
 }
 
+/** Round to two decimals so paths print stably. */
+export function num(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+/** Round every decimal in a path string: midpoints print without float noise. */
+export function smooth(d: string): string {
+  return d.replace(/-?\d+\.\d+/g, (match) => String(num(Number(match))));
+}
+
 /**
  * Edge path between two node centres: a smooth S-curve. A failure that drops to
  * another row is the same curve; one that routes back along the same row arcs
  * ABOVE the pair (labels sit below nodes). `lift` raises such an arc further, so
  * two back-edges into one node stay distinct (0 = the hero's drawing).
  * `forceArc` draws the arc whatever the row gap — a fail or error edge
- * touching an ensemble group never S-curves through the row.
+ * touching an ensemble group never S-curves through the row. An explicit
+ * `rise` places the arc's top exactly, for a plate that has measured the
+ * height every unit's box needs to stay clear.
  */
-export function edgePath(a: Pt, b: Pt, fail: boolean, lift = 0, forceArc = false): string {
+export function edgePath(a: Pt, b: Pt, fail: boolean, lift = 0, forceArc = false, rise?: number): string {
   if (!forceArc && (!fail || Math.abs(b.y - a.y) > 6)) {
     const mx = (a.x + b.x) / 2;
     return `M${a.x} ${a.y} C${mx} ${a.y} ${mx} ${b.y} ${b.x} ${b.y}`;
   }
-  const rise = Math.min(a.y, b.y) - 8 - Math.abs(a.x - b.x) * 0.1 - lift;
-  return `M${a.x} ${a.y - 3} C${a.x} ${rise} ${b.x} ${rise} ${b.x} ${b.y - 3}`;
+  const top = rise ?? Math.min(a.y, b.y) - 8 - Math.abs(a.x - b.x) * 0.1 - lift;
+  return `M${a.x} ${a.y - 3} C${a.x} ${top} ${b.x} ${top} ${b.x} ${b.y - 3}`;
+}
+
+/** A node's drawn half extents: a rotated gate's bounding box is the wider one. */
+export function nodeBox(node: { shape: Kind; w: number; h: number }): { hw: number; hh: number } {
+  const rot = GEOM[node.shape].rot !== 0;
+  return {
+    hw: rot ? (node.w * Math.SQRT2) / 2 : node.w / 2,
+    hh: rot ? (node.h * Math.SQRT2) / 2 : node.h / 2,
+  };
 }
 
 /** Gap between an arrowhead tip and the target border, in plate units. */

@@ -10,18 +10,23 @@
  * downward (a rank is as tall as its tallest unit), units within a rank run
  * left to right in barycenter order, groups keep their horizontal shape
  * with members stacked, and the infra node sits in its own row below
- * everything. Fail edges between units of one column arc LEFT of the pair
- * (labels sit right of nodes). The viewBox padding is symmetric, so the
- * drawing stays centred — a single node sits at its viewBox centre.
+ * everything. The handler lane — units that end a failure instead of
+ * carrying the flow — runs down the left edge of the column at mid height,
+ * its labels beneath the shapes so the channel between lane and column
+ * stays clear for routes and buses. Fail edges between units of one column
+ * arc LEFT of the pair (labels sit right of nodes). The viewBox padding is
+ * symmetric, so the drawing stays centred — a single node sits at its
+ * viewBox centre.
  *
  * Everything here is total and deterministic, like the horizontal engine:
  * the same input places the same way, byte for byte.
  */
 import {
-  classOf,
   parseDocument,
   shapeOf,
   type EdgeClass,
+  type EnsembleView,
+  type NodeView,
 } from "./document.js";
 import {
   GROUP_CHAR,
@@ -34,21 +39,35 @@ import {
   PAD_BOTTOM,
   PAD_TOP,
   PAD_X,
+  drawnName,
   forceArcOf,
   groupSubtitle,
   groupTitle,
   groupWidth,
-  num,
-  plateWalk,
-  smooth,
+  labelHalfOf,
+  nodeBottom,
   type PlacedEdge,
   type PlacedGroup,
   type PlacedNode,
   type PlateLayout,
 } from "./layout.js";
+import {
+  DONE_DY,
+  DONE_HALF,
+  MARK_HALF,
+  laneGroups,
+  lanePath,
+  shiftedLane,
+  verticalRoute,
+  type DoneSpot,
+  type Extent,
+  type LaneSpan,
+} from "./lane.js";
+import { flowOf, type LaneEdge } from "./flow.js";
+import { doneUnitsOf, handlersOf, type Handler } from "./handlers.js";
 import { rankUnits } from "./rank.js";
-import { generateWalk, happyRandom } from "./walk.js";
-import { GEOM, TYPE, shortenEdgeEnd, type Pt } from "./vocabulary.js";
+import { generateWalk, happyRandom, plateWalk } from "./walk.js";
+import { GEOM, TYPE, nodeBox, num, shortenEdgeEnd, smooth, type Pt } from "./vocabulary.js";
 
 /** Gap between two units side by side in one rank (viewBox units). */
 const UNIT_GAP = 8;
@@ -56,6 +75,10 @@ const UNIT_GAP = 8;
 const RANK_GAP = 10;
 /** Vertical slot one node occupies in a rank row. */
 const NODE_SLOT_V = 12;
+/** Gap between the column and the handler lane's right edge. Shared with the lane routes. */
+const V_LANE_GAP = 12;
+/** Where the lane's routes run inside that gap. */
+const V_LANE_CHANNEL = 3;
 /** Gap between a shape's right edge and its labels. Shared with render.ts. */
 export const V_LABEL_DX = 2;
 /** Baselines of the two right-side labels. Shared with render.ts. */
@@ -108,7 +131,11 @@ export function layoutPlateVertical(
   if (parsed === null) {
     return null;
   }
-  const { byRank, entry, rankOf, unitId } = rankUnits(parsed);
+  const { byRank, entry, rankOf, unitId, units } = rankUnits(parsed);
+  const orderOf = new Map(units.map((unit) => [unit.id, unit.order]));
+  const unitOrder = (id: string): number => orderOf.get(id) ?? Number.MAX_SAFE_INTEGER;
+  const handlers = handlersOf(parsed, unitId, unitOrder);
+  const doneUnits = doneUnitsOf(parsed, unitId, unitOrder, handlers);
 
   // Geometry in design coordinates: ranks accumulate downward, units within
   // a rank run left to right, the infra node waits for its own last row.
@@ -117,9 +144,11 @@ export function layoutPlateVertical(
   const nodes: PlacedNode[] = [];
   const groups: PlacedGroup[] = [];
   let cursor = 0;
+  let columnLeft = Number.POSITIVE_INFINITY;
   for (const rank of [...byRank.keys()].sort((a, b) => a - b)) {
     const row = (byRank.get(rank) ?? []).filter(
-      (unit) => unit.node === null || unit.node.name !== parsed.infra,
+      (unit) =>
+        !handlers.has(unit.id) && (unit.node === null || unit.node.name !== parsed.infra),
     );
     const heights = row.map((unit) =>
       unit.node !== null
@@ -143,7 +172,7 @@ export function layoutPlateVertical(
         left += labelsWidth(unit.node.name, w, unit.node.harness) + UNIT_GAP;
         atX.set(unit.id, x);
         atY.set(unit.id, y);
-        nodes.push({
+        const placed: PlacedNode = {
           name: unit.node.name,
           shape,
           docKind: unit.node.docKind,
@@ -153,8 +182,10 @@ export function layoutPlateVertical(
           w,
           h: GEOM[shape].h,
           rank,
-          infra: false,
-        });
+          lane: "main",
+        };
+        nodes.push(placed);
+        columnLeft = Math.min(columnLeft, x - nodeBox(placed).hw);
       } else if (unit.ensemble !== null) {
         const title = groupTitle(unit.ensemble.name);
         const subtitle = groupSubtitle(
@@ -175,10 +206,15 @@ export function layoutPlateVertical(
           y: num(y - h / 2 + GROUP_HEAD + index * MEMBER_DY + MEMBER_DY / 2),
         }));
         groups.push({ name: unit.ensemble.name, title, subtitle, x, y, w, h, rank, members });
+        columnLeft = Math.min(columnLeft, x - w / 2);
       }
     }
   }
-  if (parsed.infra !== null) {
+  if (!Number.isFinite(columnLeft)) {
+    columnLeft = 0;
+  }
+  const columnBottom = num(cursor - RANK_GAP);
+  if (parsed.infra !== null && !handlers.has(parsed.infra)) {
     const node = parsed.nodes.find((candidate) => candidate.name === parsed.infra);
     const rank = rankOf.get(parsed.infra) ?? 0;
     if (node !== undefined) {
@@ -197,10 +233,126 @@ export function layoutPlateVertical(
         w: GEOM[shape].w,
         h: GEOM[shape].h,
         rank,
-        infra: true,
+        lane: "infra",
       });
     }
   }
+
+  // The handler lane: a column at the left edge of the flow, at mid height,
+  // its units stacked in document order. Labels sit under the shapes, so
+  // the channel between the lane and the column stays clear for routes.
+  interface LaneEntry {
+    handler: Handler;
+    node: NodeView | null;
+    group: EnsembleView | null;
+    hw: number;
+    hh: number;
+  }
+  const laneEntries: LaneEntry[] = [];
+  for (const handler of handlers.list) {
+    const node = parsed.nodes.find((candidate) => candidate.name === handler.id);
+    if (node !== undefined) {
+      const shape = shapeOf(
+        node.docKind,
+        node.name,
+        node.commitRights,
+        entry !== null && node.name === entry.name,
+      );
+      const box = nodeBox({ shape, w: GEOM[shape].w, h: GEOM[shape].h });
+      laneEntries.push({ handler, node, group: null, ...box });
+    } else {
+      const ensemble = parsed.ensembles.find((candidate) => `ensemble:${candidate.name}` === handler.id);
+      if (ensemble === undefined) {
+        continue;
+      }
+      const title = groupTitle(ensemble.name);
+      const subtitle = groupSubtitle(ensemble.strategy, ensemble.minPass, ensemble.members.length);
+      const w = num(groupWidth(title, subtitle, ensemble.members));
+      const h = num(GROUP_HEAD + ensemble.members.length * MEMBER_DY + GROUP_FOOT);
+      laneEntries.push({ handler, node: null, group: ensemble, hw: w / 2, hh: h / 2 });
+    }
+  }
+  let lane: LaneSpan | null = null;
+  if (laneEntries.length > 0) {
+    const maxHalf = Math.max(...laneEntries.map((entry) => entry.hw));
+    const laneRight = num(columnLeft - V_LANE_GAP);
+    const laneX = num(laneRight - maxHalf);
+    const mid = num(columnBottom / 2);
+    const slots = laneEntries.map((entry) => Math.max(NODE_SLOT_V, entry.hh * 2 + 6));
+    const total = slots.reduce((sum, slot) => sum + slot, 0);
+    let top = mid - total / 2;
+    for (const [index, item] of laneEntries.entries()) {
+      const slot = slots[index] ?? NODE_SLOT_V;
+      const y = num(top + slot / 2);
+      top += slot;
+      const { handler } = item;
+      const rank = rankOf.get(handler.id) ?? 0;
+      atX.set(handler.id, laneX);
+      atY.set(handler.id, y);
+      if (item.node !== null) {
+        const shape = shapeOf(
+          item.node.docKind,
+          item.node.name,
+          item.node.commitRights,
+          entry !== null && item.node.name === entry.name,
+        );
+        nodes.push({
+          name: item.node.name,
+          shape,
+          docKind: item.node.docKind,
+          harness: item.node.harness,
+          x: laneX,
+          y,
+          w: GEOM[shape].w,
+          h: GEOM[shape].h,
+          rank,
+          lane: "handler",
+        });
+      } else if (item.group !== null) {
+        const ensemble = item.group;
+        const title = groupTitle(ensemble.name);
+        const subtitle = groupSubtitle(ensemble.strategy, ensemble.minPass, ensemble.members.length);
+        const w = num(groupWidth(title, subtitle, ensemble.members));
+        const h = num(GROUP_HEAD + ensemble.members.length * MEMBER_DY + GROUP_FOOT);
+        const members = ensemble.members.map((label, memberIndex) => ({
+          label,
+          harness: ensemble.memberHarness[memberIndex] ?? null,
+          x: laneX,
+          y: num(y - h / 2 + GROUP_HEAD + memberIndex * MEMBER_DY + MEMBER_DY / 2),
+        }));
+        groups.push({ name: ensemble.name, title, subtitle, x: laneX, y, w, h, rank, members });
+      }
+    }
+    lane = {
+      left: num(laneX - maxHalf),
+      right: laneRight,
+      gutter: num(laneRight + V_LANE_CHANNEL),
+      corridor: mid,
+    };
+  }
+
+  // Every placed unit's drawn extent, by drawn name.
+  const extent = new Map<string, Extent>();
+  for (const node of nodes) {
+    extent.set(node.name, { x: node.x, y: node.y, ...nodeBox(node) });
+  }
+  for (const group of groups) {
+    extent.set(group.name, { x: group.x, y: group.y, hw: group.w / 2, hh: group.h / 2 });
+  }
+
+  // Grouped inputs: one short mark on each source, one bus per handler and
+  // class, measured in design coordinates and shifted with the drawing.
+  const { marks: markSpots, buses: busSpots } = laneGroups(
+    handlers,
+    extent,
+    lane === null ? 0 : lane.left,
+  );
+  const doneSpots: DoneSpot[] = doneUnits.flatMap((done) => {
+    const node = nodes.find((placed) => placed.name === done.id);
+    return node === undefined
+      ? []
+      : [{ name: node.name, x: node.x, y: num(nodeBottom(node.y, node.harness) + DONE_DY) }];
+  });
 
   // Edge endpoints: node centres, group tops and bottoms for ensemble wiring.
   const groupByName = new Map(groups.map((group) => [group.name, group]));
@@ -217,8 +369,7 @@ export function layoutPlateVertical(
     const y = atY.get(name);
     return x === undefined || y === undefined ? null : { x, y };
   };
-  const displayName = (name: string): string =>
-    name.startsWith("ensemble:") ? name.slice("ensemble:".length) : name;
+  const displayName = drawnName;
 
   interface RawEdge {
     from: string;
@@ -228,107 +379,73 @@ export function layoutPlateVertical(
     b: Pt;
     forceArc: boolean;
   }
+  const flow = flowOf(parsed, unitId, handlers);
   const raw: RawEdge[] = [];
-  for (const edge of parsed.edges) {
-    const fromId = unitId(edge.from);
-    const toId = unitId(edge.to);
-    if (fromId === null || toId === null) {
-      continue;
-    }
-    const a = pointOf(fromId, "bottom");
-    const b = pointOf(toId, "top");
+  for (const edge of flow.drawn) {
+    const b = pointOf(edge.to, "top");
+    const a = pointOf(edge.from, "bottom");
     if (a === null || b === null) {
       continue;
     }
-    const cls = classOf(edge.condition);
     raw.push({
-      from: displayName(fromId),
-      to: displayName(toId),
-      cls,
+      from: displayName(edge.from),
+      to: displayName(edge.to),
+      cls: edge.cls,
       a,
       b,
-      forceArc: forceArcOf(cls, fromId, toId),
+      forceArc: forceArcOf(edge.cls, edge.from, edge.to),
     });
   }
+  const laneRoutes: LaneEdge[] =
+    lane === null
+      ? []
+      : flow.lane.map((edge) => ({
+          ...edge,
+          from: displayName(edge.from),
+          to: displayName(edge.to),
+        }));
   for (const ensemble of parsed.ensembles) {
-    const id = `ensemble:${ensemble.name}`;
-    if (ensemble.entryFrom !== null) {
-      const fromId = unitId(ensemble.entryFrom);
-      const a = fromId === null ? null : pointOf(fromId, "bottom");
-      const b = pointOf(id, "top");
-      if (fromId !== null && a !== null && b !== null) {
-        const cls = classOf(ensemble.entryCondition);
-        raw.push({
-          from: displayName(fromId),
-          to: ensemble.name,
-          cls,
-          a,
-          b,
-          forceArc: forceArcOf(cls, fromId, id),
-        });
-      }
+    const group = groupByName.get(ensemble.name);
+    if (group === undefined) {
+      continue;
     }
-    for (const extra of ensemble.extraEntries) {
-      const fromId = unitId(extra.from);
-      const a = fromId === null ? null : pointOf(fromId, "bottom");
-      const b = pointOf(id, "top");
-      if (fromId !== null && a !== null && b !== null) {
-        const cls = classOf(extra.condition);
-        raw.push({
-          from: displayName(fromId),
-          to: ensemble.name,
-          cls,
-          a,
-          b,
-          forceArc: forceArcOf(cls, fromId, id),
-        });
-      }
-    }
-    if (ensemble.onPassTo !== null) {
-      const toId = unitId(ensemble.onPassTo);
-      const a = pointOf(id, "bottom");
-      const b = toId === null ? null : pointOf(toId, "top");
-      if (toId !== null && a !== null && b !== null) {
-        raw.push({ from: ensemble.name, to: displayName(toId), cls: "pass", a, b, forceArc: false });
-      }
-    }
-    if (ensemble.onFailTo !== null) {
-      const toId = unitId(ensemble.onFailTo);
-      const a = pointOf(id, "bottom");
-      const b = toId === null ? null : pointOf(toId, "top");
-      if (toId !== null && a !== null && b !== null) {
+    for (let index = 0; index + 1 < group.members.length; index += 1) {
+      const a = group.members[index];
+      const b = group.members[index + 1];
+      if (a !== undefined && b !== undefined) {
         raw.push({
           from: ensemble.name,
-          to: displayName(toId),
-          cls: "fail",
-          a,
-          b,
-          forceArc: forceArcOf("fail", id, toId),
+          to: ensemble.name,
+          cls: "order",
+          a: { x: a.x, y: a.y },
+          b: { x: b.x, y: b.y },
+          forceArc: false,
         });
-      }
-    }
-    const group = groupByName.get(ensemble.name);
-    if (group !== undefined) {
-      for (let index = 0; index + 1 < group.members.length; index += 1) {
-        const a = group.members[index];
-        const b = group.members[index + 1];
-        if (a !== undefined && b !== undefined) {
-          raw.push({
-            from: ensemble.name,
-            to: ensemble.name,
-            cls: "order",
-            a: { x: a.x, y: a.y },
-            b: { x: b.x, y: b.y },
-            forceArc: false,
-          });
-        }
       }
     }
   }
 
-  /** Whether an edge draws as an arc left of the column: forced, or a same-column fail. */
+  // A unit's rank, by drawn name: an edge that skips a rank or walks back
+  // one never crosses the column, it curves outside like a fail edge.
+  const rankByName = new Map<string, number>();
+  for (const node of nodes) {
+    rankByName.set(node.name, node.rank);
+  }
+  for (const group of groups) {
+    rankByName.set(group.name, group.rank);
+  }
+  const outside = (edge: RawEdge): boolean => {
+    const from = rankByName.get(edge.from);
+    const to = rankByName.get(edge.to);
+    return edge.cls !== "order" && from !== undefined && to !== undefined && to - from !== 1;
+  };
+
+  /**
+   * Whether an edge draws as an arc left of the column: forced, a
+   * same-column fail, or a range-skipping or back edge.
+   */
   const arcs = (edge: RawEdge): boolean =>
-    edge.forceArc || (edge.cls === "fail" && Math.abs(edge.b.x - edge.a.x) <= 6);
+    edge.forceArc || (edge.cls === "fail" && Math.abs(edge.b.x - edge.a.x) <= 6) || outside(edge);
 
   // Fail arcs left of the column push further left per back edge into one target.
   const arcIndex = new Map<string, number>();
@@ -346,9 +463,10 @@ export function layoutPlateVertical(
   );
   const lifts = new Map<RawEdge, number>(orderedRaw.map((edge) => [edge, liftOf(edge)]));
 
-  // Bounds: shapes, right-side labels, group outlines and fail-arc lefts —
-  // the viewBox grows around all of them, then everything shifts into
-  // positive space with symmetric padding, centred on the drawing.
+  // Bounds: shapes, right-side labels, group outlines, fail-arc lefts,
+  // marks, buses, done terminals and lane routes — the viewBox grows around
+  // all of them, then everything shifts into positive space with symmetric
+  // padding, centred on the drawing.
   let minX = Number.POSITIVE_INFINITY;
   let maxX = Number.NEGATIVE_INFINITY;
   let minY = Number.POSITIVE_INFINITY;
@@ -360,6 +478,17 @@ export function layoutPlateVertical(
     maxY = Math.max(maxY, y1);
   };
   for (const node of nodes) {
+    if (node.lane === "handler") {
+      // The lane's labels sit under the shapes, keeping the channel clear.
+      const labelHalf = labelHalfOf(node.name, node.harness);
+      span(
+        Math.min(node.x - node.w / 2, node.x - labelHalf),
+        Math.max(node.x + node.w / 2, node.x + labelHalf),
+        node.y - node.h / 2,
+        nodeBottom(node.y, node.harness),
+      );
+      continue;
+    }
     const bottom = node.harness === null
       ? Math.max(node.h / 2, V_LABEL_DY + TYPE.label / 2)
       : Math.max(node.h / 2, V_HARNESS_DY + TYPE.harness / 2);
@@ -372,6 +501,22 @@ export function layoutPlateVertical(
   }
   for (const group of groups) {
     span(group.x - group.w / 2, group.x + group.w / 2, group.y - group.h / 2, group.y + group.h / 2);
+  }
+  for (const spot of markSpots) {
+    span(spot.x - MARK_HALF, spot.x + MARK_HALF, spot.y - MARK_HALF, spot.y + MARK_HALF);
+  }
+  for (const spot of busSpots) {
+    span(spot.x, spot.hx, spot.top, spot.hy);
+  }
+  for (const spot of doneSpots) {
+    span(spot.x - DONE_HALF, spot.x + DONE_HALF, spot.y - 2, spot.y + 0.6);
+  }
+  if (lane !== null) {
+    for (const route of laneRoutes) {
+      for (const point of verticalRoute(route, extent, lane) ?? []) {
+        span(point.x, point.x, point.y, point.y);
+      }
+    }
   }
   for (const edge of raw) {
     if (arcs(edge)) {
@@ -400,6 +545,33 @@ export function layoutPlateVertical(
       member.y = num(member.y + dy);
     }
   }
+  const shiftedExtent = new Map<string, Extent>();
+  for (const node of nodes) {
+    shiftedExtent.set(node.name, { x: node.x, y: node.y, ...nodeBox(node) });
+  }
+  for (const group of groups) {
+    shiftedExtent.set(group.name, { x: group.x, y: group.y, hw: group.w / 2, hh: group.h / 2 });
+  }
+  const shiftedSpan: LaneSpan | null =
+    lane === null
+      ? null
+      : {
+          left: num(lane.left + dx),
+          right: num(lane.right + dx),
+          gutter: num(lane.gutter + dx),
+          corridor: num(lane.corridor + dy),
+        };
+  const { marks, buses, dones } = shiftedLane({ marks: markSpots, buses: busSpots, dones: doneSpots }, dx, dy);
+  const laneEdges: PlacedEdge[] = [];
+  if (shiftedSpan !== null) {
+    for (const route of laneRoutes) {
+      const points = verticalRoute(route, shiftedExtent, shiftedSpan);
+      if (points === null || points.length < 2) {
+        continue;
+      }
+      laneEdges.push({ from: route.from, to: route.to, cls: route.cls, d: smooth(lanePath(points)) });
+    }
+  }
   const targetOf = new Map<string, { hx: number; hy: number; group: boolean }>();
   for (const node of nodes) {
     const rot = GEOM[node.shape].rot !== 0;
@@ -412,26 +584,29 @@ export function layoutPlateVertical(
   for (const group of groups) {
     targetOf.set(group.name, { hx: group.w / 2, hy: group.h / 2, group: true });
   }
-  const edges: PlacedEdge[] = raw.map((edge) => {
-    const a = shift(edge.a);
-    const b = shift(edge.b);
-    // Mirror of the horizontal plate: S-curves arrive along the column
-    // (shorten nodes in y), arcs arrive from the left (shorten in x).
-    const target = edge.cls === "order" ? undefined : targetOf.get(edge.to);
-    const arc = arcs(edge);
-    let end = b;
-    if (target !== undefined && (!target.group || arc)) {
-      end = arc
-        ? shortenEdgeEnd(a, b, target.hx, "x", 1, 3)
-        : shortenEdgeEnd(a, b, target.hy, "y", null, 0);
-    }
-    return {
-      from: edge.from,
-      to: edge.to,
-      cls: edge.cls,
-      d: smooth(edgePathV(a, end, edge.cls === "fail", lifts.get(edge) ?? 0, arc)),
-    };
-  });
+  const edges: PlacedEdge[] = [
+    ...raw.map((edge) => {
+      const a = shift(edge.a);
+      const b = shift(edge.b);
+      // Mirror of the horizontal plate: S-curves arrive along the column
+      // (shorten nodes in y), arcs arrive from the left (shorten in x).
+      const target = edge.cls === "order" ? undefined : targetOf.get(edge.to);
+      const arc = arcs(edge);
+      let end = b;
+      if (target !== undefined && (!target.group || arc)) {
+        end = arc
+          ? shortenEdgeEnd(a, b, target.hx, "x", 1, 3)
+          : shortenEdgeEnd(a, b, target.hy, "y", null, 0);
+      }
+      return {
+        from: edge.from,
+        to: edge.to,
+        cls: edge.cls,
+        d: smooth(edgePathV(a, end, edge.cls === "fail", lifts.get(edge) ?? 0, arc)),
+      };
+    }),
+    ...laneEdges,
+  ];
 
   // The token walks the walk — the pass chain with its fail detours —
   // through this orientation's curves. A fail leg rides the arc of the
@@ -469,6 +644,9 @@ export function layoutPlateVertical(
     nodes,
     groups,
     edges,
+    marks,
+    buses,
+    dones,
     width: num(maxX - minX + PAD_X * 2),
     height: num(maxY - minY + PAD_TOP + PAD_BOTTOM),
     walk: walked.walk,
