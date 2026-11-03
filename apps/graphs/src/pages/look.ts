@@ -669,7 +669,7 @@ pre.prompt, pre.hash {
   .row-install code { flex: 1; }
 }
 @media (min-width: 640px) {
-  .site-header { height: 200px; }
+  .site-header { min-height: 200px; }
   .band { padding: 0 1.5rem; }
   main.look-col { padding: 2rem 1.5rem 4rem; }
 }

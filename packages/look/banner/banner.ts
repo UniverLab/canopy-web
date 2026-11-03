@@ -1,10 +1,12 @@
-// Ported from harness-canopy src/shared/banner.rs (BANNER, BANNER_GRADIENT, gradient_rgb)
+// The art is ported from harness-canopy src/shared/banner.rs (BANNER);
 // SPDX-License-Identifier: Apache-2.0
 /**
  * The house banner: Canopy in the DOS Rebel figlet font, one colour per
- * line over the TUI's five-stop teal gradient, light at the top to dark
- * at the bottom. The ten art lines are byte-identical to the `BANNER`
- * block `banner.rs` prints — trailing spaces included, never retyped.
+ * line over the landing's eight-stop wizard green gradient, light at the
+ * top to dark at the bottom. The ten art lines are byte-identical to the
+ * `BANNER` block `banner.rs` prints — trailing spaces included, never
+ * retyped — while the gradient follows the Canopy landing page
+ * (`univerlab/src/components/Banner.astro`), not the TUI's teal scale.
  * Pair with banner.css; `npm run build:look` copies both into the apps.
  *
  * The header banners below are the same font rendered once with
@@ -62,30 +64,35 @@ export const REMOTE_BANNER_LINES: readonly string[] = [
 ];
 
 /**
- * The five legible Canopy scale stops, light at the top of the banner
- * to dark at the bottom. `#003330` (the darkest stop) is excluded: it
- * is a background tone only, never banner ink.
+ * The landing's eight wizard greens, verbatim from
+ * `univerlab/src/components/Banner.astro`, light at the top of the banner
+ * to dark at the bottom.
  */
 export const BANNER_GRADIENT: readonly string[] = [
-  "#52fff6",
-  "#1ffff3",
-  "#00e0d4",
-  "#00a9a0",
-  "#006661",
+  "#9dcfa1",
+  "#84be89",
+  "#6cae71",
+  "#559d5a",
+  "#3f8d44",
+  "#2b7a30",
+  "#1a6620",
+  "#0c5212",
 ];
 
 /**
  * The colour of art line `index` in a `count`-line banner: an exact port
- * of `gradient_rgb` — `round(index / count * 4)` over the five stops, so
- * the ten-line canopy banner runs stops [0,0,1,1,2,2,2,3,3,4] and the
- * eleven-line headers [0,0,1,1,1,2,2,3,3,3,4]. The default count is the
- * house banner's ten lines, spelled as a number rather than
- * `BANNER_LINES.length` so an app that never draws the house banner
- * tree-shakes its art out of its bundle.
+ * of the landing's `gradColor` — `round(index / max(1, count - 1) * 7)`
+ * over the eight stops, so the first line always takes stop 0 and the
+ * last line stop 7. The ten-line canopy banner runs stops
+ * [0,1,2,2,3,4,5,5,6,7] and the eleven-line headers
+ * [0,1,1,2,3,4,4,5,6,6,7]. The default count is the house banner's ten
+ * lines, spelled as a number rather than `BANNER_LINES.length` so an app
+ * that never draws the house banner tree-shakes its art out of its
+ * bundle.
  */
 export function bannerColor(index: number, count = 10): string {
-  const stop = Math.min(4, Math.round((index / count) * 4));
-  return BANNER_GRADIENT[stop] ?? "#52fff6";
+  const stop = Math.min(7, Math.round((index / Math.max(1, count - 1)) * 7));
+  return BANNER_GRADIENT[stop] ?? "#9dcfa1";
 }
 
 function escapeHtml(value: string): string {
@@ -136,7 +143,8 @@ export type BannerApp = "remote" | "graphs";
  * Render the banner: the ten art lines as an SVG hidden from assistive
  * tech, a visually hidden "Canopy" for readers, and the app name in the
  * mono face, as the TUI prints its title. banner.css paints the app word
- * (`#52fff6`); no style attribute, so the remote's CSP stays happy.
+ * (`#9dcfa1`, the lightest wizard stop); no style attribute, so the
+ * remote's CSP stays happy.
  */
 export function renderBanner(app: BannerApp): string {
   return [

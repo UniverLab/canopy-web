@@ -541,9 +541,11 @@ describe("the header band", () => {
       /<a href="https:\/\/github.com\/UniverLab\/canopy-web" target="_blank" rel="noopener noreferrer" aria-label="Source" title="Source"><svg[\s\S]*?<\/svg><span>Source<\/span><\/a>/,
     );
     expect(header).toContain(`<div class="fondo" id="fondo" aria-hidden="true"></div>`);
-    // The band is 200 px on desktop, 160 px on mobile, clipping the honeycomb.
+    // The band is at least 200 px on desktop, 160 px on mobile, clipping
+    // the honeycomb; the desktop floor is content-driven so the stacked
+    // banner and nav rows fit.
     expect(html).toMatch(/\.site-header \{[^}]*height: 160px;[^}]*overflow: hidden;/);
-    expect(html).toMatch(/@media \(min-width: 640px\) \{[\s\S]*\.site-header \{ height: 200px; \}/);
+    expect(html).toMatch(/@media \(min-width: 640px\) \{[\s\S]*\.site-header \{ min-height: 200px; \}/);
   });
 
   it("holds the current query in the search box, in the page body", async () => {

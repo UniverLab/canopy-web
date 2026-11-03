@@ -7,9 +7,9 @@
  * no sideways scroll at 360 px) with its Publish/Source links, dense index
  * rows instead of cards, each document page as one horizontal plate in
  * its pan-and-zoom viewport beside its datasheet — and no horizontal page
- * scroll at 390 px. On a phone the header stacks:
- * the banner centred on its own row, the nav icons in one centred row
- * below (five fit at 360 px); desktop keeps the single row.
+ * scroll at 390 px. At every width the header stacks:
+ * the banner centred on its own row, the nav in one centred row below
+ * (icon-only under 520 px; five fit at 360 px).
  * The datasheet INSTALL row shows its whole command wrapped in its box
  * while the home index rows keep their one-line command — the command a
  * raised field (command surface, visible outline, full ink) at the Copy
@@ -163,15 +163,15 @@ for (const viewport of VIEWPORTS) {
       expect(box).not.toBeNull();
       expect(Math.abs((box?.height ?? 0) - (viewport.width < 640 ? 96 : 160))).toBeLessThanOrEqual(5);
       expect((box?.width ?? 0) + (box?.x ?? 0)).toBeLessThanOrEqual(viewport.width);
-      // The teal gradient is a `fill` presentation attribute — never a
-      // style attribute, which this page's CSP would refuse — so the art
-      // is teal, not flat ink.
+      // The wizard green gradient is a `fill` presentation attribute —
+      // never a style attribute, which this page's CSP would refuse — so
+      // the art runs light to dark, not flat ink.
       const inks = await page
         .locator("header .look-banner-line")
         .evaluateAll((groups) => groups.map((group) => getComputedStyle(group).fill));
       expect(inks).toHaveLength(11);
-      expect(inks[0]).toBe("rgb(82, 255, 246)");
-      expect(inks[10]).toBe("rgb(0, 102, 97)");
+      expect(inks[0]).toBe("rgb(157, 207, 161)");
+      expect(inks[10]).toBe("rgb(12, 82, 18)");
       expect(refused.filter((text) => text.includes("Content Security Policy"))).toEqual([]);
       await expect(page.locator("header nav.site-nav a[href='/editor']")).toHaveText("Editor");
       await expect(page.locator("header nav.site-nav a[href='/publish']")).toHaveText("Publish");
@@ -499,8 +499,8 @@ test("the home lists sit on dark panels with the search in the page at 1280x900"
 });
 
 test("the header fits the banner and its five links at 480x900", async ({ page }) => {
-  // The tightest width for the band: just below the labelled nav's
-  // threshold, where the row has the least room beside the banner.
+  // A narrow width just below the labelled nav's threshold, where the
+  // icon row below the banner has the least room.
   await page.setViewportSize({ width: 480, height: 900 });
   await page.goto("/", { waitUntil: "load" });
   const fit = await page.evaluate(() => {
@@ -611,23 +611,27 @@ for (const width of [360, 390] as const) {
   });
 }
 
-test("the header keeps its single row at 1280x900", async ({ page }) => {
+test("the header stacks the banner over a centred nav row at 1280x900", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/", { waitUntil: "load" });
-  // Desktop keeps the current single-row header: the nav shares the
-  // banner's row instead of stacking below it.
   const layout = await page.evaluate(() => {
     const banner = document.querySelector("header .banner-home .look-banner-header") as HTMLElement;
     const nav = document.querySelector("header nav.site-nav") as HTMLElement;
     const bannerBox = banner.getBoundingClientRect();
     const navBox = nav.getBoundingClientRect();
     return {
-      banner: { top: bannerBox.top, bottom: bannerBox.bottom },
-      nav: { top: navBox.top, bottom: navBox.bottom },
+      view: window.innerWidth,
+      bannerCenter: bannerBox.left + bannerBox.width / 2,
+      bannerBottom: bannerBox.bottom,
+      navCenter: navBox.left + navBox.width / 2,
+      navTop: navBox.top,
     };
   });
-  expect(layout.nav.top).toBeGreaterThanOrEqual(layout.banner.top - 1);
-  expect(layout.nav.bottom).toBeLessThanOrEqual(layout.banner.bottom + 1);
+  // Row 1: the banner sits on the viewport's centre line.
+  expect(Math.abs(layout.bannerCenter - layout.view / 2)).toBeLessThanOrEqual(3);
+  // Row 2: the nav is one centred row below the banner.
+  expect(Math.abs(layout.navCenter - layout.view / 2)).toBeLessThanOrEqual(3);
+  expect(layout.navTop).toBeGreaterThanOrEqual(layout.bannerBottom);
 });
 
 test("the colophon wraps without sideways scroll at 390x844", async ({ page }) => {

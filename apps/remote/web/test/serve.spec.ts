@@ -200,15 +200,15 @@ test("sign-in wears the header banner and a one-row colophon at 1280x900", async
   const box = await banner.boundingBox();
   expect(box).not.toBeNull();
   expect(Math.abs((box?.height ?? 0) - 160)).toBeLessThanOrEqual(5);
-  // The teal gradient survives the relay's CSP: the ink is a `fill`
-  // presentation attribute (or banner.css), never an inline style. A
-  // refused load would log here.
+  // The wizard green gradient survives the relay's CSP: the ink is a
+  // `fill` presentation attribute (or banner.css), never an inline style.
+  // A refused load would log here.
   const inks = await page
     .locator(".topbar .look-banner-line")
     .evaluateAll((groups) => groups.map((group) => getComputedStyle(group).fill));
   expect(inks).toHaveLength(11);
-  expect(inks[0]).toBe("rgb(82, 255, 246)");
-  expect(inks[10]).toBe("rgb(0, 102, 97)");
+  expect(inks[0]).toBe("rgb(157, 207, 161)");
+  expect(inks[10]).toBe("rgb(12, 82, 18)");
   expect(refused.filter((text) => text.includes("Content Security Policy"))).toEqual([]);
   const tops = await page
     .locator("footer.look-colophon nav a")
