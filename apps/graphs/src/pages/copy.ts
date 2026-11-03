@@ -684,7 +684,7 @@ export const TRANSPARENCY_HOOK_BODY =
 export const TRANSPARENCY_REVIEW_MODEL_BODY =
   "A configured provider reads each unscanned document's install-review facts — shell commands, prompt excerpts, attention marks — and answers which bundled patterns the graph uses plus one fuzzy verdict. Nodes carry no patterns.";
 export const TRANSPARENCY_REVIEW_HASH_BODY =
-  "A document is reviewed only when its content hash differs from the last reviewed hash. The verdict, detected patterns, scanned hash, model name and review date are stored alongside the document and refreshed on content change only.";
+  "A document is reviewed when its content hash differs from the last reviewed hash, or when the review prompt changed since it was last reviewed. The verdict, detected patterns, scanned hash, prompt version, model name and review date are stored alongside the document and refreshed on content or prompt change only.";
 export const TRANSPARENCY_REVIEW_BUDGET_BODY =
   "The pass is budgeted: a per-run scan cap takes the newest unscanned documents first, and API failures, timeouts or missing credits leave those documents unreviewed, without touching the index path.";
 export const TRANSPARENCY_REVIEW_ADVISORY_BODY =

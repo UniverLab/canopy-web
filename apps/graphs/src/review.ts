@@ -21,16 +21,19 @@
  * indexer flushed, and every failure — API errors, timeouts, missing
  * credits — leaves those documents `unreviewed` (no badge) without
  * touching the index keys. It is budgeted by a per-run scan cap that
- * takes the newest unscanned documents first, and hash-gated: a document
- * is reviewed only when its content hash differs from the last reviewed
- * hash. The verdict, detected patterns, scanned hash, model name and
- * review date live in KV alongside the document (`review:v1:*`) plus two
- * aggregates (`reviews:v1` for the transparency page, `review-patterns:v1`
- * for the patterns pages), refreshed on content change only.
+ * takes the newest unscanned documents first, and gated on content and
+ * prompt: a document is reviewed when its content hash differs from the
+ * last reviewed hash, or when the bundled review prompt changed since it
+ * was last reviewed. The verdict, detected patterns, scanned hash, prompt
+ * version, model name and review date live in KV alongside the document
+ * (`review:v1:*`) plus two aggregates (`reviews:v1` for the transparency
+ * page, `review-patterns:v1` for the patterns pages), refreshed on
+ * content or prompt change only.
  */
 import type { DocumentKind, JsonValue } from "../../../src/schema.js";
 import type { Log } from "./github.js";
 import { sha256 } from "./hashes.js";
+import { REVIEW_PROMPT_VERSION } from "./review-assets.generated.js";
 import { isArray, isRecord, isString, parseJson } from "./json.js";
 import { INDEX_KEY, docKey, parseIndex, parseStoredDoc, type KV } from "./store.js";
 import { HASHES_KEY, parseHashes } from "./hashes.js";
@@ -146,6 +149,8 @@ export interface StoredReview {
   patterns: string[];
   /** The SHA-256 hex of the `doc:v1:*` value the model saw. */
   hash: string;
+  /** The bundled prompt version the model answered under. */
+  prompt: string;
   /** The model name the badge shows. */
   model: string;
   /** When the model answered, ISO-8601. */
@@ -163,6 +168,7 @@ export function parseStoredReview(text: string): StoredReview | null {
   const reasons = value["reasons"];
   const patterns = value["patterns"];
   const hash = value["hash"];
+  const prompt = value["prompt"];
   const model = value["model"];
   const reviewedAt = value["reviewed_at"];
   if (
@@ -177,6 +183,9 @@ export function parseStoredReview(text: string): StoredReview | null {
     reasons,
     patterns: [...patterns],
     hash,
+    // Reviews written before the prompt was stored read as v1; any
+    // non-empty string parses, so a future prompt never breaks old rows.
+    prompt: isString(prompt) && prompt !== "" ? prompt : "v1",
     model,
     reviewed_at: reviewedAt,
   };
@@ -209,6 +218,7 @@ function entryOf(value: unknown): ReviewEntry | null {
   const reasons = value["reasons"];
   const patterns = value["patterns"];
   const hash = value["hash"];
+  const prompt = value["prompt"];
   const model = value["model"];
   const reviewedAt = value["reviewed_at"];
   if (
@@ -227,6 +237,9 @@ function entryOf(value: unknown): ReviewEntry | null {
     reasons,
     patterns: [...patterns],
     hash,
+    // Rows written before the prompt was stored read as v1; any
+    // non-empty string parses, so a future prompt never breaks old rows.
+    prompt: isString(prompt) && prompt !== "" ? prompt : "v1",
     model,
     reviewed_at: reviewedAt,
   };
@@ -362,9 +375,11 @@ export interface ReviewRunOptions {
 /**
  * Run one review pass after the index writes landed. Newest unscanned
  * documents first (index `updated` descending, unknown last), at most
- * `cap` provider calls; a document whose content hash matches its last
- * reviewed hash is never re-reviewed. Failures stay `unreviewed`: no key
- * is written for them. Orphaned reviews (no live index entry) are pruned,
+ * `cap` provider calls; a document is re-reviewed when its content hash
+ * changed or the bundled prompt did, and a document whose content hash
+ * matches its last reviewed hash under the current prompt never is.
+ * Failures stay `unreviewed`: no key is written for them. Orphaned
+ * reviews (no live index entry) are pruned,
  * and the two aggregates rebuilt only when something changed and the
  * listing completed — never from a partial view. Total: it never throws
  * past the caller, so the index path stays untouched.
@@ -398,8 +413,11 @@ export async function runReview(options: ReviewRunOptions): Promise<ReviewRunSta
     const aggregateText = await options.index.get(REVIEWS_KEY).catch(() => null);
     const aggregate = aggregateText === null ? null : parseReviewsAggregate(aggregateText);
     const lastHash = new Map<string, string>();
+    const lastPrompt = new Map<string, string>();
     for (const entry of aggregate?.reviews ?? []) {
-      lastHash.set(reviewKey(entry.kind, entry.owner, entry.repo, entry.slug), entry.hash);
+      const key = reviewKey(entry.kind, entry.owner, entry.repo, entry.slug);
+      lastHash.set(key, entry.hash);
+      lastPrompt.set(key, entry.prompt);
     }
     const live = new Set(
       index.entries.map((entry) => reviewKey(entry.kind, entry.owner, entry.repo, entry.slug)),
@@ -408,6 +426,11 @@ export async function runReview(options: ReviewRunOptions): Promise<ReviewRunSta
       const key = reviewKey(entry.kind, entry.owner, entry.repo, entry.slug);
       const last = lastHash.get(key);
       if (last === undefined) {
+        return true;
+      }
+      // A prompt change re-reviews everything: the verdict below was
+      // written under older instructions, whatever its hash says.
+      if (lastPrompt.get(key) !== REVIEW_PROMPT_VERSION) {
         return true;
       }
       const current = hashes[docKey(entry.kind, entry.owner, entry.repo, entry.slug)];
@@ -446,7 +469,10 @@ export async function runReview(options: ReviewRunOptions): Promise<ReviewRunSta
         continue;
       }
       const hash = await sha256(raw);
-      if (lastHash.get(key) === hash) {
+      // The re-hash gate mirrors the candidate filter: a matching hash
+      // skips only when the stored prompt is current too, or a v1 verdict
+      // would be selected above and skipped here, never re-reviewed.
+      if (lastHash.get(key) === hash && lastPrompt.get(key) === REVIEW_PROMPT_VERSION) {
         continue;
       }
       const stored = parseStoredDoc(raw);
@@ -486,6 +512,7 @@ export async function runReview(options: ReviewRunOptions): Promise<ReviewRunSta
         reasons: result.reasons.trim().slice(0, 1000),
         patterns,
         hash,
+        prompt: REVIEW_PROMPT_VERSION,
         model: provider.model,
         reviewed_at: reviewedAt,
       };
@@ -497,6 +524,7 @@ export async function runReview(options: ReviewRunOptions): Promise<ReviewRunSta
         continue;
       }
       lastHash.set(key, hash);
+      lastPrompt.set(key, REVIEW_PROMPT_VERSION);
       stats.reviewed += 1;
     }
     // Orphans: reviews whose index entry is gone lose their keys, so the

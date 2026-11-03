@@ -2,7 +2,7 @@
 /**
  * The `Muse` review provider: the model behind the index-time pass.
  *
- * It fills the versioned prompt (`prompt.v1.xml`, bundled by
+ * It fills the versioned prompt (`prompt.v2.xml`, bundled by
  * `build:review-assets`) with the install-review facts — shell commands,
  * prompt excerpts, attention marks — and the bundled pattern slugs, calls
  * the Muse API (`POST /v1/messages`) with the key from worker secrets,
@@ -14,7 +14,7 @@
  */
 import type { JsonValue } from "../../../src/schema.js";
 import { isArray, isRecord, isString, parseJson } from "./json.js";
-import { REVIEW_PROMPT_V1 } from "./review-assets.generated.js";
+import { REVIEW_PROMPT_V2 } from "./review-assets.generated.js";
 import {
   isVerdict,
   reviewFactsOf,
@@ -51,7 +51,7 @@ export interface ClaudeOptions {
   fetchImpl?: typeof fetch;
   /** Per-call timeout override; production waits 15 seconds. */
   timeoutMs?: number;
-  /** Prompt template override; production reads the bundled v1. */
+  /** Prompt template override; production reads the bundled v2. */
   promptTemplate?: string;
 }
 
@@ -76,7 +76,7 @@ export function stripLeadingComments(template: string): string {
 export function buildReviewPrompt(
   document: ReviewDocument,
   patternSlugs: string[],
-  template: string = REVIEW_PROMPT_V1,
+  template: string = REVIEW_PROMPT_V2,
 ): string {
   const facts = reviewFactsOf(document.kind, document.document);
   return stripLeadingComments(template)
@@ -148,7 +148,7 @@ function answerText(body: unknown): string {
 export function createClaudeProvider(options: ClaudeOptions): ReviewProvider {
   const model = options.model;
   const known = new Set(options.patternSlugs);
-  const template = options.promptTemplate ?? REVIEW_PROMPT_V1;
+  const template = options.promptTemplate ?? REVIEW_PROMPT_V2;
   const timeoutMs = options.timeoutMs ?? CLAUDE_TIMEOUT_MS;
   const fetchImpl = options.fetchImpl ?? fetch;
   return {

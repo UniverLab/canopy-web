@@ -54,7 +54,7 @@ function scratch(): { dir: string; out: string; remove: () => void } {
 }
 
 const PROMPT = [
-  `<review_prompt version="v1">`,
+  `<review_prompt version="v2">`,
   `  <patterns>{{PATTERNS}}</patterns>`,
   `  <document kind="{{KIND}}" name="{{NAME}}" slug="{{SLUG}}">`,
   `    {{COMMANDS}} {{PROMPTS}} {{ATTENTION}}`,
@@ -76,7 +76,7 @@ const DIAGRAM = [
 function buildDiagram(source: string): string {
   const { dir, out, remove } = scratch();
   try {
-    writeFileSync(path.join(dir, "prompt.v1.xml"), PROMPT);
+    writeFileSync(path.join(dir, "prompt.v2.xml"), PROMPT);
     writeFileSync(path.join(dir, "indexing.mmd"), source);
     const result = attempt(["--dir", dir, "--out", out]);
     expect(result.status, result.stderr).toBe(0);
@@ -90,7 +90,7 @@ function buildDiagram(source: string): string {
 function failDiagram(source: string): Attempt {
   const { dir, out, remove } = scratch();
   try {
-    writeFileSync(path.join(dir, "prompt.v1.xml"), PROMPT);
+    writeFileSync(path.join(dir, "prompt.v2.xml"), PROMPT);
     writeFileSync(path.join(dir, "indexing.mmd"), source);
     return attempt(["--dir", dir, "--out", out]);
   } finally {
@@ -121,12 +121,12 @@ describe("the review bundle", () => {
   it("builds a valid fixture to SVG and --check detects drift", () => {
     const { dir, out, remove } = scratch();
     try {
-      writeFileSync(path.join(dir, "prompt.v1.xml"), PROMPT);
+      writeFileSync(path.join(dir, "prompt.v2.xml"), PROMPT);
       writeFileSync(path.join(dir, "indexing.mmd"), DIAGRAM);
       expect(attempt(["--dir", dir, "--out", out]).status).toBe(0);
       expect(existsSync(out)).toBe(true);
       const module = readFileSync(out, "utf8");
-      expect(module).toContain(`REVIEW_PROMPT_VERSION = "v1"`);
+      expect(module).toContain(`REVIEW_PROMPT_VERSION = "v2"`);
       expect(module).toContain("{{COMMANDS}}");
       expect(module).toContain("sequenceDiagram");
       expect(module).toContain("<svg");
@@ -145,7 +145,7 @@ describe("the review bundle", () => {
   it("fails a prompt without its fact placeholders", () => {
     const { dir, out, remove } = scratch();
     try {
-      writeFileSync(path.join(dir, "prompt.v1.xml"), `<review_prompt version="v1">no facts</review_prompt>\n`);
+      writeFileSync(path.join(dir, "prompt.v2.xml"), `<review_prompt version="v2">no facts</review_prompt>\n`);
       writeFileSync(path.join(dir, "indexing.mmd"), DIAGRAM);
       const failed = attempt(["--dir", dir, "--out", out]);
       expect(failed.status).toBe(1);
@@ -159,7 +159,7 @@ describe("the review bundle", () => {
   it("fails a diagram line the renderer cannot read", () => {
     const { dir, out, remove } = scratch();
     try {
-      writeFileSync(path.join(dir, "prompt.v1.xml"), PROMPT);
+      writeFileSync(path.join(dir, "prompt.v2.xml"), PROMPT);
       writeFileSync(path.join(dir, "indexing.mmd"), `${DIAGRAM}  this is not a message\n`);
       const failed = attempt(["--dir", dir, "--out", out]);
       expect(failed.status).toBe(1);

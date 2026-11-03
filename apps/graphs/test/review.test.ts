@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
  * The index-time model review: the provider interface against a mock,
- * `off` disabling the pass, the hash gate, the per-run cap, failure
- * degrading to `unreviewed`, every verdict label including the
+ * `off` disabling the pass, the hash and prompt gates, the per-run cap,
+ * failure degrading to `unreviewed`, every verdict label including the
  * placeholder case, stored pattern relations on the patterns pages, the
  * `meta` provider with its repair retry and usage logs, prompt hygiene
  * (leading comments stripped from wire and page), the meta env wiring,
@@ -23,7 +23,7 @@ import {
 import {
   INDEXING_MMD,
   INDEXING_SVG,
-  REVIEW_PROMPT_V1,
+  REVIEW_PROMPT_V2,
   REVIEW_PROMPT_VERSION,
 } from "../src/review-assets.generated.js";
 import {
@@ -138,7 +138,7 @@ async function call(path: string, kv: FakeKV, accept?: string, reviewProvider?: 
 }
 
 describe("the provider interface", () => {
-  it("reviews through a mock and stores verdict, patterns, hash, model and date", async () => {
+  it("reviews through a mock and stores verdict, patterns, hash, prompt, model and date", async () => {
     const kv = new FakeKV();
     const entries = [entry("graph", "acme", "things", "flow", "2026-10-29")];
     const document = graphDoc("flow", "echo hi");
@@ -159,12 +159,13 @@ describe("the provider interface", () => {
     const raw = await kv.get(docKey("graph", "acme", "things", "flow"));
     const hash = await sha256(raw as string);
     const stored = parseStoredReview((await kv.get(reviewKey("graph", "acme", "things", "flow"))) as string);
-    // Unknown slugs are dropped; the scanned hash, model and date are kept.
+    // Unknown slugs are dropped; the scanned hash, prompt, model and date are kept.
     expect(stored).toEqual({
       verdict: "looks-safe",
       reasons: "",
       patterns: ["deterministic-gates"],
       hash,
+      prompt: "v2",
       model: MODEL,
       reviewed_at: "2026-10-30T12:00:00.000Z",
     });
@@ -178,6 +179,7 @@ describe("the provider interface", () => {
       reasons: "",
       patterns: ["deterministic-gates"],
       hash,
+      prompt: "v2",
       model: MODEL,
       reviewed_at: "2026-10-30T12:00:00.000Z",
     }]);
@@ -249,6 +251,66 @@ describe("the hash gate", () => {
     expect(stored?.reasons).toBe("pipe to shell");
     expect(stored?.hash).toBe(await sha256((await kv.get(key)) as string));
     expect(stored?.reviewed_at).toBe("2026-10-30T12:00:02.000Z");
+  });
+});
+
+describe("the prompt gate", () => {
+  it("re-reviews an up-to-date hash stored under an older prompt, then rests", async () => {
+    const kv = new FakeKV();
+    const key = docKey("graph", "acme", "things", "flow");
+    await seed(kv, [entry("graph", "acme", "things", "flow", "2026-10-29")], {
+      [key]: graphDoc("flow", "echo hi"),
+    });
+    const provider = mockProvider(() => ({ verdict: "looks-safe", reasons: "", patterns: [] }));
+    await runReview({ index: kv, provider, patternSlugs: SLUGS, now: () => NOW });
+    expect(provider.calls.length).toBe(1);
+    // Backdate the stored prompt to v1 with the hash untouched: the next
+    // run reselects the entry as a candidate and re-reviews it.
+    const review = reviewKey("graph", "acme", "things", "flow");
+    const stored = JSON.parse((await kv.get(review)) as string) as Record<string, unknown>;
+    stored["prompt"] = "v1";
+    await kv.put(review, JSON.stringify(stored));
+    const aggregate = JSON.parse((await kv.get(REVIEWS_KEY)) as string) as {
+      built_at: string;
+      reviews: Array<Record<string, unknown>>;
+    };
+    for (const row of aggregate.reviews) {
+      row["prompt"] = "v1";
+    }
+    await kv.put(REVIEWS_KEY, JSON.stringify(aggregate));
+    kv.putOptions.length = 0;
+    const stats = await runReview({ index: kv, provider, patternSlugs: SLUGS, now: () => NOW + 1000 });
+    expect(stats).toEqual({ candidates: 1, reviewed: 1, failed: 0, pruned: 0 });
+    expect(provider.calls.length).toBe(2);
+    expect(parseStoredReview((await kv.get(review)) as string)?.prompt).toBe("v2");
+    // Now current: the next run excludes it — no call, no write.
+    kv.putOptions.length = 0;
+    const again = await runReview({ index: kv, provider, patternSlugs: SLUGS, now: () => NOW + 2000 });
+    expect(again.reviewed).toBe(0);
+    expect(provider.calls.length).toBe(2);
+    expect(kv.putOptions).toEqual([]);
+  });
+
+  it("reads rows without a prompt as v1, and any version verbatim", () => {
+    const row = {
+      verdict: "looks-safe",
+      reasons: "",
+      patterns: [],
+      hash: "abc",
+      model: MODEL,
+      reviewed_at: "2026-10-30T12:00:00.000Z",
+    };
+    expect(parseStoredReview(JSON.stringify(row))?.prompt).toBe("v1");
+    const aggregate = parseReviewsAggregate(JSON.stringify({
+      built_at: "2026-10-30T12:00:00.000Z",
+      reviews: [{ kind: "graph", owner: "acme", repo: "things", slug: "flow", ...row }],
+    }));
+    expect(aggregate?.reviews[0]?.prompt).toBe("v1");
+    // An invalid prompt reads as v1 too; a future version parses verbatim.
+    for (const prompt of ["", 42, null]) {
+      expect(parseStoredReview(JSON.stringify({ ...row, prompt }))?.prompt).toBe("v1");
+    }
+    expect(parseStoredReview(JSON.stringify({ ...row, prompt: "v9" }))?.prompt).toBe("v9");
   });
 });
 
@@ -474,10 +536,13 @@ describe("the transparency page", () => {
     expect(html).toContain("<svg");
     expect(html).toContain("Cron */15");
     expect(html).toContain("review newest unscanned docs");
-    // The stripped prompt, exactly as the model saw it.
+    // The stripped v2 prompt, exactly as the model saw it.
     expect(html).toContain("&lt;review_prompt");
+    expect(html).toContain("version=&quot;v2&quot;");
     expect(html).toContain("{{COMMANDS}}");
     expect(html).toContain(`Version ${REVIEW_PROMPT_VERSION}`);
+    expect(html).toContain("install slot");
+    expect(html).toContain("engine variables");
     // Each verdict with its hash and date.
     const review = parseStoredReview((await kv.get(reviewKey("graph", "acme", "things", "flow"))) as string);
     expect(html).toContain(`<a class="row-name" href="/g/acme/things/flow">flow</a>`);
@@ -569,17 +634,26 @@ describe("the transparency page", () => {
 
 describe("the bundled review assets", () => {
   it("versions the prompt in XML with the install-review facts", () => {
-    expect(REVIEW_PROMPT_VERSION).toBe("v1");
-    expect(REVIEW_PROMPT_V1).toContain(`<review_prompt version="v1">`);
-    expect(REVIEW_PROMPT_V1).toContain("{{PATTERNS}}");
-    expect(REVIEW_PROMPT_V1).toContain("{{COMMANDS}}");
-    expect(REVIEW_PROMPT_V1).toContain("{{PROMPTS}}");
-    expect(REVIEW_PROMPT_V1).toContain("{{ATTENTION}}");
-    expect(REVIEW_PROMPT_V1).toContain("looks-safe");
-    expect(REVIEW_PROMPT_V1).toContain("needs-look");
-    expect(REVIEW_PROMPT_V1).toContain("flagged");
-    expect(REVIEW_PROMPT_V1).toContain("&lt;GATE-SCRIPT&gt;");
-    expect(REVIEW_PROMPT_V1).toContain("never");
+    expect(REVIEW_PROMPT_VERSION).toBe("v2");
+    expect(REVIEW_PROMPT_V2).toContain(`<review_prompt version="v2">`);
+    expect(REVIEW_PROMPT_V2).toContain("{{PATTERNS}}");
+    expect(REVIEW_PROMPT_V2).toContain("{{COMMANDS}}");
+    expect(REVIEW_PROMPT_V2).toContain("{{PROMPTS}}");
+    expect(REVIEW_PROMPT_V2).toContain("{{ATTENTION}}");
+    expect(REVIEW_PROMPT_V2).toContain("looks-safe");
+    expect(REVIEW_PROMPT_V2).toContain("needs-look");
+    expect(REVIEW_PROMPT_V2).toContain("flagged");
+    // v2: the install slot and engine variables are ordinary, never
+    // needs-look on their own, and reasons name what to check.
+    expect(REVIEW_PROMPT_V2).toContain("&lt;GATE-SCRIPT&gt;");
+    expect(REVIEW_PROMPT_V2).toContain("install slot");
+    expect(REVIEW_PROMPT_V2).toContain("fails closed");
+    expect(REVIEW_PROMPT_V2).toContain("{{workdir}}");
+    expect(REVIEW_PROMPT_V2).toContain("{{spec_content}}");
+    expect(REVIEW_PROMPT_V2).toContain("engine variables");
+    expect(REVIEW_PROMPT_V2).toContain("exactly what to check");
+    expect(REVIEW_PROMPT_V2).toContain("Read the `Fetch deps` node");
+    expect(REVIEW_PROMPT_V2).toContain("never");
   });
 
   it("pre-renders the sequence diagram to static SVG", () => {
@@ -980,7 +1054,7 @@ describe("the Meta provider", () => {
 
 describe("prompt hygiene", () => {
   it("strips the template's leading comments and keeps everything else verbatim", () => {
-    const stripped = stripLeadingComments(REVIEW_PROMPT_V1);
+    const stripped = stripLeadingComments(REVIEW_PROMPT_V2);
     expect(stripped.startsWith("<review_prompt")).toBe(true);
     expect(stripped).toContain("{{PATTERNS}}");
     expect(stripped).toContain("{{COMMANDS}}");

@@ -88,7 +88,7 @@ import { transparencyPage } from "./transparency.js";
 import {
   INDEXING_MMD,
   INDEXING_SVG,
-  REVIEW_PROMPT_V1,
+  REVIEW_PROMPT_V2,
   REVIEW_PROMPT_VERSION,
 } from "../review-assets.generated.js";
 import { stripLeadingComments } from "../review-claude.js";
@@ -474,7 +474,7 @@ async function transparencyResponse(req: Request, env: PageEnv, deps: PageDeps):
     // The same stripped bytes the model saw: the template's leading
     // comments cost tokens and are not instructions, so the page shows
     // the prompt exactly as it was sent, placeholders aside.
-    prompt: stripLeadingComments(REVIEW_PROMPT_V1),
+    prompt: stripLeadingComments(REVIEW_PROMPT_V2),
     promptVersion: REVIEW_PROMPT_VERSION,
     reviews: reviews?.reviews ?? [],
     reviewProvider: env.REVIEW_PROVIDER,

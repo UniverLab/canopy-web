@@ -3,7 +3,7 @@
  * The `meta` review provider: the model behind the index-time pass.
  *
  * It fills the same versioned prompt the `Muse` provider sends
- * (`prompt.v1.xml`, leading comments stripped by `buildReviewPrompt`),
+ * (`prompt.v2.xml`, leading comments stripped by `buildReviewPrompt`),
  * calls the configured chat-completions-style endpoint (`POST` with the
  * key as a Bearer token), and parses the one JSON object the prompt
  * demands. Verified live 2026-10-31 against Meta's chat-completions
@@ -34,7 +34,7 @@
 import type { JsonValue } from "../../../src/schema.js";
 import type { Log } from "./github.js";
 import { isArray, isRecord, isString } from "./json.js";
-import { REVIEW_PROMPT_V1 } from "./review-assets.generated.js";
+import { REVIEW_PROMPT_V2 } from "./review-assets.generated.js";
 import {
   type ReviewDocument,
   type ReviewProvider,
@@ -120,7 +120,7 @@ export interface MetaOptions {
   fetchImpl?: typeof fetch;
   /** Per-call timeout override; production waits 30 seconds. */
   timeoutMs?: number;
-  /** Prompt template override; production reads the bundled v1. */
+  /** Prompt template override; production reads the bundled v2. */
   promptTemplate?: string;
   /** Where token usage is noted; defaults to no-op. */
   log?: Log;
@@ -185,7 +185,7 @@ export function createMetaProvider(options: MetaOptions): ReviewProvider {
   const effort = resolveMetaEffort(options.effort);
   const maxTokens = resolveMetaMaxTokens(options.maxTokens);
   const known = new Set(options.patternSlugs);
-  const template = options.promptTemplate ?? REVIEW_PROMPT_V1;
+  const template = options.promptTemplate ?? REVIEW_PROMPT_V2;
   const timeoutMs = options.timeoutMs ?? META_TIMEOUT_MS;
   const fetchImpl = options.fetchImpl ?? fetch;
   const log = options.log ?? (() => undefined);

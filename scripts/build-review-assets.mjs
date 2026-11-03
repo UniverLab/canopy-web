@@ -2,7 +2,7 @@
 /**
  * Bundle the review assets into the Worker.
  *
- * The review prompt (`apps/graphs/review/prompt.v1.xml`, versioned XML) and
+ * The review prompt (`apps/graphs/review/prompt.v2.xml`, versioned XML) and
  * the indexing diagram (`apps/graphs/review/indexing.mmd`, a mermaid
  * `sequenceDiagram`) are committed in-repo; this script validates both and
  * writes the committed `apps/graphs/src/review-assets.generated.ts` the
@@ -38,7 +38,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const REVIEW_DIR = path.join(ROOT, "apps", "graphs", "review");
 const GENERATED = path.join(ROOT, "apps", "graphs", "src", "review-assets.generated.ts");
 
-const PROMPT_FILE = "prompt.v1.xml";
+const PROMPT_FILE = "prompt.v2.xml";
 const DIAGRAM_FILE = "indexing.mmd";
 
 /**
@@ -291,7 +291,7 @@ export function renderDiagramSvg(model) {
  * Render the generated module: the prompt, the diagram source and its SVG,
  * plus the stamp. Payloads stay JSON-encoded on one line each.
  *
- * @param {string} prompt - the prompt.v1.xml text
+ * @param {string} prompt - the prompt.v2.xml text
  * @param {string} mmd - the indexing.mmd text
  * @param {string} svg - the pre-rendered SVG
  * @param {string} builtAt - the ISO-8601 stamp
@@ -305,13 +305,13 @@ function renderModule(prompt, mmd, svg, builtAt) {
     ` * from \`apps/graphs/review/\` — committed, do not edit.`,
     ` */`,
     `/** The review prompt's version: the transparency page names it. */`,
-    `export const REVIEW_PROMPT_VERSION = "v1";`,
+    `export const REVIEW_PROMPT_VERSION = "v2";`,
     ``,
     `/** When the bundled payload last changed, ISO-8601. */`,
     `export const REVIEW_ASSETS_BUILT_AT = ${JSON.stringify(builtAt)};`,
     ``,
     `/** The bundled review prompt; the runner strips its leading comments, and /transparency shows the stripped bytes. */`,
-    `export const REVIEW_PROMPT_V1 = ${JSON.stringify(prompt)};`,
+    `export const REVIEW_PROMPT_V2 = ${JSON.stringify(prompt)};`,
     ``,
     `/** The indexing diagram source, a mermaid sequenceDiagram. */`,
     `export const INDEXING_MMD = ${JSON.stringify(mmd)};`,
@@ -346,7 +346,7 @@ function previousStamp(out) {
 function previousPayload(out) {
   try {
     const text = readFileSync(out, "utf8");
-    const prompt = /REVIEW_PROMPT_V1 = ("(?:[^"\\]|\\.)*");/.exec(text)?.[1];
+    const prompt = /REVIEW_PROMPT_V2 = ("(?:[^"\\]|\\.)*");/.exec(text)?.[1];
     const mmd = /INDEXING_MMD = ("(?:[^"\\]|\\.)*");/.exec(text)?.[1];
     if (prompt === undefined || mmd === undefined) {
       return null;
