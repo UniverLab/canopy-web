@@ -200,18 +200,24 @@ describe("the sanitizer", () => {
 });
 
 describe("the plate drawing", () => {
-  it("draws the five nodes as Canopy shapes in a scrolling figure, both orientations", async () => {
+  it("draws the five nodes as Canopy shapes in the viewport, horizontal only", async () => {
     const html = await (await call("/g/hello-graph")).text();
     expect(html).toMatchSnapshot();
-    // The figure holds both orientations; CSS shows the vertical one under
-    // 640 px and the horizontal one above, with no JavaScript involved.
-    expect(html).toContain(`<figure class="plate">`);
+    // The figure holds the one horizontal plate at every size: no
+    // vertical twin anywhere, on the page or in the stylesheet.
+    expect(html).toContain(`<figure class="plate" tabindex="0" data-plate>`);
     expect(html).toContain(`<svg class="plate-svg plate-h"`);
-    expect(html).toContain(`<svg class="plate-svg plate-v"`);
-    expect(html).toMatch(/\.plate \.plate-v \{ display: none; \}/);
-    expect(html).toMatch(/@media \(max-width: 639px\) \{[\s\S]*\.plate \.plate-v \{ display: block; \}/);
-    // The figure scrolls horizontally inside itself; the page never overflows.
-    expect(html).toMatch(/figure\.plate \{[^}]*max-width: 100%;[^}]*overflow-x: auto;/);
+    expect(html).not.toContain("plate-v");
+    // The viewport's client rides deferred with no inline bootstrap; the
+    // figure scrolls at scale 1 until it mounts.
+    expect(html).toContain(`<script src="/look/plate.js" defer></script>`);
+    expect(html).toMatch(/figure\.plate \{[^}]*max-width: 100%;[^}]*overflow: auto;/);
+    expect(html).toMatch(/figure\.plate\.is-live \{[^}]*overflow: hidden;[^}]*touch-action: none;/);
+    // Below the datasheet breakpoint the viewport is full width and
+    // 60svh; above it the row stretches plate and sheet to one height.
+    expect(html).toMatch(/\.doc-cols figure\.plate \{[^}]*width: 100%;[^}]*height: 60svh;[^}]*min-height: 320px;/);
+    expect(html).toMatch(/@media \(min-width: 1024px\) \{[\s\S]*\.doc-cols \{ flex-direction: row; align-items: stretch; \}/);
+    expect(html).toMatch(/\.doc-cols figure\.plate \{ flex: 1; min-width: 0; width: auto; height: auto; min-height: 420px; \}/);
     // One labelled shape per node: agents are circles, checks rounded
     // squares, gates and routers diamonds — the router reads as a gate.
     for (const label of ["build", "test", "gate", "triage", "docs"]) {
@@ -226,11 +232,11 @@ describe("the plate drawing", () => {
     ]) {
       expect(html).toContain(shape);
     }
-    // Edges follow the conditions, in each orientation: one red fail arc
-    // back, four teal passes (the always and the route read as pass), no
-    // error, a labelled svg.
-    expect((html.match(/class="edge fail"/g) ?? [])).toHaveLength(2);
-    expect((html.match(/class="edge pass"/g) ?? [])).toHaveLength(8);
+    // Edges follow the conditions: one red fail arc back, four teal
+    // passes (the always and the route read as pass), no error, a
+    // labelled svg.
+    expect((html.match(/class="edge fail"/g) ?? [])).toHaveLength(1);
+    expect((html.match(/class="edge pass"/g) ?? [])).toHaveLength(4);
     expect(html).not.toContain(`class="edge error"`);
     expect(html).toContain(`role="img"`);
     expect(html).toContain(`<title>hello-graph</title>`);
@@ -382,7 +388,7 @@ describe("the page shell", () => {
   it("installs the node page by its node ref and draws the one node", async () => {
     const html = await (await call("/n/hello-node")).text();
     expect(html).toContain("canopy node install hello-node");
-    expect(html).toContain(`<figure class="plate">`);
+    expect(html).toContain(`<figure class="plate" tabindex="0" data-plate>`);
     expect(html).toContain(`<g class="node shape-agent" data-name="hello-node"`);
     expect(html).toContain(`<title>hello-node</title>`);
   });

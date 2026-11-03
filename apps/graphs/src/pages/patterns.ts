@@ -4,8 +4,8 @@
  *
  * A reader sees the shape drawn first: the list shows every figure as a
  * small plate on its card, and the page opens with the figure's full plate
- * — the same plate renderer and look as graph pages, the vertical plate
- * under 640 px and the horizontal one above, on the black stage. Then the
+ * — the same plate renderer and look as graph pages, one horizontal
+ * drawing at every size, on the black stage. Then the
  * status badge, the body (the shared markdown renderer, no new HTML), the
  * sources as links, and Implemented-by: each `implements` ref as the
  * catalogue's index row, a graph's own small plate beneath its row.
@@ -51,22 +51,21 @@ function statusBadge(status: PatternStatus): string {
 }
 
 /**
- * One figure as a thumbnail: the plate renderer at thumbnail size, in both
- * orientations like a full plate, so the small drawing shows on phones too.
- * The drawing is decorative beside the words around it, so it hides from
- * assistive tech; the page's own plate carries the labelled drawing.
+ * One figure as a thumbnail: the plate renderer at thumbnail size, the one
+ * horizontal drawing like a document plate, so the small drawing shows at
+ * every size. The drawing is decorative beside the words around it, so it
+ * hides from assistive tech; the page's own plate carries the labelled
+ * drawing.
  */
 function thumbFigure(figure: JsonValue, label: string, markerSeed: string): string {
-  // One seed per figure, replayed by each orientation's own generator,
-  // so both plates walk the same fail edges — a fresh one per render.
+  // A fresh seed per render, so the walk looks alive across reloads.
   // The marker ids take the caller's slug instead: every figure on the
   // page renders within one clock tick, and the ids must not collide.
   const seed = Date.now() >>> 0;
   const horizontal = renderPlate(figure as unknown as GraphDocument, "horizontal", undefined, mulberry32(seed), markerSeed);
-  const vertical = renderPlate(figure as unknown as GraphDocument, "vertical", undefined, mulberry32(seed), markerSeed);
-  return horizontal === "" && vertical === ""
+  return horizontal === ""
     ? ""
-    : `<figure class="plate thumb" aria-hidden="true">${horizontal}${vertical}<figcaption class="sr-only">${escapeHtml(label)}</figcaption></figure>`;
+    : `<figure class="plate thumb" aria-hidden="true">${horizontal}<figcaption class="sr-only">${escapeHtml(label)}</figcaption></figure>`;
 }
 
 /** One card: the small plate, the title, the badge and the summary. */
@@ -188,14 +187,13 @@ export function patternPage(
   slug: string,
   reviews: StoredReviews | null = null,
 ): Page {
-  // One seed for the figure's H/V pair, like the thumbnails'; the marker
-  // ids take the pattern's slug, which is unique among the page's figures.
+  // One seed for the figure, like the thumbnails'; the marker ids take
+  // the pattern's slug, which is unique among the page's figures.
   const seed = Date.now() >>> 0;
   const horizontal = renderPlate(pattern.figure as unknown as GraphDocument, "horizontal", undefined, mulberry32(seed), slug);
-  const vertical = renderPlate(pattern.figure as unknown as GraphDocument, "vertical", undefined, mulberry32(seed), slug);
-  const plate = horizontal === "" && vertical === ""
+  const plate = horizontal === ""
     ? ""
-    : `<figure class="plate">${horizontal}${vertical}</figure>`;
+    : `<figure class="plate">${horizontal}</figure>`;
   const badge = statusBadge(pattern.status);
   const notice = pattern.status === "experiment"
     ? `<aside class="community-warning" role="note">${iconSvg("triangleAlert")}<p>${escapeHtml(EXPERIMENT_NOTICE)}</p></aside>`

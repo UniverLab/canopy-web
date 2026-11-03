@@ -85,30 +85,25 @@ function agentNames(document: unknown): string[] {
 
 /**
  * The plate figure for a document page: the graph plate, or the one node —
- * rendered in both orientations, with CSS showing the vertical one under
- * 640 px and the horizontal one above. No JavaScript is involved.
+ * the one horizontal drawing at every size, inside the pan-and-zoom
+ * viewport. The figure is focusable, so the keyboard reaches the stage;
+ * the client (`/look/plate.js`) mounts on `data-plate`, and without it
+ * the viewport scrolls at scale 1.
  */
 function plateFigure(document: JsonValue, kind: PageRef["kind"]): string {
   // The data layer only serves validated documents, so the cast is honest;
-  // the renderers stay total and draw nothing when it is not.
-  // One seed per figure, replayed by each orientation's own generator,
-  // so both plates walk the same fail edges — and a fresh one every
-  // render, so the walk looks alive across reloads. (One shared generator
-  // would walk the vertical plate from where the horizontal one stopped.)
+  // the renderers stay total and draw nothing when it is not. A fresh
+  // seed every render, so the walk looks alive across reloads.
   const seed = Date.now() >>> 0;
-  // The marker ids ride the same seed as a tag, so the two orientations
-  // of this figure never share an id — the hidden twin's markers stay
-  // out of the visible plate's `url(#…)` resolution.
+  // The marker ids ride the same seed as a tag, so this figure never
+  // shares an id with another plate on the page.
   const markerSeed = seed.toString(36);
   const horizontal = kind === "graph"
     ? renderPlate(document as unknown as GraphDocument, "horizontal", undefined, mulberry32(seed), markerSeed)
     : renderNodePlate(document as unknown as NodeDocument, "horizontal", markerSeed);
-  const vertical = kind === "graph"
-    ? renderPlate(document as unknown as GraphDocument, "vertical", undefined, mulberry32(seed), markerSeed)
-    : renderNodePlate(document as unknown as NodeDocument, "vertical", markerSeed);
-  return horizontal === "" && vertical === ""
+  return horizontal === ""
     ? ""
-    : `<figure class="plate">${horizontal}${vertical}</figure>`;
+    : `<figure class="plate" tabindex="0" data-plate>${horizontal}</figure>`;
 }
 
 /** One datasheet field: the label and its already-escaped HTML value. */
@@ -448,6 +443,9 @@ export function documentPage(
     description: doc.description,
     html,
     markdown,
+    // The plate viewport's client, like the editor's bundle: a deferred
+    // self-mounting script, no inline bootstrap.
+    scripts: ["/look/plate.js"],
     ...(standalone ? { noindex: true } : {}),
   };
 }

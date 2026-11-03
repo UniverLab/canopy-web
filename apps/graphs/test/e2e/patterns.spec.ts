@@ -4,10 +4,10 @@
  * as a grid of cards over the bundled set — each card its figure drawn
  * small above its title, badge and summary — and one pattern page, reached
  * through the first card's own link, opening with the figure's full plate,
- * the vertical plate under 640 px and the horizontal one above, on the
- * black stage, ending on the Implemented-by section. At the two reference
- * sizes, 390x844 and 1280x900, with a screenshot per page attached to the
- * report for the operator's review, never compared.
+ * one horizontal drawing at every size, on the black stage, ending on the
+ * Implemented-by section. At the two reference sizes, 390x844 and 1280x900,
+ * with a screenshot per page attached to the report for the operator's
+ * review, never compared.
  */
 import { expect, test } from "@playwright/test";
 
@@ -37,21 +37,11 @@ for (const viewport of VIEWPORTS) {
     await expect(card.locator(".card-title")).not.toBeEmpty();
     await expect(card.locator(".badge-status")).toHaveText(new RegExp(`^(${STATUSES.join("|")})$`));
     await expect(card.locator(".card-summary")).not.toBeEmpty();
-    // The thumbnail shows its orientation like a full plate: vertical under
-    // 640 px, horizontal above — both drawn from the same figure.
-    const thumbHorizontal = card.locator("figure.plate.thumb svg.plate-h");
-    const thumbVertical = card.locator("figure.plate.thumb svg.plate-v");
-    if (viewport.width < 640) {
-      await expect(thumbVertical).toBeVisible();
-      await expect(thumbHorizontal).toBeHidden();
-    } else {
-      await expect(thumbHorizontal).toBeVisible();
-      await expect(thumbVertical).toBeHidden();
-    }
-    const thumbNodesH = await card.locator("figure.plate.thumb svg.plate-h g.node").count();
-    const thumbNodesV = await card.locator("figure.plate.thumb svg.plate-v g.node").count();
-    expect(thumbNodesH).toBeGreaterThan(0);
-    expect(thumbNodesV).toBe(thumbNodesH);
+    // The thumbnail shows the one horizontal drawing like a full plate.
+    await expect(card.locator("figure.plate.thumb svg.plate-h")).toBeVisible();
+    await expect(card.locator("figure.plate.thumb svg.plate-v")).toHaveCount(0);
+    const thumbNodes = await card.locator("figure.plate.thumb svg.plate-h g.node").count();
+    expect(thumbNodes).toBeGreaterThan(0);
 
     // The page never scrolls sideways, at either reference size.
     const width = await page.evaluate(() => ({
@@ -102,30 +92,18 @@ for (const viewport of VIEWPORTS) {
       }
     }
 
-    // The figure's plate opens the page, on the black stage: one
-    // orientation visible, chosen by CSS alone — vertical under 640 px,
-    // horizontal above.
+    // The figure's plate opens the page, on the black stage: the one
+    // horizontal drawing at every size.
     const painted = await page.evaluate(() =>
       getComputedStyle(document.querySelector("figure.plate") as HTMLElement).backgroundColor,
     );
     expect(painted).toBe("rgb(5, 5, 5)");
     const plate = page.locator("main.look-col > figure.plate");
     await expect(plate).toHaveCount(1);
-    const horizontal = plate.locator("svg.plate-h");
-    const vertical = plate.locator("svg.plate-v");
-    if (viewport.width < 640) {
-      await expect(vertical).toBeVisible();
-      await expect(horizontal).toBeHidden();
-    } else {
-      await expect(horizontal).toBeVisible();
-      await expect(vertical).toBeHidden();
-    }
-    // Both orientations stay in the document, drawn from the same figure;
-    // the check above proves which shows.
-    const nodesH = await plate.locator("svg.plate-h g.node").count();
-    const nodesV = await plate.locator("svg.plate-v g.node").count();
-    expect(nodesH).toBeGreaterThan(0);
-    expect(nodesV).toBe(nodesH);
+    await expect(plate.locator("svg.plate-h")).toBeVisible();
+    await expect(plate.locator("svg.plate-v")).toHaveCount(0);
+    const nodes = await plate.locator("svg.plate-h g.node").count();
+    expect(nodes).toBeGreaterThan(0);
 
     // Then the badge, the body, the sources, and Implemented-by: the
     // section every pattern page ends on, rows or the nothing-yet line.

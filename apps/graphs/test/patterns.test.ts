@@ -350,9 +350,10 @@ describe("the plates", () => {
     }
     const thumbs = html.match(/<figure class="plate thumb" aria-hidden="true">/g) ?? [];
     expect(thumbs).toHaveLength(entries.length);
-    // Every figure node drawn twice — both orientations like a full
-    // plate — the token stilled, out of the pointer's way. Fail edges
-    // render dashed; ensembles add their own, so only presence is pinned.
+    // Every figure node drawn once — the one horizontal drawing like a
+    // document plate — the token stilled, out of the pointer's way. Fail
+    // edges render dashed; ensembles add their own, so only presence is
+    // pinned.
     let nodes = 0;
     let fails = 0;
     for (const entry of entries) {
@@ -360,7 +361,8 @@ describe("the plates", () => {
       nodes += figure.nodes?.length ?? 0;
       fails += figure.edges?.filter((edge) => edge.condition === "fail").length ?? 0;
     }
-    expect(html.match(/<g class="node /g) ?? []).toHaveLength(nodes * 2);
+    expect(html.match(/<g class="node /g) ?? []).toHaveLength(nodes);
+    expect(html).not.toContain("plate-v");
     expect(fails).toBeGreaterThan(0);
     expect(html).toContain(`class="edge fail"`);
     expect(html).toContain(`stroke-dasharray:1.4 1.1`);
@@ -368,7 +370,7 @@ describe("the plates", () => {
     expect(html).toMatch(/figure\.thumb \.token \{ display: none; \}/);
   });
 
-  it("opens the page with the figure's full plate, both orientations", async () => {
+  it("opens the page with the figure's full plate, horizontal only", async () => {
     const { entries } = await bundledPatterns();
     const ordered = [...entries].sort(comparePatterns);
     const withFail = ordered.find((one) => {
@@ -381,10 +383,10 @@ describe("the plates", () => {
     const html = await (await call(`/patterns/${entry.slug}`)).text();
     expect(html).toContain(`<figure class="plate">`);
     expect(html).toContain(`<svg class="plate-svg plate-h"`);
-    expect(html).toContain(`<svg class="plate-svg plate-v"`);
-    // One shape per figure node in each orientation, the fail edge dashed.
+    expect(html).not.toContain("plate-v");
+    // One shape per figure node, the fail edge dashed.
     for (const node of figure.nodes ?? []) {
-      expect(html.match(new RegExp(`data-name="${node.name ?? ""}"`, "g"))?.length).toBeGreaterThanOrEqual(2);
+      expect(html.match(new RegExp(`data-name="${node.name ?? ""}"`, "g"))?.length).toBeGreaterThanOrEqual(1);
     }
     expect(html).toContain(`class="edge fail"`);
     // The shape comes first: plate, then badge, body, sources, Implemented-by.

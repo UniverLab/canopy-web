@@ -49,8 +49,7 @@ export function fondoHost(): string {
  * parts catalogue: dense mono rows under a header band, the honeycomb only
  * behind the band, the body flat `--bg-deep`. Nothing is centred except
  * the plate inside its figure. Breakpoints: 640 px (band height, page
- * gutters, plate orientation), 900 px (index rows), 1024 px (datasheet
- * columns).
+ * gutters), 900 px (index rows), 1024 px (datasheet columns).
  */
 export function lookCss(): string {
   return `
@@ -410,14 +409,51 @@ figure.plate {
   margin: 0 0 1.5rem;
   padding: 0.75rem;
   max-width: 100%;
-  overflow-x: auto;
+  overflow: auto;
   background: var(--stage-bg);
   border: 1px solid var(--stage-line);
   border-radius: var(--radius-card);
 }
-.doc-cols figure.plate { margin: 0; }
+/* The document plate viewport: full width and 60svh below the datasheet
+ * breakpoint, stretched beside the datasheet above it (see the 1024 px
+ * block). Without scripting it scrolls at scale 1; the plate client
+ * adds is-live and pans/zooms the drawing itself instead. */
+.doc-cols figure.plate {
+  margin: 0;
+  width: 100%;
+  height: 60svh;
+  min-height: 320px;
+}
+figure.plate.is-live {
+  padding: 0;
+  overflow: hidden;
+  position: relative;
+  touch-action: none;
+}
 .plate svg { display: block; height: auto; margin: 0 auto; }
-.plate .plate-v { display: none; }
+.plate.is-live svg { margin: 0; transform-origin: 0 0; }
+/* The overlaid zoom controls, rendered by the client: three 44 px targets
+ * in the viewport's corner, over the drawing. */
+.plate-controls {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  display: flex;
+  gap: 0.5rem;
+}
+.plate-controls button {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  background: var(--surface-panel);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  color: var(--surface-ink);
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  cursor: pointer;
+}
+.plate-controls button:hover { border-color: var(--teal); }
 
 .readme { font-family: var(--font-body); font-size: 1.05rem; line-height: 1.6; }
 .readme h1, .readme h2, .readme h3 {
@@ -604,8 +640,6 @@ pre.prompt, pre.hash {
   .site-nav a span { display: none; }
 }
 @media (max-width: 639px) {
-  .plate .plate-h { display: none; }
-  .plate .plate-v { display: block; }
   /* Phones: every control that holds an icon alone is a 44 × 44 target. */
   .copy { min-width: 44px; min-height: 44px; justify-content: center; }
   .search button, .site-nav a { min-height: 44px; }
@@ -623,8 +657,8 @@ pre.prompt, pre.hash {
   main.look-col { padding: 2rem 1.5rem 4rem; }
 }
 @media (min-width: 1024px) {
-  .doc-cols { flex-direction: row; align-items: flex-start; }
-  .doc-cols figure.plate { flex: 1; min-width: 0; }
+  .doc-cols { flex-direction: row; align-items: stretch; }
+  .doc-cols figure.plate { flex: 1; min-width: 0; width: auto; height: auto; min-height: 420px; }
   dl.sheet { flex: 0 0 320px; }
 }
 @media (prefers-reduced-motion: reduce) {

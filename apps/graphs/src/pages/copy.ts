@@ -103,6 +103,17 @@ export const COPY_DONE = "Copied";
 /** The drawing's heading: the plate figure below it. */
 export const DRAWING_HEADING = "Drawing";
 
+/**
+ * The plate viewport's zoom controls, rendered by the client script
+ * (`src/plate/client.ts`) into the document page's figure. The zoom
+ * buttons show their glyph with the label as their accessible name;
+ * Fit shows its word with the longer label as its name.
+ */
+export const PLATE_ZOOM_OUT = "Zoom out";
+export const PLATE_ZOOM_IN = "Zoom in";
+export const PLATE_FIT = "Fit";
+export const PLATE_FIT_LABEL = "Fit the graph";
+
 /** The structure section of a graph's markdown twin: nodes and routes as text. */
 export const STRUCTURE_HEADING = "Structure";
 export const STRUCTURE_NODES_LABEL = "Nodes";

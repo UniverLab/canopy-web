@@ -5,9 +5,9 @@
  * the honeycomb mounted inside the header band only, the header banner as
  * an SVG on a fixed grid (about 160 px tall on desktop, 96 px on a phone,
  * no sideways scroll at 360 px) with its Publish/Source links, dense index
- * rows instead of cards, each document page as a plate beside its
- * datasheet — the vertical plate under 640 px, the horizontal one above —
- * and no horizontal page scroll at 390 px. On a phone the header stacks:
+ * rows instead of cards, each document page as one horizontal plate in
+ * its pan-and-zoom viewport beside its datasheet — and no horizontal page
+ * scroll at 390 px. On a phone the header stacks:
  * the banner centred on its own row, the nav icons in one centred row
  * below (five fit at 360 px); desktop keeps the single row.
  * The datasheet INSTALL row shows its whole command wrapped in its box
@@ -257,17 +257,9 @@ for (const viewport of VIEWPORTS) {
         const plate = page.locator("figure.plate");
         await expect(plate).toHaveCount(1);
         await expect(page.locator("dl.sheet")).toHaveCount(1);
-        // One orientation is visible, chosen by CSS alone: vertical under
-        // 640 px, horizontal above.
-        const horizontal = page.locator("figure.plate svg.plate-h");
-        const vertical = page.locator("figure.plate svg.plate-v");
-        if (viewport.width < 640) {
-          await expect(vertical).toBeVisible();
-          await expect(horizontal).toBeHidden();
-        } else {
-          await expect(horizontal).toBeVisible();
-          await expect(vertical).toBeHidden();
-        }
+        // One horizontal plate at every size: the vertical twin is gone.
+        await expect(page.locator("figure.plate svg.plate-h")).toBeVisible();
+        await expect(page.locator("figure.plate svg.plate-v")).toHaveCount(0);
         // The datasheet INSTALL row shows the whole command: it wraps
         // instead of clipping, so nothing hides inside a scroll box.
         const installCode = page.locator("dl.sheet .row-install code");

@@ -298,7 +298,7 @@ describe("the draft page", () => {
     const html = await response.text();
 
     // The plate, the datasheet and the transparency section, like /g.
-    expect(html).toContain(`<figure class="plate">`);
+    expect(html).toContain(`<figure class="plate" tabindex="0" data-plate>`);
     expect(html).toContain(`<dt>Kind</dt><dd>`);
     expect(html).toContain(`<dt>Install</dt>`);
     expect(html).toContain(`<section class="runs" id="what-this-runs">`);

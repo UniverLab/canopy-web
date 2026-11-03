@@ -3,13 +3,13 @@
  * Copy the shared look kit (packages/look) into both apps' public folders
  * and bundle the honeycomb background for the catalogue Worker's pages.
  *
- *   apps/graphs/public/look/      tokens.css, fonts/, colophon/, banner/, fondo/assets/, fondo.js, icons.js
+ *   apps/graphs/public/look/      tokens.css, fonts/, colophon/, banner/, fondo/assets/, fondo.js, icons.js, plate.js
  *   apps/remote/web/public/look/  tokens.css, fonts/, colophon/, banner/, fondo/assets/
  *
  * The remote web app imports the kit's TypeScript sources directly through
  * Vite, so only the catalogue — whose pages are server-rendered strings —
- * needs the fondo.js and icons.js bundles. Both destinations are generated
- * and gitignored.
+ * needs the fondo.js, icons.js and plate.js bundles. Both destinations are
+ * generated and gitignored.
  */
 import { copyFileSync, cpSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
@@ -93,12 +93,34 @@ export async function bundleIcons(outfile) {
   });
 }
 
+/**
+ * Bundle the plate viewport as one self-mounting script the document
+ * pages load with a plain <script src>: it turns their figure into a
+ * pan-and-zoom stage and renders its own controls, so the page carries
+ * no inline bootstrap. Without it the viewport keeps scrolling.
+ *
+ * @param {string} outfile - the destination plate.js file
+ */
+export async function bundlePlate(outfile) {
+  await build({
+    entryPoints: [path.join(ROOT, "apps", "graphs", "src", "plate", "client.ts")],
+    bundle: true,
+    format: "iife",
+    platform: "browser",
+    target: "es2022",
+    minify: true,
+    logLevel: "silent",
+    outfile,
+  });
+}
+
 export async function buildLook() {
   for (const target of LOOK_TARGETS) {
     copyLook(target);
   }
   await bundleFondo(path.join(GRAPHS_LOOK, "fondo.js"));
   await bundleIcons(path.join(GRAPHS_LOOK, "icons.js"));
+  await bundlePlate(path.join(GRAPHS_LOOK, "plate.js"));
 }
 
 const invoked =

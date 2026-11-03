@@ -58,9 +58,9 @@ export interface Page {
   noindex?: boolean;
   /**
    * Extra stylesheets this one page loads after the kit's, and extra
-   * deferred scripts after the inline ones. Only the editor passes them
-   * (its bundled `/editor/editor.css` and `editor.js`); every other page
-   * leaves them absent, so its shell stays byte-identical.
+   * deferred scripts after the inline ones. The editor passes its bundled
+   * `/editor/editor.css` and `editor.js`, a document page its `/look/plate.js`;
+   * every other page leaves them absent, so its shell stays byte-identical.
    */
   styles?: string[];
   scripts?: string[];
