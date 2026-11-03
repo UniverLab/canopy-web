@@ -47,7 +47,7 @@ export function termControlsHtml(): string {
           aria-label="Show terminal keys"
           title="Show or hide the terminal keys"
         >Keys</button>
-        <button type="button" id="term-builder">${icon("blocks")}<span>Builder</span></button>${fullscreen}
+        <button type="button" id="term-builder" aria-label="Builder">${icon("blocks")}<span>Builder</span></button>${fullscreen}
         <button type="button" id="term-latest" hidden aria-label="Scroll to the latest output">${icon("arrowDown")}<span>latest</span></button>
       </div>`;
 }

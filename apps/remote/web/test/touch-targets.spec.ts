@@ -108,9 +108,9 @@ test("touch_targets_meet_44px", async ({ page }) => {
         }),
     );
   process.stdout.write(`session bar boxes at 390x844: ${JSON.stringify(barBoxes, null, 2)}\n`);
-  // Zoom out, zoom in, Keys, Builder, fullscreen, and the ten keys;
+  // Zoom out, zoom in, Keys, Builder, Attach, fullscreen, and the ten keys;
   // latest stays hidden until the user scrolls up.
-  expect(barBoxes).toHaveLength(15);
+  expect(barBoxes).toHaveLength(16);
   for (const control of barBoxes) {
     expect(control.width, `${control.label} width`).toBeGreaterThanOrEqual(44);
     expect(control.height, `${control.label} height`).toBeGreaterThanOrEqual(44);

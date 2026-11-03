@@ -27,6 +27,8 @@ export interface ReplyError {
   req: string | null;
   code: string;
   message: string;
+  /** Some errors (an upload's checksum, say) name the file, not a req. */
+  file_id?: string;
 }
 
 // The host's catalog: everything the New dialog and the Prompt Builder
@@ -216,7 +218,15 @@ export function parseError(frame: unknown): ReplyError | null {
   if (typeof frame.code !== "string" || typeof frame.message !== "string") {
     return null;
   }
-  return { req: typeof frame.req === "string" ? frame.req : null, code: frame.code, message: frame.message };
+  const error: ReplyError = {
+    req: typeof frame.req === "string" ? frame.req : null,
+    code: frame.code,
+    message: frame.message,
+  };
+  if (typeof frame.file_id === "string" && frame.file_id !== "") {
+    error.file_id = frame.file_id;
+  }
+  return error;
 }
 
 // A denied guest attach: the hub answers the grant check with the session
@@ -342,6 +352,10 @@ export interface ShelfItem {
   caption: string | null;
   from: string;
   created_at: number;
+  /** Where the host put the file, when it shares one (the Attach chip). */
+  path?: string;
+  /** Who produced it; a device upload says so when the ledger is cold. */
+  origin?: string;
 }
 
 export interface ShelfList {
@@ -404,6 +418,8 @@ function parseShelfItem(value: unknown): ShelfItem | null {
     caption: typeof value.caption === "string" && value.caption !== "" ? value.caption : null,
     from: asString(value.from),
     created_at: parseEpochMs(value.created_at) ?? 0,
+    ...(typeof value.path === "string" && value.path !== "" ? { path: value.path } : {}),
+    ...(typeof value.origin === "string" && value.origin !== "" ? { origin: value.origin } : {}),
   };
 }
 

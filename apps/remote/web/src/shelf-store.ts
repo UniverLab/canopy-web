@@ -146,6 +146,7 @@ export class ShelfStore {
 
 interface BlobEntry {
   url: string;
+  blob: Blob;
   bytes: number;
 }
 
@@ -174,12 +175,18 @@ export class BlobLru {
     return entry.url;
   }
 
+  /** The bytes behind a url, for the text preview; null until loaded. */
+  blob(fileId: string): Blob | null {
+    return this.entries.get(fileId)?.blob ?? null;
+  }
+
   put(fileId: string, data: Uint8Array, mime: string): string {
     this.drop(fileId);
     // The copy keeps the blob on a plain ArrayBuffer (never a view into
     // somebody else's buffer) and gives the URL exactly these bytes.
-    const url = URL.createObjectURL(new Blob([new Uint8Array(data)], { type: mime }));
-    this.entries.set(fileId, { url, bytes: data.byteLength });
+    const blob = new Blob([new Uint8Array(data)], { type: mime });
+    const url = URL.createObjectURL(blob);
+    this.entries.set(fileId, { url, blob, bytes: data.byteLength });
     this.totalBytes += data.byteLength;
     while (this.totalBytes > this.maxBytes && this.entries.size > 1) {
       const oldest = this.entries.keys().next().value;

@@ -763,9 +763,15 @@ label > textarea {
   }
 
   /* Five controls share 328 px: at the base gap the Builder label wraps
-   * onto two lines, the row grows, and the size row slides out of view. */
+   * onto two lines, the row grows, and the size row slides out of view.
+   * Six controls with the paperclip fit once the Builder word steps
+   * aside: the blocks icon still says which control it is. */
   .term-controls {
     gap: 0.25rem;
+  }
+
+  #term-builder span {
+    display: none;
   }
 
   .keybar {
@@ -1182,6 +1188,166 @@ label > textarea {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* The upload tray above the key bar: one progress row per file, the
+ * inline refusal naming the file, and the Attach chip a finished upload
+ * leaves. */
+.upload-tray {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.upload-tray[hidden] {
+  display: none;
+}
+
+.upload-item,
+.upload-error {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  background: var(--tint-info);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.upload-error {
+  background: var(--tint-danger, var(--tint-warn));
+  color: var(--danger);
+}
+
+.upload-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-bar {
+  flex: 1;
+  min-width: 3rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--bg-deep);
+  overflow: hidden;
+}
+
+.upload-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.upload-pct {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.upload-cancel {
+  min-width: 2rem;
+  min-height: 2rem;
+  padding: 0 0.4rem;
+  line-height: 1;
+}
+
+.upload-attach {
+  align-self: flex-start;
+  min-height: 2.75rem;
+  padding: 0.35rem 0.7rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  background: var(--tint-ok);
+  border-color: var(--tint-line);
+}
+
+/* The Files sheet's two directions: From agent and Yours. */
+.shelf-sections {
+  padding: 0.25rem 0 0.75rem;
+}
+
+.shelf-section-title {
+  margin: 0.5rem 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.shelf-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.shelf-download {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  background: var(--tint-info);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  text-decoration: none;
+}
+
+/* Text and code in the viewer: a plain-text page, scrollable, never a
+ * markup parse. */
+.viewer-stage[data-kind="text"] {
+  display: block;
+  overflow: auto;
+  touch-action: pan-y;
+}
+
+.viewer-text {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.viewer-text[hidden],
+.viewer-card[hidden] {
+  display: none;
+}
+
+.viewer-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1.25rem;
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius-card);
+  background: var(--surface-bg-raise);
+  text-align: center;
+}
+
+.viewer-card-name {
+  margin: 0;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.viewer-card-meta {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--muted);
 }
 
 /* The full-screen viewer, above every sheet. */

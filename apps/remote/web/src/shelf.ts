@@ -2,16 +2,21 @@
 // The session shelf's surfaces: the Files sheet (a thumbnail grid in the
 // shared modal sheet, two columns on a phone and four from 900 px) and
 // the full-screen viewer behind a cell — wheel/pinch zoom, swipe or
-// arrow keys to step through the shelf, a download link and Esc. Every
-// file is only ever shown as <img src="blob:…">; names and captions go
-// in as text nodes, so no caption can become markup. The data half
-// (lists, LRU, transfer queue) lives in shelf-store.ts; the controller
-// that binds both halves to the protocol lives in shelf-controller.ts.
+// arrow keys to step through the shelf, a download link and Esc. What
+// the viewer shows follows the host's sniffed mime (preview.ts): images
+// in <img src="blob:…">, text as text nodes, everything else (HTML
+// included) as a download card — and every download carries a blob URL
+// with download=, never a tab. Names and captions go in as text nodes,
+// so no caption can become markup. The data half (lists, LRU, transfer
+// queue) lives in shelf-store.ts; the controller that binds both halves
+// to the protocol lives in shelf-controller.ts.
 
 import type { ShelfItem } from "./protocol.js";
 import type { ShelfKey } from "./shelf-store.js";
 import { Sheet } from "./sheet.js";
 import { icon } from "./icons-dom.js";
+import { extensionLabel, formatBytes, previewKind } from "./preview.js";
+import type { PreviewKind } from "./preview.js";
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 6;
@@ -33,15 +38,10 @@ export function formatAge(nowMs: number, thenMs: number): string {
 }
 
 /** The extension the loading placeholder shows under the thumb. */
-function extensionLabel(name: string): string {
-  const dot = name.lastIndexOf(".");
-  const ext = dot >= 0 && dot < name.length - 1 ? name.slice(dot + 1).toLowerCase() : "";
-  return ext === "" ? "file" : ext;
-}
-
 interface ViewerDeps {
   ensure: (item: ShelfItem) => void;
   blobUrl: (fileId: string) => string | null;
+  blob: (fileId: string) => Blob | null;
   onClose: () => void;
 }
 
@@ -53,8 +53,13 @@ interface ViewerDeps {
 class ShelfViewer {
   private readonly deps: ViewerDeps;
   private overlay: HTMLElement | null = null;
+  private stage: HTMLElement | null = null;
   private img: HTMLImageElement | null = null;
+  private text: HTMLElement | null = null;
+  private card: HTMLElement | null = null;
   private note: HTMLElement | null = null;
+  private kind: PreviewKind = "image";
+  private shownFileId = "";
   private caption: HTMLElement | null = null;
   private counter: HTMLElement | null = null;
   private link: HTMLAnchorElement | null = null;
@@ -97,10 +102,18 @@ class ShelfViewer {
     img.className = "viewer-img";
     img.id = "shelf-viewer-img";
     img.alt = "";
+    const text = document.createElement("pre");
+    text.className = "viewer-text";
+    text.id = "shelf-viewer-text";
+    text.hidden = true;
+    const card = document.createElement("div");
+    card.className = "viewer-card";
+    card.id = "shelf-viewer-card";
+    card.hidden = true;
     const note = document.createElement("p");
     note.className = "viewer-note";
     note.id = "shelf-viewer-note";
-    stage.append(img, note);
+    stage.append(img, text, card, note);
 
     const bar = document.createElement("div");
     bar.className = "viewer-bar";
@@ -136,7 +149,10 @@ class ShelfViewer {
     parent.append(overlay);
 
     this.overlay = overlay;
+    this.stage = stage;
     this.img = img;
+    this.text = text;
+    this.card = card;
     this.note = note;
     this.caption = caption;
     this.counter = counter;
@@ -161,8 +177,12 @@ class ShelfViewer {
   close(): void {
     const overlay = this.overlay;
     this.overlay = null;
+    this.stage = null;
     this.img = null;
+    this.text = null;
+    this.card = null;
     this.note = null;
+    this.shownFileId = "";
     this.caption = null;
     this.counter = null;
     this.link = null;
@@ -211,22 +231,43 @@ class ShelfViewer {
 
   private render(): void {
     const item = this.items[this.index];
-    if (!item || !this.overlay || !this.img || !this.note) {
+    if (!item || !this.overlay || !this.stage || !this.img || !this.text || !this.card || !this.note) {
       return;
     }
+    const kind = previewKind(item.mime);
     const url = this.deps.blobUrl(item.file_id);
+    this.kind = kind;
+    this.shownFileId = item.file_id;
+    this.stage.dataset.kind = kind;
+    this.img.alt = item.caption ?? item.name;
     if (url === null) {
       this.img.removeAttribute("src");
       this.img.hidden = true;
+      this.text.hidden = true;
+      this.card.hidden = true;
       this.note.hidden = false;
       this.note.textContent = "Loading…";
       this.deps.ensure(item);
-    } else {
+    } else if (kind === "image") {
       this.img.src = url;
       this.img.hidden = false;
+      this.text.hidden = true;
+      this.card.hidden = true;
       this.note.hidden = true;
+    } else if (kind === "text") {
+      this.img.removeAttribute("src");
+      this.img.hidden = true;
+      this.text.hidden = false;
+      this.card.hidden = true;
+      this.note.hidden = true;
+      this.fillText(item);
+    } else {
+      this.img.removeAttribute("src");
+      this.img.hidden = true;
+      this.text.hidden = true;
+      this.note.hidden = true;
+      this.fillCard(item, url);
     }
-    this.img.alt = item.caption ?? item.name;
     if (this.caption) {
       this.caption.textContent = item.caption ?? item.name;
     }
@@ -252,6 +293,46 @@ class ShelfViewer {
     this.applyTransform();
   }
 
+  /** Text and code: one text node, never HTML. */
+  private fillText(item: ShelfItem): void {
+    const text = this.text;
+    if (!text) {
+      return;
+    }
+    text.textContent = "";
+    const blob = this.deps.blob(item.file_id);
+    if (!blob) {
+      return;
+    }
+    const fileId = item.file_id;
+    void blob.text().then((value) => {
+      if (this.text === text && this.shownFileId === fileId) {
+        text.textContent = value;
+      }
+    });
+  }
+
+  /** Everything else: name, size, type and a blob download. */
+  private fillCard(item: ShelfItem, url: string): void {
+    const card = this.card;
+    if (!card) {
+      return;
+    }
+    const name = document.createElement("p");
+    name.className = "viewer-card-name";
+    name.textContent = item.name;
+    const meta = document.createElement("p");
+    meta.className = "viewer-card-meta";
+    meta.textContent = `${formatBytes(item.size)} · ${item.mime === "" ? "unknown type" : item.mime}`;
+    const link = document.createElement("a");
+    link.className = "viewer-download";
+    link.textContent = "Download";
+    link.download = item.name;
+    link.href = url;
+    card.replaceChildren(name, meta, link);
+    card.hidden = false;
+  }
+
   private applyTransform(): void {
     if (this.img) {
       this.img.style.transform = `translate(${this.tx}px, ${this.ty}px) scale(${this.scale})`;
@@ -268,15 +349,24 @@ class ShelfViewer {
   }
 
   private onReset = (): void => {
+    if (this.kind !== "image") {
+      return;
+    }
     this.zoom(1);
   };
 
   private onWheel = (ev: WheelEvent): void => {
+    if (this.kind !== "image") {
+      return;
+    }
     ev.preventDefault();
     this.zoom(this.scale * Math.exp(-ev.deltaY * 0.002));
   };
 
   private onPointerDown = (ev: PointerEvent): void => {
+    if (this.kind !== "image") {
+      return;
+    }
     if (ev.pointerType === "mouse" && ev.button !== 0) {
       return;
     }
@@ -369,6 +459,9 @@ interface SheetOwner {
   requestList: (key: ShelfKey) => void;
   markSeen: (key: ShelfKey) => void;
   blobUrl: (fileId: string) => string | null;
+  blob: (fileId: string) => Blob | null;
+  /** True for a file this device uploaded on this connection. */
+  isYours: (item: ShelfItem) => boolean;
   onClosed: () => void;
 }
 
@@ -384,6 +477,7 @@ export class ShelfSheet {
   private items: ShelfItem[] = [];
   private sheetFocus: Element | null = null;
   private cellFocus: Element | null = null;
+  private readonly pending = new Set<string>();
   /** The shelf this sheet shows; null is the host shelf. */
   key: ShelfKey = null;
 
@@ -405,7 +499,7 @@ export class ShelfSheet {
     empty.className = "empty shelf-empty";
     empty.textContent = "No files on this shelf yet.";
     const grid = document.createElement("div");
-    grid.className = "shelf-grid";
+    grid.className = "shelf-sections";
     body.append(empty, grid);
     this.sheet = sheet;
     this.empty = empty;
@@ -435,18 +529,30 @@ export class ShelfSheet {
   }
 
   applyBlob(fileId: string, url: string): void {
-    const grid = this.grid;
-    if (grid) {
-      for (const cell of grid.children) {
-        const el = cell as HTMLElement;
-        if (el.dataset.fileId !== fileId) {
-          continue;
-        }
+    const item = this.items.find((row) => row.file_id === fileId);
+    for (const el of this.grid?.querySelectorAll<HTMLElement>(".shelf-item") ?? []) {
+      if (el.dataset.fileId !== fileId) {
+        continue;
+      }
+      if (item && previewKind(item.mime) === "image") {
         const img = el.querySelector("img");
         if (img) {
           img.src = url;
           img.hidden = false;
-          el.classList.add("loaded");
+          el.querySelector(".shelf-cell")?.classList.add("loaded");
+        }
+      }
+      const link = el.querySelector<HTMLAnchorElement>(".shelf-download");
+      if (link) {
+        link.href = url;
+        link.download = item?.name ?? link.download;
+      }
+    }
+    if (this.pending.delete(fileId)) {
+      for (const link of this.grid?.querySelectorAll<HTMLAnchorElement>(".shelf-download") ?? []) {
+        if (link.dataset.fileId === fileId) {
+          link.click();
+          break;
         }
       }
     }
@@ -521,14 +627,45 @@ export class ShelfSheet {
     grid.replaceChildren();
     this.observer?.disconnect();
     this.observer = null;
-    for (const item of this.items) {
-      grid.append(this.cell(item));
+    if (this.items.length > 0) {
+      const yours = this.items.filter((item) => this.owner.isYours(item));
+      const agent = this.items.filter((item) => !this.owner.isYours(item));
+      grid.append(this.section("From agent", agent), this.section("Yours", yours));
     }
     this.viewer?.setItems(this.items);
     this.observe();
   }
 
+  /** One direction of the transfer, with its own heading. */
+  private section(title: string, items: ShelfItem[]): HTMLElement {
+    const section = document.createElement("section");
+    section.className = "shelf-section";
+    const heading = document.createElement("h3");
+    heading.className = "shelf-section-title";
+    heading.textContent = title;
+    const grid = document.createElement("div");
+    grid.className = "shelf-grid";
+    for (const item of items) {
+      grid.append(this.cell(item));
+    }
+    section.append(heading, grid);
+    return section;
+  }
+
+  private download(item: ShelfItem, ev: Event): void {
+    if (this.owner.blobUrl(item.file_id) !== null) {
+      return;
+    }
+    ev.preventDefault();
+    this.pending.add(item.file_id);
+    this.owner.ensure(item);
+  }
+
   private cell(item: ShelfItem): HTMLElement {
+    const holder = document.createElement("div");
+    holder.className = "shelf-item";
+    holder.dataset.fileId = item.file_id;
+
     const cell = document.createElement("button");
     cell.type = "button";
     cell.className = "shelf-cell";
@@ -540,7 +677,7 @@ export class ShelfSheet {
     const img = document.createElement("img");
     img.alt = "";
     const url = this.owner.blobUrl(item.file_id);
-    if (url === null) {
+    if (url === null || previewKind(item.mime) !== "image") {
       img.hidden = true;
     } else {
       img.src = url;
@@ -563,7 +700,18 @@ export class ShelfSheet {
 
     cell.append(thumb, caption, meta);
     cell.addEventListener("click", () => this.openViewer(item));
-    return cell;
+
+    const download = document.createElement("a");
+    download.className = "shelf-download";
+    download.dataset.fileId = item.file_id;
+    download.textContent = "Download";
+    download.download = item.name;
+    if (url !== null) {
+      download.href = url;
+    }
+    download.addEventListener("click", (ev) => this.download(item, ev));
+    holder.append(cell, download);
+    return holder;
   }
 
   /** Thumbnails arrive when a cell comes near the viewport. */
@@ -595,7 +743,7 @@ export class ShelfSheet {
       { rootMargin: "240px" },
     );
     this.observer = observer;
-    for (const cell of grid.children) {
+    for (const cell of grid.querySelectorAll(".shelf-item")) {
       observer.observe(cell);
     }
   }
@@ -612,6 +760,7 @@ export class ShelfSheet {
     const viewer = new ShelfViewer({
       ensure: this.owner.ensure,
       blobUrl: this.owner.blobUrl,
+      blob: this.owner.blob,
       onClose: () => {
         if (this.viewer === viewer) {
           this.viewer = null;

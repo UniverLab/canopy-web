@@ -18,6 +18,8 @@ import {
 import type { ShelfKey } from "./shelf-store.js";
 import { ShelfSheet } from "./shelf.js";
 import type { SessionStore } from "./sessions.js";
+import { UploadQueue } from "./upload.js";
+import type { ShelfPutAck, ShelfPutReady, UploadAttachment, UploadTaskView } from "./upload.js";
 
 /** What the shell needs to render counts and open the sheet. */
 export interface ShelfHandle {
@@ -29,6 +31,12 @@ export interface ShelfHandle {
   isOpen: () => boolean;
   open: (parent: HTMLElement, key: ShelfKey) => void;
   close: () => void;
+  /** hello.features carried shelf_upload: the attach UI may exist. */
+  uploadEnabled: () => boolean;
+  uploads: () => UploadTaskView[];
+  startUploads: (files: File[], target: string | null) => void;
+  cancelUpload: (id: string) => void;
+  takeAttachment: (id: string) => UploadAttachment | null;
 }
 
 /** What the frame router pushes into the shelf. */
@@ -39,6 +47,8 @@ export interface ShelfFrames {
   handleRemoved: (fileId: string) => void;
   handlePart: (part: FilePart) => boolean;
   handleError: (error: ReplyError) => boolean;
+  handlePutReady: (frame: ShelfPutReady) => void;
+  handlePutAck: (frame: ShelfPutAck) => void;
 }
 
 export interface ShelfDeps {
@@ -54,9 +64,13 @@ export class ShelfController implements ShelfHandle, ShelfFrames {
   private readonly store = new ShelfStore();
   private readonly lru: BlobLru;
   private readonly fetcher: ShelfFetcher;
+  private readonly queue: UploadQueue;
   private readonly send: (data: string) => boolean;
   private readonly sessions: SessionStore | null;
   private readonly requested = new Set<string>();
+  /** Files this device uploaded on this connection: the Yours section. */
+  private readonly uploaded = new Set<string>();
+  private uploadsEnabled = false;
   private readonly stopSessions: (() => void) | null;
   private stopStore: (() => void) | null = null;
   private sheet: ShelfSheet | null = null;
@@ -67,6 +81,10 @@ export class ShelfController implements ShelfHandle, ShelfFrames {
     this.send = deps.send;
     this.sessions = deps.sessions ?? null;
     this.lru = new BlobLru(deps.lruBytes ?? LRU_MAX_BYTES);
+    this.queue = new UploadQueue({
+      send: deps.send,
+      notify: () => this.notifyUi(),
+    });
     this.fetcher = new ShelfFetcher({
       send: deps.send,
       lru: this.lru,
@@ -116,6 +134,28 @@ export class ShelfController implements ShelfHandle, ShelfFrames {
     return this.store.enabled ? this.store.unseen(sessionId) : 0;
   }
 
+  uploadEnabled(): boolean {
+    return this.uploadsEnabled && this.store.enabled;
+  }
+
+  uploads(): UploadTaskView[] {
+    return this.uploadEnabled() ? this.queue.views() : [];
+  }
+
+  startUploads(files: File[], target: string | null): void {
+    if (this.uploadEnabled()) {
+      this.queue.add(files, target);
+    }
+  }
+
+  cancelUpload(id: string): void {
+    this.queue.cancel(id);
+  }
+
+  takeAttachment(id: string): UploadAttachment | null {
+    return this.queue.takeAttachment(id);
+  }
+
   open(parent: HTMLElement, key: ShelfKey): void {
     if (!this.store.enabled) {
       return;
@@ -127,6 +167,9 @@ export class ShelfController implements ShelfHandle, ShelfFrames {
       requestList: (shelfKey) => this.requestList(shelfKey, false),
       markSeen: (shelfKey) => this.store.markSeen(shelfKey),
       blobUrl: (fileId) => this.lru.get(fileId),
+      blob: (fileId) => this.lru.blob(fileId),
+      isYours: (item) =>
+        this.uploaded.has(item.file_id) || item.origin === "device" || item.origin === "upload",
       onClosed: () => {
         if (this.sheet === sheet) {
           this.sheet = null;
@@ -148,8 +191,11 @@ export class ShelfController implements ShelfHandle, ShelfFrames {
 
   handleHello(features: string[]): void {
     const on = features.includes("shelf");
+    this.uploadsEnabled = features.includes("shelf_upload");
     // Everything below belonged to the previous connection.
     this.fetcher.reset();
+    this.queue.reset();
+    this.uploaded.clear();
     this.requested.clear();
     this.store.reset();
     if (!on) {
@@ -176,6 +222,9 @@ export class ShelfController implements ShelfHandle, ShelfFrames {
       return;
     }
     const viewing = this.sheet?.isOpen === true && this.sheet.key === item.session_id;
+    if (this.queue.confirmAdded(item) || item.origin === "device" || item.origin === "upload") {
+      this.uploaded.add(item.file_id);
+    }
     this.store.add(item, viewing);
   }
 
@@ -200,7 +249,18 @@ export class ShelfController implements ShelfHandle, ShelfFrames {
     if (!this.store.enabled) {
       return false;
     }
+    if (this.queue.handleError(error)) {
+      return true;
+    }
     return this.fetcher.handleError(error);
+  }
+
+  handlePutReady(frame: ShelfPutReady): void {
+    this.queue.handleReady(frame);
+  }
+
+  handlePutAck(frame: ShelfPutAck): void {
+    this.queue.handleAck(frame);
   }
 
   /** Leaving or switching hosts: nothing of this host's shelf stays. */
@@ -211,6 +271,7 @@ export class ShelfController implements ShelfHandle, ShelfFrames {
   dispose(): void {
     this.close();
     this.fetcher.reset();
+    this.queue.reset();
     this.lru.clear();
     this.stopStore?.();
     this.stopStore = null;

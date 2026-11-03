@@ -35,6 +35,7 @@ import {
 import type { SessionController } from "./session.js";
 import type { ShelfFrames } from "./shelf-controller.js";
 import type { SessionStore } from "./sessions.js";
+import { parseShelfPutAck, parseShelfPutReady } from "./upload.js";
 
 export interface FrameRouter {
   handleSnapshot: (snapshot: JoinedSnapshot) => void;
@@ -172,6 +173,16 @@ export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
     const filePart = parseFilePart(frame);
     if (filePart) {
       shelf?.handlePart(filePart);
+      return;
+    }
+    const putReady = parseShelfPutReady(frame);
+    if (putReady) {
+      shelf?.handlePutReady(putReady);
+      return;
+    }
+    const putAck = parseShelfPutAck(frame);
+    if (putAck) {
+      shelf?.handlePutAck(putAck);
       return;
     }
     const ok = parseOk(frame);

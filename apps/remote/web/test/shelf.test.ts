@@ -264,6 +264,68 @@ describe("blob url cache", () => {
   });
 });
 
+describe("preview by sniffed mime", () => {
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  function openFile(
+    harness: ShellHarness,
+    item: ShelfItem,
+    bytes: Uint8Array,
+  ): void {
+    harness.shelf.handleHello(["shelf"]);
+    harness.shelf.open(harness.root, "s1");
+    harness.shelf.handleList({ req: null, id: "s1", items: [item] });
+    harness.root.querySelector<HTMLButtonElement>(".shelf-cell")?.click();
+    const get = harness.sent
+      .map((line) => JSON.parse(line) as { t: string; req?: string })
+      .filter((frame) => frame.t === "shelf_get")
+      .pop();
+    harness.shelf.handlePart({
+      req: get?.req ?? "",
+      file_id: item.file_id,
+      part: 0,
+      data: bytes,
+      last: true,
+    });
+  }
+
+  it("shows markdown as text nodes, never markup", async () => {
+    const harness = shellHarness();
+    openFile(
+      harness,
+      shelfItem({ file_id: "md", name: "notes.md", mime: "text/markdown", caption: null }),
+      new TextEncoder().encode("# Title\n<script>alert(1)</script>"),
+    );
+    await tick();
+    const text = document.querySelector<HTMLElement>("#shelf-viewer-text");
+    expect(text?.hidden).toBe(false);
+    expect(text?.textContent).toContain("# Title");
+    expect(text?.textContent).toContain("<script>alert(1)</script>");
+    expect(document.querySelector("#shelf-viewer script")).toBeNull();
+    expect(document.querySelector<HTMLElement>("#shelf-viewer-card")?.hidden).toBe(true);
+  });
+
+  it("shows html only as a download card with a blob link", async () => {
+    const harness = shellHarness();
+    openFile(
+      harness,
+      shelfItem({ file_id: "html", name: "page.html", mime: "text/html", caption: null }),
+      new TextEncoder().encode("<script>alert(1)</script>"),
+    );
+    await tick();
+    const card = document.querySelector<HTMLElement>("#shelf-viewer-card");
+    expect(card?.hidden).toBe(false);
+    expect(card?.textContent).toContain("page.html");
+    expect(card?.textContent).toContain("Download");
+    expect(document.querySelector("#shelf-viewer script")).toBeNull();
+    expect(document.querySelector("#shelf-viewer iframe")).toBeNull();
+    const link = card?.querySelector<HTMLAnchorElement>(".viewer-download");
+    expect(link?.getAttribute("href")).toMatch(/^blob:/);
+    expect(link?.getAttribute("download")).toBe("page.html");
+    expect(document.querySelector<HTMLElement>("#shelf-viewer-text")?.hidden).toBe(true);
+  });
+});
+
 describe("shelf surfaces", () => {
   it("hides every shelf surface until hello carries the feature", () => {
     const { root, sessions, shelf, shell, sent } = shellHarness();

@@ -30,6 +30,8 @@ import type { TerminalFactory } from "./terminal.js";
 import { termControlsHtml, termSizeHtml, wireTermControls } from "./term-controls.js";
 import { pointerIsFine, readControlSize } from "./terminal-prefs.js";
 import { shellTitle } from "./titles.js";
+import { mountUploads } from "./upload-view.js";
+import type { UploadView } from "./upload-view.js";
 import type { PairSubmit } from "./ui.js";
 
 export interface ShellCallbacks {
@@ -148,6 +150,7 @@ export function createShell(
   let sessionRows = 0;
   let terminalView: TerminalView | null = null;
   let latestButton: HTMLButtonElement | null = null;
+  let uploadView: UploadView | null = null;
   // The two state-telling slots: the host chip's link icon and the Files
   // button's folder.
   let hostIcon: MorphSlot | null = null;
@@ -285,6 +288,7 @@ export function createShell(
     terminalView?.dispose();
     terminalView = null;
     latestButton = null;
+    uploadView = null;
     shelfIcon?.destroy();
     shelfIcon = null;
     sessionCols = 0;
@@ -315,6 +319,7 @@ export function createShell(
         <p class="term-placeholder">Attaching…</p>
       </div>
       ${termControlsHtml()}
+      <div class="upload-tray" id="upload-tray" hidden></div>
       <div class="keybar" id="keybar"></div>
       ${termSizeHtml(sessionId)}
     </main>
@@ -341,6 +346,14 @@ export function createShell(
       onControlSize: (cols, rows) => callbacks.onControlSize(cols, rows),
       onBuilder: () => openBuilder(),
     }).latestButton;
+    uploadView = shelf
+      ? mountUploads({
+          root,
+          shelf,
+          sessionId: () => sessionId,
+          typeText: (text) => callbacks.onKeyPress(new TextEncoder().encode(text)),
+        })
+      : null;
     const bar = root.querySelector<HTMLElement>("#keybar");
     if (bar) {
       renderKeyBar(bar, (def) => {
@@ -500,6 +513,7 @@ export function createShell(
       graphRoute.paintHome();
     } else if (route === "session") {
       syncFilesBadge();
+      uploadView?.render();
     }
   });
 
