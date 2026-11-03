@@ -1,6 +1,10 @@
 // Copied from univerlab src/scripts/fondos/canopy.ts (import extensions and observer typing adapted)
-import { hostCanvas, pointerIn, loop, loadImage } from './runtime.js';
-import type { Fondo, FondoOpts, MountFondo, ObservedCanvas } from './runtime.js';
+import { hostCanvas, pointerIn, loop, decodeImage } from './runtime.js';
+import type { Fondo, FondoOpts, MountFondo, ObservedCanvas, FondoImage } from './runtime.js';
+import { loadCellIndex, lookupCell } from './cell-map.js';
+import type { CellIndex, LabelRows } from './cell-map.js';
+import { createSpriteStore, drawCells, writeCellPixels } from './sprites.js';
+import type { SpriteStore } from './sprites.js';
 
 const TEAL = '#3fb8b0';
 const STEP_MS = 120;
@@ -62,13 +66,13 @@ export const mount: MountFondo = (host: HTMLElement, opts: FondoOpts): Fondo => 
   canvas.style.setProperty('-webkit-mask-image', MASK);
 
   if (reduced) {
-    let still: HTMLImageElement | null = null;
+    let still: FondoImage | null = null;
     // A resize clears the canvas (hostCanvas reassigns its size), so the still is repainted on every resize.
     const paintStill = () => {
       if (!still) return;
       const sz = size();
-      const mapW = still.naturalWidth || 1;
-      const mapH = still.naturalHeight || 1;
+      const mapW = still.width || 1;
+      const mapH = still.height || 1;
       const s = Math.max(sz.w / mapW, sz.h / mapH);
       const ox = (sz.w - mapW * s) / 2;
       const oy = (sz.h - mapH * s) / 2;
@@ -76,10 +80,10 @@ export const mount: MountFondo = (host: HTMLElement, opts: FondoOpts): Fondo => 
       c.clearRect(0, 0, canvas.width, canvas.height);
       c.setTransform(sz.dpr * s, 0, 0, sz.dpr * s, sz.dpr * ox, sz.dpr * oy);
       c.globalAlpha = COMB_ALPHA;
-      c.drawImage(still, 0, 0);
+      c.drawImage(still.source, 0, 0);
       c.globalAlpha = 1;
     };
-    loadImage(base + 'panal.webp').then((img) => {
+    decodeImage(base + 'panal.webp').then((img) => {
       still = img;
       paintStill();
     });
@@ -128,10 +132,13 @@ export const mount: MountFondo = (host: HTMLElement, opts: FondoOpts): Fondo => 
   let ox = 0;
   let oy = 0;
   let map: { w: number; h: number; cells: CanopyCell[] } | null = null;
-  let comb: HTMLImageElement | null = null;
+  let comb: FondoImage | null = null;
   let cells: CanopyCell[] = [];
-  let sprites: Array<HTMLCanvasElement | null> = [];
-  let ids: Int32Array | null = null;
+  // Empty and sparse up front: a cell's sprite is built the first time a
+  // frame draws it, then cached and reused. At most a handful of cells
+  // are lit at once, so the per-frame cost stays bounded.
+  let store: SpriteStore | null = null;
+  let index: CellIndex | null = null;
   let state: Uint8Array | null = null;
   let next: Uint8Array | null = null;
   let vis: Float32Array | null = null;
@@ -165,53 +172,32 @@ export const mount: MountFondo = (host: HTMLElement, opts: FondoOpts): Fondo => 
     c.clearRect(0, 0, canvas.width, canvas.height);
     c.setTransform(dpr * s, 0, 0, dpr * s, dpr * ox, dpr * oy);
     c.globalAlpha = COMB_ALPHA;
-    c.drawImage(comb, 0, 0);
+    c.drawImage(comb.source, 0, 0);
     c.globalAlpha = 1;
   };
 
-  const buildSprites = (labels: HTMLImageElement) => {
-    if (!map) return;
-    const k = document.createElement('canvas');
-    k.width = map.w;
-    k.height = map.h;
-    const kc = k.getContext('2d') as CanvasRenderingContext2D;
-    kc.drawImage(labels, 0, 0);
-    const px = kc.getImageData(0, 0, map.w, map.h).data;
-    ids = new Int32Array(map.w * map.h);
-    for (let i = 0; i < ids.length; i++) {
-      ids[i] = px[i * 4] + px[i * 4 + 1] * 256;
-    }
-    const m = TEAL.match(/\w\w/g) as string[];
-    const [r, g, b] = m.map((x) => parseInt(x, 16));
-    sprites = cells.map((cell, n) => {
-      if (!cell) return null;
-      const id = n + 1;
-      const sp = document.createElement('canvas');
-      sp.width = cell.w;
-      sp.height = cell.h;
-      const sc = sp.getContext('2d') as CanvasRenderingContext2D;
-      const img = sc.createImageData(cell.w, cell.h);
-      for (let y = 0; y < cell.h; y++) {
-        for (let x = 0; x < cell.w; x++) {
-          if (ids![(cell.y + y) * map!.w + cell.x + x] !== id) continue;
-          const o = (y * cell.w + x) * 4;
-          img.data[o] = r;
-          img.data[o + 1] = g;
-          img.data[o + 2] = b;
-          img.data[o + 3] = 255;
-        }
-      }
-      sc.putImageData(img, 0, 0);
-      return sp;
-    });
+  const hex = TEAL.match(/\w\w/g) as string[];
+  const [r, g, b] = hex.map((x) => parseInt(x, 16));
+
+  const buildSprite = (n: number): HTMLCanvasElement | null => {
+    const cell = cells[n];
+    if (!cell || !map || !index) return null;
+    const sp = document.createElement('canvas');
+    sp.width = cell.w;
+    sp.height = cell.h;
+    const sc = sp.getContext('2d') as CanvasRenderingContext2D;
+    const img = sc.createImageData(cell.w, cell.h);
+    writeCellPixels(img.data, cell, map.w, index.ids, n + 1, r, g, b);
+    sc.putImageData(img, 0, 0);
+    return sp;
   };
 
   const cellAt = (x: number, y: number): number => {
-    if (!ids || !map) return -1;
+    if (!map) return -1;
     const ix = Math.floor((x - ox) / s);
     const iy = Math.floor((y - oy) / s);
-    if (ix < 0 || iy < 0 || ix >= map.w || iy >= map.h) return -1;
-    return ids[iy * map.w + ix] - 1;
+    // -1 until the last id slice lands; pointer input before that is ignored.
+    return lookupCell(index, ix, iy);
   };
 
   const seed = (k: number) => {
@@ -233,7 +219,7 @@ export const mount: MountFondo = (host: HTMLElement, opts: FondoOpts): Fondo => 
   };
 
   const frame = (now: number) => {
-    if (!ready || !map || !comb || !state || !next || !vis) return;
+    if (!ready || !map || !comb || !state || !next || !vis || !store) return;
     const sz = size();
     if (sz.w !== w || sz.h !== h || sz.dpr !== dpr || w === 0) layout();
     if (now - lastStep > STEP_MS) {
@@ -259,9 +245,12 @@ export const mount: MountFondo = (host: HTMLElement, opts: FondoOpts): Fondo => 
     const steps = lastDraw ? Math.min((now - lastDraw) / 16.7, 6) : 1;
     lastDraw = now;
 
+    // Every non-null cell fades here, not just the built sprites: a cell
+    // still dark has no sprite yet, and skipping it would leave it dark
+    // forever.
     let litAny = false;
     for (let k = 0; k < cells.length; k++) {
-      if (!sprites[k]) continue;
+      if (!cells[k]) continue;
       const target = state[k] === ON ? 0.55 : state[k] === DYING ? 0.18 : 0;
       const rate = target > vis[k] ? 0.5 : 0.08;
       vis[k] += (target - vis[k]) * (1 - Math.pow(1 - rate, steps));
@@ -273,18 +262,7 @@ export const mount: MountFondo = (host: HTMLElement, opts: FondoOpts): Fondo => 
 
     lc.globalCompositeOperation = 'source-over';
     lc.clearRect(0, 0, lit.width, lit.height);
-    for (let k = 0; k < cells.length; k++) {
-      if (!sprites[k] || vis[k] < 0.01) continue;
-      lc.globalAlpha = vis[k];
-      lc.drawImage(
-        sprites[k] as HTMLCanvasElement,
-        cells[k].x * HALO,
-        cells[k].y * HALO,
-        cells[k].w * HALO,
-        cells[k].h * HALO
-      );
-    }
-    lc.globalAlpha = 1;
+    drawCells(lc, store, cells, vis, HALO);
 
     tc.globalCompositeOperation = 'copy';
     tc.drawImage(lit, 0, 0, tiny.width, tiny.height);
@@ -306,21 +284,34 @@ export const mount: MountFondo = (host: HTMLElement, opts: FondoOpts): Fondo => 
 
   Promise.all([
     fetch(base + 'celdas.json').then((r) => r.json()),
-    loadImage(base + 'celdas.png'),
-    loadImage(base + 'panal.webp'),
-  ]).then(([m, labels, img]) => {
+    decodeImage(base + 'celdas.png'),
+    decodeImage(base + 'panal.webp'),
+  ]).then(async ([m, labels, img]) => {
     map = m;
     cells = m.cells;
     comb = img;
     state = new Uint8Array(cells.length);
     next = new Uint8Array(cells.length);
     vis = new Float32Array(cells.length);
-    buildSprites(labels);
+    store = createSpriteStore(cells.length, buildSprite);
+    const k = document.createElement('canvas');
+    k.width = map!.w;
+    k.height = map!.h;
+    const kc = k.getContext('2d') as CanvasRenderingContext2D;
+    kc.drawImage(labels.source, 0, 0);
+    // The ids land in slices of at most 128 rows per task; `ready` flips
+    // only after the last slice, in the same task as layout and the seeds.
+    const rows: LabelRows = {
+      width: map!.w,
+      height: map!.h,
+      readRows: (y, count) => kc.getImageData(0, y, map!.w, count).data,
+    };
+    index = await loadCellIndex(rows);
     lit.width = glow.width = combGlow.width = Math.round(map!.w * HALO);
     lit.height = glow.height = combGlow.height = Math.round(map!.h * HALO);
     tiny.width = Math.max(1, Math.round(lit.width / BLUR_DOWN));
     tiny.height = Math.max(1, Math.round(lit.height / BLUR_DOWN));
-    cg.drawImage(img, 0, 0, combGlow.width, combGlow.height);
+    cg.drawImage(img.source, 0, 0, combGlow.width, combGlow.height);
     layout();
     for (let i = 0; i < 6; i++) seed((Math.random() * cells.length) | 0);
     ready = true;

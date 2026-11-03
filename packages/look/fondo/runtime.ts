@@ -60,6 +60,32 @@ export function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
+export interface FondoImage {
+  source: CanvasImageSource;
+  width: number;
+  height: number;
+}
+
+/**
+ * Decode an image off the main thread: fetch the bytes and let the
+ * browser decode the bitmap (`createImageBitmap`) instead of the <img>
+ * loader. Falls back to `loadImage` only where `createImageBitmap` is
+ * missing.
+ */
+export function decodeImage(src: string): Promise<FondoImage> {
+  if (typeof createImageBitmap !== 'function') {
+    return loadImage(src).then((img) => ({
+      source: img,
+      width: img.naturalWidth || 1,
+      height: img.naturalHeight || 1,
+    }));
+  }
+  return fetch(src)
+    .then((res) => res.blob())
+    .then((blob) => createImageBitmap(blob))
+    .then((bmp) => ({ source: bmp, width: bmp.width, height: bmp.height }));
+}
+
 export function pointerIn(
   host: HTMLElement,
   onMove: (x: number, y: number) => void,
