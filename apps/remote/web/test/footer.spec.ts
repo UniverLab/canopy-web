@@ -57,7 +57,7 @@ test("ends the sessions home, both tabs, in the footer at 390x844", async ({ pag
   await expectFooterAfterMain(page);
   expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
   await page.locator('[data-tab="graphs"]').click();
-  await expect(page.locator(".graph-row")).toHaveCount(3);
+  await expect(page.locator(".graph-row")).toHaveCount(5);
   await expectFooterAfterMain(page);
   expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
 });
@@ -100,7 +100,7 @@ test("ends the graph and SysInfo views in the footer at 390x844", async ({ page 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/fake.html");
   await page.locator('[data-tab="graphs"]').click();
-  await expect(page.locator(".graph-row")).toHaveCount(3);
+  await expect(page.locator(".graph-row")).toHaveCount(5);
   await page.locator('[data-graph="g-loop"]').click();
   await expect(page.locator("main.graph-view")).toBeVisible();
   await expect(page.locator("#graph-stage .plate-svg")).toBeVisible();

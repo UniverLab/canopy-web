@@ -18,6 +18,7 @@ import {
   statusChip,
 } from "../src/graphs-list.js";
 import type { GraphState, GraphSummary } from "../src/protocol.js";
+import { parseGraph, parseGraphState, parseGraphs } from "../src/protocol.js";
 import { createFrameRouter } from "../src/router.js";
 import { SessionController } from "../src/session.js";
 import { SessionStore } from "../src/sessions.js";
@@ -197,7 +198,7 @@ describe("GraphStore", () => {
   it("watches, and a fresh id starts from a clean slate", () => {
     const { store, sent } = setup();
     store.watch("g1");
-    store.handleGraph({ summary: summary(), doc: CHAIN });
+    store.handleGraph({ summary: summary(), doc: CHAIN, state: graphState() });
     store.handleGraphState(graphState());
     // Re-watching the open graph keeps what arrived; a fresh id clears it.
     store.watch("g1");
@@ -250,9 +251,13 @@ describe("GraphStore", () => {
     store.handleGraphs([summary({ id: "g2", name: "b-second" }), summary({ name: "a-first" })]);
     expect(store.list().map((row) => row.name)).toEqual(["a-first", "b-second"]);
     store.watch("g1");
-    store.handleGraph({ summary: summary(), doc: CHAIN });
+    store.handleGraph({ summary: summary(), doc: CHAIN, state: graphState() });
     // A reply for another graph never overwrites the open one.
-    store.handleGraph({ summary: summary({ id: "g9", name: "stranger" }), doc: null });
+    store.handleGraph({
+      summary: summary({ id: "g9", name: "stranger" }),
+      doc: null,
+      state: graphState(),
+    });
     expect(store.currentSummary()?.name).toBe("palette-loop");
     expect(store.currentDoc()).toEqual(CHAIN);
     store.handleGraphState(graphState());
@@ -266,6 +271,15 @@ describe("GraphStore", () => {
     expect(store.currentSummary()).toBeNull();
     expect(store.currentState()).toBeNull();
     expect(store.lastReceivedAt()).toBeNull();
+  });
+
+  it("paints the reply's initial state without waiting for a push", () => {
+    const { store } = setup();
+    store.watch("g1");
+    store.handleGraph({ summary: summary(), doc: CHAIN, state: graphState() });
+    // No push arrived: the reply alone set the state, exactly like one.
+    expect(store.currentState()?.current_node).toBe("second");
+    expect(store.lastReceivedAt()).not.toBeNull();
   });
 });
 
@@ -512,27 +526,39 @@ describe("routing the graph frames", () => {
   it("routes the list, the watch reply and the pushes to the store", () => {
     const { router, graphs } = setup();
     graphs.watch("g1");
-    router.handleFrame({ t: "graphs", items: [{ ...summary(), updated_at: 1793100000 }] });
+    router.handleFrame({
+      t: "graphs",
+      req: "r1",
+      graphs: [{ ...summary(), updated_at: "2026-11-02T10:30:00.000Z" }],
+    });
     expect(graphs.list().map((row) => row.id)).toEqual(["g1"]);
+    const doc = { ...CHAIN, name: "palette-loop" };
     router.handleFrame({
       t: "graph",
-      item: { ...summary(), updated_at: 1793100000 },
-      doc: CHAIN,
+      req: "r7",
+      id: "g1",
+      document: doc,
+      state: { ...graphState(), updated_at: "2026-11-02T10:30:00.000Z" },
     });
     expect(graphs.currentSummary()?.name).toBe("palette-loop");
-    expect(graphs.currentDoc()).toEqual(CHAIN);
+    expect(graphs.currentDoc()).toEqual(doc);
+    // The reply's initial state already landed: the view never waits.
+    expect(graphs.currentState()?.current_node).toBe("second");
     router.handleFrame({
       t: "graph_state",
-      status: "running",
-      blocked: false,
-      blocker: null,
-      current_spec_id: "s2",
-      current_node: "second",
-      nodes: { second: "running" },
-      specs: [],
-      updated_at: 1793100000,
+      id: "g1",
+      state: {
+        status: "running",
+        blocked: false,
+        blocker: null,
+        current_spec_id: "s2",
+        current_node: "first",
+        nodes: { first: "running" },
+        specs: [],
+        updated_at: "2026-11-02T10:31:00.000Z",
+      },
     });
-    expect(graphs.currentState()?.current_node).toBe("second");
+    expect(graphs.currentState()?.current_node).toBe("first");
   });
 
   it("routes nothing without the store, and never throws", () => {
@@ -548,10 +574,157 @@ describe("routing the graph frames", () => {
     });
     const router = createFrameRouter({ store, controller, shell: {} as Shell, catalog });
     expect(() => {
-      router.handleFrame({ t: "graphs", items: [] });
-      router.handleFrame({ t: "graph", item: summary(), doc: null });
-      router.handleFrame({ ...graphState(), t: "graph_state" });
+      router.handleFrame({ t: "graphs", req: "r1", graphs: [] });
+      router.handleFrame({ t: "graph", req: "r7", id: "g1", document: CHAIN, state: graphState() });
+      router.handleFrame({ t: "graph_state", id: "g1", state: graphState() });
     }).not.toThrow();
+  });
+});
+
+// The host contract vectors: verbatim host frames (graphs.rs shapes,
+// RFC3339 timestamps, never a live daemon) through the parsers, the
+// store and the views — the drift that emptied the tab cannot return.
+describe("the host contract vectors", () => {
+  const AT = "2026-11-02T10:30:00.000Z";
+
+  const hostRow = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
+    id: "g1",
+    name: "palette-loop",
+    status: "running",
+    workdir: "demo",
+    current_spec: "Draw the plate",
+    current_node: "implementer",
+    done: 1,
+    total: 4,
+    blocked: false,
+    updated_at: AT,
+    ...overrides,
+  });
+
+  const hostState = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
+    status: "running",
+    blocked: false,
+    blocker: null,
+    current_spec_id: "s2",
+    current_node: "second",
+    nodes: { first: "pass", second: "running" },
+    specs: [
+      { id: "s1", code: "FIX-1", name: "Lock the palette", status: "completed", attempts: 2 },
+      { id: "s2", code: "FIX-2", name: "Draw the plate", status: "running", attempts: 1 },
+      { id: "s3", code: null, name: "Watch it live", status: "pending", attempts: 1 },
+      { id: "s4", code: "FIX-4", name: "Ship the remote", status: "failed", attempts: 3 },
+    ],
+    updated_at: AT,
+    ...overrides,
+  });
+
+  it("lists three running graphs with spinner chips", () => {
+    const parsed = parseGraphs({
+      t: "graphs",
+      req: "r1",
+      graphs: [
+        hostRow(),
+        hostRow({ id: "g2", name: "quality-bubble", current_spec: "Measure the gap" }),
+        hostRow({ id: "g3", name: "canopy-builder", current_spec: "Draw the lane" }),
+      ],
+    });
+    if (parsed === null) {
+      throw new Error("the verbatim graphs frame did not parse");
+    }
+    const store = new GraphStore({ send: () => true });
+    store.handleGraphs(parsed);
+    const root = document.createElement("div");
+    renderGraphsList(root, store.list(), { onOpen: () => {} });
+    const rows = root.querySelectorAll(".graph-row");
+    expect(rows).toHaveLength(3);
+    for (const row of rows) {
+      const chip = row.querySelector(".status-chip");
+      expect(chip?.getAttribute("data-status")).toBe("running");
+      expect(chip?.classList.contains("chip-spin")).toBe(true);
+    }
+  });
+
+  it("paints the reply's name, plate and state with no push", () => {
+    const parsed = parseGraph({
+      t: "graph",
+      req: "r7",
+      id: "g1",
+      document: { ...CHAIN, name: "palette-loop" },
+      state: hostState(),
+    });
+    if (parsed === null) {
+      throw new Error("the verbatim graph reply did not parse");
+    }
+    const store = new GraphStore({ send: () => true });
+    store.watch("g1");
+    store.handleGraph(parsed);
+    // No push arrived: name, plate and checklist all come from the reply.
+    const root = document.createElement("div");
+    renderGraphView(
+      root,
+      viewArgs({
+        name: store.currentSummary()?.name ?? "",
+        summary: store.currentSummary(),
+        doc: store.currentDoc(),
+        state: store.currentState(),
+        receivedAt: store.lastReceivedAt(),
+      }),
+    );
+    expect(root.querySelector(".graph-title")?.textContent).toBe("palette-loop");
+    expect(root.querySelector("#graph-stage .plate-svg")).not.toBeNull();
+    expect(root.querySelector("#graph-count")?.textContent).toBe("1/4");
+    expect(root.querySelectorAll("#spec-list .spec-row")).toHaveLength(4);
+  });
+
+  it("repaints the overlay from a verbatim state push", () => {
+    const reply = parseGraph({
+      t: "graph",
+      req: "r7",
+      id: "g1",
+      document: { ...CHAIN, name: "palette-loop" },
+      state: hostState(),
+    });
+    if (reply === null) {
+      throw new Error("the verbatim graph reply did not parse");
+    }
+    const store = new GraphStore({ send: () => true });
+    store.watch("g1");
+    store.handleGraph(reply);
+    const root = document.createElement("div");
+    const args = (): GraphViewArgs =>
+      viewArgs({
+        summary: store.currentSummary(),
+        doc: store.currentDoc(),
+        state: store.currentState(),
+        receivedAt: store.lastReceivedAt(),
+      });
+    renderGraphView(root, args());
+    const push = parseGraphState({
+      t: "graph_state",
+      id: "g1",
+      state: hostState({ current_node: "first", nodes: { first: "running" } }),
+    });
+    if (push === null) {
+      throw new Error("the verbatim state push did not parse");
+    }
+    store.handleGraphState(push);
+    updateGraphView(root, args());
+    expect(plateStateOf(store.currentState())).toEqual({
+      nodes: { first: "running" },
+      current: "first",
+    });
+  });
+
+  it("never lets one bad row empty the list", () => {
+    const parsed = parseGraphs({
+      t: "graphs",
+      req: "r1",
+      graphs: [hostRow(), { name: "nameless" }, hostRow({ id: "g2", name: "quality-bubble" })],
+    });
+    expect(parsed?.map((row) => row.id)).toEqual(["g1", "g2"]);
+    const root = document.createElement("div");
+    renderGraphsList(root, parsed ?? [], { onOpen: () => {} });
+    expect(root.querySelectorAll(".graph-row")).toHaveLength(2);
   });
 });
 
