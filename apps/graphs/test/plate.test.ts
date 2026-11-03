@@ -204,18 +204,18 @@ describe("plate invariants", () => {
     });
   }
 
-  it("hello-graph: the error destination leaves the column for the lane", () => {
+  it("hello-graph: the error destination leaves the flow for the band below", () => {
     const svg = renderPlate(helloGraph as unknown as GraphDocument);
     const boxes = nodeBoxes(svg);
-    // `tests` is the infra node and an error destination: the lane wins, and
+    // `tests` is the infra node and an error destination: the band wins, and
     // no unit keeps the lower row.
     expect(boxes.filter((box) => box.lane === "handler").map((box) => box.name)).toEqual(["tests"]);
     expect(boxes.some((box) => box.lane === "infra")).toBe(false);
-    const mainLeft = Math.min(
-      ...boxes.filter((box) => box.lane === "main").map((box) => box.cx - box.w / 2),
+    const mainBottom = Math.max(
+      ...boxes.filter((box) => box.lane === "main").map((box) => box.cy),
     );
     const tests = boxes.find((box) => box.name === "tests") as Box;
-    expect(tests.cx + tests.w / 2).toBeLessThan(mainLeft);
+    expect(tests.cy).toBeGreaterThan(mainBottom);
   });
 
   it("an infra node the flow still passes draws in the lower lane", () => {
@@ -243,17 +243,46 @@ describe("plate invariants", () => {
     expect(monitor.cy).toBeGreaterThan(mainBottom);
   });
 
-  it("canopy-tui-polish: resilience leaves the column, Commit is filled", () => {
+  it("draws the handler band between the main flow and the infra lane", () => {
+    const document: GraphDocument = {
+      name: "band-infra",
+      nodes: [
+        { name: "start", kind: "check", position: 1, config: {} },
+        { name: "work", kind: "agent", position: 2, config: {} },
+        { name: "retry", kind: "agent", position: 3, config: {} },
+        { name: "monitor", kind: "agent", position: 4, config: {} },
+      ],
+      edges: [
+        { from_node: "start", to_node: "work", condition: "pass" },
+        { from_node: "work", to_node: "retry", condition: "fail" },
+        { from_node: "work", to_node: "monitor", condition: "always" },
+      ],
+      infra_node: "monitor",
+    };
+    const svg = renderPlate(document);
+    const boxes = nodeBoxes(svg);
+    expect(boxes.filter((box) => box.lane === "handler").map((box) => box.name)).toEqual(["retry"]);
+    expect(boxes.filter((box) => box.lane === "infra").map((box) => box.name)).toEqual(["monitor"]);
+    const mainBottom = Math.max(
+      ...boxes.filter((box) => box.lane === "main").map((box) => box.cy),
+    );
+    const retry = boxes.find((box) => box.name === "retry") as Box;
+    const monitor = boxes.find((box) => box.name === "monitor") as Box;
+    expect(retry.cy).toBeGreaterThan(mainBottom);
+    expect(monitor.cy).toBeGreaterThan(retry.cy + retry.h / 2);
+  });
+
+  it("canopy-tui-polish: resilience leaves the flow, Commit is filled", () => {
     const svg = renderPlate(TUI_POLISH_GRAPH);
     const boxes = nodeBoxes(svg);
     expect(boxes.filter((box) => box.lane === "handler").map((box) => box.name)).toEqual([
       "resilience",
     ]);
-    const mainLeft = Math.min(
-      ...boxes.filter((box) => box.lane === "main").map((box) => box.cx - box.w / 2),
+    const mainBottom = Math.max(
+      ...boxes.filter((box) => box.lane === "main").map((box) => box.cy),
     );
     const resilience = boxes.find((box) => box.name === "resilience") as Box;
-    expect(resilience.cx + resilience.w / 2).toBeLessThan(mainLeft);
+    expect(resilience.cy).toBeGreaterThan(mainBottom);
     expect(svg).toContain(`<g class="node shape-commit" data-name="Commit"`);
     expect(svg).toContain("PARALLEL · 2/3");
     expect(svg).toContain("CASCADE · 2");

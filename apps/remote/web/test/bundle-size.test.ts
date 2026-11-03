@@ -91,6 +91,14 @@ const WALK_BUDGET = 512;
  * impossible (the shared plate code rides the main bundle).
  */
 const LANE_BUDGET = 4_096;
+/**
+ * Allowance for the band-geometry spec (horizontal handler band below the
+ * flow, grouped marks below sources, bus rails and band routes): measured
+ * +1 028 B gzip over the allowed total (main 162 186 vs 161 158), JS only
+ * — the stylesheet is untouched. Added in the feature commit like
+ * LANE_BUDGET: the shared plate code rides the main bundle.
+ */
+const BAND_BUDGET = 1_280;
 /** The budget the lazy guest chunk is allowed, gzip bytes of JS. */
 const GUEST_BUDGET = 6_144;
 /** The budget the lazy editor chunk is allowed, gzip bytes of JS. */
@@ -194,7 +202,8 @@ describe("the remote's bundle", () => {
         TURN_FALLBACK_BUDGET +
         SESSION_HINT_BUDGET +
         WALK_BUDGET +
-        LANE_BUDGET,
+        LANE_BUDGET +
+        BAND_BUDGET,
     );
     expect(guestJs, JSON.stringify(report)).toBeLessThanOrEqual(GUEST_BUDGET);
     expect(editorJs, JSON.stringify(report)).toBeLessThanOrEqual(EDITOR_BUDGET);

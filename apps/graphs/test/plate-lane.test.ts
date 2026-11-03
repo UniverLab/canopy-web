@@ -3,11 +3,13 @@
  * The canopy-builder plate's lanes, in both orientations: the reader must
  * see the flow, and see where failure goes without counting nine long lines
  * that read as the main path. These tests hold the drawing to the shape of
- * the graph — handlers out of the column, one bus per class into each, one
- * `✓ done` under the flow's real end, and no edge crossing a node.
+ * the graph — handlers below the flow in a band (left of the column when
+ * vertical), one bus per class into each, one `✓ done` under the flow's
+ * real end, and no edge crossing a node.
  */
 import { describe, expect, it } from "vitest";
 import builder from "./fixtures/graphs/canopy-builder/graph.json" with { type: "json" };
+import qualityBubble from "./fixtures/graphs/quality-bubble/graph.json" with { type: "json" };
 import { renderPlate } from "../../../packages/plate/render.js";
 import type { GraphDocument } from "../../../packages/plate/document.js";
 
@@ -136,20 +138,46 @@ describe.each(["horizontal", "vertical"] as const)("canopy-builder %s", (orienta
   const all = [...nodes, ...groupBoxes(svg)];
   const main = nodes.filter((node) => node.lane === "main");
 
-  it("lays out only the failure terminals in the side lane", () => {
-    expect(nodes.filter((node) => node.lane === "handler").map((node) => node.name)).toEqual([
-      "Human verdict",
-      "Resilience",
-    ]);
-    // Outside the column: every lane unit sits left of every flow unit.
-    const columnLeft = Math.min(...main.map((node) => node.cx - node.hw));
-    for (const node of nodes.filter((candidate) => candidate.lane === "handler")) {
-      expect(node.cx + node.hw, node.name).toBeLessThan(columnLeft);
+  it("lays out only the failure terminals in the handler lane", () => {
+    const handlers = nodes.filter((node) => node.lane === "handler");
+    expect(handlers.map((node) => node.name)).toEqual(["Human verdict", "Resilience"]);
+    const verdict = nodes.find((node) => node.name === "Human verdict") as Box;
+    const resilience = nodes.find((node) => node.name === "Resilience") as Box;
+    if (orientation === "vertical") {
+      // Outside the column: every lane unit sits left of every flow unit.
+      const columnLeft = Math.min(...main.map((node) => node.cx - node.hw));
+      for (const node of handlers) {
+        expect(node.cx + node.hw, node.name).toBeLessThan(columnLeft);
+      }
+      // Human verdict above Resilience, at the column's mid height.
+      expect(verdict.cy).toBeLessThan(resilience.cy);
+      return;
     }
-    // Human verdict above Resilience, at the column's mid height.
-    const verdict = nodes.find((node) => node.name === "Human verdict");
-    const resilience = nodes.find((node) => node.name === "Resilience");
-    expect(verdict?.cy ?? 0).toBeLessThan(resilience?.cy ?? 0);
+    // The band below the flow: every handler at or right of Start, below
+    // every main-lane node, and never left of the flow's left edge.
+    const start = nodes.find((node) => node.name === "Start") as Box;
+    const mainBottom = Math.max(...main.map((node) => node.cy));
+    const flowLeft = Math.min(...main.map((node) => node.cx - node.hw));
+    for (const node of handlers) {
+      expect(node.cx, node.name).toBeGreaterThanOrEqual(start.cx);
+      expect(node.cy, node.name).toBeGreaterThan(mainBottom);
+      expect(node.cx - node.hw, node.name).toBeGreaterThanOrEqual(flowLeft);
+    }
+    // In unit order: Human verdict left of Resilience, sharing the band row.
+    expect(verdict.cx).toBeLessThan(resilience.cx);
+    expect(verdict.cy).toBe(resilience.cy);
+    // No handler box intersects another node or group box.
+    for (const handler of handlers) {
+      for (const box of all) {
+        if (box.name === handler.name) {
+          continue;
+        }
+        const overlap =
+          Math.abs(handler.cx - box.cx) < handler.hw + box.hw &&
+          Math.abs(handler.cy - box.cy) < handler.hh + box.hh;
+        expect(overlap, `${handler.name} vs ${box.name}`).toBe(false);
+      }
+    }
   });
 
   it("ends the flow with one done terminal under Relock repo", () => {
@@ -171,8 +199,13 @@ describe.each(["horizontal", "vertical"] as const)("canopy-builder %s", (orienta
     expect(into).toHaveLength(1);
     const resilience = nodes.find((node) => node.name === "Resilience");
     const [x, y] = endOf(into[0]?.d ?? "");
-    expect(x).toBeCloseTo((resilience?.cx ?? 0) - (resilience?.hw ?? 0), 1);
-    expect(y).toBeCloseTo(resilience?.cy ?? 0, 1);
+    if (orientation === "vertical") {
+      expect(x).toBeCloseTo((resilience?.cx ?? 0) - (resilience?.hw ?? 0), 1);
+      expect(y).toBeCloseTo(resilience?.cy ?? 0, 1);
+      return;
+    }
+    expect(x).toBeCloseTo(resilience?.cx ?? 0, 1);
+    expect(y).toBeCloseTo((resilience?.cy ?? 0) - (resilience?.hh ?? 0), 1);
   });
 
   it("marks every grouped source once per class, and draws no grouped edge", () => {
@@ -194,17 +227,17 @@ describe.each(["horizontal", "vertical"] as const)("canopy-builder %s", (orienta
     expect(edges.some((edge) => edge.cls === "fail" && edge.to === "Human verdict")).toBe(false);
   });
 
-  it("keeps the fail edge from the Designer to Resilience, outside the column", () => {
+  it("keeps the fail edge from the Designer to Resilience, outside the flow", () => {
     const kept = paths(svg).find(
       (path) => path.bus === null && path.cls === "fail" && path.from === "Designer" && path.to === "Resilience",
     );
     expect(kept).toBeDefined();
-    // The arc leaves the column on the side this orientation puts failure
-    // on — above the row, left of the column — instead of cutting across.
+    // The lane edge leaves the flow where this orientation puts failure —
+    // below the row into the band, left of the column — never across it.
     const points = samples(kept?.d ?? "");
     if (orientation === "horizontal") {
-      expect(Math.min(...points.map((point) => point[1]))).toBeLessThan(
-        Math.min(...all.map((box) => box.cy - box.hh)),
+      expect(Math.max(...points.map((point) => point[1]))).toBeGreaterThan(
+        Math.max(...all.filter((box) => box.lane === "main").map((box) => box.cy + box.hh)),
       );
     } else {
       expect(Math.min(...points.map((point) => point[0]))).toBeLessThan(
@@ -240,5 +273,14 @@ describe.each(["horizontal", "vertical"] as const)("canopy-builder %s", (orienta
     expect(svg).toContain(".plate-svg .mark-error{fill:var(--attention,#ffb454)");
     expect(svg).toContain(`data-bus="Resilience"`);
     expect(svg).not.toContain(".plate-svg .edge.error{stroke:currentColor");
+  });
+});
+
+describe("no-handler plates", () => {
+  it("keeps a handler-free svg byte-identical", async () => {
+    const svg = renderPlate(qualityBubble as unknown as GraphDocument);
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(svg));
+    const hex = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    expect(hex).toBe("1c9a793e36ad803b7f30908e96a7b86250a70bc851c5faa60758f90499241409");
   });
 });
