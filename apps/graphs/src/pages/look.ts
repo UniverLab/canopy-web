@@ -528,26 +528,7 @@ pre.run-command code, pre.run-prompt-text code { font-family: inherit; overflow-
   font-size: 0.72rem;
   white-space: nowrap;
 }
-details.run-prompt {
-  margin: 0 0 0.75rem;
-  padding: 0.6rem 0.75rem;
-  background: var(--stage-bg);
-  border: 1px solid var(--stage-line);
-  border-radius: var(--radius-ctl);
-}
-details.run-prompt summary { cursor: pointer; }
-details.run-prompt summary .run-where { color: var(--surface-ink); }
-.run-preview {
-  display: block;
-  margin-top: 0.25rem;
-  color: var(--surface-ink-dim);
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-  white-space: pre-line;
-  overflow-wrap: anywhere;
-}
 .run-builtin { margin: 0.5rem 0 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--surface-ink-dim); }
-details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
 /* The fuzzy verdict: a compact pill in the datasheet's Review field and a
  * small chip on catalogue rows — shield, words and border in the verdict

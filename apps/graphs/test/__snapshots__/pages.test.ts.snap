@@ -487,26 +487,7 @@ pre.run-command code, pre.run-prompt-text code { font-family: inherit; overflow-
   font-size: 0.72rem;
   white-space: nowrap;
 }
-details.run-prompt {
-  margin: 0 0 0.75rem;
-  padding: 0.6rem 0.75rem;
-  background: var(--stage-bg);
-  border: 1px solid var(--stage-line);
-  border-radius: var(--radius-ctl);
-}
-details.run-prompt summary { cursor: pointer; }
-details.run-prompt summary .run-where { color: var(--surface-ink); }
-.run-preview {
-  display: block;
-  margin-top: 0.25rem;
-  color: var(--surface-ink-dim);
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-  white-space: pre-line;
-  overflow-wrap: anywhere;
-}
 .run-builtin { margin: 0.5rem 0 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--surface-ink-dim); }
-details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
 /* The fuzzy verdict: a compact pill in the datasheet's Review field and a
  * small chip on catalogue rows — shield, words and border in the verdict
@@ -1168,26 +1149,7 @@ pre.run-command code, pre.run-prompt-text code { font-family: inherit; overflow-
   font-size: 0.72rem;
   white-space: nowrap;
 }
-details.run-prompt {
-  margin: 0 0 0.75rem;
-  padding: 0.6rem 0.75rem;
-  background: var(--stage-bg);
-  border: 1px solid var(--stage-line);
-  border-radius: var(--radius-ctl);
-}
-details.run-prompt summary { cursor: pointer; }
-details.run-prompt summary .run-where { color: var(--surface-ink); }
-.run-preview {
-  display: block;
-  margin-top: 0.25rem;
-  color: var(--surface-ink-dim);
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-  white-space: pre-line;
-  overflow-wrap: anywhere;
-}
 .run-builtin { margin: 0.5rem 0 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--surface-ink-dim); }
-details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
 /* The fuzzy verdict: a compact pill in the datasheet's Review field and a
  * small chip on catalogue rows — shield, words and border in the verdict
@@ -1322,10 +1284,10 @@ pre.prompt, pre.hash {
 <p class="runs-summary runs-community">Runs 2 shell commands and 4 agent instructions on your machine.</p>
 <div class="run"><p class="run-where">node &quot;tests&quot;</p><pre class="run-command"><code>npm test</code></pre></div>
 <div class="run"><p class="run-where">hook on_completed #1</p><pre class="run-command"><code>echo done</code></pre></div>
-<details class="run-prompt"><summary><span class="run-where">node &quot;implementer&quot;</span><span class="run-preview">Implement the spec.</span></summary><pre class="run-prompt-text"><code>Implement the spec.</code></pre></details>
-<details class="run-prompt"><summary><span class="run-where">ensemble &quot;reviewers&quot;</span><span class="run-preview">Review the diff for defects.</span></summary><pre class="run-prompt-text"><code>Review the diff for defects.</code></pre></details>
-<details class="run-prompt"><summary><span class="run-where">ensemble &quot;reviewers&quot; member 1</span><span class="run-preview">Review for correctness.</span></summary><pre class="run-prompt-text"><code>Review for correctness.</code></pre></details>
-<details class="run-prompt"><summary><span class="run-where">ensemble &quot;reviewers&quot; member 2</span><span class="run-preview">Review for style.</span></summary><pre class="run-prompt-text"><code>Review for style.</code></pre></details>
+<div class="run"><p class="run-where">node &quot;implementer&quot;</p><pre class="run-prompt-text"><code>Implement the spec.</code></pre></div>
+<div class="run"><p class="run-where">ensemble &quot;reviewers&quot;</p><pre class="run-prompt-text"><code>Review the diff for defects.</code></pre></div>
+<div class="run"><p class="run-where">ensemble &quot;reviewers&quot; member 1</p><pre class="run-prompt-text"><code>Review for correctness.</code></pre></div>
+<div class="run"><p class="run-where">ensemble &quot;reviewers&quot; member 2</p><pre class="run-prompt-text"><code>Review for style.</code></pre></div>
 </section>
 </main>
 <footer class="look-colophon">
@@ -1858,26 +1820,7 @@ pre.run-command code, pre.run-prompt-text code { font-family: inherit; overflow-
   font-size: 0.72rem;
   white-space: nowrap;
 }
-details.run-prompt {
-  margin: 0 0 0.75rem;
-  padding: 0.6rem 0.75rem;
-  background: var(--stage-bg);
-  border: 1px solid var(--stage-line);
-  border-radius: var(--radius-ctl);
-}
-details.run-prompt summary { cursor: pointer; }
-details.run-prompt summary .run-where { color: var(--surface-ink); }
-.run-preview {
-  display: block;
-  margin-top: 0.25rem;
-  color: var(--surface-ink-dim);
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-  white-space: pre-line;
-  overflow-wrap: anywhere;
-}
 .run-builtin { margin: 0.5rem 0 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--surface-ink-dim); }
-details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
 /* The fuzzy verdict: a compact pill in the datasheet's Review field and a
  * small chip on catalogue rows — shield, words and border in the verdict
@@ -2006,16 +1949,16 @@ pre.prompt, pre.hash {
 <figure class="plate"><svg class="plate-svg plate-h" viewBox="0 0 131.05 45.69" width="655" height="228" role="img" xmlns="http://www.w3.org/2000/svg"><title>hello-graph</title><desc>Nodes in order: build, test, gate, triage, docs.</desc><style>.plate-svg text{font-family:var(--font-mono,'Sometype Mono',ui-monospace,Menlo,monospace)}.plate-svg .edge{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.45;opacity:.85}.plate-svg .edge.fail{stroke:#ff6b6b;stroke-dasharray:1.4 1.1;opacity:.7}.plate-svg .edge.error{stroke:var(--attention,#ffb454);stroke-width:.3;stroke-dasharray:.4 .8;opacity:.55}.plate-svg .edge.bus{stroke-width:.5;opacity:.85}.plate-svg .edge.order{stroke:currentColor;stroke-width:.3;stroke-dasharray:.5 1.1;stroke-linecap:round;opacity:.9}.plate-svg #horizontal-1lom6tc-arrow path{fill:var(--canopy,#00a9a0);fill-opacity:.85}.plate-svg #horizontal-1lom6tc-arrow-fail path{fill:#ff6b6b;fill-opacity:.7}.plate-svg #horizontal-1lom6tc-arrow-error path{fill:var(--attention,#ffb454);fill-opacity:.7}.plate-svg .node .shape{fill:color-mix(in srgb, var(--nc, var(--canopy, #00a9a0)) 22%, #04110f);stroke:var(--nc, var(--canopy, #00a9a0));stroke-width:.45}.plate-svg .shape-chip .shape{fill:#0c1416;stroke:var(--ink-dim,#9a9890)}.plate-svg .shape-check .shape,.plate-svg .shape-gate .shape{fill:#0c1416;stroke:#e8f6f1}.plate-svg .shape-commit .shape{fill:color-mix(in srgb, var(--canopy, #00a9a0) 35%, #04110f);stroke:var(--canopy,#00a9a0)}.plate-svg .label{font-size:2.3px;fill:#e8f6f1}.plate-svg .harness{font-size:1.9px;fill:var(--nc, var(--canopy, #00a9a0));opacity:.9}.plate-svg .group-box{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.3;stroke-dasharray:1.2 .9;opacity:.8}.plate-svg .group-title,.plate-svg .group-subtitle{font-size:1.9px;fill:var(--canopy,#00a9a0);letter-spacing:.14em;text-transform:uppercase}.plate-svg .member-shape{fill:color-mix(in srgb, var(--nc, var(--canopy, #00a9a0)) 22%, #04110f);stroke:var(--nc, var(--canopy, #00a9a0));stroke-width:.3}.plate-svg .member-label{font-size:1.9px;fill:#e8f6f1;text-anchor:middle}.plate-svg .mark-error{fill:var(--attention,#ffb454);font-size:2.6px;text-anchor:middle}.plate-svg .mark-fail{fill:none;stroke:#ff6b6b;stroke-width:.5;stroke-dasharray:.6 .5}.plate-svg .done{font-size:2px;fill:var(--canopy,#00a9a0);letter-spacing:.04em}.plate-svg .token{fill:var(--canopy,#00a9a0)}@media (prefers-reduced-motion:reduce){.plate-svg .token{display:none}}</style><defs><marker id="horizontal-1lom6tc-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="1.3" markerHeight="1.3" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker><marker id="horizontal-1lom6tc-arrow-fail" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="1.3" markerHeight="1.3" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker><marker id="horizontal-1lom6tc-arrow-error" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="1.3" markerHeight="1.3" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker></defs><g class="edges"><path class="edge pass" d="M13.45 24.14 C24.65 24.14 24.65 24.14 35.85 24.14" marker-end="url(#horizontal-1lom6tc-arrow)" data-from="build" data-to="test"/><path class="edge pass" d="M65.45 24.14 C76.28 24.14 76.28 24.14 87.11 24.14" marker-end="url(#horizontal-1lom6tc-arrow)" data-from="gate" data-to="triage"/><path class="edge pass" d="M39.45 24.14 C50.28 24.14 50.28 24.14 61.11 24.14" marker-end="url(#horizontal-1lom6tc-arrow)" data-from="test" data-to="gate"/><path class="edge pass" d="M91.45 24.14 C102.55 24.14 102.55 24.14 113.65 24.14" marker-end="url(#horizontal-1lom6tc-arrow)" data-from="triage" data-to="docs"/><path class="edge fail" d="M39.45 21.14 C39.45 -6.14 13.45 -6.14 13.45 20.34" marker-end="url(#horizontal-1lom6tc-arrow-fail)" data-from="test" data-to="build"/></g><g class="groups"></g><g class="nodes"><g class="node shape-agent" data-name="build" data-cx="13.45" data-cy="24.14" data-w="6" data-h="6" data-rank="0" data-lane="main"><title>build (agent)</title><rect class="shape" x="10.45" y="21.14" width="6" height="6" rx="3"/><text class="label" x="13.45" y="24.14" dy="6.4" text-anchor="middle">build</text></g><g class="node shape-check" data-name="test" data-cx="39.45" data-cy="24.14" data-w="5.6" data-h="5.6" data-rank="1" data-lane="main"><title>test (check)</title><rect class="shape" x="36.650000000000006" y="21.34" width="5.6" height="5.6" rx="0.7"/><text class="label" x="39.45" y="24.14" dy="6.4" text-anchor="middle">test</text></g><g class="node shape-gate" data-name="gate" data-cx="65.45" data-cy="24.14" data-w="5" data-h="5" data-rank="2" data-lane="main"><title>gate (gate)</title><rect class="shape" x="62.95" y="21.64" width="5" height="5" rx="0.5" transform="rotate(45 65.45 24.14)"/><text class="label" x="65.45" y="24.14" dy="6.4" text-anchor="middle">gate</text></g><g class="node shape-gate" data-name="triage" data-cx="91.45" data-cy="24.14" data-w="5" data-h="5" data-rank="3" data-lane="main"><title>triage (router)</title><rect class="shape" x="88.95" y="21.64" width="5" height="5" rx="0.5" transform="rotate(45 91.45 24.14)"/><text class="label" x="91.45" y="24.14" dy="6.4" text-anchor="middle">triage</text></g><g class="node shape-agent" data-name="docs" data-cx="117.45" data-cy="24.14" data-w="6" data-h="6" data-rank="4" data-lane="main"><title>docs (agent)</title><rect class="shape" x="114.45" y="21.14" width="6" height="6" rx="3"/><text class="label" x="117.45" y="24.14" dy="6.4" text-anchor="middle">docs</text></g></g><g class="marks"></g><g class="dones"><text class="done" x="117.45" y="35.09" text-anchor="middle" data-done="docs">✓ done</text></g><circle class="token" r="1.1" cx="0" cy="0"><animateMotion dur="3.6s" repeatCount="indefinite" path="M13.45 24.14C26.45 24.14 26.45 24.14 39.45 24.14C52.45 24.14 52.45 24.14 65.45 24.14C78.45 24.14 78.45 24.14 91.45 24.14C104.45 24.14 104.45 24.14 117.45 24.14"/></circle></svg><svg class="plate-svg plate-v" viewBox="0 0 42.68 122.55" width="213" height="613" role="img" xmlns="http://www.w3.org/2000/svg"><title>hello-graph</title><desc>Nodes in order: build, test, gate, triage, docs.</desc><style>.plate-svg text{font-family:var(--font-mono,'Sometype Mono',ui-monospace,Menlo,monospace)}.plate-svg .edge{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.45;opacity:.85}.plate-svg .edge.fail{stroke:#ff6b6b;stroke-dasharray:1.4 1.1;opacity:.7}.plate-svg .edge.error{stroke:var(--attention,#ffb454);stroke-width:.3;stroke-dasharray:.4 .8;opacity:.55}.plate-svg .edge.bus{stroke-width:.5;opacity:.85}.plate-svg .edge.order{stroke:currentColor;stroke-width:.3;stroke-dasharray:.5 1.1;stroke-linecap:round;opacity:.9}.plate-svg #vertical-1lom6tc-arrow path{fill:var(--canopy,#00a9a0);fill-opacity:.85}.plate-svg #vertical-1lom6tc-arrow-fail path{fill:#ff6b6b;fill-opacity:.7}.plate-svg #vertical-1lom6tc-arrow-error path{fill:var(--attention,#ffb454);fill-opacity:.7}.plate-svg .node .shape{fill:color-mix(in srgb, var(--nc, var(--canopy, #00a9a0)) 22%, #04110f);stroke:var(--nc, var(--canopy, #00a9a0));stroke-width:.45}.plate-svg .shape-chip .shape{fill:#0c1416;stroke:var(--ink-dim,#9a9890)}.plate-svg .shape-check .shape,.plate-svg .shape-gate .shape{fill:#0c1416;stroke:#e8f6f1}.plate-svg .shape-commit .shape{fill:color-mix(in srgb, var(--canopy, #00a9a0) 35%, #04110f);stroke:var(--canopy,#00a9a0)}.plate-svg .label{font-size:2.3px;fill:#e8f6f1}.plate-svg .harness{font-size:1.9px;fill:var(--nc, var(--canopy, #00a9a0));opacity:.9}.plate-svg .group-box{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.3;stroke-dasharray:1.2 .9;opacity:.8}.plate-svg .group-title,.plate-svg .group-subtitle{font-size:1.9px;fill:var(--canopy,#00a9a0);letter-spacing:.14em;text-transform:uppercase}.plate-svg .member-shape{fill:color-mix(in srgb, var(--nc, var(--canopy, #00a9a0)) 22%, #04110f);stroke:var(--nc, var(--canopy, #00a9a0));stroke-width:.3}.plate-svg .member-label{font-size:1.9px;fill:#e8f6f1;text-anchor:middle}.plate-svg .mark-error{fill:var(--attention,#ffb454);font-size:2.6px;text-anchor:middle}.plate-svg .mark-fail{fill:none;stroke:#ff6b6b;stroke-width:.5;stroke-dasharray:.6 .5}.plate-svg .done{font-size:2px;fill:var(--canopy,#00a9a0);letter-spacing:.04em}.plate-svg .token{fill:var(--canopy,#00a9a0)}@media (prefers-reduced-motion:reduce){.plate-svg .token{display:none}}</style><defs><marker id="vertical-1lom6tc-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="1.3" markerHeight="1.3" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker><marker id="vertical-1lom6tc-arrow-fail" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="1.3" markerHeight="1.3" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker><marker id="vertical-1lom6tc-arrow-error" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="1.3" markerHeight="1.3" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker></defs><g class="edges"><path class="edge pass" d="M20.4 13 C20.4 22.2 20.2 22.2 20.2 31.4" marker-end="url(#vertical-1lom6tc-arrow)" data-from="build" data-to="test"/><path class="edge pass" d="M19.9 57 C19.9 65.83 19.9 65.83 19.9 74.66" marker-end="url(#vertical-1lom6tc-arrow)" data-from="gate" data-to="triage"/><path class="edge pass" d="M20.2 35 C20.2 43.83 19.9 43.83 19.9 52.66" marker-end="url(#vertical-1lom6tc-arrow)" data-from="test" data-to="gate"/><path class="edge pass" d="M19.9 79 C19.9 88.1 20.4 88.1 20.4 97.2" marker-end="url(#vertical-1lom6tc-arrow)" data-from="triage" data-to="docs"/><path class="edge fail" d="M17.2 35 C9.4 35 9.4 13 16.6 13" marker-end="url(#vertical-1lom6tc-arrow-fail)" data-from="test" data-to="build"/></g><g class="groups"></g><g class="nodes"><g class="node shape-agent" data-name="build" data-cx="20.4" data-cy="13" data-w="6" data-h="6" data-rank="0" data-lane="main"><title>build (agent)</title><rect class="shape" x="17.4" y="10" width="6" height="6" rx="3"/><text class="label" x="25.4" y="13" dy="0.8" text-anchor="start">build</text></g><g class="node shape-check" data-name="test" data-cx="20.2" data-cy="35" data-w="5.6" data-h="5.6" data-rank="1" data-lane="main"><title>test (check)</title><rect class="shape" x="17.4" y="32.2" width="5.6" height="5.6" rx="0.7"/><text class="label" x="25" y="35" dy="0.8" text-anchor="start">test</text></g><g class="node shape-gate" data-name="gate" data-cx="19.9" data-cy="57" data-w="5" data-h="5" data-rank="2" data-lane="main"><title>gate (gate)</title><rect class="shape" x="17.4" y="54.5" width="5" height="5" rx="0.5" transform="rotate(45 19.9 57)"/><text class="label" x="24.4" y="57" dy="0.8" text-anchor="start">gate</text></g><g class="node shape-gate" data-name="triage" data-cx="19.9" data-cy="79" data-w="5" data-h="5" data-rank="3" data-lane="main"><title>triage (router)</title><rect class="shape" x="17.4" y="76.5" width="5" height="5" rx="0.5" transform="rotate(45 19.9 79)"/><text class="label" x="24.4" y="79" dy="0.8" text-anchor="start">triage</text></g><g class="node shape-agent" data-name="docs" data-cx="20.4" data-cy="101" data-w="6" data-h="6" data-rank="4" data-lane="main"><title>docs (agent)</title><rect class="shape" x="17.4" y="98" width="6" height="6" rx="3"/><text class="label" x="25.4" y="101" dy="0.8" text-anchor="start">docs</text></g></g><g class="marks"></g><g class="dones"><text class="done" x="20.4" y="111.95" text-anchor="middle" data-done="docs">✓ done</text></g><circle class="token" r="1.1" cx="0" cy="0"><animateMotion dur="3.6s" repeatCount="indefinite" path="M20.4 13C20.4 24 20.2 24 20.2 35C20.2 46 19.9 46 19.9 57C19.9 68 19.9 68 19.9 79C19.9 90 20.4 90 20.4 101"/></circle></svg></figure>
 <dl class="sheet"><div class="field"><dt>Kind</dt><dd><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg> graph</dd></div><div class="field"><dt>Name</dt><dd>hello-graph</dd></div><div class="field"><dt>Source</dt><dd><a href="https://github.com/UniverLab/canopy-graphs" target="_blank" rel="noopener noreferrer">UniverLab/canopy-graphs<svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg></a></dd></div><div class="field"><dt>Stars</dt><dd><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg> 7 stars</dd></div><div class="field"><dt>Nodes</dt><dd>agent 2 · check 1 · gate 1 · router 1</dd></div><div class="field"><dt>Edges</dt><dd>5 edges · 1 fail</dd></div><div class="field"><dt>Agent nodes</dt><dd>build, docs</dd></div><div class="field"><dt>Install</dt><dd><span class="row-install"><code>canopy graph install hello-graph</code><button type="button" class="copy" data-copy="canopy graph install hello-graph" data-label="Copy" data-done="Copied" aria-label="Copy the install command to the clipboard"><span class="copy-icon" data-icon="copy"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></span><span class="copy-text">Copy</span></button></span></dd></div><div class="field"><dt>Report</dt><dd><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"/></svg> <a href="https://github.com/UniverLab/canopy-graphs/issues/new?template=report-document.yml&amp;title=Report%3A%20graph%20UniverLab%2Fcanopy-graphs%2Fhello-graph&amp;document=https%3A%2F%2Fgraphs.univerlab.org%2Fg%2Fhello-graph&amp;kind=graph&amp;source=UniverLab%2Fcanopy-graphs" target="_blank" rel="noopener noreferrer">Report<svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg></a></dd></div></dl>
 </div>
-<section class="runs" id="what-this-runs">
-<h2 class="kicker"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19h8"/><path d="m4 17 6-6-6-6"/></svg><span>What this runs</span></h2>
-<p class="runs-summary">Runs 0 shell commands and 0 agent instructions on your machine.</p>
-</section>
 <h2 class="kicker"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg><span>README</span></h2>
 <div class="readme"><h1>hello-graph</h1>
 <p>A graph the page tests render, with <strong>one fail edge</strong>.</p>
 <h2>Install</h2>
 <pre><code>canopy graph install hello-graph</code></pre>
 <p>Read the <a href="https://univerlab.org/canopy/" rel="nofollow">docs</a> and run <code>npm test</code>.</p></div>
+<section class="runs" id="what-this-runs">
+<h2 class="kicker"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19h8"/><path d="m4 17 6-6-6-6"/></svg><span>What this runs</span></h2>
+<p class="runs-summary">Runs 0 shell commands and 0 agent instructions on your machine.</p>
+</section>
 </main>
 <footer class="look-colophon">
   <picture class="colophon-band" aria-hidden="true">
@@ -2568,26 +2511,7 @@ pre.run-command code, pre.run-prompt-text code { font-family: inherit; overflow-
   font-size: 0.72rem;
   white-space: nowrap;
 }
-details.run-prompt {
-  margin: 0 0 0.75rem;
-  padding: 0.6rem 0.75rem;
-  background: var(--stage-bg);
-  border: 1px solid var(--stage-line);
-  border-radius: var(--radius-ctl);
-}
-details.run-prompt summary { cursor: pointer; }
-details.run-prompt summary .run-where { color: var(--surface-ink); }
-.run-preview {
-  display: block;
-  margin-top: 0.25rem;
-  color: var(--surface-ink-dim);
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-  white-space: pre-line;
-  overflow-wrap: anywhere;
-}
 .run-builtin { margin: 0.5rem 0 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--surface-ink-dim); }
-details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
 /* The fuzzy verdict: a compact pill in the datasheet's Review field and a
  * small chip on catalogue rows — shield, words and border in the verdict
@@ -2719,7 +2643,7 @@ pre.prompt, pre.hash {
 <section class="runs" id="what-this-runs">
 <h2 class="kicker"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19h8"/><path d="m4 17 6-6-6-6"/></svg><span>What this runs</span></h2>
 <p class="runs-summary">Runs 0 shell commands and 1 agent instructions on your machine.</p>
-<details class="run-prompt"><summary><span class="run-where">node &quot;hello-node&quot;</span><span class="run-preview">Draft a plan for {{spec_name}}.</span></summary><pre class="run-prompt-text"><code>Draft a plan for {{spec_name}}.</code></pre></details>
+<div class="run"><p class="run-where">node &quot;hello-node&quot;</p><pre class="run-prompt-text"><code>Draft a plan for {{spec_name}}.</code></pre></div>
 </section>
 </main>
 <footer class="look-colophon">
@@ -3252,26 +3176,7 @@ pre.run-command code, pre.run-prompt-text code { font-family: inherit; overflow-
   font-size: 0.72rem;
   white-space: nowrap;
 }
-details.run-prompt {
-  margin: 0 0 0.75rem;
-  padding: 0.6rem 0.75rem;
-  background: var(--stage-bg);
-  border: 1px solid var(--stage-line);
-  border-radius: var(--radius-ctl);
-}
-details.run-prompt summary { cursor: pointer; }
-details.run-prompt summary .run-where { color: var(--surface-ink); }
-.run-preview {
-  display: block;
-  margin-top: 0.25rem;
-  color: var(--surface-ink-dim);
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-  white-space: pre-line;
-  overflow-wrap: anywhere;
-}
 .run-builtin { margin: 0.5rem 0 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--surface-ink-dim); }
-details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
 /* The fuzzy verdict: a compact pill in the datasheet's Review field and a
  * small chip on catalogue rows — shield, words and border in the verdict
@@ -3928,26 +3833,7 @@ pre.run-command code, pre.run-prompt-text code { font-family: inherit; overflow-
   font-size: 0.72rem;
   white-space: nowrap;
 }
-details.run-prompt {
-  margin: 0 0 0.75rem;
-  padding: 0.6rem 0.75rem;
-  background: var(--stage-bg);
-  border: 1px solid var(--stage-line);
-  border-radius: var(--radius-ctl);
-}
-details.run-prompt summary { cursor: pointer; }
-details.run-prompt summary .run-where { color: var(--surface-ink); }
-.run-preview {
-  display: block;
-  margin-top: 0.25rem;
-  color: var(--surface-ink-dim);
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-  white-space: pre-line;
-  overflow-wrap: anywhere;
-}
 .run-builtin { margin: 0.5rem 0 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--surface-ink-dim); }
-details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
 /* The fuzzy verdict: a compact pill in the datasheet's Review field and a
  * small chip on catalogue rows — shield, words and border in the verdict
@@ -4076,16 +3962,16 @@ pre.prompt, pre.hash {
 <figure class="plate"><svg class="plate-svg plate-h" viewBox="0 0 131.05 45.69" width="655" height="228" role="img" xmlns="http://www.w3.org/2000/svg"><title>hello-graph</title><desc>Nodes in order: build, test, gate, triage, docs.</desc><style>.plate-svg text{font-family:var(--font-mono,'Sometype Mono',ui-monospace,Menlo,monospace)}.plate-svg .edge{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.45;opacity:.85}.plate-svg .edge.fail{stroke:#ff6b6b;stroke-dasharray:1.4 1.1;opacity:.7}.plate-svg .edge.error{stroke:var(--attention,#ffb454);stroke-width:.3;stroke-dasharray:.4 .8;opacity:.55}.plate-svg .edge.bus{stroke-width:.5;opacity:.85}.plate-svg .edge.order{stroke:currentColor;stroke-width:.3;stroke-dasharray:.5 1.1;stroke-linecap:round;opacity:.9}.plate-svg #horizontal-1lom6tc-arrow path{fill:var(--canopy,#00a9a0);fill-opacity:.85}.plate-svg #horizontal-1lom6tc-arrow-fail path{fill:#ff6b6b;fill-opacity:.7}.plate-svg #horizontal-1lom6tc-arrow-error path{fill:var(--attention,#ffb454);fill-opacity:.7}.plate-svg .node .shape{fill:color-mix(in srgb, var(--nc, var(--canopy, #00a9a0)) 22%, #04110f);stroke:var(--nc, var(--canopy, #00a9a0));stroke-width:.45}.plate-svg .shape-chip .shape{fill:#0c1416;stroke:var(--ink-dim,#9a9890)}.plate-svg .shape-check .shape,.plate-svg .shape-gate .shape{fill:#0c1416;stroke:#e8f6f1}.plate-svg .shape-commit .shape{fill:color-mix(in srgb, var(--canopy, #00a9a0) 35%, #04110f);stroke:var(--canopy,#00a9a0)}.plate-svg .label{font-size:2.3px;fill:#e8f6f1}.plate-svg .harness{font-size:1.9px;fill:var(--nc, var(--canopy, #00a9a0));opacity:.9}.plate-svg .group-box{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.3;stroke-dasharray:1.2 .9;opacity:.8}.plate-svg .group-title,.plate-svg .group-subtitle{font-size:1.9px;fill:var(--canopy,#00a9a0);letter-spacing:.14em;text-transform:uppercase}.plate-svg .member-shape{fill:color-mix(in srgb, var(--nc, var(--canopy, #00a9a0)) 22%, #04110f);stroke:var(--nc, var(--canopy, #00a9a0));stroke-width:.3}.plate-svg .member-label{font-size:1.9px;fill:#e8f6f1;text-anchor:middle}.plate-svg .mark-error{fill:var(--attention,#ffb454);font-size:2.6px;text-anchor:middle}.plate-svg .mark-fail{fill:none;stroke:#ff6b6b;stroke-width:.5;stroke-dasharray:.6 .5}.plate-svg .done{font-size:2px;fill:var(--canopy,#00a9a0);letter-spacing:.04em}.plate-svg .token{fill:var(--canopy,#00a9a0)}@media (prefers-reduced-motion:reduce){.plate-svg .token{display:none}}</style><defs><marker id="horizontal-1lom6tc-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="1.3" markerHeight="1.3" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker><marker id="horizontal-1lom6tc-arrow-fail" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="1.3" markerHeight="1.3" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker><marker id="horizontal-1lom6tc-arrow-error" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="1.3" markerHeight="1.3" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker></defs><g class="edges"><path class="edge pass" d="M13.45 24.14 C24.65 24.14 24.65 24.14 35.85 24.14" marker-end="url(#horizontal-1lom6tc-arrow)" data-from="build" data-to="test"/><path class="edge pass" d="M65.45 24.14 C76.28 24.14 76.28 24.14 87.11 24.14" marker-end="url(#horizontal-1lom6tc-arrow)" data-from="gate" data-to="triage"/><path class="edge pass" d="M39.45 24.14 C50.28 24.14 50.28 24.14 61.11 24.14" marker-end="url(#horizontal-1lom6tc-arrow)" data-from="test" data-to="gate"/><path class="edge pass" d="M91.45 24.14 C102.55 24.14 102.55 24.14 113.65 24.14" marker-end="url(#horizontal-1lom6tc-arrow)" data-from="triage" data-to="docs"/><path class="edge fail" d="M39.45 21.14 C39.45 -6.14 13.45 -6.14 13.45 20.34" marker-end="url(#horizontal-1lom6tc-arrow-fail)" data-from="test" data-to="build"/></g><g class="groups"></g><g class="nodes"><g class="node shape-agent" data-name="build" data-cx="13.45" data-cy="24.14" data-w="6" data-h="6" data-rank="0" data-lane="main"><title>build (agent)</title><rect class="shape" x="10.45" y="21.14" width="6" height="6" rx="3"/><text class="label" x="13.45" y="24.14" dy="6.4" text-anchor="middle">build</text></g><g class="node shape-check" data-name="test" data-cx="39.45" data-cy="24.14" data-w="5.6" data-h="5.6" data-rank="1" data-lane="main"><title>test (check)</title><rect class="shape" x="36.650000000000006" y="21.34" width="5.6" height="5.6" rx="0.7"/><text class="label" x="39.45" y="24.14" dy="6.4" text-anchor="middle">test</text></g><g class="node shape-gate" data-name="gate" data-cx="65.45" data-cy="24.14" data-w="5" data-h="5" data-rank="2" data-lane="main"><title>gate (gate)</title><rect class="shape" x="62.95" y="21.64" width="5" height="5" rx="0.5" transform="rotate(45 65.45 24.14)"/><text class="label" x="65.45" y="24.14" dy="6.4" text-anchor="middle">gate</text></g><g class="node shape-gate" data-name="triage" data-cx="91.45" data-cy="24.14" data-w="5" data-h="5" data-rank="3" data-lane="main"><title>triage (router)</title><rect class="shape" x="88.95" y="21.64" width="5" height="5" rx="0.5" transform="rotate(45 91.45 24.14)"/><text class="label" x="91.45" y="24.14" dy="6.4" text-anchor="middle">triage</text></g><g class="node shape-agent" data-name="docs" data-cx="117.45" data-cy="24.14" data-w="6" data-h="6" data-rank="4" data-lane="main"><title>docs (agent)</title><rect class="shape" x="114.45" y="21.14" width="6" height="6" rx="3"/><text class="label" x="117.45" y="24.14" dy="6.4" text-anchor="middle">docs</text></g></g><g class="marks"></g><g class="dones"><text class="done" x="117.45" y="35.09" text-anchor="middle" data-done="docs">✓ done</text></g><circle class="token" r="1.1" cx="0" cy="0"><animateMotion dur="3.6s" repeatCount="indefinite" path="M13.45 24.14C26.45 24.14 26.45 24.14 39.45 24.14C52.45 24.14 52.45 24.14 65.45 24.14C78.45 24.14 78.45 24.14 91.45 24.14C104.45 24.14 104.45 24.14 117.45 24.14"/></circle></svg><svg class="plate-svg plate-v" viewBox="0 0 42.68 122.55" width="213" height="613" role="img" xmlns="http://www.w3.org/2000/svg"><title>hello-graph</title><desc>Nodes in order: build, test, gate, triage, docs.</desc><style>.plate-svg text{font-family:var(--font-mono,'Sometype Mono',ui-monospace,Menlo,monospace)}.plate-svg .edge{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.45;opacity:.85}.plate-svg .edge.fail{stroke:#ff6b6b;stroke-dasharray:1.4 1.1;opacity:.7}.plate-svg .edge.error{stroke:var(--attention,#ffb454);stroke-width:.3;stroke-dasharray:.4 .8;opacity:.55}.plate-svg .edge.bus{stroke-width:.5;opacity:.85}.plate-svg .edge.order{stroke:currentColor;stroke-width:.3;stroke-dasharray:.5 1.1;stroke-linecap:round;opacity:.9}.plate-svg #vertical-1lom6tc-arrow path{fill:var(--canopy,#00a9a0);fill-opacity:.85}.plate-svg #vertical-1lom6tc-arrow-fail path{fill:#ff6b6b;fill-opacity:.7}.plate-svg #vertical-1lom6tc-arrow-error path{fill:var(--attention,#ffb454);fill-opacity:.7}.plate-svg .node .shape{fill:color-mix(in srgb, var(--nc, var(--canopy, #00a9a0)) 22%, #04110f);stroke:var(--nc, var(--canopy, #00a9a0));stroke-width:.45}.plate-svg .shape-chip .shape{fill:#0c1416;stroke:var(--ink-dim,#9a9890)}.plate-svg .shape-check .shape,.plate-svg .shape-gate .shape{fill:#0c1416;stroke:#e8f6f1}.plate-svg .shape-commit .shape{fill:color-mix(in srgb, var(--canopy, #00a9a0) 35%, #04110f);stroke:var(--canopy,#00a9a0)}.plate-svg .label{font-size:2.3px;fill:#e8f6f1}.plate-svg .harness{font-size:1.9px;fill:var(--nc, var(--canopy, #00a9a0));opacity:.9}.plate-svg .group-box{fill:none;stroke:var(--canopy,#00a9a0);stroke-width:.3;stroke-dasharray:1.2 .9;opacity:.8}.plate-svg .group-title,.plate-svg .group-subtitle{font-size:1.9px;fill:var(--canopy,#00a9a0);letter-spacing:.14em;text-transform:uppercase}.plate-svg .member-shape{fill:color-mix(in srgb, var(--nc, var(--canopy, #00a9a0)) 22%, #04110f);stroke:var(--nc, var(--canopy, #00a9a0));stroke-width:.3}.plate-svg .member-label{font-size:1.9px;fill:#e8f6f1;text-anchor:middle}.plate-svg .mark-error{fill:var(--attention,#ffb454);font-size:2.6px;text-anchor:middle}.plate-svg .mark-fail{fill:none;stroke:#ff6b6b;stroke-width:.5;stroke-dasharray:.6 .5}.plate-svg .done{font-size:2px;fill:var(--canopy,#00a9a0);letter-spacing:.04em}.plate-svg .token{fill:var(--canopy,#00a9a0)}@media (prefers-reduced-motion:reduce){.plate-svg .token{display:none}}</style><defs><marker id="vertical-1lom6tc-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="1.3" markerHeight="1.3" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker><marker id="vertical-1lom6tc-arrow-fail" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="1.3" markerHeight="1.3" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker><marker id="vertical-1lom6tc-arrow-error" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="1.3" markerHeight="1.3" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker></defs><g class="edges"><path class="edge pass" d="M20.4 13 C20.4 22.2 20.2 22.2 20.2 31.4" marker-end="url(#vertical-1lom6tc-arrow)" data-from="build" data-to="test"/><path class="edge pass" d="M19.9 57 C19.9 65.83 19.9 65.83 19.9 74.66" marker-end="url(#vertical-1lom6tc-arrow)" data-from="gate" data-to="triage"/><path class="edge pass" d="M20.2 35 C20.2 43.83 19.9 43.83 19.9 52.66" marker-end="url(#vertical-1lom6tc-arrow)" data-from="test" data-to="gate"/><path class="edge pass" d="M19.9 79 C19.9 88.1 20.4 88.1 20.4 97.2" marker-end="url(#vertical-1lom6tc-arrow)" data-from="triage" data-to="docs"/><path class="edge fail" d="M17.2 35 C9.4 35 9.4 13 16.6 13" marker-end="url(#vertical-1lom6tc-arrow-fail)" data-from="test" data-to="build"/></g><g class="groups"></g><g class="nodes"><g class="node shape-agent" data-name="build" data-cx="20.4" data-cy="13" data-w="6" data-h="6" data-rank="0" data-lane="main"><title>build (agent)</title><rect class="shape" x="17.4" y="10" width="6" height="6" rx="3"/><text class="label" x="25.4" y="13" dy="0.8" text-anchor="start">build</text></g><g class="node shape-check" data-name="test" data-cx="20.2" data-cy="35" data-w="5.6" data-h="5.6" data-rank="1" data-lane="main"><title>test (check)</title><rect class="shape" x="17.4" y="32.2" width="5.6" height="5.6" rx="0.7"/><text class="label" x="25" y="35" dy="0.8" text-anchor="start">test</text></g><g class="node shape-gate" data-name="gate" data-cx="19.9" data-cy="57" data-w="5" data-h="5" data-rank="2" data-lane="main"><title>gate (gate)</title><rect class="shape" x="17.4" y="54.5" width="5" height="5" rx="0.5" transform="rotate(45 19.9 57)"/><text class="label" x="24.4" y="57" dy="0.8" text-anchor="start">gate</text></g><g class="node shape-gate" data-name="triage" data-cx="19.9" data-cy="79" data-w="5" data-h="5" data-rank="3" data-lane="main"><title>triage (router)</title><rect class="shape" x="17.4" y="76.5" width="5" height="5" rx="0.5" transform="rotate(45 19.9 79)"/><text class="label" x="24.4" y="79" dy="0.8" text-anchor="start">triage</text></g><g class="node shape-agent" data-name="docs" data-cx="20.4" data-cy="101" data-w="6" data-h="6" data-rank="4" data-lane="main"><title>docs (agent)</title><rect class="shape" x="17.4" y="98" width="6" height="6" rx="3"/><text class="label" x="25.4" y="101" dy="0.8" text-anchor="start">docs</text></g></g><g class="marks"></g><g class="dones"><text class="done" x="20.4" y="111.95" text-anchor="middle" data-done="docs">✓ done</text></g><circle class="token" r="1.1" cx="0" cy="0"><animateMotion dur="3.6s" repeatCount="indefinite" path="M20.4 13C20.4 24 20.2 24 20.2 35C20.2 46 19.9 46 19.9 57C19.9 68 19.9 68 19.9 79C19.9 90 20.4 90 20.4 101"/></circle></svg></figure>
 <dl class="sheet"><div class="field"><dt>Kind</dt><dd><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg> graph</dd></div><div class="field"><dt>Name</dt><dd>hello-graph</dd></div><div class="field"><dt>Source</dt><dd><a href="https://github.com/UniverLab/canopy-graphs" target="_blank" rel="noopener noreferrer">UniverLab/canopy-graphs<svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg></a></dd></div><div class="field"><dt>Stars</dt><dd><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg> 7 stars</dd></div><div class="field"><dt>Nodes</dt><dd>agent 2 · check 1 · gate 1 · router 1</dd></div><div class="field"><dt>Edges</dt><dd>5 edges · 1 fail</dd></div><div class="field"><dt>Agent nodes</dt><dd>build, docs</dd></div><div class="field"><dt>Install</dt><dd><span class="row-install"><code>canopy graph install hello-graph</code><button type="button" class="copy" data-copy="canopy graph install hello-graph" data-label="Copy" data-done="Copied" aria-label="Copy the install command to the clipboard"><span class="copy-icon" data-icon="copy"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></span><span class="copy-text">Copy</span></button></span></dd></div><div class="field"><dt>Report</dt><dd><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"/></svg> <a href="https://github.com/UniverLab/canopy-graphs/issues/new?template=report-document.yml&amp;title=Report%3A%20graph%20UniverLab%2Fcanopy-graphs%2Fhello-graph&amp;document=https%3A%2F%2Fgraphs.univerlab.org%2Fg%2Fhello-graph&amp;kind=graph&amp;source=UniverLab%2Fcanopy-graphs" target="_blank" rel="noopener noreferrer">Report<svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg></a></dd></div></dl>
 </div>
-<section class="runs" id="what-this-runs">
-<h2 class="kicker"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19h8"/><path d="m4 17 6-6-6-6"/></svg><span>What this runs</span></h2>
-<p class="runs-summary">Runs 0 shell commands and 0 agent instructions on your machine.</p>
-</section>
 <h2 class="kicker"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg><span>README</span></h2>
 <div class="readme"><h1>hello-graph</h1>
 <p>A graph the page tests render, with <strong>one fail edge</strong>.</p>
 <h2>Install</h2>
 <pre><code>canopy graph install hello-graph</code></pre>
 <p>Read the <a href="https://univerlab.org/canopy/" rel="nofollow">docs</a> and run <code>npm test</code>.</p></div>
+<section class="runs" id="what-this-runs">
+<h2 class="kicker"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19h8"/><path d="m4 17 6-6-6-6"/></svg><span>What this runs</span></h2>
+<p class="runs-summary">Runs 0 shell commands and 0 agent instructions on your machine.</p>
+</section>
 </main>
 <footer class="look-colophon">
   <picture class="colophon-band" aria-hidden="true">

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * The document page: the plate, the datasheet, "what this runs" and the
- * README, rendered from one validated document.
+ * The document page: the plate, the datasheet, the README and "what this
+ * runs", rendered from one validated document.
  *
  * `/g`, `/n` and `/d` all come through `documentPage`, so a shared document
  * reads the same wherever it is reached. A route passes what only it knows:
@@ -147,28 +147,24 @@ function commandBlock(command: RunCommand): string {
 }
 
 /**
- * One agent instruction of the runs section: a disclosure titled by node,
- * its first three lines as the summary, the full text inside. A builtin
- * preset has no text in the document, so it names itself instead.
+ * One agent instruction of the runs section: its node title and its full
+ * text in a mono block, always expanded. A builtin preset has no text in
+ * the document, so it names itself instead.
  */
 function promptBlock(prompt: RunPrompt): string {
-  const preview = prompt.source === "builtin"
-    ? builtinPresetLine(prompt.text)
-    : prompt.text.split(/\r?\n/).slice(0, 3).join("\n");
   const body = prompt.source === "builtin"
     ? `<p class="run-builtin">${escapeHtml(builtinPresetLine(prompt.text))}</p>`
     : `<pre class="run-prompt-text"><code>${escapeHtml(prompt.text)}</code></pre>`;
   return (
-    `<details class="run-prompt">` +
-    `<summary><span class="run-where">${escapeHtml(prompt.where)}</span>` +
-    `<span class="run-preview">${escapeHtml(preview)}</span></summary>` +
+    `<div class="run">` +
+    `<p class="run-where">${escapeHtml(prompt.where)}</p>` +
     body +
-    `</details>`
+    `</div>`
   );
 }
 
 /**
- * The transparency section, before the README: the summary line, every
+ * The transparency section, after the README: the summary line, every
  * command verbatim, every agent instruction readable. Even an empty
  * document states its counts, so the absence of runs is visible too.
  * On community documents the summary carries the warn tint.
@@ -365,8 +361,8 @@ function datasheet(
 
 /**
  * One document page: title, star button, the community warning above the
- * install box, the plate beside its datasheet, what the document runs,
- * then the README. Official pages carry the badge and no warning. A draft
+ * install box, the plate beside its datasheet, the README, then what the
+ * document runs. Official pages carry the badge and no warning. A draft
  * page passes a banner and `standalone`, so the same renderer draws it
  * without the GitHub furniture.
  */
@@ -418,8 +414,8 @@ export function documentPage(
     plateFigure(document, ref.kind),
     sheet.html,
     `</div>`,
-    runs,
     readme,
+    runs,
   ].filter((block) => block !== "").join("\n");
 
   const markdown = [
@@ -436,11 +432,15 @@ export function documentPage(
     `    ${install}`,
     ...(doc.official || standalone ? [] : [RUNS_REVIEW_LINE]),
     ``,
+    ...(readme === ""
+      ? []
+      : [
+        `## ${README_HEADING}`,
+        ``,
+        doc.readme.endsWith("\n") ? doc.readme : `${doc.readme}\n`,
+        ``,
+      ]),
     runsSectionMarkdown(ref.kind, document),
-    ``,
-    readme === ""
-      ? ""
-      : `## ${README_HEADING}\n\n${doc.readme.endsWith("\n") ? doc.readme : `${doc.readme}\n`}`,
   ].join("\n");
 
   return {

