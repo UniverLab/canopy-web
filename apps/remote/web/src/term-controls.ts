@@ -1,12 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
-// The session view's terminal controls: zoom, the Fit affordance, the
+// The session view's terminal controls: zoom, the key-bar switch, the
 // latest button, and the per-session control-size toggle with its
 // explainer. Rendered as HTML beside the terminal pane and wired to the
 // open TerminalView plus the shell's live session state.
 
 import { icon } from "./icons-dom.js";
 import type { TerminalView } from "./terminal.js";
-import { readControlSize, readFitOnly, writeControlSize, writeFitOnly } from "./terminal-prefs.js";
+import {
+  readControlSize,
+  readKeyBarVisible,
+  writeControlSize,
+  writeKeyBarVisible,
+} from "./terminal-prefs.js";
 
 export function termControlsHtml(): string {
   return `
@@ -15,11 +20,11 @@ export function termControlsHtml(): string {
         <button type="button" id="term-zoom-in" aria-label="Zoom in">${icon("plus")}</button>
         <button
           type="button"
-          id="term-fit"
-          aria-pressed="${readFitOnly() ? "true" : "false"}"
-          aria-label="Fit terminal to pane width"
-          title="Fit the terminal to the pane width"
-        >Fit</button>
+          id="term-keys"
+          aria-pressed="${readKeyBarVisible() ? "true" : "false"}"
+          aria-label="Show terminal keys"
+          title="Show or hide the terminal keys"
+        >Keys</button>
         <button type="button" id="term-latest" hidden aria-label="Scroll to the latest output">${icon("arrowDown")}<span>latest</span></button>
       </div>`;
 }
@@ -56,15 +61,24 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
   const { root } = deps;
   root.querySelector("#term-zoom-in")?.addEventListener("click", () => deps.terminalView()?.zoomIn());
   root.querySelector("#term-zoom-out")?.addEventListener("click", () => deps.terminalView()?.zoomOut());
-  // The terminal always fits the pane width; Fit stays as a harmless
-  // remembered affordance that is never needed to read the line.
-  const fitButton = root.querySelector<HTMLButtonElement>("#term-fit");
-  fitButton?.addEventListener("click", () => {
-    const next = fitButton.getAttribute("aria-pressed") !== "true";
-    writeFitOnly(next);
-    fitButton.setAttribute("aria-pressed", `${next}`);
-    deps.terminalView()?.setFitOnly(next);
-  });
+  // The Keys switch hides the nine-key bar and nothing else: the zoom and
+  // the composer stay put. The choice is remembered per device.
+  const keysButton = root.querySelector<HTMLButtonElement>("#term-keys");
+  const keyBar = root.querySelector<HTMLElement>("#keybar");
+  const showKeyBar = (visible: boolean): void => {
+    keysButton?.setAttribute("aria-pressed", visible ? "true" : "false");
+    if (keyBar) {
+      keyBar.hidden = !visible;
+    }
+  };
+  if (keysButton) {
+    showKeyBar(readKeyBarVisible());
+    keysButton.addEventListener("click", () => {
+      const next = keysButton.getAttribute("aria-pressed") !== "true";
+      writeKeyBarVisible(next);
+      showKeyBar(next);
+    });
+  }
   const latestButton = root.querySelector<HTMLButtonElement>("#term-latest");
   latestButton?.addEventListener("click", () => {
     const view = deps.terminalView();

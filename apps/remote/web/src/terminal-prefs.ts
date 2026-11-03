@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
-// Per-device terminal preferences. The terminal always fits the pane width;
-// Fit stays as a harmless remembered affordance. "This device controls the
-// size" is per session: each session remembers whether this device asserts
-// its PTY size, default off. Every storage access is guarded: Safari
-// private mode and embedded webviews throw on localStorage, and a
-// terminal must still open without it.
+// Per-device terminal preferences. The key bar is shown on touch by default
+// and hidden under a fine pointer; a tap on the Keys switch remembers the
+// choice. "This device controls the size" is per session: each session
+// remembers whether this device asserts its PTY size, default off. Every
+// storage access is guarded: Safari private mode and embedded webviews throw
+// on localStorage, and a terminal must still open without it.
 
-export const FIT_ONLY_KEY = "canopy.remote.term.fitOnly";
+export const KEYBAR_KEY = "canopy.remote.term.keybar";
 export const CONTROL_SIZE_KEY_PREFIX = "canopy.remote.term.controlSize.";
 
 function storage(): Storage | null {
@@ -17,17 +17,42 @@ function storage(): Storage | null {
   }
 }
 
-export function readFitOnly(): boolean {
+/** True when the primary pointer is a mouse or trackpad. */
+export function pointerIsFine(): boolean {
   try {
-    return storage()?.getItem(FIT_ONLY_KEY) === "1";
+    return (
+      typeof globalThis.matchMedia === "function" &&
+      globalThis.matchMedia("(pointer: fine)").matches
+    );
   } catch {
     return false;
   }
 }
 
-export function writeFitOnly(value: boolean): void {
+/** Visible on touch by default; hidden under a fine pointer. */
+export function defaultKeyBarVisible(): boolean {
+  return !pointerIsFine();
+}
+
+/** The remembered key-bar choice, falling back to the pointer default. */
+export function readKeyBarVisible(): boolean {
   try {
-    storage()?.setItem(FIT_ONLY_KEY, value ? "1" : "0");
+    const stored = storage()?.getItem(KEYBAR_KEY);
+    if (stored === "1") {
+      return true;
+    }
+    if (stored === "0") {
+      return false;
+    }
+  } catch {
+    // Fall through to the pointer default.
+  }
+  return defaultKeyBarVisible();
+}
+
+export function writeKeyBarVisible(value: boolean): void {
+  try {
+    storage()?.setItem(KEYBAR_KEY, value ? "1" : "0");
   } catch {
     // A terminal that cannot remember the toggle still works.
   }

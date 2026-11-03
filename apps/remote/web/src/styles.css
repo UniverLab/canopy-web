@@ -657,16 +657,10 @@ label > textarea {
   gap: var(--gap);
 }
 
+/* Every control beside the terminal keeps the 44x44 touch floor: the base
+ * button height is 2.75rem and this widens the short icon buttons. */
 .term-controls button {
   min-width: 2.75rem;
-}
-
-/* The Fit mode is a toggle, so its state has to be visible and not only in
- * aria-pressed: on a wide screen both modes render the same, and the button
- * is then the only sign of what the device remembered. */
-#term-fit[aria-pressed="true"] {
-  border-color: var(--accent);
-  color: var(--accent);
 }
 
 #term-latest {
@@ -725,16 +719,17 @@ label > textarea {
   gap: 0.3rem;
 }
 
-/* The latch's circle, filled to a dot while the modifier is armed. */
-.keybar .key .latch-icon {
-  width: 12px;
-  height: 12px;
+/* The Keys switch hides the bar without touching the zoom or the composer. */
+.keybar[hidden] {
+  display: none;
 }
 
-/* A latched Ctrl or Shift shows pressed until the next key releases it. */
+/* A latched Ctrl or Shift fills teal with a thicker border until the next
+ * key releases it: the fill is the whole signal, no icon or text. */
 .keybar .key[aria-pressed="true"] {
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--accent);
+  border: 2px solid var(--accent);
+  color: var(--accent-ink);
 }
 
 /* A 360x640 phone: the 96 px banner leaves no slack in the session column,

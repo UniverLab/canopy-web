@@ -2,9 +2,9 @@
 import { expect, test } from "@playwright/test";
 
 // Audit finding U4 (2026-11-01, second pass): terminal text clipped on the
-// right (`.../univerlab/sandbo`) until "Fit" was pressed by hand, and on
-// the left at zoom. The terminal must fit its panel by itself, on open, on
-// panel resize and on zoom change; Fit stays but is never needed.
+// right (`.../univerlab/sandbo`) until the terminal was refitted by hand,
+// and on the left at zoom. The terminal must fit its panel by itself, on
+// open, on panel resize and on zoom change.
 //
 // The WebGL renderer has no .xterm-rows text, so output is asserted through
 // the fake host's recorded writes, never the DOM — while geometry proves
@@ -103,8 +103,6 @@ for (const viewport of [
     expect(measured.scrollLeft).toBeLessThanOrEqual(1);
     expect(measured.scalerLeft).toBeGreaterThanOrEqual(measured.contentLeft - 1);
     expect(measured.scalerRight).toBeLessThanOrEqual(measured.contentRight + 1);
-    // …with Fit never touched.
-    await expect(page.locator("#term-fit")).toHaveAttribute("aria-pressed", "false");
   });
 }
 
@@ -142,6 +140,4 @@ test("terminal_autofits_panel keeps the line start visible at 200% zoom", async 
   // …but the line start stays visible: the pane is anchored left.
   expect(measured.scrollLeft).toBeLessThanOrEqual(1);
   expect(measured.scalerLeft).toBeGreaterThanOrEqual(measured.contentLeft - 1);
-  // Fit never touched here either.
-  await expect(page.locator("#term-fit")).toHaveAttribute("aria-pressed", "false");
 });

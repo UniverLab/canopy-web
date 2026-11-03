@@ -40,6 +40,11 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator('[data-session="smoke"]')).toBeVisible();
   await page.locator('[data-session="smoke"]').click();
   await expect.poll(() => terminalText(page)).toContain("hello from the host");
+  // A fine pointer hides the key bar by default; these specs tap the keys,
+  // so pin it visible the way a touch device shows it.
+  if (!(await page.locator("#keybar").isVisible())) {
+    await page.locator("#term-keys").click();
+  }
 });
 
 test("renders the terminal and the key bar at 360x640", async ({ page }) => {
@@ -88,9 +93,9 @@ test("renders a legible 80-column session at 390x844", async ({ page }, testInfo
     })),
   );
   expect(faces).toContainEqual({ family: "JetBrains Mono", status: "loaded" });
-  // Always fitted: the terminal fits the pane with Fit untouched (off),
-  // so the rightmost column reads with no manual press. Glyph legibility
-  // itself is the sibling spec's font-size concern, not a scale floor.
+  // Always fitted: the terminal fits the pane by itself, so the rightmost
+  // column reads with no manual step. Glyph legibility itself is the
+  // sibling spec's font-size concern, not a scale floor.
   await expect
     .poll(() =>
       page.evaluate(() => {
@@ -119,7 +124,6 @@ test("renders a legible 80-column session at 390x844", async ({ page }, testInfo
     const scalerBox = scaler.getBoundingClientRect();
     return {
       fontOk: document.fonts.check('14px "JetBrains Mono"'),
-      fit: fit.dataset.fit,
       scale: Number(fit.dataset.scale),
       pageOverflow: doc.scrollWidth - doc.clientWidth,
       paneScroll: pane.scrollWidth - pane.clientWidth,
@@ -134,7 +138,6 @@ test("renders a legible 80-column session at 390x844", async ({ page }, testInfo
     };
   });
   expect(measured.fontOk).toBe(true);
-  expect(measured.fit).toBe("off");
   expect(measured.scale).toBeGreaterThan(0);
   // The session fits inside its card with the line start at the left edge;
   // the page itself never scrolls sideways.
@@ -461,11 +464,7 @@ test("builder picks sections by kind at 390x844", async ({ page }, testInfo) => 
 });
 
 test("terminal pans when zoomed", async ({ page }) => {
-  const fit = page.locator("#term-fit");
-  await expect(fit).toHaveAttribute("aria-pressed", "false");
   // Always fitted, so only the zoom makes it overflow.
-  await fit.click();
-  await expect(fit).toHaveAttribute("aria-pressed", "true");
   await page.locator("#term-zoom-in").click();
   await page.locator("#term-zoom-in").click();
   const pan = await page.evaluate(() => {
@@ -473,13 +472,32 @@ test("terminal pans when zoomed", async ({ page }) => {
     return {
       overflow: getComputedStyle(pane).overflowX,
       larger: pane.scrollWidth > pane.clientWidth,
-      fit: (document.querySelector(".term-fit") as HTMLElement).dataset.fit,
     };
   });
   // Zoomed content exceeds the pane, and the pane lets the user pan it.
-  expect(pan.fit).toBe("on");
   expect(pan.larger).toBe(true);
   expect(["auto", "scroll"]).toContain(pan.overflow);
+});
+
+test("the Keys switch hides the bar and remembers the choice across reload", async ({ page }) => {
+  const bar = page.locator("#keybar");
+  const toggle = page.locator("#term-keys");
+  // The beforeEach pinned the bar visible.
+  await expect(bar).toBeVisible();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await toggle.click();
+  await expect(bar).toBeHidden();
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  // Only the key bar goes: zoom and composer stay.
+  await expect(page.locator("#term-zoom-in")).toBeVisible();
+  await expect(page.locator(".composer-input")).toBeVisible();
+  // The choice survives a reload.
+  await page.reload();
+  await expect(page.locator('[data-session="smoke"]')).toBeVisible();
+  await page.locator('[data-session="smoke"]').click();
+  await expect(page.locator("#term-keys")).toBeVisible();
+  await expect(page.locator("#keybar")).toBeHidden();
+  await expect(page.locator("#term-keys")).toHaveAttribute("aria-pressed", "false");
 });
 
 for (const viewport of [
@@ -530,16 +548,17 @@ for (const viewport of [
     const errorShot = await page.screenshot({ path: testInfo.outputPath(`morph-error-${viewport.label}.png`) });
     await testInfo.attach(`morph-error-${viewport.label}`, { body: errorShot, contentType: "image/png" });
 
-    // The Ctrl latch: a circle that fills to a dot, in place.
-    const latch = page.locator('#keybar .key[data-key="ctrl"] .latch-icon');
-    await expect(latch).toHaveAttribute("data-icon", "circle");
-    const latchBefore = await latch.boundingBox();
-    await page.locator('#keybar .key[data-key="ctrl"]').click();
-    await expect(page.locator('#keybar .key[data-key="ctrl"]')).toHaveAttribute("aria-pressed", "true");
-    await expect(latch).toHaveAttribute("data-icon", "circleDot");
-    expect(await latch.boundingBox()).toEqual(latchBefore);
-    const latchShot = await page.screenshot({ path: testInfo.outputPath(`morph-latch-${viewport.label}.png`) });
-    await testInfo.attach(`morph-latch-${viewport.label}`, { body: latchShot, contentType: "image/png" });
+    // The Ctrl latch: a filled teal button, with no circle or dot icon.
+    const ctrl = page.locator('#keybar .key[data-key="ctrl"]');
+    await expect(page.locator("#keybar .latch-icon")).toHaveCount(0);
+    await expect(page.locator('#keybar [data-icon="circle"], #keybar [data-icon="circleDot"]')).toHaveCount(0);
+    await expect(ctrl).toHaveAttribute("aria-pressed", "false");
+    await ctrl.click();
+    await expect(ctrl).toHaveAttribute("aria-pressed", "true");
+    const pressedFill = await ctrl.evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(pressedFill).not.toBe("rgba(0, 0, 0, 0)");
+    const latchShot = await page.screenshot({ path: testInfo.outputPath(`latch-fill-${viewport.label}.png`) });
+    await testInfo.attach(`latch-fill-${viewport.label}`, { body: latchShot, contentType: "image/png" });
   });
 
   test(`connects, kills and lists sessions with their icons at ${viewport.label}`, async ({ page }) => {

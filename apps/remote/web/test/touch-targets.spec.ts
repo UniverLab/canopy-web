@@ -85,4 +85,34 @@ test("touch_targets_meet_44px", async ({ page }) => {
     expect(link.height, `colophon "${link.label}" height`).toBeGreaterThanOrEqual(44);
   }
   expect(colorScheme).toBe("dark");
+
+  // The session's terminal controls and keys keep the same floor. A fine
+  // pointer hides the key bar by default, so show it first.
+  await page.locator('[data-session="smoke"]').click();
+  await expect(page.locator("#term-pane")).toBeVisible();
+  if (!(await page.locator("#keybar").isVisible())) {
+    await page.locator("#term-keys").click();
+  }
+  const barBoxes = await page
+    .locator(".term-controls button, #keybar .key")
+    .evaluateAll((els) =>
+      els
+        .filter((el) => (el as HTMLElement).offsetParent !== null)
+        .map((el) => {
+          const box = el.getBoundingClientRect();
+          return {
+            label: el.getAttribute("aria-label") ?? el.textContent ?? "",
+            width: box.width,
+            height: box.height,
+          };
+        }),
+    );
+  process.stdout.write(`session bar boxes at 390x844: ${JSON.stringify(barBoxes, null, 2)}\n`);
+  // Zoom out, zoom in, Keys, and the nine keys; latest stays hidden until
+  // the user scrolls up.
+  expect(barBoxes).toHaveLength(12);
+  for (const control of barBoxes) {
+    expect(control.width, `${control.label} width`).toBeGreaterThanOrEqual(44);
+    expect(control.height, `${control.label} height`).toBeGreaterThanOrEqual(44);
+  }
 });

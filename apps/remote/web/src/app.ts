@@ -29,7 +29,7 @@ import { convergeOpenSessionName, type SessionStore } from "./sessions.js";
 import { createXtermHandle, TerminalView } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
 import { termControlsHtml, termSizeHtml, wireTermControls } from "./term-controls.js";
-import { readControlSize, readFitOnly } from "./terminal-prefs.js";
+import { readControlSize } from "./terminal-prefs.js";
 import { shellTitle } from "./titles.js";
 import type { PairSubmit } from "./ui.js";
 
@@ -713,7 +713,6 @@ export function createShell(
             }
           },
         },
-        { fitOnly: readFitOnly() },
       );
       terminalView.mount(pane, cols, rows);
       // A remembered control-size toggle re-asserts on every (re)mount, so

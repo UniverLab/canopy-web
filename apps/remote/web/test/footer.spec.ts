@@ -71,6 +71,11 @@ test("keeps the session's terminal, key bar and composer above the footer at 390
   await page.locator('[data-session="smoke"]').click();
   await expect.poll(() => terminalText(page)).toContain("hello from the host");
   await expect(page.locator("#term-pane .xterm-screen")).toBeVisible();
+  // The key bar is hidden under a fine pointer by default: show it so its
+  // box sits in the terminal → key bar → composer order below.
+  if (!(await page.locator("#keybar").isVisible())) {
+    await page.locator("#term-keys").click();
+  }
   await expectFooterAfterMain(page);
   // Top to bottom: terminal, key bar, composer, then the footer — the
   // footer never overlays any of them, and the terminal keeps its height.

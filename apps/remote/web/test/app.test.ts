@@ -7,7 +7,7 @@ import { connectFailMessage } from "../src/peer.js";
 import type { PromptDraft, SpawnRequest } from "../src/protocol.js";
 import { openSessionName, SessionStore } from "../src/sessions.js";
 import type { TerminalFactory, TerminalHandle } from "../src/terminal.js";
-import { readControlSize, writeControlSize } from "../src/terminal-prefs.js";
+import { KEYBAR_KEY, readControlSize, writeControlSize } from "../src/terminal-prefs.js";
 import { sessionTitle } from "../src/titles.js";
 import type { PairSubmit } from "../src/ui.js";
 
@@ -303,8 +303,8 @@ describe("createShell", () => {
     expect(query("#session-back").textContent).toBe("");
     expect(query("#term-zoom-out svg")).not.toBeNull();
     expect(query("#term-zoom-in svg")).not.toBeNull();
-    // Fit stays a word: it is a mode, not a direction.
-    expect(query("#term-fit").textContent).toBe("Fit");
+    // The Keys switch stays a word: it names the bar it shows.
+    expect(query("#term-keys").textContent).toBe("Keys");
   });
 
   it("ends every view in the same UniverLab footer, after the main", () => {
@@ -645,18 +645,28 @@ describe("createShell", () => {
     expect(handles).toHaveLength(1);
   });
 
-  it("remembers the Fit toggle per device", () => {
+  it("hides and shows the key bar with the Keys switch, remembered per device", () => {
     localStorage.clear();
+    localStorage.setItem(KEYBAR_KEY, "1");
     shell.showSession("s1", "build");
-    shell.ensureTerminal("s1", 80, 24);
-    const fit = query<HTMLButtonElement>("#term-fit");
-    expect(fit.getAttribute("aria-pressed")).toBe("false");
-    fit.click();
-    expect(fit.getAttribute("aria-pressed")).toBe("true");
-    expect(localStorage.getItem("canopy.remote.term.fitOnly")).toBe("1");
-    fit.click();
-    expect(fit.getAttribute("aria-pressed")).toBe("false");
-    expect(localStorage.getItem("canopy.remote.term.fitOnly")).toBe("0");
+    const toggle = query<HTMLButtonElement>("#term-keys");
+    const bar = query<HTMLElement>("#keybar");
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    expect(bar.hidden).toBe(false);
+    toggle.click();
+    expect(bar.hidden).toBe(true);
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    expect(localStorage.getItem(KEYBAR_KEY)).toBe("0");
+    // A fresh paint remembers the hidden choice.
+    shell.showSession("s1", "build");
+    expect(query<HTMLElement>("#keybar").hidden).toBe(true);
+    expect(query<HTMLButtonElement>("#term-keys").getAttribute("aria-pressed")).toBe("false");
+    // And the switch shows it again without touching zoom or composer.
+    query<HTMLButtonElement>("#term-keys").click();
+    expect(query<HTMLElement>("#keybar").hidden).toBe(false);
+    expect(query("#term-zoom-in")).not.toBeNull();
+    expect(query(".composer-input")).not.toBeNull();
+    expect(localStorage.getItem(KEYBAR_KEY)).toBe("1");
   });
 
   it("spawns from the New sheet and opens the spawned session", () => {

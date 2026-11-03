@@ -18,10 +18,9 @@
 // follow-bottom switches off until the app exits back to the shell. The
 // scale always measures the real .xterm-screen, never the .xterm wrapper.
 // The terminal fits its panel on open, on panel resize, on zoom change
-// and on buffer change with no manual Fit press. Every refit anchors the
-// pane at scrollLeft 0, so the line start stays visible and a stale
-// scroll never clips the left edge. The Fit toggle remains as a harmless
-// remembered affordance that no longer changes the scale.
+// and on buffer change. Every refit anchors the pane at scrollLeft 0, so
+// the line start stays visible and a stale scroll never clips the left
+// edge.
 
 import "@xterm/xterm/css/xterm.css";
 import { Terminal } from "@xterm/xterm";
@@ -55,15 +54,6 @@ export interface TerminalHandle {
 }
 
 export type TerminalFactory = (host: HTMLElement, cols: number, rows: number) => TerminalHandle;
-
-export interface TerminalViewOptions {
-  /**
-   * Remembered Fit affordance only: the view always fits the pane width,
-   * so this no longer changes the scale. Kept so the button's wiring and
-   * the per-device preference keep working as a harmless no-op.
-   */
-  fitOnly?: boolean;
-}
 
 export const MIN_ZOOM = 0.4;
 export const MAX_ZOOM = 3;
@@ -207,7 +197,6 @@ export class TerminalView {
   private pane: HTMLElement | null = null;
   private handle: TerminalHandle | null = null;
   private zoom = 1;
-  private fitOnly: boolean;
   private rows = 0;
   private following = true;
   private alternate = false;
@@ -218,14 +207,9 @@ export class TerminalView {
   private resolveReady: (() => void) | null = null;
   private pendingWrites: Uint8Array[] = [];
 
-  constructor(
-    factory: TerminalFactory,
-    callbacks: TerminalViewCallbacks,
-    options?: TerminalViewOptions,
-  ) {
+  constructor(factory: TerminalFactory, callbacks: TerminalViewCallbacks) {
     this.factory = factory;
     this.callbacks = callbacks;
-    this.fitOnly = options?.fitOnly ?? false;
   }
 
   // The scaffold: .term-pane (sizes and scrolls) > .term-fit (width
@@ -316,10 +300,6 @@ export class TerminalView {
     return this.alternate;
   }
 
-  get isFitOnly(): boolean {
-    return this.fitOnly;
-  }
-
   write(data: Uint8Array): void {
     if (this.handle) {
       this.handle.write(data);
@@ -348,21 +328,6 @@ export class TerminalView {
 
   zoomOut(): void {
     this.setZoom(this.zoom / ZOOM_STEP);
-  }
-
-  /**
-   * The Fit button's remembered state; kept as a harmless no-op (the view
-   * always fits). It mirrors the flag to the dataset only — never a refit,
-   * which would yank a manual pan back to the left edge.
-   */
-  setFitOnly(fitOnly: boolean): void {
-    if (this.fitOnly === fitOnly) {
-      return;
-    }
-    this.fitOnly = fitOnly;
-    if (this.fit) {
-      this.fit.dataset.fit = fitOnly ? "on" : "off";
-    }
   }
 
   scrollToLatest(): void {
@@ -423,7 +388,6 @@ export class TerminalView {
     fit.dataset.scale = `${scale}`;
     fit.dataset.buffer = this.alternate ? "alternate" : "normal";
     fit.dataset.rowHeight = `${rowHeight}`;
-    fit.dataset.fit = this.fitOnly ? "on" : "off";
     this.pane?.style.setProperty("--term-visual-h", `${naturalHeight * scale}px`);
     // A stale horizontal scroll would clip the line start after the scale
     // shrinks (open, resize, zoom out): anchor the pane at the left edge so

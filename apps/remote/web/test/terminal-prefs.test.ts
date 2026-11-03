@@ -1,35 +1,44 @@
 // SPDX-License-Identifier: Apache-2.0
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CONTROL_SIZE_KEY_PREFIX,
   controlSizeKey,
-  FIT_ONLY_KEY,
+  KEYBAR_KEY,
+  pointerIsFine,
   readControlSize,
-  readFitOnly,
+  readKeyBarVisible,
   writeControlSize,
-  writeFitOnly,
+  writeKeyBarVisible,
 } from "../src/terminal-prefs.js";
 
-describe("terminal prefs", () => {
+describe("key bar visibility", () => {
   afterEach(() => {
     localStorage.clear();
+    vi.unstubAllGlobals();
   });
 
-  it("defaults to Fit off", () => {
-    expect(readFitOnly()).toBe(false);
+  it("defaults visible on touch and hidden under a fine pointer", () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(pointer: fine)" }));
+    expect(pointerIsFine()).toBe(true);
+    expect(readKeyBarVisible()).toBe(false);
+    vi.stubGlobal("matchMedia", () => ({ matches: false }));
+    expect(pointerIsFine()).toBe(false);
+    expect(readKeyBarVisible()).toBe(true);
   });
 
-  it("remembers Fit per device", () => {
-    writeFitOnly(true);
-    expect(localStorage.getItem(FIT_ONLY_KEY)).toBe("1");
-    expect(readFitOnly()).toBe(true);
-    writeFitOnly(false);
-    expect(localStorage.getItem(FIT_ONLY_KEY)).toBe("0");
-    expect(readFitOnly()).toBe(false);
+  it("remembers the choice per device over the pointer default", () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: false }));
+    writeKeyBarVisible(false);
+    expect(localStorage.getItem(KEYBAR_KEY)).toBe("0");
+    expect(readKeyBarVisible()).toBe(false);
+    writeKeyBarVisible(true);
+    expect(localStorage.getItem(KEYBAR_KEY)).toBe("1");
+    expect(readKeyBarVisible()).toBe(true);
   });
 
-  it("survives a storage that throws (private mode)", () => {
+  it("falls back to the pointer default when storage throws (private mode)", () => {
     const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
     Object.defineProperty(globalThis, "localStorage", {
       configurable: true,
       get() {
@@ -37,8 +46,8 @@ describe("terminal prefs", () => {
       },
     });
     try {
-      expect(readFitOnly()).toBe(false);
-      expect(() => writeFitOnly(true)).not.toThrow();
+      expect(readKeyBarVisible()).toBe(false);
+      expect(() => writeKeyBarVisible(true)).not.toThrow();
       expect(readControlSize("smoke")).toBe(false);
       expect(() => writeControlSize("smoke", true)).not.toThrow();
     } finally {
@@ -48,6 +57,12 @@ describe("terminal prefs", () => {
         Reflect.deleteProperty(globalThis, "localStorage");
       }
     }
+  });
+});
+
+describe("control size prefs", () => {
+  afterEach(() => {
+    localStorage.clear();
   });
 
   it("keeps control-size per session, default off", () => {

@@ -3,12 +3,12 @@
 // Esc, Tab, the arrows and Enter send their bytes; Ctrl and Shift are
 // one-shot latching modifiers (see modifiers.ts) with no bytes of their
 // own. Esc, Ctrl and Shift stay words — a phone reader knows them — while
-// Tab, the arrows and Enter wear their Lucide icon; the latch shows a
-// circle that morphs to a filled dot while it is armed. Rendering is plain
-// buttons; the bytes table is exported so the session layer and the tests
-// share one definition.
+// Tab, the arrows and Enter wear their Lucide icon. An armed latch is a
+// filled teal button: no indicator, icon or text marks it. Rendering is
+// plain buttons; the bytes table is exported so the session layer and the
+// tests share one definition.
 
-import { icon, mountMorphSlot, type RemoteIconName, type MorphSlot } from "./icons-dom.js";
+import { icon, type RemoteIconName } from "./icons-dom.js";
 import type { ModifierState } from "./modifiers.js";
 
 export interface KeyDef {
@@ -45,13 +45,6 @@ export function keyById(id: string): KeyDef | null {
   return KEY_DEFS.find((def) => def.id === id) ?? null;
 }
 
-/**
- * The latch indicator's slot per key button: a circle that becomes a dot
- * while the modifier is armed. A WeakMap keeps the bar's DOM the only
- * handle the shell needs.
- */
-const latchSlots = new WeakMap<HTMLElement, MorphSlot>();
-
 /** One icon in a key: hidden from readers, the button carries the name. */
 function iconSlot(name: RemoteIconName): HTMLElement {
   const slot = document.createElement("span");
@@ -79,10 +72,6 @@ export function renderKeyBar(bar: HTMLElement, onKey: (def: KeyDef) => void): vo
     }
     if (isLatchKey(def.id)) {
       button.setAttribute("aria-pressed", "false");
-      const latch = iconSlot("circle");
-      latch.classList.add("latch-icon");
-      button.append(latch);
-      latchSlots.set(button, mountMorphSlot(latch, "circle"));
     }
     button.addEventListener("click", () => onKey(def));
     bar.appendChild(button);
@@ -91,7 +80,7 @@ export function renderKeyBar(bar: HTMLElement, onKey: (def: KeyDef) => void): vo
 
 // A latched modifier shows pressed until the next key (or a second tap)
 // releases it. The shell owns the latches and calls this after each
-// toggle and each consumed key: the circle becomes a filled dot.
+// toggle and each consumed key; the pressed state is the whole signal.
 export function updateKeyBarLatches(bar: HTMLElement, mods: ModifierState): void {
   for (const [id, latched] of [
     ["ctrl", mods.ctrl],
@@ -100,7 +89,6 @@ export function updateKeyBarLatches(bar: HTMLElement, mods: ModifierState): void
     const button = bar.querySelector<HTMLButtonElement>(`button.key[data-key="${id}"]`);
     if (button) {
       button.setAttribute("aria-pressed", latched ? "true" : "false");
-      latchSlots.get(button)?.to(latched ? "circleDot" : "circle");
     }
   }
 }

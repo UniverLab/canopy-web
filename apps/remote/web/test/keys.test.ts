@@ -77,28 +77,26 @@ describe("renderKeyBar", () => {
       expect(button?.querySelector("svg"), id).not.toBeNull();
       expect(button?.getAttribute("aria-label"), id).not.toBe("");
     }
-    // Esc, Ctrl and Shift stay words, and the latches carry the indicator.
+    // Esc, Ctrl and Shift stay words, with no indicator beside them.
     expect(bar.querySelector('button.key[data-key="esc"]')?.textContent).toBe("Esc");
     expect(bar.querySelector('button.key[data-key="ctrl"]')?.textContent).toBe("Ctrl");
     expect(bar.querySelector('button.key[data-key="shift"]')?.textContent).toBe("Shift");
-    expect(bar.querySelector('button.key[data-key="ctrl"] .latch-icon')).not.toBeNull();
   });
 
-  it("morphs the latch circle into a dot while armed", () => {
+  it("draws no circle or dot anywhere in the key bar", () => {
     const bar = document.createElement("div");
     document.body.appendChild(bar);
     renderKeyBar(bar, () => {});
-    const ctrl = bar.querySelector<HTMLButtonElement>('button.key[data-key="ctrl"]');
-    const shift = bar.querySelector<HTMLButtonElement>('button.key[data-key="shift"]');
-    const mark = (button: HTMLButtonElement | null) =>
-      button?.querySelector(".latch-icon")?.getAttribute("data-icon");
-    expect(mark(ctrl)).toBe("circle");
-    updateKeyBarLatches(bar, { ctrl: true, shift: false });
-    expect(mark(ctrl)).toBe("circleDot");
-    expect(mark(shift)).toBe("circle");
-    updateKeyBarLatches(bar, { ctrl: false, shift: true });
-    expect(mark(ctrl)).toBe("circle");
-    expect(mark(shift)).toBe("circleDot");
+    updateKeyBarLatches(bar, { ctrl: true, shift: true });
+    expect(bar.querySelector(".latch-icon")).toBeNull();
+    expect(bar.querySelector('[data-icon="circle"]')).toBeNull();
+    expect(bar.querySelector('[data-icon="circleDot"]')).toBeNull();
+    // The latch keys stay bare words: no icon slot, no extra glyph.
+    for (const id of ["ctrl", "shift"]) {
+      const button = bar.querySelector<HTMLButtonElement>(`button.key[data-key="${id}"]`);
+      expect(button?.querySelector("svg"), id).toBeNull();
+      expect(button?.getAttribute("aria-pressed"), id).toBe("true");
+    }
   });
 
   it("marks the latches unpressed until the shell updates them", () => {

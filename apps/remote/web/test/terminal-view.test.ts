@@ -292,9 +292,7 @@ describe("TerminalView", () => {
   it("scales once into the visual box and reports the scale", () => {
     const { parent, view } = setup();
     view.mount(parent, 80, 24);
-    // Always fit-to-width, so the expected scale is pane / content; the
-    // Fit toggle is a no-op that must not change it.
-    view.setFitOnly(true);
+    // Always fit-to-width, so the expected scale is pane / content.
     const fit = parent.querySelector<HTMLElement>(".term-fit");
     const scaler = parent.querySelector<HTMLElement>(".term-scale");
     const host = parent.querySelector<HTMLElement>(".term-host");
@@ -313,12 +311,11 @@ describe("TerminalView", () => {
     expect(scaler.style.width).toBe("400px");
     expect(scaler.style.height).toBe("240px");
     expect(fit.dataset.scale).toBe("0.5");
-    expect(fit.dataset.fit).toBe("on");
     expect(parent.style.getPropertyValue("--term-visual-h")).toBe("240px");
     view.dispose();
   });
 
-  it("always fits the pane width with Fit off, and Fit is a no-op", () => {
+  it("always fits the pane width and anchors the line start", () => {
     const { parent, view } = setup();
     view.mount(parent, 80, 24);
     const fit = parent.querySelector<HTMLElement>(".term-fit");
@@ -338,22 +335,10 @@ describe("TerminalView", () => {
     parent.scrollLeft = 48;
     view.refit();
     const fitted = 356 / 672;
-    expect(view.isFitOnly).toBe(false);
     expect(host.style.transform).toBe(`scale(${fitted})`);
-    expect(fit.dataset.fit).toBe("off");
     expect(scaler.style.width).toBe(`${672 * fitted}px`);
     expect(672 * fitted).toBeCloseTo(356, 6);
     expect(parent.scrollLeft).toBe(0);
-    // Fit on changes nothing but the remembered toggle: same scale, same
-    // box, still anchored left.
-    view.setFitOnly(true);
-    expect(view.isFitOnly).toBe(true);
-    expect(fit.dataset.fit).toBe("on");
-    expect(host.style.transform).toBe(`scale(${fitted})`);
-    expect(scaler.style.width).toBe(`${672 * fitted}px`);
-    expect(parent.scrollLeft).toBe(0);
-    view.setFitOnly(false);
-    expect(host.style.transform).toBe(`scale(${fitted})`);
     view.dispose();
   });
 
@@ -380,34 +365,6 @@ describe("TerminalView", () => {
     expect(parseFloat(scaler.style.width)).toBeCloseTo(672 * zoomed, 3);
     expect(672 * zoomed).toBeGreaterThan(356);
     expect(parent.scrollLeft).toBe(0);
-    view.dispose();
-  });
-
-  it("keeps a manual pan when Fit is toggled", () => {
-    const { parent, view } = setup();
-    view.mount(parent, 80, 24);
-    const fit = parent.querySelector<HTMLElement>(".term-fit");
-    const host = parent.querySelector<HTMLElement>(".term-host");
-    if (!fit || !host) {
-      throw new Error("missing scaffold");
-    }
-    Object.defineProperty(fit, "clientWidth", { value: 356, configurable: true });
-    Object.defineProperty(host, "scrollWidth", { value: 672, configurable: true });
-    Object.defineProperty(host, "scrollHeight", { value: 408, configurable: true });
-    view.setZoom(2);
-    const zoomed = (356 / 672) * 2;
-    expect(host.style.transform).toBe(`scale(${zoomed})`);
-    // The user pans right to read the zoomed line's end; toggling Fit is a
-    // harmless no-op, so the pan and the scale must survive it.
-    parent.scrollLeft = 120;
-    view.setFitOnly(true);
-    expect(fit.dataset.fit).toBe("on");
-    expect(host.style.transform).toBe(`scale(${zoomed})`);
-    expect(parent.scrollLeft).toBe(120);
-    view.setFitOnly(false);
-    expect(fit.dataset.fit).toBe("off");
-    expect(host.style.transform).toBe(`scale(${zoomed})`);
-    expect(parent.scrollLeft).toBe(120);
     view.dispose();
   });
 
