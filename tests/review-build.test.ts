@@ -65,12 +65,23 @@ const PROMPT = [
 
 const DIAGRAM = [
   `sequenceDiagram`,
-  `  participant A as Alpha`,
-  `  participant B as Beta`,
-  `  A->>B: hello`,
-  `  B-->>A: hi back`,
+  `  participant Cron as Cron */15`,
+  `  participant Worker as Worker`,
+  `  participant Review as {{REVIEW_PROVIDER}}`,
+  `  participant Browser as Browser`,
+  `  Cron->>Worker: scheduled trigger`,
+  `  Worker->>Review: review newest unscanned docs`,
+  `  Review-->>Worker: patterns and verdict`,
+  `  Browser->>Worker: GET page or API`,
   ``,
 ].join("\n");
+
+/** One exported SVG of the generated module, decoded. */
+function exportedSvg(module: string, name: string): string {
+  const match = new RegExp(`${name} = ("(?:[^"\\\\]|\\\\.)*");`).exec(module);
+  expect(match, name).not.toBeNull();
+  return JSON.parse(match?.[1] ?? '""') as string;
+}
 
 /** Build this diagram source to a generated module; the build must succeed. */
 function buildDiagram(source: string): string {
@@ -101,15 +112,20 @@ function failDiagram(source: string): Attempt {
 const RICH_DIAGRAM = [
   `sequenceDiagram`,
   `  autonumber`,
-  `  participant A as Alpha`,
-  `  participant B as Beta`,
-  `  A->>B: hello`,
-  `  activate B`,
-  `  B-->>A: hi back`,
-  `  deactivate B`,
-  `  loop every one`,
-  `    A->>A: think`,
+  `  participant Cron as Cron */15`,
+  `  participant Worker as Worker`,
+  `  participant GitHub as GitHub`,
+  `  participant Browser as Browser`,
+  `  Cron->>Worker: scheduled trigger`,
+  `  activate Worker`,
+  `  Worker->>GitHub: read blocked.json`,
+  `  GitHub-->>Worker: blocked list`,
+  `  loop per repository`,
+  `    Worker->>Worker: validate graph and node JSON`,
   `  end`,
+  `  Worker-->>Cron: done`,
+  `  deactivate Worker`,
+  `  Browser->>Worker: GET page or API`,
   ``,
 ].join("\n");
 
@@ -130,10 +146,10 @@ describe("the review bundle", () => {
       expect(module).toContain("{{COMMANDS}}");
       expect(module).toContain("sequenceDiagram");
       expect(module).toContain("<svg");
-      expect(module).toContain("Alpha");
-      expect(module).toContain("hello");
+      expect(module).toContain("Cron");
+      expect(module).toContain("scheduled trigger");
       expect(attempt(["--check", "--dir", dir, "--out", out]).status).toBe(0);
-      writeFileSync(path.join(dir, "indexing.mmd"), DIAGRAM.replace("hello", "changed"));
+      writeFileSync(path.join(dir, "indexing.mmd"), DIAGRAM.replace("scheduled trigger", "changed"));
       const stale = attempt(["--check", "--dir", dir, "--out", out]);
       expect(stale.status).toBe(1);
       expect(stale.stderr).toContain("is stale");
@@ -172,30 +188,69 @@ describe("the review bundle", () => {
 });
 
 describe("the sequence renderer", () => {
-  it("draws activation boxes between activate and deactivate", () => {
-    const module = buildDiagram(RICH_DIAGRAM);
-    expect(module).toContain(`fill-opacity=\\"0.12\\"`);
+  it("emits the wide and mobile SVGs with the token and both phases", () => {
+    const module = buildDiagram(DIAGRAM);
+    const wide = exportedSvg(module, "INDEXING_SVG");
+    const mobile = exportedSvg(module, "INDEXING_MOBILE_SVG");
+    expect(wide).toContain("<svg");
+    expect(mobile).toContain("<svg");
+    for (const svg of [wide, mobile]) {
+      expect(svg).toContain("{{REVIEW_PROVIDER}}");
+      expect(svg).toContain("Index");
+      expect(svg).toContain("Serve");
+    }
+    expect(wide).toContain("1 · Index");
+    expect(wide).toContain("2 · Serve");
+    expect(wide).toContain("every 15 minutes");
+    expect(wide).toContain("on every request");
   });
 
-  it("renders replies dashed and lighter than calls", () => {
-    const module = buildDiagram(RICH_DIAGRAM);
-    expect(module).toContain(`stroke-dasharray=\\"4 3\\" opacity=\\"0.65\\"`);
-    expect(module).toContain(`stroke=\\"currentColor\\"/>`);
+  it("sources every participant colour from the page tokens", () => {
+    const real = readFileSync(path.join(ROOT, "apps", "graphs", "review", "indexing.mmd"), "utf8");
+    for (const svg of [exportedSvg(buildDiagram(real), "INDEXING_SVG"), exportedSvg(buildDiagram(real), "INDEXING_MOBILE_SVG")]) {
+      for (const token of ["--attention", "--teal", "--surface-ink", "--canopy", "--phosphor"]) {
+        expect(svg).toContain(`var(${token},`);
+      }
+      expect(svg).not.toContain("currentColor");
+    }
   });
 
-  it("numbers every arrow in order when autonumber is set", () => {
-    const module = buildDiagram(RICH_DIAGRAM);
-    const one = module.indexOf(">1<");
-    const two = module.indexOf(">2<");
-    const three = module.indexOf(">3<");
+  it("draws activation bars over the lanes", () => {
+    expect(exportedSvg(buildDiagram(RICH_DIAGRAM), "INDEXING_SVG")).toContain("opacity:.22");
+  });
+
+  it("renders replies dotted and calls solid", () => {
+    const wide = exportedSvg(buildDiagram(RICH_DIAGRAM), "INDEXING_SVG");
+    expect(wide).toContain("stroke-dasharray:5 4");
+    expect(wide).toContain(`class="reply"`);
+    expect(wide).toContain(`class="msg"`);
+  });
+
+  it("numbers every arrow at its origin, in order", () => {
+    const wide = exportedSvg(buildDiagram(DIAGRAM), "INDEXING_SVG");
+    const one = wide.indexOf(">1<");
+    const two = wide.indexOf(">2<");
+    const three = wide.indexOf(">3<");
     expect(one).toBeGreaterThan(-1);
     expect(two).toBeGreaterThan(one);
     expect(three).toBeGreaterThan(two);
-    expect(buildDiagram(DIAGRAM)).not.toContain(`rx=\\"8\\"`);
+    // The wide art always numbers, autonumber or not.
+    expect(exportedSvg(buildDiagram(RICH_DIAGRAM), "INDEXING_SVG")).toContain(`class="num"`);
+    expect(exportedSvg(buildDiagram(DIAGRAM), "INDEXING_SVG")).toContain(`class="num"`);
   });
 
-  it("frames loops with their labels", () => {
-    expect(buildDiagram(RICH_DIAGRAM)).toContain("loop every one");
+  it("frames loops with their labels and draws the self-call", () => {
+    const wide = exportedSvg(buildDiagram(RICH_DIAGRAM), "INDEXING_SVG");
+    expect(wide).toContain("loop · per repository");
+    expect(wide).toContain(`class="msg" d="M`);
+  });
+
+  it("keeps the mobile timeline numberless with filled calls and hollow replies", () => {
+    const mobile = exportedSvg(buildDiagram(DIAGRAM), "INDEXING_MOBILE_SVG");
+    expect(mobile).not.toContain(`class="num"`);
+    expect(mobile).toContain(`r="5"`);
+    expect(mobile).toContain(`r="3.5"`);
+    expect(mobile).toContain("Cron");
   });
 
   it("fails the strict grammar with the line and the reason", () => {

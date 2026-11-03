@@ -24,6 +24,7 @@ import {
 } from "../src/pages/copy.js";
 import {
   INDEXING_MMD,
+  INDEXING_MOBILE_SVG,
   INDEXING_SVG,
   REVIEW_PROMPT_V2,
   REVIEW_PROMPT_VERSION,
@@ -755,7 +756,7 @@ describe("the transparency page", () => {
     expect(html).toContain("canopy-graph");
     expect(html).toContain("never blocks them");
     expect(html).toContain("<svg");
-    expect(html).toContain("Cron */15");
+    expect(html).toContain(">Cron</text>");
     expect(html).toContain("review newest unscanned docs");
     // The stripped v2 prompt, exactly as the model saw it.
     expect(html).toContain("&lt;review_prompt");
@@ -801,6 +802,28 @@ describe("the transparency page", () => {
       expect(html, provider).toContain("Claude API");
       expect(html, provider).not.toContain("{{REVIEW_PROVIDER}}");
     }
+  });
+
+  it("switches the wide art for the phone timeline at the 639 px breakpoint", async () => {
+    const html = await (await call("/transparency", new FakeKV(), undefined, "meta")).text();
+    expect(html).toContain(`<figure class="diagram diagram-wide">`);
+    expect(html).toContain(`<figure class="diagram diagram-mobile">`);
+    // The narrow screen shows the timeline by default and hides the wide art.
+    expect(html).toMatch(/@media \(max-width: 639px\) \{[\s\S]*?figure\.diagram-wide \{ display: none; \}/);
+    expect(html).toMatch(/figure\.diagram-mobile \{ display: none; \}/);
+    // The narrow figure full-bleeds the 1rem page gutter and the timeline
+    // fills it, so its 360-unit viewBox renders at 360 px: 11-unit text is
+    // 11 px effective.
+    expect(html).toMatch(/figure\.diagram-mobile \{[^}]*?display: block;[^}]*?margin: 0 -1rem 1\.5rem;[^}]*?padding: 0;/);
+    expect(html).toContain(`figure.diagram-mobile svg { min-width: 0; width: 100%; }`);
+    // Both diagrams carry the substituted provider label, never the token.
+    const wideAt = html.indexOf(`<figure class="diagram diagram-wide">`);
+    const mobileAt = html.indexOf(`<figure class="diagram diagram-mobile">`);
+    const wide = html.slice(wideAt, mobileAt);
+    const mobile = html.slice(mobileAt, html.indexOf(`</figure>`, mobileAt));
+    expect(wide).toContain("Meta API");
+    expect(mobile).toContain("Meta API");
+    expect(html).not.toContain(REVIEW_PROVIDER_TOKEN);
   });
 
   it("labels every provider value exactly", () => {
@@ -902,12 +925,27 @@ describe("the bundled review assets", () => {
       expect(INDEXING_MMD).toContain(message);
     }
     expect(INDEXING_SVG).toContain("<svg");
-    expect(INDEXING_SVG).toContain("Cron */15");
+    expect(INDEXING_SVG).toContain(">Cron</text>");
     expect(INDEXING_SVG).toContain("review newest unscanned docs");
     expect(INDEXING_SVG).toContain("{{REVIEW_PROVIDER}}");
-    expect(INDEXING_SVG).toContain("loop per repository");
+    expect(INDEXING_SVG).toContain("loop · per repository");
     expect(INDEXING_SVG).not.toContain("mermaid");
     expect(INDEXING_SVG).not.toContain("Claude API");
+  });
+
+  it("ships the phone timeline at 360 units with no text under 11 px", () => {
+    expect(INDEXING_MOBILE_SVG).toContain("<svg");
+    expect(INDEXING_MOBILE_SVG).toMatch(/viewBox="0 0 360 /);
+    expect(INDEXING_MOBILE_SVG).toContain("{{REVIEW_PROVIDER}}");
+    expect(INDEXING_MOBILE_SVG).toContain("Index");
+    expect(INDEXING_MOBILE_SVG).toContain("Serve");
+    // Numberless: the timeline carries no step badges.
+    expect(INDEXING_MOBILE_SVG).not.toContain(`class="num"`);
+    expect(INDEXING_MOBILE_SVG).toContain(`r="5"`);
+    expect(INDEXING_MOBILE_SVG).toContain(`r="3.5"`);
+    const sizes = [...INDEXING_MOBILE_SVG.matchAll(/font-size:(\d+(?:\.\d+)?)px/g)].map((match) => Number(match[1]));
+    expect(sizes.length).toBeGreaterThan(0);
+    expect(Math.min(...sizes)).toBeGreaterThanOrEqual(11);
   });
 });
 

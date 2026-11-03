@@ -378,7 +378,13 @@ describe("the look build", () => {
     ];
     for (const target of [GRAPHS_LOOK, REMOTE_LOOK]) {
       for (const [source, dest] of pairs) {
-        expect(readFileSync(path.join(target, dest))).toEqual(readFileSync(path.join(KIT, source)));
+        // Buffer.equals, not expect().toEqual(): vitest's deep equality
+        // walks large binaries element by element (~3 s here, over the
+        // 5 s timeout under full-suite load); memcmp is milliseconds
+        // with identical byte-for-byte semantics.
+        const actual = readFileSync(path.join(target, dest));
+        const expected = readFileSync(path.join(KIT, source));
+        expect(actual.equals(expected), `${target}/${dest} differs from kit/${source}`).toBe(true);
       }
     }
   });

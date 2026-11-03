@@ -6,8 +6,9 @@
  * A pure `Page` over prose from copy.ts and the bundled review assets:
  * the indexing story (cron, discovery, per-repo fetch, validation, KV
  * writes, serve paths, where the review hooks in) with the mermaid
- * `sequenceDiagram` pre-rendered to static SVG at build time (no runtime
- * mermaid.js), the review rules, the versioned prompt verbatim, and the
+ * `sequenceDiagram` pre-rendered at build time to a wide SVG and a phone
+ * timeline behind one CSS switch (no runtime mermaid.js), the review
+ * rules, the versioned prompt verbatim, and the
  * stored verdicts with hash and date. Advisory only, said twice: once in
  * the review rules, once beside the verdicts.
  */
@@ -69,6 +70,8 @@ export function reviewProviderLabel(provider?: string): string {
 export interface TransparencyInput {
   /** The pre-rendered indexing diagram, static SVG. */
   svg: string;
+  /** The pre-rendered phone timeline, static SVG. */
+  mobileSvg: string;
   /** The diagram source, for the markdown twin's fenced block. */
   mmd: string;
   /** The exact prompt text, shown verbatim. */
@@ -135,6 +138,7 @@ function verdictMarkdown(entry: ReviewEntry): string {
 export function transparencyPage(input: TransparencyInput): Page {
   const providerLabel = reviewProviderLabel(input.reviewProvider);
   const svg = input.svg.replaceAll(REVIEW_PROVIDER_TOKEN, () => providerLabel);
+  const mobileSvg = input.mobileSvg.replaceAll(REVIEW_PROVIDER_TOKEN, () => providerLabel);
   const mmd = input.mmd.replaceAll(REVIEW_PROVIDER_TOKEN, () => providerLabel);
   const indexParas = [
     TRANSPARENCY_CRON_BODY,
@@ -157,7 +161,8 @@ export function transparencyPage(input: TransparencyInput): Page {
     heading(TRANSPARENCY_INDEX_HEADING),
     ...indexParas.map(para),
     heading(TRANSPARENCY_DIAGRAM_HEADING),
-    `<figure class="diagram">${svg}</figure>`,
+    `<figure class="diagram diagram-wide">${svg}</figure>`,
+    `<figure class="diagram diagram-mobile">${mobileSvg}</figure>`,
     heading(TRANSPARENCY_REVIEW_HEADING),
     ...reviewParas.map(para),
     heading(TRANSPARENCY_PROMPT_HEADING),

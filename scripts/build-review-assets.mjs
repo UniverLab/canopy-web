@@ -6,8 +6,9 @@
  * the indexing diagram (`apps/graphs/review/indexing.mmd`, a mermaid
  * `sequenceDiagram`) are committed in-repo; this script validates both and
  * writes the committed `apps/graphs/src/review-assets.generated.ts` the
- * Worker renders from. The diagram is pre-rendered to static SVG here, so
- * the transparency page inlines an image and no runtime mermaid.js ships.
+ * Worker renders from. The diagram is pre-rendered here to two static SVGs
+ * — the wide sequence and the numberless phone timeline — so the
+ * transparency page inlines both and no runtime mermaid.js ships.
  *
  * The renderer is intentionally small: it reads `participant` lines,
  * `A->>B: message` calls and `A-->>B: message` replies, `activate` /
@@ -196,108 +197,407 @@ export function parseDiagram(source) {
 }
 
 /**
- * Render the drawing model as one static SVG: participant boxes on top,
- * dashed lifelines below, activation boxes over the lifelines, one
- * labelled arrow per message (calls solid, `-->>` replies dashed and
- * lighter), a labelled frame per loop, and — when the source says
- * `autonumber` — a gutter column of numbered badges in message order.
- *
- * @param {{ participants: Array<{ id: string, label: string }>, messages: Array<{ from: string, to: string, text: string, dotted: boolean }>, autonumber?: boolean, activations?: Array<{ participant: string, start: number, end: number }>, loops?: Array<{ label: string, start: number, end: number }> }} model
- *   the parsed diagram
- * @returns {string} the SVG document
+ * The lane style of each participant, keyed by lowercased mermaid id. The
+ * colours are the page tokens, with the design's literals as fallbacks so
+ * each SVG also stands alone; a diagram naming an id outside this table
+ * fails the build — the art is written for this one story.
  */
-export function renderDiagramSvg(model) {
-  const lane = 170;
-  const margin = 24;
-  const top = 44;
-  const row = 38;
-  const numbered = model.autonumber === true;
-  const activations = model.activations ?? [];
-  const loops = model.loops ?? [];
-  const gutter = numbered ? 44 : 0;
-  const left = margin + gutter;
-  const width = left + model.participants.length * lane + margin;
-  const height = top + model.messages.length * row + margin + 8;
-  const xOf = new Map(model.participants.map((p, i) => [p.id, left + lane * i + lane / 2]));
-  const parts = [];
-  parts.push(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Indexing sequence diagram">`,
-  );
-  parts.push(`<title>Indexing sequence diagram</title>`);
-  for (const [index, participant] of model.participants.entries()) {
-    const x = left + lane * index;
-    const cx = xOf.get(participant.id) ?? 0;
-    parts.push(
-      `<rect x="${x + 8}" y="8" width="${lane - 16}" height="28" rx="4" fill="none" stroke="currentColor"/>` +
-        `<text x="${cx}" y="27" text-anchor="middle" font-size="12" fill="currentColor">${escapeXml(participant.label)}</text>` +
-        `<line x1="${cx}" y1="${top}" x2="${cx}" y2="${height - margin}" stroke="currentColor" stroke-dasharray="3 3" opacity="0.5"/>`,
-    );
-  }
-  for (const loop of loops) {
-    const frameTop = top + loop.start * row - 4;
-    const frameBottom = top + loop.end * row + 8;
-    const frameWidth = model.participants.length * lane;
-    parts.push(
-      `<rect x="${left}" y="${frameTop}" width="${frameWidth}" height="${frameBottom - frameTop}" fill="none" stroke="currentColor"/>` +
-        `<text x="${left + 8}" y="${frameTop + 14}" font-size="11" fill="currentColor">loop ${escapeXml(loop.label)}</text>`,
-    );
-  }
-  for (const activation of activations) {
-    const cx = xOf.get(activation.participant) ?? 0;
-    const boxTop = top + activation.start * row + 6;
-    const boxBottom = Math.max(top + activation.end * row + 6, boxTop + 14);
-    parts.push(
-      `<rect x="${cx - 6}" y="${boxTop}" width="12" height="${boxBottom - boxTop}" fill="currentColor" fill-opacity="0.12" stroke="currentColor"/>`,
-    );
-  }
-  model.messages.forEach((message, rowIndex) => {
-    const y = top + rowIndex * row + 18;
-    const fromX = xOf.get(message.from) ?? 0;
-    const toX = xOf.get(message.to) ?? 0;
-    const leftEdge = Math.min(fromX, toX);
-    const rightEdge = Math.max(fromX, toX);
-    const self = fromX === toX;
-    const dash = message.dotted ? ` stroke-dasharray="4 3"` : "";
-    const dim = message.dotted ? ` opacity="0.65"` : "";
-    if (numbered) {
-      const badgeCx = margin + gutter / 2;
-      parts.push(
-        `<rect x="${badgeCx - 12}" y="${y - 8}" width="24" height="16" rx="8" fill="none" stroke="currentColor"/>` +
-          `<text x="${badgeCx}" y="${y + 4}" text-anchor="middle" font-size="10" fill="currentColor">${rowIndex + 1}</text>`,
-      );
-    }
-    if (self) {
-      parts.push(
-        `<text x="${fromX + 6}" y="${y - 14}" font-size="11" fill="currentColor"${dim}>${escapeXml(message.text)}</text>` +
-          `<line x1="${fromX}" y1="${y}" x2="${fromX + 28}" y2="${y}" stroke="currentColor"${dash}${dim}/>` +
-          `<line x1="${fromX + 28}" y1="${y}" x2="${fromX + 28}" y2="${y + 12}" stroke="currentColor"${dash}${dim}/>` +
-          `<line x1="${fromX + 28}" y1="${y + 12}" x2="${fromX}" y2="${y + 12}" stroke="currentColor"${dash}${dim}/>` +
-          `<polygon points="${fromX},${y + 12} ${fromX + 7},${y + 8} ${fromX + 7},${y + 16}" fill="currentColor"${dim}/>`,
-      );
-      return;
-    }
-    const flip = fromX > toX;
-    parts.push(
-      `<text x="${(leftEdge + rightEdge) / 2}" y="${y - 6}" text-anchor="middle" font-size="11" fill="currentColor"${dim}>${escapeXml(message.text)}</text>` +
-        `<line x1="${fromX}" y1="${y}" x2="${toX}" y2="${y}" stroke="currentColor"${dash}${dim}/>` +
-        `<polygon points="${toX},${y} ${toX + (flip ? 7 : -7)},${y - 4} ${toX + (flip ? 7 : -7)},${y + 4}" fill="currentColor"${dim}/>`,
-    );
-  });
-  parts.push(`</svg>`);
-  return parts.join("");
+export const LANES = {
+  cron: { color: "--attention", fallback: "#ffb454", role: "every 15 min" },
+  worker: { color: "--teal", fallback: "#3fb8b0", role: "graphs.univerlab.org" },
+  github: { color: "--surface-ink", fallback: "#edfffe", role: "public repos" },
+  kv: { color: "--canopy", fallback: "#00a9a0", role: "index · docs · reviews" },
+  review: { color: "--phosphor", fallback: "#fde9ff", role: "a model, via API" },
+  browser: { color: "--surface-ink-dim", fallback: "#bbc7c6", role: "you" },
+};
+
+/** The lane key of one participant id. */
+function laneKey(id) {
+  return id.toLowerCase();
+}
+
+/** The token colour expression of one lane. */
+function laneColor(key) {
+  const lane = LANES[key];
+  return `var(${lane.color},${lane.fallback})`;
 }
 
 /**
- * Render the generated module: the prompt, the diagram source and its SVG,
- * plus the stamp. Payloads stay JSON-encoded on one line each.
+ * Resolve the participants into lanes, failing the build on an unknown id.
+ * The head label is the mermaid label with the trailing cron interval
+ * removed, so the box reads `Cron` while the source keeps its schedule.
+ *
+ * The page substitutes the review token at request time, so geometry is
+ * measured against the generic label it falls back to — otherwise the
+ * box and the phone arrow are sized for a word the reader never sees.
+ *
+ * @param {{ participants: Array<{ id: string, label: string }> }} model
+ * @returns {Map<string, { id: string, label: string, measure: string, color: string, fallback: string, role: string }>}
+ */
+function resolveLanes(model) {
+  const lanes = new Map();
+  for (const participant of model.participants) {
+    const key = laneKey(participant.id);
+    const lane = LANES[key];
+    if (lane === undefined) {
+      throw new Error(`review-assets: no lane style for participant ${participant.id}`);
+    }
+    const label = participant.label.replace(/\s*\*\/15\s*$/, "").trim();
+    lanes.set(key, {
+      id: key,
+      label,
+      measure: label.replaceAll("{{REVIEW_PROVIDER}}", "Review API"),
+      ...lane,
+    });
+  }
+  return lanes;
+}
+
+/**
+ * Flatten the diagram into drawing steps: a phase band at the top and at
+ * the first Browser-originated message, loop markers around each loop's
+ * messages, and one step per message.
+ *
+ * @param {{ messages: Array<{ from: string, to: string, text: string, dotted: boolean }>, loops?: Array<{ label: string, start: number, end: number }> }} model
+ * @returns {Array<Record<string, unknown>>} the steps in drawing order
+ */
+function resolveSteps(model) {
+  const messages = model.messages.map((message) => ({
+    kind: "message",
+    from: laneKey(message.from),
+    to: laneKey(message.to),
+    text: message.text,
+    reply: message.dotted,
+  }));
+  const split = messages.findIndex((message) => message.from === "browser");
+  if (split <= 0) {
+    throw new Error("review-assets: the diagram needs a Browser message to split the phases");
+  }
+  const loops = model.loops ?? [];
+  const steps = [];
+  for (let index = 0; index <= messages.length; index += 1) {
+    if (index === 0) {
+      steps.push({ kind: "phase", title: "Index", sub: "every 15 minutes, nobody waiting" });
+    }
+    if (index === split) {
+      steps.push({ kind: "phase", title: "Serve", sub: "on every request, from KV only" });
+    }
+    for (const loop of loops) {
+      if (loop.start === index) {
+        steps.push({ kind: "loop-open", label: loop.label });
+      }
+    }
+    if (index < messages.length) {
+      steps.push(messages[index]);
+    }
+    for (const loop of loops) {
+      if (loop.end === index + 1) {
+        steps.push({ kind: "loop-close" });
+      }
+    }
+  }
+  return steps;
+}
+
+/** Shared marker definitions, one arrow per lane. */
+function arrowDefs(lanes, prefix) {
+  const parts = ["<defs>"];
+  for (const key of lanes.keys()) {
+    parts.push(
+      `<marker id="${prefix}-arrow-${key}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" ` +
+        `markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:${laneColor(key)}"/></marker>`,
+    );
+  }
+  parts.push("</defs>");
+  return parts.join("");
+}
+
+const WIDE_STYLE = `
+<style>
+  .seq{font-family:var(--font-mono,'Sometype Mono',ui-monospace,Menlo,monospace)}
+  .seq .bg{fill:var(--stage-bg,#050505)}
+  .seq .frame{fill:none;stroke:var(--stage-line,#1f2a29);stroke-width:1}
+  .seq .ink{fill:var(--surface-ink,#edfffe)}
+  .seq .dim{fill:var(--surface-ink-dim,#bbc7c6)}
+  .seq .faint{fill:var(--surface-ink-faint,#9aa8a7)}
+  .seq .life{stroke:var(--surface-ink-faint,#9aa8a7);stroke-width:1;stroke-dasharray:2 5;opacity:.45}
+  .seq .band{fill:var(--surface-bg-raise,#003734);opacity:.35}
+  .seq .loop{fill:none;stroke:var(--surface-ink-faint,#9aa8a7);stroke-width:1;stroke-dasharray:4 3;opacity:.8}
+  .seq .msg{stroke-width:1.6;fill:none}
+  .seq .reply{stroke-width:1.2;stroke-dasharray:5 4;opacity:.75;fill:none}
+  .seq .badge{fill:var(--stage-bg,#050505);stroke-width:1.2}
+  .seq .num{font-size:10px;font-weight:700}
+  .seq .lbl{font-size:12.5px}
+  .seq .lbl-reply{font-size:12px}
+  .seq .head{font-size:13px;font-weight:700;letter-spacing:.04em}
+  .seq .role{font-size:10px}
+  .seq .phase{font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+  .seq .phase-sub{font-size:11px}
+</style>`;
+
+const MOBILE_STYLE = `
+<style>
+  .seq{font-family:var(--font-mono,'Sometype Mono',ui-monospace,Menlo,monospace)}
+  .seq .bg{fill:var(--stage-bg,#050505)}
+  .seq .frame{fill:none;stroke:var(--stage-line,#1f2a29);stroke-width:1}
+  .seq .ink{fill:var(--surface-ink,#edfffe)}
+  .seq .dim{fill:var(--surface-ink-dim,#bbc7c6)}
+  .seq .faint{fill:var(--surface-ink-faint,#9aa8a7)}
+  .seq .msg{stroke-width:1.6;fill:none}
+  .seq .reply{stroke-width:1.2;stroke-dasharray:5 4;opacity:.75;fill:none}
+  .seq .lbl{font-size:12.5px}
+  .seq .lbl-reply{font-size:12px}
+  .seq .head{font-size:13px;font-weight:700;letter-spacing:.04em}
+  .seq .phase{font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+  .seq .phase-sub{font-size:11px}
+  .seq .loop-cap{font-size:11px}
+</style>`;
+
+/**
+ * Render the wide diagram: two phase bands, one coloured head per lane,
+ * activation bars, the loop frame, the self-call, dotted replies, and a
+ * numbered badge at each message's origin. The wide art always numbers,
+ * regardless of the source's `autonumber`.
+ *
+ * @param {{ participants: Array<{ id: string, label: string }>, messages: Array<{ from: string, to: string, text: string, dotted: boolean }>, loops?: Array<{ label: string, start: number, end: number }> }} model
+ * @returns {string} the SVG document
+ */
+export function renderWideSvg(model) {
+  const lanes = resolveLanes(model);
+  const steps = resolveSteps(model);
+  const width = 960;
+  const x0 = 92;
+  const gap = (width - 2 * x0) / (lanes.size - 1);
+  const rowHeight = 40;
+  const head = 96;
+  const x = new Map([...lanes.keys()].map((key, index) => [key, x0 + index * gap]));
+  let y = head + 6;
+  const phases = [];
+  const loopFrames = [];
+  const messageSteps = [];
+  let openLoop = null;
+  for (const step of steps) {
+    if (step.kind === "phase") {
+      y += 16;
+      phases.push({ title: step.title, sub: step.sub, top: y - 14, bottom: null });
+      if (phases.length > 1) {
+        phases[phases.length - 2].bottom = y - 30;
+      }
+      y += 40;
+    } else if (step.kind === "loop-open") {
+      openLoop = { label: step.label, top: y - 12, bottom: null };
+      y += 30;
+    } else if (step.kind === "loop-close") {
+      openLoop.bottom = y - 16;
+      loopFrames.push(openLoop);
+      openLoop = null;
+      y += 10;
+    } else {
+      step.y = y;
+      messageSteps.push(step);
+      y += rowHeight + (step.from === step.to ? 14 : 0);
+    }
+  }
+  const height = y + 30;
+  phases[phases.length - 1].bottom = height - 22;
+
+  const parts = [
+    `<svg xmlns="http://www.w3.org/2000/svg" class="seq" viewBox="0 0 ${width} ${height}" role="img" ` +
+      `aria-label="Indexing sequence diagram: how the catalogue is indexed every 15 minutes and served from KV">`,
+    "<title>Indexing sequence diagram</title>",
+    WIDE_STYLE,
+    arrowDefs(lanes, "seq"),
+    `<rect class="bg" x="0" y="0" width="${width}" height="${height}" rx="14"/>`,
+    `<rect class="frame" x=".5" y=".5" width="${width - 1}" height="${height - 1}" rx="14"/>`,
+  ];
+  phases.forEach((phase, index) => {
+    const title = `${index + 1} · ${phase.title}`;
+    parts.push(
+      `<rect class="band" x="14" y="${phase.top}" width="${width - 28}" height="${phase.bottom - phase.top}" rx="10"/>` +
+        `<text class="phase" x="30" y="${phase.top + 20}" style="fill:${laneColor("worker")}">${escapeXml(title)}</text>` +
+        `<text class="phase-sub faint" x="${30 + title.length * 9.4 + 16}" y="${phase.top + 20}">${escapeXml(phase.sub)}</text>`,
+    );
+  });
+  for (const lane of lanes.values()) {
+    const cx = x.get(lane.id);
+    parts.push(`<line class="life" x1="${cx}" y1="${head - 6}" x2="${cx}" y2="${height - 20}"/>`);
+    const boxWidth = Math.max(100, 10 * lane.measure.length + 48);
+    parts.push(
+      `<rect x="${cx - boxWidth / 2}" y="22" width="${boxWidth}" height="34" rx="17" style="fill:var(--stage-bg,#050505);stroke:${laneColor(lane.id)};stroke-width:1.4"/>` +
+        `<circle cx="${cx - boxWidth / 2 + 16}" cy="39" r="4" style="fill:${laneColor(lane.id)}"/>` +
+        `<text class="head" x="${cx + 9}" y="43.5" text-anchor="middle" style="fill:${laneColor(lane.id)}">${escapeXml(lane.label)}</text>` +
+        `<text class="role faint" x="${cx}" y="74" text-anchor="middle">${escapeXml(lane.role)}</text>`,
+    );
+  }
+  const bar = (key, top, bottom) => {
+    parts.push(
+      `<rect x="${x.get(key) - 4}" y="${top}" width="8" height="${bottom - top}" rx="3" style="fill:${laneColor(key)};opacity:.22"/>`,
+    );
+  };
+  const phaseRows = phases.map(() => []);
+  let phaseIndex = -1;
+  for (const step of steps) {
+    if (step.kind === "phase") {
+      phaseIndex += 1;
+    } else if (step.kind === "message") {
+      phaseRows[phaseIndex].push(step.y);
+    }
+  }
+  for (const rows of phaseRows) {
+    if (rows.length > 0 && lanes.has("worker")) {
+      bar("worker", rows[0] - 6, rows[rows.length - 1] + 8);
+    }
+  }
+  for (let index = 0; index + 1 < messageSteps.length; index += 1) {
+    const first = messageSteps[index];
+    const second = messageSteps[index + 1];
+    if (["github", "kv", "review"].includes(first.to) && second.from === first.to && second.reply) {
+      bar(first.to, first.y - 6, second.y + 6);
+    } else if (first.to === "kv" && second.from !== "kv") {
+      bar("kv", first.y - 6, first.y + 8);
+    }
+  }
+  const selfWidest = messageSteps
+    .filter((step) => step.from === "worker" && step.to === "worker")
+    .reduce((widest, step) => Math.max(widest, step.text.length), 0);
+  for (const frame of loopFrames) {
+    const leftEdge = x.get("worker") - 46;
+    const rightEdge = Math.max(x.get("github") + 70, x.get("worker") + 60 + selfWidest * 7.7 + 24);
+    parts.push(
+      `<rect class="loop" x="${leftEdge}" y="${frame.top}" width="${rightEdge - leftEdge}" height="${frame.bottom - frame.top}" rx="8"/>` +
+        `<rect x="${leftEdge}" y="${frame.top}" width="128" height="18" rx="8" style="fill:var(--surface-bg-raise,#003734)"/>` +
+        `<text class="role dim" x="${leftEdge + 10}" y="${frame.top + 13}">↻ loop · ${escapeXml(frame.label)}</text>`,
+    );
+  }
+  messageSteps.forEach((step, index) => {
+    const color = laneColor(step.from);
+    let badgeX;
+    if (step.from === step.to) {
+      const startX = x.get(step.from) + 4;
+      const path = `M${startX} ${step.y} h34 q8 0 8 8 v6 q0 8 -8 8 h-32`;
+      parts.push(
+        `<path class="msg" d="${path}" style="stroke:${color}" marker-end="url(#seq-arrow-${step.from})"/>` +
+          `<text class="lbl ink" x="${startX + 52}" y="${step.y + 12}">${escapeXml(step.text)}</text>`,
+      );
+      badgeX = x.get(step.from) - 20;
+    } else {
+      const sign = x.get(step.to) > x.get(step.from) ? 1 : -1;
+      const startX = x.get(step.from) + 5 * sign;
+      const endX = x.get(step.to) - 5 * sign;
+      const className = step.reply ? "reply" : "msg";
+      parts.push(
+        `<line class="${className}" x1="${startX}" y1="${step.y}" x2="${endX}" y2="${step.y}" style="stroke:${color}" marker-end="url(#seq-arrow-${step.from})"/>` +
+          `<text class="${step.reply ? "lbl-reply dim" : "lbl ink"}" x="${startX + sign * 22}" y="${step.y - 8}" text-anchor="${sign > 0 ? "start" : "end"}">${escapeXml(step.text)}</text>`,
+      );
+      badgeX = startX + sign * 9;
+    }
+    parts.push(
+      `<circle class="badge" cx="${badgeX}" cy="${step.y}" r="8.5" style="stroke:${color}"/>` +
+        `<text class="num" x="${badgeX}" y="${step.y + 3.5}" text-anchor="middle" style="fill:${color}">${index + 1}</text>`,
+    );
+  });
+  parts.push("</svg>");
+  return parts.join("\n");
+}
+
+/**
+ * Render the phone timeline: numberless, one rail, one dot per step
+ * (filled for a call, hollow for a reply), `Origin → Destination` in the
+ * participants' colours, and the message below. Drawn on a 360-unit
+ * viewBox so 11-unit text is 11 px on a 360 px screen.
+ *
+ * @param {{ participants: Array<{ id: string, label: string }>, messages: Array<{ from: string, to: string, text: string, dotted: boolean }>, loops?: Array<{ label: string, start: number, end: number }> }} model
+ * @returns {string} the SVG document
+ */
+export function renderMobileSvg(model) {
+  const lanes = resolveLanes(model);
+  const steps = resolveSteps(model);
+  const width = 360;
+  const rail = 32;
+  const body = [];
+  let y = 20;
+  let railTop = null;
+  let loopTop = null;
+  for (const step of steps) {
+    if (step.kind === "phase") {
+      if (railTop !== null) {
+        body.push(
+          `<line x1="${rail}" y1="${railTop}" x2="${rail}" y2="${y - 18}" style="stroke:var(--surface-ink-faint,#9aa8a7);stroke-width:1;opacity:.35"/>`,
+        );
+      }
+      y += 10;
+      body.push(`<text class="phase" x="20" y="${y + 14}" style="fill:${laneColor("worker")}">${escapeXml(step.title)}</text>`);
+      body.push(`<text class="phase-sub faint" x="20" y="${y + 31}">${escapeXml(step.sub)}</text>`);
+      y += 50;
+      railTop = y;
+      continue;
+    }
+    if (step.kind === "loop-open") {
+      loopTop = y - 4;
+      body.push(`<text class="loop-cap dim" x="${rail + 20}" y="${y + 8}">↻ for each ${escapeXml(step.label.replace(/^per\s+/, ""))}</text>`);
+      y += 20;
+      continue;
+    }
+    if (step.kind === "loop-close") {
+      body.push(
+        `<rect x="${rail + 10}" y="${loopTop}" width="${width - rail - 26}" height="${y - loopTop - 2}" rx="8" style="fill:none;stroke:var(--surface-ink-faint,#9aa8a7);stroke-dasharray:4 3;opacity:.6"/>`,
+      );
+      y += 8;
+      continue;
+    }
+    const fromLabel = lanes.get(step.from).label;
+    const toLabel = lanes.get(step.to).label;
+    const fromMeasure = lanes.get(step.from).measure;
+    body.push(
+      `<circle cx="${rail}" cy="${y + 6}" r="${step.reply ? 3.5 : 5}" style="fill:${step.reply ? "var(--stage-bg,#050505)" : laneColor(step.from)};stroke:${laneColor(step.from)};stroke-width:1.5"/>`,
+    );
+    const textX = rail + 20;
+    body.push(`<text class="head" x="${textX}" y="${y + 10}" style="font-size:11px;fill:${laneColor(step.from)}">${escapeXml(fromLabel)}</text>`);
+    const arrowX = textX + fromMeasure.length * 7.6 + 6;
+    if (step.from !== step.to) {
+      body.push(
+        `<line class="${step.reply ? "reply" : "msg"}" x1="${arrowX}" y1="${y + 6}" x2="${arrowX + 22}" y2="${y + 6}" style="stroke:${laneColor(step.from)}" marker-end="url(#seqm-arrow-${step.from})"/>` +
+          `<text class="head" x="${arrowX + 30}" y="${y + 10}" style="font-size:11px;fill:${laneColor(step.to)}">${escapeXml(toLabel)}</text>`,
+      );
+    }
+    body.push(
+      `<text class="${step.reply ? "lbl-reply dim" : "lbl ink"}" x="${textX}" y="${y + 28}">${escapeXml(step.text)}</text>`,
+    );
+    y += 44;
+  }
+  body.push(
+    `<line x1="${rail}" y1="${railTop}" x2="${rail}" y2="${y - 30}" style="stroke:var(--surface-ink-faint,#9aa8a7);stroke-width:1;opacity:.35"/>`,
+  );
+  const height = y + 6;
+  const rails = body.filter((element) => element.startsWith(`<line x1="${rail}"`));
+  const rest = body.filter((element) => !element.startsWith(`<line x1="${rail}"`));
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" class="seq" viewBox="0 0 ${width} ${height}" role="img" ` +
+      `aria-label="Indexing sequence, step by step">`,
+    "<title>Indexing sequence, step by step</title>",
+    MOBILE_STYLE,
+    arrowDefs(lanes, "seqm"),
+    `<rect class="bg" x="0" y="0" width="${width}" height="${height}" rx="14"/>`,
+    `<rect class="frame" x=".5" y=".5" width="${width - 1}" height="${height - 1}" rx="14"/>`,
+    ...rails,
+    ...rest,
+    "</svg>",
+  ].join("\n");
+}
+
+/**
+ * Render the generated module: the prompt, the diagram source and both
+ * pre-rendered SVGs, plus the stamp. Payloads stay JSON-encoded on one
+ * line each.
  *
  * @param {string} prompt - the prompt.v2.xml text
  * @param {string} mmd - the indexing.mmd text
- * @param {string} svg - the pre-rendered SVG
+ * @param {string} svg - the wide SVG
+ * @param {string} mobileSvg - the phone timeline SVG
  * @param {string} builtAt - the ISO-8601 stamp
  * @returns {string} the module text
  */
-function renderModule(prompt, mmd, svg, builtAt) {
+function renderModule(prompt, mmd, svg, mobileSvg, builtAt) {
   return [
     `// SPDX-License-Identifier: Apache-2.0`,
     `/**`,
@@ -316,8 +616,11 @@ function renderModule(prompt, mmd, svg, builtAt) {
     `/** The indexing diagram source, a mermaid sequenceDiagram. */`,
     `export const INDEXING_MMD = ${JSON.stringify(mmd)};`,
     ``,
-    `/** The diagram pre-rendered to static SVG at build time. */`,
+    `/** The wide diagram, pre-rendered to static SVG at build time. */`,
     `export const INDEXING_SVG = ${JSON.stringify(svg)};`,
+    ``,
+    `/** The phone timeline, pre-rendered to static SVG at build time. */`,
+    `export const INDEXING_MOBILE_SVG = ${JSON.stringify(mobileSvg)};`,
     ``,
   ].join("\n");
 }
@@ -375,13 +678,15 @@ if (invoked) {
   if (!mmd.includes("sequenceDiagram")) {
     throw new Error("review-assets: the diagram is not a mermaid sequenceDiagram");
   }
-  const svg = renderDiagramSvg(parseDiagram(mmd));
+  const model = parseDiagram(mmd);
+  const svg = renderWideSvg(model);
+  const mobileSvg = renderMobileSvg(model);
   const previous = previousPayload(out);
   const builtAt =
     previous !== null && previous.prompt === prompt && previous.mmd === mmd
       ? (previousStamp(out) ?? new Date().toISOString())
       : new Date().toISOString();
-  const module = renderModule(prompt, mmd, svg, builtAt);
+  const module = renderModule(prompt, mmd, svg, mobileSvg, builtAt);
 
   if (check) {
     let current = null;

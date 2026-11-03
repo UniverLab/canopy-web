@@ -589,8 +589,10 @@ pre.run-command code, pre.run-prompt-text code { font-family: inherit; overflow-
 .review-flagged { --verdict: var(--err-label); }
 .review-reasons { font-family: var(--font-body); font-size: 1rem; color: var(--surface-ink-dim); }
 
-/* The transparency page: the pre-rendered diagram scrolls inside itself,
- * the prompt and the verdict hashes read as mono blocks. */
+/* The transparency page: two pre-rendered diagrams behind one CSS switch.
+ * The wide art scrolls inside its own frame above the phone breakpoint;
+ * under it the numberless timeline takes over and full-bleeds the page
+ * gutter, so its 11-unit text is 11 px on a 360 px screen. */
 figure.diagram {
   margin: 0 0 1.5rem;
   padding: 0.75rem;
@@ -602,6 +604,21 @@ figure.diagram {
   color: var(--stage-ink);
 }
 figure.diagram svg { display: block; min-width: 40rem; height: auto; }
+figure.diagram-mobile { display: none; }
+@media (max-width: 639px) {
+  figure.diagram-wide { display: none; }
+  figure.diagram-mobile {
+    display: block;
+    margin: 0 -1rem 1.5rem;
+    padding: 0;
+    max-width: none;
+    overflow: visible;
+    background: none;
+    border: 0;
+    border-radius: 0;
+  }
+  figure.diagram-mobile svg { min-width: 0; width: 100%; }
+}
 pre.prompt, pre.hash {
   padding: 0.75rem;
   background: var(--stage-bg);

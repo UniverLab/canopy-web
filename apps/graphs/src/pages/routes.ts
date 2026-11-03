@@ -88,6 +88,7 @@ import { patternPage, patternsIndexPage, type ImplementsRow } from "./patterns.j
 import { transparencyPage } from "./transparency.js";
 import {
   INDEXING_MMD,
+  INDEXING_MOBILE_SVG,
   INDEXING_SVG,
   REVIEW_PROMPT_V2,
   REVIEW_PROMPT_VERSION,
@@ -478,6 +479,7 @@ async function transparencyResponse(req: Request, env: PageEnv, deps: PageDeps):
   const reviews = await store.getReviews();
   return page(req, transparencyPage({
     svg: INDEXING_SVG,
+    mobileSvg: INDEXING_MOBILE_SVG,
     mmd: INDEXING_MMD,
     // The same stripped bytes the model saw: the template's leading
     // comments cost tokens and are not instructions, so the page shows
