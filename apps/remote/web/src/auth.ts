@@ -3,15 +3,16 @@
 // signing out of it. The Worker answers 401 without a session cookie,
 // 200 {login} with one; POST /auth/logout clears the cookie.
 //
-// The session cookie is HttpOnly, so the page usually cannot see it: a
-// localStorage hint (the terminal-prefs pattern, fail-open when storage is
-// denied) records whether a session likely exists, and fetchLogin skips
-// its /auth/me request when neither the hint nor a readable cookie says
-// so — the signed-out landing makes zero requests and logs zero 401s. The
-// hint is armed on sign-in click and on every 200, cleared on 401 and
-// logout.
+// The session cookie is HttpOnly, so the page cannot see it: a readable
+// cr_hint cookie (the worker mirrors the session's presence with it, the
+// primary signal) plus a localStorage hint (the terminal-prefs pattern,
+// fail-open when storage is denied, secondary) record whether a session
+// likely exists, and fetchLogin skips its /auth/me request when neither
+// says so — the signed-out landing makes zero requests and logs zero 401s.
+// The hints are armed on sign-in click and on every 200, cleared on 401
+// and logout.
 
-import { SESSION_COOKIE } from "../../worker/src/protocol.js";
+import { SESSION_HINT_COOKIE } from "../../worker/src/protocol.js";
 
 /** localStorage hint: "1" while a relay session likely exists. */
 export const SESSION_HINT_KEY = "canopy.remote.session";
@@ -53,13 +54,17 @@ export function clearSessionHint(): void {
   } catch {
     // Forgetting is best effort; a stale hint self-heals on the next 401.
   }
+  try {
+    document.cookie = `${SESSION_HINT_COOKIE}=; Max-Age=0; Path=/; Secure; SameSite=Strict`;
+  } catch {
+    // Same: an unreadable cookie jar cannot hold a stale hint either.
+  }
 }
 
 /**
- * Whether the readable cookies carry the session cookie. The relay sets it
- * HttpOnly, so this is normally false even signed in — the hint covers
- * that — but a readable cookie must never be ignored. Fail open: when the
- * cookies cannot be read, the fetch goes out.
+ * Whether the readable hint cookie is present. The relay sets cr_hint=1
+ * beside the HttpOnly session cookie, so its presence is the primary
+ * signal. Fail open: when the cookies cannot be read, the fetch goes out.
  */
 function sessionCookiePresent(): boolean {
   let cookies: string;
@@ -71,7 +76,7 @@ function sessionCookiePresent(): boolean {
   for (const part of cookies.split(";")) {
     const eq = part.indexOf("=");
     const name = (eq === -1 ? part : part.slice(0, eq)).trim();
-    if (name === SESSION_COOKIE) {
+    if (name === SESSION_HINT_COOKIE) {
       return true;
     }
   }

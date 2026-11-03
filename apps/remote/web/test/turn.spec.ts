@@ -31,8 +31,11 @@ function mintSession(uid: number, login: string): string {
 }
 
 test("a real browser connects past /turn with no forbidden_origin", async ({ page, context }) => {
+  // A real session carries both cookies: cr_session plus the readable
+  // cr_hint=1 the worker sets beside it (the app's only readable signal).
   await context.addCookies([
     { name: "cr_session", value: mintSession(UID, LOGIN), url: "http://127.0.0.1:8787/" },
+    { name: "cr_hint", value: "1", url: "http://127.0.0.1:8787/" },
   ]);
 
   const turnBodies: string[] = [];

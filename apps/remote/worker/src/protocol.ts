@@ -8,6 +8,9 @@
 /** Signed session cookie set by the OAuth callback. */
 export const SESSION_COOKIE = "cr_session";
 
+/** Readable session-presence hint mirroring the session cookie (value "1"). */
+export const SESSION_HINT_COOKIE = "cr_hint";
+
 /** Short-lived OAuth state cookie, cleared by the callback. */
 export const STATE_COOKIE = "cr_oauth_state";
 

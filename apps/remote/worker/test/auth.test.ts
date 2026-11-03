@@ -145,6 +145,12 @@ describe("GET /auth/callback", () => {
     expect(hasAttribute(response, "cr_session", "HttpOnly")).toBe(true);
     expect(hasAttribute(response, "cr_session", "Secure")).toBe(true);
     expect(hasAttribute(response, "cr_session", "SameSite=Strict")).toBe(true);
+    expect(setCookie(response, "cr_hint")).toBe("1");
+    expect(hasAttribute(response, "cr_hint", "Max-Age=43200")).toBe(true);
+    expect(hasAttribute(response, "cr_hint", "Path=/")).toBe(true);
+    expect(hasAttribute(response, "cr_hint", "HttpOnly")).toBe(false);
+    expect(hasAttribute(response, "cr_hint", "Secure")).toBe(true);
+    expect(hasAttribute(response, "cr_hint", "SameSite=Strict")).toBe(true);
     expect(hasAttribute(response, "cr_oauth_state", "Max-Age=0")).toBe(true);
   });
 
@@ -159,6 +165,7 @@ describe("GET /auth/callback", () => {
     expect(await response.json()).toEqual({ error: "oauth_failed" });
     expect(hasAttribute(response, "cr_oauth_state", "Max-Age=0")).toBe(true);
     expect(setCookie(response, "cr_session")).toBeNull();
+    expect(setCookie(response, "cr_hint")).toBeNull();
     expect(fake.calls).toEqual([]);
   });
 
@@ -200,6 +207,8 @@ describe("POST /auth/logout", () => {
     expect(response.headers.get("location")).toBe("/");
     expect(setCookie(response, "cr_session")).toBe("");
     expect(hasAttribute(response, "cr_session", "Max-Age=0")).toBe(true);
+    expect(setCookie(response, "cr_hint")).toBe("");
+    expect(hasAttribute(response, "cr_hint", "Max-Age=0")).toBe(true);
   });
 });
 
@@ -315,6 +324,7 @@ describe("session revocation", () => {
     const response = await handleLogout(request("/auth/logout", `cr_session=${value}`), env);
     expect(response.status).toBe(303);
     expect(setCookie(response, "cr_session")).toBe("");
+    expect(setCookie(response, "cr_hint")).toBe("");
   });
 });
 

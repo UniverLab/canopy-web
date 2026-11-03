@@ -2,10 +2,12 @@
 /**
  * GitHub OAuth for browsers: login redirect, code exchange, signed session.
  * The GitHub token is discarded after `/user`; the browser keeps only the
- * `cr_session` cookie, an HMAC-signed {uid, login, exp, jti}.
+ * `cr_session` cookie, an HMAC-signed {uid, login, exp, jti}. A readable
+ * `cr_hint=1` cookie mirrors the session's presence so the page can decide
+ * whether to probe `/auth/me` without seeing the HttpOnly session cookie.
  */
 import { b64urlDecode, b64urlEncode, parseCookies, serializeCookie, timingSafeEqual } from "./codec.js";
-import { SESSION_COOKIE, STATE_COOKIE, applySecurityHeaders } from "./protocol.js";
+import { SESSION_COOKIE, SESSION_HINT_COOKIE, STATE_COOKIE, applySecurityHeaders } from "./protocol.js";
 import { exchangeCode, fetchUser } from "./github.js";
 import { isOriginAllowed, parseAllowedOrigins } from "./origin.js";
 
@@ -283,6 +285,15 @@ export async function handleCallback(
       sameSite: "Strict",
     }),
   );
+  headers.append(
+    "set-cookie",
+    serializeCookie(SESSION_HINT_COOKIE, "1", {
+      maxAge: SESSION_TTL_S,
+      path: "/",
+      secure: true,
+      sameSite: "Strict",
+    }),
+  );
   return new Response(null, { status: 302, headers });
 }
 
@@ -317,6 +328,15 @@ export async function handleLogout(req: Request, env: AuthEnv): Promise<Response
       maxAge: 0,
       path: "/",
       httpOnly: true,
+      secure: true,
+      sameSite: "Strict",
+    }),
+  );
+  headers.append(
+    "set-cookie",
+    serializeCookie(SESSION_HINT_COOKIE, "", {
+      maxAge: 0,
+      path: "/",
       secure: true,
       sameSite: "Strict",
     }),

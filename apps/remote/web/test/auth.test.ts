@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { SESSION_COOKIE } from "../../worker/src/protocol.js";
+import { SESSION_HINT_COOKIE } from "../../worker/src/protocol.js";
 import {
   armSessionHint,
   clearSessionHint,
@@ -64,15 +64,22 @@ describe("fetchLogin", () => {
     expect(calls).toEqual([]);
   });
 
-  it("fetches when a readable session cookie is present, hint or not", async () => {
-    document.cookie = `${SESSION_COOKIE}=signed-value; path=/`;
+  it("fetches when the hint cookie is present with empty localStorage", async () => {
+    document.cookie = `${SESSION_HINT_COOKIE}=1; path=/`;
     const { fetchImpl, calls } = stubFetch(() => json({ login: "octo" }, 200));
     await expect(fetchLogin(fetchImpl)).resolves.toBe("octo");
     expect(calls).toHaveLength(1);
   });
 
-  it("ignores a cookie whose name merely contains the session name", async () => {
-    document.cookie = `other_${SESSION_COOKIE}=signed-value; path=/`;
+  it("fetches when the hint cookie is present, hint or not", async () => {
+    document.cookie = `${SESSION_HINT_COOKIE}=1; path=/`;
+    const { fetchImpl, calls } = stubFetch(() => json({ login: "octo" }, 200));
+    await expect(fetchLogin(fetchImpl)).resolves.toBe("octo");
+    expect(calls).toHaveLength(1);
+  });
+
+  it("ignores a cookie whose name merely contains the hint name", async () => {
+    document.cookie = `other_${SESSION_HINT_COOKIE}=1; path=/`;
     const { fetchImpl, calls } = stubFetch(() => json({ login: "octo" }, 200));
     await expect(fetchLogin(fetchImpl)).resolves.toBeNull();
     expect(calls).toEqual([]);
@@ -87,7 +94,7 @@ describe("fetchLogin", () => {
   });
 
   it("arms the hint on 200", async () => {
-    document.cookie = `${SESSION_COOKIE}=signed-value; path=/`;
+    document.cookie = `${SESSION_HINT_COOKIE}=1; path=/`;
     expect(localStorage.getItem(SESSION_HINT_KEY)).toBeNull();
     const { fetchImpl } = stubFetch(() => json({ login: "octo" }, 200));
     await expect(fetchLogin(fetchImpl)).resolves.toBe("octo");
@@ -96,9 +103,11 @@ describe("fetchLogin", () => {
 
   it("returns null on 401 and clears the hint", async () => {
     armSessionHint();
+    document.cookie = `${SESSION_HINT_COOKIE}=1; path=/`;
     const { fetchImpl } = stubFetch(() => json({ error: "unauthorized" }, 401));
     await expect(fetchLogin(fetchImpl)).resolves.toBeNull();
     expect(localStorage.getItem(SESSION_HINT_KEY)).toBeNull();
+    expect(document.cookie).not.toContain(`${SESSION_HINT_COOKIE}=1`);
   });
 
   it("keeps the hint when the relay is unreachable or answers nonsense", async () => {
