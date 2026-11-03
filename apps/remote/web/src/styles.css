@@ -621,7 +621,9 @@ label > textarea {
   padding: 8px;
   overflow: auto;
   overscroll-behavior: contain;
-  touch-action: pan-x pan-y;
+  /* The browser only ever pans sideways here: a vertical drag is the
+   * terminal's one-finger history scroll (see terminal.ts). */
+  touch-action: pan-x;
 }
 
 .term-placeholder {
@@ -640,7 +642,8 @@ label > textarea {
   height: min(var(--term-visual-h, 46dvh), 60vh);
   min-height: 34vh;
   overflow: visible;
-  touch-action: pan-x pan-y;
+  /* Same as the pane: vertical drags belong to the terminal. */
+  touch-action: pan-x;
 }
 
 /* The visual box: natural size × the scale refit wrote, clipping the

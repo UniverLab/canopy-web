@@ -531,6 +531,9 @@ for (const viewport of [
     // The header says the link is up.
     await expect(page.locator("#conn-icon")).toHaveAttribute("data-icon", "wifi");
     await page.locator("#session-back").click();
+    // The host pushes a fourth shelf file 2 s after attach and the list
+    // repaints around it, recreating New mid-click; wait it out first.
+    await expect(page.locator('[data-session="smoke"] .session-files-count')).toHaveText("4");
     // The session row says what it is, and New wears its plus.
     await expect(page.locator('[data-session="smoke"] .session-kind')).toHaveAttribute("data-kind", "bot");
     await expect(page.locator("#session-new svg.icon")).toBeVisible();
@@ -569,6 +572,8 @@ test("latches Ctrl so the keyboard's c sends 0x03", async ({ page }) => {
 
 test("spawns a terminal from the New dialog", async ({ page }) => {
   await page.locator("#session-back").click();
+  // Same 2 s shelf push as the icons test: the repaint recreates New.
+  await expect(page.locator('[data-session="smoke"] .session-files-count')).toHaveText("4");
   await page.locator("#session-new").click();
   await expect(page.locator("#new-form")).toBeVisible();
   await page.locator("#new-kind-terminal").check();
