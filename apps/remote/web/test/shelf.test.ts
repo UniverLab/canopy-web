@@ -24,6 +24,7 @@ const CALLBACKS: ShellCallbacks = {
   onForgetDevice: () => {},
   onKeyPress: () => {},
   onTerminalInput: () => {},
+  onControlSize: () => {},
   onComposerSend: () => {},
   onSpawn: () => true,
   onCompose: () => true,

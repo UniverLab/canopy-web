@@ -1,21 +1,27 @@
 // SPDX-License-Identifier: Apache-2.0
 // The host PTY on the phone: an xterm.js terminal created once with the
-// snapshot's cols and rows — the browser never resizes the host — scaled
-// exactly once. .term-host keeps xterm's natural pixel size and
-// transform:scale(s) does the scaling; the surrounding .term-scale is the
-// visual box (natural × s) and .term-fit holds it. The pane itself is the
-// scroller (overflow:auto), so a zoomed session pans inside the terminal
-// card and the page never scrolls sideways. Pinch or the +/− buttons zoom
-// on top of the fit, output follows the bottom unless the user scrolled
-// up, and tapping the terminal focuses xterm's hidden textarea so the soft
+// snapshot's cols and rows — the browser never resizes the host (unless
+// the control-size toggle says so) — scaled exactly once. .term-host
+// keeps xterm's natural pixel size and transform:scale(s) does the
+// scaling; the surrounding .term-scale is the visual box (natural × s)
+// and .term-fit holds it. The pane itself is the scroller
+// (overflow:auto), so a zoomed session pans inside the terminal card and
+// the page never scrolls sideways. Pinch or the +/− buttons zoom on top
+// of the fit, output follows the bottom unless the user scrolled up, and
+// tapping the terminal focuses xterm's hidden textarea so the soft
 // keyboard opens and typed characters come back through onData as input.
 //
-// The fitted scale is always paneWidth / terminalWidth times the zoom:
-// the terminal fits its panel on open, on panel resize and on zoom change
-// with no manual Fit press. Every refit anchors the pane at scrollLeft 0,
-// so the line start stays visible and a stale scroll never clips the left
-// edge. The Fit toggle remains as a harmless remembered affordance that no
-// longer changes the scale.
+// The fitted scale is paneWidth / terminalWidth times the zoom while the
+// normal buffer is active; a fullscreen app switches xterm to the
+// alternate buffer, and then the whole frame — every row and column —
+// fits the panel with min(panelW/naturalW, panelH/naturalH) and
+// follow-bottom switches off until the app exits back to the shell. The
+// scale always measures the real .xterm-screen, never the .xterm wrapper.
+// The terminal fits its panel on open, on panel resize, on zoom change
+// and on buffer change with no manual Fit press. Every refit anchors the
+// pane at scrollLeft 0, so the line start stays visible and a stale
+// scroll never clips the left edge. The Fit toggle remains as a harmless
+// remembered affordance that no longer changes the scale.
 
 import "@xterm/xterm/css/xterm.css";
 import { Terminal } from "@xterm/xterm";
@@ -37,6 +43,10 @@ export interface TerminalHandle {
   focus: () => void;
   scrollToBottom: () => void;
   isAtBottom: () => boolean;
+  /** True while xterm's alternate (fullscreen) buffer is active. Absent means always normal. */
+  isAlternateBuffer?: () => boolean;
+  /** Fires when the active buffer changes between normal and alternate. */
+  onBufferChange?: (callback: () => void) => () => void;
   onUserInput: (callback: (text: string) => void) => () => void;
   onScroll: (callback: () => void) => () => void;
   /** Fires once the terminal is open (and the WebGL attempt settled). */
@@ -90,6 +100,27 @@ export function computeScale(
   return Math.max(paneWidth / contentWidth, minScale) * clampZoom(zoom);
 }
 
+// The fitted scale for the active buffer: the normal buffer keeps the
+// width fit, while the alternate (fullscreen) buffer fits the whole frame
+// — every row and column — with min(panelW/naturalW, panelH/naturalH).
+// Zoom multiplies on top in both modes.
+export function computeFitScale(
+  paneWidth: number,
+  paneHeight: number,
+  contentWidth: number,
+  contentHeight: number,
+  zoom: number,
+  alternate: boolean,
+): number {
+  if (!alternate) {
+    return computeScale(paneWidth, contentWidth, zoom, 0);
+  }
+  if (paneWidth <= 0 || paneHeight <= 0 || contentWidth <= 0 || contentHeight <= 0) {
+    return 1;
+  }
+  return Math.min(paneWidth / contentWidth, paneHeight / contentHeight) * clampZoom(zoom);
+}
+
 export function zoomFromPinch(startDistance: number, currentDistance: number, startZoom: number): number {
   if (startDistance <= 0) {
     return startZoom;
@@ -129,6 +160,9 @@ export function createXtermHandle(
   // After open(): the addon needs the screen's canvas. A failure or a
   // context loss leaves xterm's DOM renderer running.
   attachWebgl(terminal);
+  // Test hook: the fake host's e2e reads the active buffer through it —
+  // buffer reads work under WebGL too, where the DOM carries no row text.
+  (host as unknown as { __xterm?: Terminal }).__xterm = terminal;
   return {
     write: (data) => terminal.write(data),
     clear: () => terminal.clear(),
@@ -137,6 +171,11 @@ export function createXtermHandle(
     isAtBottom: () => {
       const buffer = terminal.buffer.active;
       return buffer.viewportY >= buffer.baseY;
+    },
+    isAlternateBuffer: () => terminal.buffer.active.type === "alternate",
+    onBufferChange: (callback) => {
+      const sub = terminal.buffer.onBufferChange(() => callback());
+      return () => sub.dispose();
     },
     onUserInput: (callback) => {
       const sub = terminal.onData(callback);
@@ -171,6 +210,7 @@ export class TerminalView {
   private fitOnly: boolean;
   private rows = 0;
   private following = true;
+  private alternate = false;
   private stopObserving: (() => void) | null = null;
   private pinchStart: { distance: number; zoom: number } | null = null;
   private generation = 0;
@@ -271,6 +311,11 @@ export class TerminalView {
     return this.following;
   }
 
+  /** True while xterm's alternate (fullscreen) buffer is active. */
+  get isAlternate(): boolean {
+    return this.alternate;
+  }
+
   get isFitOnly(): boolean {
     return this.fitOnly;
   }
@@ -321,6 +366,15 @@ export class TerminalView {
   }
 
   scrollToLatest(): void {
+    // Fullscreen has no tail to follow: latest re-shows the frame top and
+    // follow stays off until the app exits back to the shell.
+    if (this.alternate) {
+      if (this.pane) {
+        this.pane.scrollTop = 0;
+      }
+      this.setFollowing(false);
+      return;
+    }
     this.handle?.scrollToBottom();
     this.setFollowing(true);
   }
@@ -333,8 +387,12 @@ export class TerminalView {
       return;
     }
     const content = host.firstElementChild ?? host;
-    const naturalWidth = content.scrollWidth;
     const screen = host.querySelector<HTMLElement>(".xterm-screen");
+    // The scale measures the real .xterm-screen, never the .xterm wrapper:
+    // the wrapper can be narrower than the screen it holds, and a scale
+    // from the wrapper overflows the panel on the right.
+    const naturalWidth =
+      screen && screen.scrollWidth > 0 ? screen.scrollWidth : content.scrollWidth;
     const naturalHeight =
       screen && screen.offsetHeight > 0 ? screen.offsetHeight : content.scrollHeight;
     if (naturalWidth <= 0 || naturalHeight <= 0) {
@@ -343,11 +401,19 @@ export class TerminalView {
     // Both renderers size .xterm-screen in layout px (a CSS transform does
     // not affect offsetHeight), so this is the unscaled row height.
     const rowHeight = this.rows > 0 ? naturalHeight / this.rows : FALLBACK_ROW_HEIGHT;
-    // Always pure fit-to-width: the floor is gone, so the rightmost column
-    // is readable with no manual Fit press. Fit-to-width wins over zoom
-    // fidelity in one sense only — the left anchor below — while the zoom
-    // still scales on top and pans to the right when it overflows.
-    const scale = computeScale(fit.clientWidth, naturalWidth, this.zoom, 0);
+    // The normal buffer fits the width; the alternate (fullscreen) buffer
+    // fits the whole frame into the fit box (its height is the visible
+    // height, capped at 60vh by the stylesheet). Before any layout the
+    // box has no height yet, so alternate falls back to the width fit.
+    const fitAll = this.alternate && fit.clientHeight > 0;
+    const scale = computeFitScale(
+      fit.clientWidth,
+      fit.clientHeight,
+      naturalWidth,
+      naturalHeight,
+      this.zoom,
+      fitAll,
+    );
     // One scale, applied once: the host is natural-size and carries the
     // transform; the scaler is the visual box (natural × scale) that
     // clips it, so the terminal never renders at scale².
@@ -355,6 +421,7 @@ export class TerminalView {
     scaler.style.width = `${naturalWidth * scale}px`;
     scaler.style.height = `${naturalHeight * scale}px`;
     fit.dataset.scale = `${scale}`;
+    fit.dataset.buffer = this.alternate ? "alternate" : "normal";
     fit.dataset.rowHeight = `${rowHeight}`;
     fit.dataset.fit = this.fitOnly ? "on" : "off";
     this.pane?.style.setProperty("--term-visual-h", `${naturalHeight * scale}px`);
@@ -382,6 +449,7 @@ export class TerminalView {
     this.rows = 0;
     this.pinchStart = null;
     this.following = true;
+    this.alternate = false;
     this.pendingWrites.length = 0;
   }
 
@@ -395,6 +463,7 @@ export class TerminalView {
     this.handle = handle;
     handle.onUserInput((text) => this.callbacks.onUserInput(text));
     handle.onScroll(() => this.refreshFollow());
+    handle.onBufferChange?.(() => this.syncBufferMode());
     handle.onReady(() => this.settleReady());
     for (const data of this.pendingWrites.splice(0)) {
       handle.write(data);
@@ -409,8 +478,34 @@ export class TerminalView {
   }
 
   private refreshFollow(): void {
+    // Follow-bottom is off while the alternate buffer is active: a
+    // fullscreen frame has no tail to follow, only a whole screen to show.
+    if (this.alternate) {
+      this.setFollowing(false);
+      return;
+    }
     const atBottom = this.handle?.isAtBottom() ?? true;
     this.setFollowing(atBottom);
+  }
+
+  // A fullscreen app entered or left: entering drops any bottom scroll so
+  // the frame paints from the top, switches follow off and refits to the
+  // whole frame; leaving resumes the width fit plus follow-bottom.
+  private syncBufferMode(): void {
+    const alternate = this.handle?.isAlternateBuffer?.() ?? false;
+    if (alternate === this.alternate) {
+      return;
+    }
+    this.alternate = alternate;
+    if (alternate) {
+      this.setFollowing(false);
+    } else {
+      this.refreshFollow();
+    }
+    this.refit();
+    if (alternate && this.pane) {
+      this.pane.scrollTop = 0;
+    }
   }
 
   private setFollowing(following: boolean): void {

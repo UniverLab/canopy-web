@@ -4,6 +4,7 @@
 // Playwright drives it through window.__fake. It answers catalog, spawn,
 // compose and prompt exactly like the daemon's session protocol.
 
+import type { Terminal } from "@xterm/xterm";
 import { createShell } from "./app.js";
 import { signOut } from "./auth.js";
 import { CatalogStore } from "./catalog.js";
@@ -90,6 +91,23 @@ const SMOKE_OUTPUT = [
   "▁▂▃▄▅▆▇█",
   "\x1b[32m●\x1b[0m smoke · running · 80×24 · 2.3k tok",
 ].join("\r\n") + "\r\n";
+
+// The fullscreen fixture for the alternate-buffer e2e: cursor-addressed
+// numbered rows 01–24 painted into the alternate screen, the way a TUI
+// paints a frame. Row 12 fills all 80 columns so the e2e can prove the
+// right edge survives the fit.
+const ALT_ENTER = "\x1b[?1049h";
+const ALT_EXIT = "\x1b[?1049l";
+
+function altRow(n: number): string {
+  const label = `alt-row ${String(n).padStart(2, "0")}`;
+  if (n === 12) {
+    return `\x1b[${n};1H${label}-${"w".repeat(80 - label.length - 1 - 4)}|END`;
+  }
+  return `\x1b[${n};1H${label} · fullscreen ${n}`;
+}
+
+const ALT_SCREEN = ALT_ENTER + Array.from({ length: 24 }, (_, i) => altRow(i + 1)).join("");
 
 function main(): void {
   const root = document.getElementById("app");
@@ -447,6 +465,9 @@ function main(): void {
       onTerminalInput: (bytes) => {
         controller.sendInputBytes(bytes);
       },
+      onControlSize: (cols, rows) => {
+        controller.sendResize(cols, rows);
+      },
       onComposerSend: (text, req) => {
         controller.sendPrompt(text, req);
       },
@@ -555,6 +576,27 @@ function main(): void {
       seq += 1;
       deliver({ t: "out", id: "smoke", seq, data: b64encode(bytes.slice(cut)) });
     },
+    pushAltScreen: () => {
+      seq += 1;
+      deliver({ t: "out", id: "smoke", seq, data: b64(ALT_SCREEN) });
+    },
+    exitAltScreen: () => {
+      seq += 1;
+      deliver({ t: "out", id: "smoke", seq, data: b64(ALT_EXIT) });
+    },
+    bufferState: () => {
+      const host = document.querySelector(".term-host") as (HTMLElement & { __xterm?: Terminal }) | null;
+      const term = host?.__xterm;
+      if (!term) {
+        return null;
+      }
+      const active = term.buffer.active;
+      const rows: string[] = [];
+      for (let y = active.viewportY; y < active.viewportY + term.rows; y += 1) {
+        rows.push(active.getLine(y)?.translateToString() ?? "");
+      }
+      return { type: active.type, rows, viewportY: active.viewportY, baseY: active.baseY };
+    },
     failNextPrompt: (code: string, message: string) => {
       promptError = { code, message };
     },
@@ -576,6 +618,12 @@ declare global {
       pushOut: (text: string) => void;
       /** Push one frame whose UTF-8 bytes are cut at `cut`, splitting a character. */
       pushOutSplit: (text: string, cut: number) => void;
+      /** Paint the numbered-rows fullscreen fixture into the alternate buffer. */
+      pushAltScreen?: () => void;
+      /** Leave the alternate screen, back to the shell. */
+      exitAltScreen?: () => void;
+      /** The visible viewport rows plus the active buffer type, or null. */
+      bufferState?: () => { type: string; rows: string[]; viewportY: number; baseY: number } | null;
       failNextPrompt: (code: string, message: string) => void;
       /** Advance the running graph fixture one step and push its state. */
       graphTick: () => void;

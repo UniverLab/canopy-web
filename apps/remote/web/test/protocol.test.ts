@@ -14,6 +14,7 @@ import {
   buildList,
   buildPrompt,
   buildPromptDraft,
+  buildResize,
   buildShelfGet,
   buildShelfList,
   buildSpawn,
@@ -128,6 +129,30 @@ describe("builders", () => {
       data: "G1tB",
     });
     expect(JSON.parse(buildInputText("s1", "y"))).toEqual({ t: "input", id: "s1", data: "eQ==" });
+  });
+
+  it("builds the exact resize frame", () => {
+    expect(JSON.parse(buildResize("s1", 100, 40))).toEqual({
+      t: "resize",
+      id: "s1",
+      cols: 100,
+      rows: 40,
+    });
+    // The host parses u16 sizes: fractions floor, zeroes clamp to one.
+    expect(JSON.parse(buildResize("s1", 99.7, 0))).toEqual({
+      t: "resize",
+      id: "s1",
+      cols: 99,
+      rows: 1,
+    });
+    // Non-finite sizes clamp to one: JSON.stringify would write null, which
+    // the host's size_field rejects as a missing field.
+    expect(JSON.parse(buildResize("s1", Number.NaN, Number.POSITIVE_INFINITY))).toEqual({
+      t: "resize",
+      id: "s1",
+      cols: 1,
+      rows: 1,
+    });
   });
 
   it("mints unique req ids", () => {

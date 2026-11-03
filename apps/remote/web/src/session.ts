@@ -13,6 +13,7 @@ import {
   buildInputText,
   buildPrompt,
   buildPromptDraft,
+  buildResize,
   decodeSnapshotData,
 } from "./protocol.js";
 import type { OutFrame, PromptDraft } from "./protocol.js";
@@ -103,6 +104,15 @@ export class SessionController {
       return false;
     }
     return this.callbacks.send(buildPromptDraft(req, this.openId, draft));
+  }
+
+  // The control-size path: the device asserts its PTY size for the open
+  // session. Only the toggle calls this, and only while it is on.
+  sendResize(cols: number, rows: number): boolean {
+    if (this.openId === null) {
+      return false;
+    }
+    return this.callbacks.send(buildResize(this.openId, cols, rows));
   }
 
   handleSnapshot(snapshot: JoinedSnapshot): void {

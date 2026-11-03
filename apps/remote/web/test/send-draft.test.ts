@@ -106,6 +106,7 @@ describe("Prompt Builder send through the shell", () => {
         onForgetDevice: () => {},
         onKeyPress: () => {},
         onTerminalInput: () => {},
+        onControlSize: () => {},
         onComposerSend: () => {},
         onSpawn: () => true,
         onCompose: () => true,

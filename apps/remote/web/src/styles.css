@@ -677,6 +677,28 @@ label > textarea {
   display: none;
 }
 
+/* The per-session size control: the toggle and its one-line explainer sit
+ * side by side and wrap on narrow phones. */
+.term-size {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap);
+  flex-wrap: wrap;
+}
+
+.term-size-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.term-size-note {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
 /* Nine keys, all visible: two rows of five equal-width touch targets,
  * the last cell empty. The bar is one info block; the keys inside stay
  * flat so the tint reads once. */

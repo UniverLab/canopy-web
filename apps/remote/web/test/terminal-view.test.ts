@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   clampZoom,
+  computeFitScale,
   computeMinScale,
   computeScale,
   MAX_ZOOM,
@@ -20,8 +21,10 @@ class FakeHandle implements TerminalHandle {
   scrolledToBottom = 0;
   cols: number;
   rows: number;
+  alternate = false;
   private inputListeners: ((text: string) => void)[] = [];
   private scrollListeners: (() => void)[] = [];
+  private bufferListeners: (() => void)[] = [];
 
   constructor(cols: number, rows: number) {
     this.cols = cols;
@@ -42,6 +45,11 @@ class FakeHandle implements TerminalHandle {
     this.atBottom = true;
   };
   isAtBottom = (): boolean => this.atBottom;
+  isAlternateBuffer = (): boolean => this.alternate;
+  onBufferChange = (callback: () => void): (() => void) => {
+    this.bufferListeners.push(callback);
+    return () => {};
+  };
   onUserInput = (callback: (text: string) => void): (() => void) => {
     this.inputListeners.push(callback);
     return () => {};
@@ -67,6 +75,13 @@ class FakeHandle implements TerminalHandle {
   emitScroll(atBottom: boolean): void {
     this.atBottom = atBottom;
     for (const listener of this.scrollListeners) {
+      listener();
+    }
+  }
+
+  emitBufferChange(alternate: boolean): void {
+    this.alternate = alternate;
+    for (const listener of this.bufferListeners) {
       listener();
     }
   }
@@ -108,6 +123,24 @@ describe("scale math", () => {
     expect(zoomFromPinch(100, 200, 1)).toBe(2);
     expect(zoomFromPinch(200, 100, 1)).toBe(0.5);
     expect(zoomFromPinch(0, 100, 1)).toBe(1);
+  });
+
+  it("fits the whole frame in the alternate buffer", () => {
+    // 80×24 at 8.4 px cells in a 340×100 box: the height binds.
+    const expected = Math.min(340 / 672, 100 / 408);
+    expect(expected).toBeLessThan(340 / 672);
+    expect(computeFitScale(340, 100, 672, 408, 1, true)).toBeCloseTo(expected, 10);
+    expect(computeFitScale(340, 100, 672, 408, 2, true)).toBeCloseTo(expected * 2, 10);
+    // No box, no fit: the guards hold on every zero side.
+    expect(computeFitScale(0, 100, 672, 408, 1, true)).toBe(1);
+    expect(computeFitScale(340, 0, 672, 408, 1, true)).toBe(1);
+    expect(computeFitScale(340, 100, 0, 408, 1, true)).toBe(1);
+    expect(computeFitScale(340, 100, 672, 0, 1, true)).toBe(1);
+  });
+
+  it("keeps the width fit in the normal buffer", () => {
+    expect(computeFitScale(340, 100, 672, 408, 1, false)).toBeCloseTo(340 / 672, 10);
+    expect(computeFitScale(340, 100, 672, 408, 2, false)).toBeCloseTo((340 / 672) * 2, 10);
   });
 });
 
@@ -375,6 +408,106 @@ describe("TerminalView", () => {
     expect(fit.dataset.fit).toBe("off");
     expect(host.style.transform).toBe(`scale(${zoomed})`);
     expect(parent.scrollLeft).toBe(120);
+    view.dispose();
+  });
+
+  it("measures the real .xterm-screen width, never the wrapper", () => {
+    const { parent, view } = setup();
+    view.mount(parent, 80, 24);
+    const fit = parent.querySelector<HTMLElement>(".term-fit");
+    const host = parent.querySelector<HTMLElement>(".term-host");
+    if (!fit || !host) {
+      throw new Error("missing scaffold");
+    }
+    // The wrapper (.xterm) is narrower than the screen it holds: a scale
+    // from the wrapper would overflow the panel on the right.
+    const wrapper = document.createElement("div");
+    wrapper.className = "xterm";
+    const screen = document.createElement("div");
+    screen.className = "xterm-screen";
+    wrapper.appendChild(screen);
+    host.appendChild(wrapper);
+    Object.defineProperty(fit, "clientWidth", { value: 340, configurable: true });
+    Object.defineProperty(wrapper, "scrollWidth", { value: 300, configurable: true });
+    Object.defineProperty(screen, "scrollWidth", { value: 700, configurable: true });
+    Object.defineProperty(screen, "offsetHeight", { value: 408, configurable: true });
+    view.refit();
+    expect(host.style.transform).toBe(`scale(${340 / 700})`);
+    expect(fit.dataset.buffer).toBe("normal");
+    view.dispose();
+  });
+
+  it("frames the whole screen and switches follow off in the alternate buffer", () => {
+    const { parent, view, handles, follows } = setup();
+    view.mount(parent, 80, 24);
+    const fit = parent.querySelector<HTMLElement>(".term-fit");
+    const scaler = parent.querySelector<HTMLElement>(".term-scale");
+    const host = parent.querySelector<HTMLElement>(".term-host");
+    if (!fit || !scaler || !host) {
+      throw new Error("missing scaffold");
+    }
+    // 80×24 at 8.4 px cells in a 340×100 box: the height binds, so the
+    // alternate scale sits below the width fit.
+    Object.defineProperty(fit, "clientWidth", { value: 340, configurable: true });
+    Object.defineProperty(fit, "clientHeight", { value: 100, configurable: true });
+    Object.defineProperty(host, "scrollWidth", { value: 672, configurable: true });
+    Object.defineProperty(host, "scrollHeight", { value: 408, configurable: true });
+    view.refit();
+    const widthFit = 340 / 672;
+    expect(view.isAlternate).toBe(false);
+    expect(view.isFollowing).toBe(true);
+    expect(host.style.transform).toBe(`scale(${widthFit})`);
+    expect(fit.dataset.buffer).toBe("normal");
+    // A stale bottom scroll from the shell tail: entering fullscreen must
+    // drop it so the frame paints from the top.
+    parent.scrollTop = 120;
+    handles[0]?.emitBufferChange(true);
+    const fitAll = Math.min(340 / 672, 100 / 408);
+    expect(fitAll).toBeLessThan(widthFit);
+    expect(view.isAlternate).toBe(true);
+    expect(view.isFollowing).toBe(false);
+    expect(follows).toEqual([false]);
+    expect(host.style.transform).toBe(`scale(${fitAll})`);
+    expect(fit.dataset.buffer).toBe("alternate");
+    expect(parseFloat(scaler.style.width)).toBeCloseTo(672 * fitAll, 6);
+    expect(parseFloat(scaler.style.height)).toBeCloseTo(100, 6);
+    expect(parent.scrollTop).toBe(0);
+    // Scroll noise while fullscreen never re-enables follow.
+    handles[0]?.emitScroll(true);
+    expect(view.isFollowing).toBe(false);
+    expect(follows).toEqual([false]);
+    // Back to the shell: the width fit plus follow-bottom resume.
+    handles[0]?.emitBufferChange(false);
+    expect(view.isAlternate).toBe(false);
+    expect(host.style.transform).toBe(`scale(${widthFit})`);
+    expect(fit.dataset.buffer).toBe("normal");
+    expect(view.isFollowing).toBe(true);
+    expect(follows).toEqual([false, true]);
+    view.dispose();
+  });
+
+  it("keeps follow off when latest is tapped in the alternate buffer", () => {
+    const { parent, view, handles, follows } = setup();
+    view.mount(parent, 80, 24);
+    const fit = parent.querySelector<HTMLElement>(".term-fit");
+    const host = parent.querySelector<HTMLElement>(".term-host");
+    if (!fit || !host) {
+      throw new Error("missing scaffold");
+    }
+    Object.defineProperty(fit, "clientWidth", { value: 340, configurable: true });
+    Object.defineProperty(fit, "clientHeight", { value: 100, configurable: true });
+    Object.defineProperty(host, "scrollWidth", { value: 672, configurable: true });
+    Object.defineProperty(host, "scrollHeight", { value: 408, configurable: true });
+    handles[0]?.emitBufferChange(true);
+    expect(view.isAlternate).toBe(true);
+    expect(view.isFollowing).toBe(false);
+    // A zoomed pan away from the frame top: latest re-shows the frame…
+    parent.scrollTop = 60;
+    view.scrollToLatest();
+    expect(parent.scrollTop).toBe(0);
+    // …without re-enabling follow: no new callback, still off.
+    expect(view.isFollowing).toBe(false);
+    expect(follows).toEqual([false]);
     view.dispose();
   });
 });

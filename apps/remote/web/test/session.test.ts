@@ -224,4 +224,14 @@ describe("session flow over a fake data channel", () => {
     expect(h.sent()).toContainEqual({ t: "detach", id: "s1" });
     expect(h.sent()).toContainEqual({ t: "attach", id: "s2" });
   });
+
+  it("sends a resize frame for the open session only", () => {
+    const h = setup();
+    expect(h.controller.sendResize(100, 40)).toBe(false);
+    h.controller.open("s1");
+    expect(h.controller.sendResize(100, 40)).toBe(true);
+    expect(h.sent()).toContainEqual({ t: "resize", id: "s1", cols: 100, rows: 40 });
+    h.controller.close();
+    expect(h.controller.sendResize(100, 40)).toBe(false);
+  });
 });

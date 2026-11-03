@@ -507,6 +507,22 @@ export function buildAttach(id: string): string {
   return JSON.stringify({ t: "attach", id });
 }
 
+// `resize{id,cols,rows}`: the device asserts one session's PTY size. Shape
+// verified against the host protocol (harness-canopy
+// src/sessions/protocol.rs `resize_frame`, parsed on /sessions/ws): note
+// the remote bridge answers it `forbidden` today (harness-canopy
+// src/remote/bridge.rs "resize is not available to remote devices"), so
+// the control-size toggle defaults off and the browser sends nothing
+// until the user opts in per session.
+export function buildResize(id: string, cols: number, rows: number): string {
+  // The host's size_field takes integers 1..=65535 and rejects anything
+  // else — including the null JSON.stringify writes for NaN/Infinity — so
+  // anything non-finite clamps to one instead of emitting a bad frame.
+  const safeCols = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : 1;
+  const safeRows = Number.isFinite(rows) ? Math.max(1, Math.floor(rows)) : 1;
+  return JSON.stringify({ t: "resize", id, cols: safeCols, rows: safeRows });
+}
+
 export function buildDetach(id: string): string {
   return JSON.stringify({ t: "detach", id });
 }

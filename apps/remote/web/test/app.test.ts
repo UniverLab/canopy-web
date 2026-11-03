@@ -7,6 +7,7 @@ import { connectFailMessage } from "../src/peer.js";
 import type { PromptDraft, SpawnRequest } from "../src/protocol.js";
 import { openSessionName, SessionStore } from "../src/sessions.js";
 import type { TerminalFactory, TerminalHandle } from "../src/terminal.js";
+import { readControlSize, writeControlSize } from "../src/terminal-prefs.js";
 import { sessionTitle } from "../src/titles.js";
 import type { PairSubmit } from "../src/ui.js";
 
@@ -15,10 +16,12 @@ class FakeHandle implements TerminalHandle {
   clears = 0;
   disposed = false;
   atBottom = true;
+  alternate = false;
   cols: number;
   rows: number;
   private inputListeners: ((text: string) => void)[] = [];
   private scrollListeners: (() => void)[] = [];
+  private bufferListeners: (() => void)[] = [];
 
   constructor(cols: number, rows: number) {
     this.cols = cols;
@@ -36,6 +39,11 @@ class FakeHandle implements TerminalHandle {
     this.atBottom = true;
   };
   isAtBottom = (): boolean => this.atBottom;
+  isAlternateBuffer = (): boolean => this.alternate;
+  onBufferChange = (callback: () => void): (() => void) => {
+    this.bufferListeners.push(callback);
+    return () => {};
+  };
   onUserInput = (callback: (text: string) => void): (() => void) => {
     this.inputListeners.push(callback);
     return () => {};
@@ -64,6 +72,13 @@ class FakeHandle implements TerminalHandle {
       listener();
     }
   }
+
+  emitBufferChange(alternate: boolean): void {
+    this.alternate = alternate;
+    for (const listener of this.bufferListeners) {
+      listener();
+    }
+  }
 }
 
 describe("createShell", () => {
@@ -75,6 +90,7 @@ describe("createShell", () => {
     pairs: PairSubmit[];
     keys: Uint8Array[];
     inputs: Uint8Array[];
+    controlSizes: { cols: number; rows: number }[];
     composerSends: { text: string; req: string }[];
     spawns: { spawn: SpawnRequest; req: string }[];
     composes: { draft: PromptDraft; req: string }[];
@@ -121,6 +137,7 @@ describe("createShell", () => {
     const pairs: PairSubmit[] = [];
     const keys: Uint8Array[] = [];
     const inputs: Uint8Array[] = [];
+    const controlSizes: { cols: number; rows: number }[] = [];
     const composerSends: { text: string; req: string }[] = [];
     const spawns: { spawn: SpawnRequest; req: string }[] = [];
     const composes: { draft: PromptDraft; req: string }[] = [];
@@ -137,6 +154,7 @@ describe("createShell", () => {
       pairs,
       keys,
       inputs,
+      controlSizes,
       composerSends,
       spawns,
       composes,
@@ -160,6 +178,7 @@ describe("createShell", () => {
       onForgetDevice: () => {},
       onKeyPress: (bytes) => keys.push(bytes),
       onTerminalInput: (bytes) => inputs.push(bytes),
+      onControlSize: (cols, rows) => controlSizes.push({ cols, rows }),
       onComposerSend: (text, req) => composerSends.push({ text, req }),
       onSpawn: (spawn, req) => {
         spawns.push({ spawn, req });
@@ -494,6 +513,52 @@ describe("createShell", () => {
     expect(calls.inputs.map((bytes) => [...bytes])).toEqual([[0x78]]);
   });
 
+  it("offers control-size per session, default off, with its explainer", () => {
+    shell.showSession("s1", "build");
+    const toggle = query<HTMLInputElement>("#term-control-size");
+    expect(toggle.checked).toBe(false);
+    expect(toggle.closest("label")?.textContent).toContain("This device controls the size");
+    expect(query(".term-size-note").textContent).toContain("Only one client should control the size");
+    expect(calls.controlSizes).toEqual([]);
+    // Mounting while off asserts nothing.
+    shell.ensureTerminal("s1", 80, 24);
+    expect(calls.controlSizes).toEqual([]);
+  });
+
+  it("persists control-size per session and asserts the real size", () => {
+    shell.showSession("s1", "build");
+    shell.ensureTerminal("s1", 80, 24);
+    const toggle = query<HTMLInputElement>("#term-control-size");
+    // Turning it on remembers the session and asserts the open size once.
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(readControlSize("s1")).toBe(true);
+    expect(readControlSize("s2")).toBe(false);
+    expect(calls.controlSizes).toEqual([{ cols: 80, rows: 24 }]);
+    // A remount (a changed host size) re-asserts while on.
+    shell.ensureTerminal("s1", 100, 40);
+    expect(calls.controlSizes).toEqual([
+      { cols: 80, rows: 24 },
+      { cols: 100, rows: 40 },
+    ]);
+    // Same size: no remount, no duplicate assert.
+    shell.ensureTerminal("s1", 100, 40);
+    expect(calls.controlSizes).toHaveLength(2);
+    // Turning it off remembers and stops asserting.
+    query<HTMLInputElement>("#term-control-size").checked = false;
+    query<HTMLInputElement>("#term-control-size").dispatchEvent(new Event("change", { bubbles: true }));
+    expect(readControlSize("s1")).toBe(false);
+    expect(calls.controlSizes).toHaveLength(2);
+  });
+
+  it("re-asserts a remembered control-size toggle on mount", () => {
+    writeControlSize("s1", true);
+    shell.showSession("s1", "build");
+    expect(query<HTMLInputElement>("#term-control-size").checked).toBe(true);
+    shell.ensureTerminal("s1", 80, 24);
+    expect(calls.controlSizes).toEqual([{ cols: 80, rows: 24 }]);
+  });
+
   it("keeps the terminal and the composer draft across state changes", () => {
     shell.showSession("s1", "build");
     shell.ensureTerminal("s1", 80, 24);
@@ -534,6 +599,21 @@ describe("createShell", () => {
     handles[0]?.emitScroll(false);
     expect(latest.hidden).toBe(false);
     latest.click();
+    expect(latest.hidden).toBe(true);
+  });
+
+  it("keeps the latest button visible when tapped in fullscreen", () => {
+    shell.showSession("s1", "build");
+    shell.ensureTerminal("s1", 80, 24);
+    const latest = query<HTMLButtonElement>("#term-latest");
+    expect(latest.hidden).toBe(true);
+    handles[0]?.emitBufferChange(true);
+    expect(latest.hidden).toBe(false);
+    // Follow stays off in fullscreen, so the tap must not hide the button.
+    latest.click();
+    expect(latest.hidden).toBe(false);
+    // Back to the shell: follow resumes and the button hides again.
+    handles[0]?.emitBufferChange(false);
     expect(latest.hidden).toBe(true);
   });
 

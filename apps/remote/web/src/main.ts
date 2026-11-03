@@ -119,6 +119,9 @@ async function main(): Promise<void> {
       onTerminalInput: (bytes) => {
         controller.sendInputBytes(bytes);
       },
+      onControlSize: (cols, rows) => {
+        controller.sendResize(cols, rows);
+      },
       onComposerSend: (text, req) => {
         if (!controller.sendPrompt(text, req)) {
           shell.composerError("Not connected", req);

@@ -1,6 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 import { afterEach, describe, expect, it } from "vitest";
-import { FIT_ONLY_KEY, readFitOnly, writeFitOnly } from "../src/terminal-prefs.js";
+import {
+  CONTROL_SIZE_KEY_PREFIX,
+  controlSizeKey,
+  FIT_ONLY_KEY,
+  readControlSize,
+  readFitOnly,
+  writeControlSize,
+  writeFitOnly,
+} from "../src/terminal-prefs.js";
 
 describe("terminal prefs", () => {
   afterEach(() => {
@@ -31,6 +39,8 @@ describe("terminal prefs", () => {
     try {
       expect(readFitOnly()).toBe(false);
       expect(() => writeFitOnly(true)).not.toThrow();
+      expect(readControlSize("smoke")).toBe(false);
+      expect(() => writeControlSize("smoke", true)).not.toThrow();
     } finally {
       if (original) {
         Object.defineProperty(globalThis, "localStorage", original);
@@ -38,5 +48,18 @@ describe("terminal prefs", () => {
         Reflect.deleteProperty(globalThis, "localStorage");
       }
     }
+  });
+
+  it("keeps control-size per session, default off", () => {
+    expect(readControlSize("smoke")).toBe(false);
+    expect(readControlSize("other")).toBe(false);
+    writeControlSize("smoke", true);
+    expect(localStorage.getItem(controlSizeKey("smoke"))).toBe("1");
+    expect(controlSizeKey("smoke")).toBe(`${CONTROL_SIZE_KEY_PREFIX}smoke`);
+    expect(readControlSize("smoke")).toBe(true);
+    expect(readControlSize("other")).toBe(false);
+    writeControlSize("smoke", false);
+    expect(localStorage.getItem(controlSizeKey("smoke"))).toBe("0");
+    expect(readControlSize("smoke")).toBe(false);
   });
 });

@@ -28,7 +28,8 @@ import type { ShelfHandle } from "./shelf-controller.js";
 import { convergeOpenSessionName, type SessionStore } from "./sessions.js";
 import { createXtermHandle, TerminalView } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
-import { readFitOnly, writeFitOnly } from "./terminal-prefs.js";
+import { termControlsHtml, termSizeHtml, wireTermControls } from "./term-controls.js";
+import { readControlSize, readFitOnly } from "./terminal-prefs.js";
 import { shellTitle } from "./titles.js";
 import type { PairSubmit } from "./ui.js";
 
@@ -48,6 +49,12 @@ export interface ShellCallbacks {
   onKeyPress: (bytes: Uint8Array) => void;
   /** Phone-keyboard bytes with the latches applied. */
   onTerminalInput: (bytes: Uint8Array) => void;
+  /**
+   * The device asserts its PTY size for the open session (send
+   * resize{id,cols,rows}). Fires when the control-size toggle turns on and
+   * on every terminal mount while it is on.
+   */
+  onControlSize: (cols: number, rows: number) => void;
   onComposerSend: (text: string, req: string) => void;
   /** False when the frame could not be sent; the dialog then says so. */
   onSpawn: (spawn: SpawnRequest, req: string) => boolean;
@@ -314,19 +321,9 @@ export function createShell(
       <div class="term-pane" id="term-pane">
         <p class="term-placeholder">Attaching…</p>
       </div>
-      <div class="term-controls">
-        <button type="button" id="term-zoom-out" aria-label="Zoom out">${icon("minus")}</button>
-        <button type="button" id="term-zoom-in" aria-label="Zoom in">${icon("plus")}</button>
-        <button
-          type="button"
-          id="term-fit"
-          aria-pressed="${readFitOnly() ? "true" : "false"}"
-          aria-label="Fit terminal to pane width"
-          title="Fit the terminal to the pane width"
-        >Fit</button>
-        <button type="button" id="term-latest" hidden aria-label="Scroll to the latest output">${icon("arrowDown")}<span>latest</span></button>
-      </div>
+      ${termControlsHtml()}
       <div class="keybar" id="keybar"></div>
+      ${termSizeHtml(sessionId)}
       <div class="composer-slot" id="composer-slot"></div>
     </main>
     ${REMOTE_FOOTER}`;
@@ -344,24 +341,13 @@ export function createShell(
       }
     });
     syncFilesBadge();
-    root.querySelector("#term-zoom-in")?.addEventListener("click", () => terminalView?.zoomIn());
-    root.querySelector("#term-zoom-out")?.addEventListener("click", () => terminalView?.zoomOut());
-    // The terminal always fits the pane width; Fit stays as a harmless
-    // remembered affordance that is never needed to read the line.
-    const fitButton = root.querySelector<HTMLButtonElement>("#term-fit");
-    fitButton?.addEventListener("click", () => {
-      const next = fitButton.getAttribute("aria-pressed") !== "true";
-      writeFitOnly(next);
-      fitButton.setAttribute("aria-pressed", `${next}`);
-      terminalView?.setFitOnly(next);
-    });
-    latestButton = root.querySelector<HTMLButtonElement>("#term-latest");
-    latestButton?.addEventListener("click", () => {
-      terminalView?.scrollToLatest();
-      if (latestButton) {
-        latestButton.hidden = true;
-      }
-    });
+    latestButton = wireTermControls({
+      root,
+      sessionId: () => sessionId,
+      terminalView: () => terminalView,
+      sessionSize: () => ({ cols: sessionCols, rows: sessionRows }),
+      onControlSize: (cols, rows) => callbacks.onControlSize(cols, rows),
+    }).latestButton;
     const bar = root.querySelector<HTMLElement>("#keybar");
     if (bar) {
       renderKeyBar(bar, (def) => {
@@ -730,6 +716,11 @@ export function createShell(
         { fitOnly: readFitOnly() },
       );
       terminalView.mount(pane, cols, rows);
+      // A remembered control-size toggle re-asserts on every (re)mount, so
+      // a reconnected session keeps the size this device asked for.
+      if (readControlSize(id)) {
+        callbacks.onControlSize(cols, rows);
+      }
     },
     writeTerminal(data: Uint8Array): void {
       terminalView?.write(data);
