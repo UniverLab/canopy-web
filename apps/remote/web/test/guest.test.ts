@@ -17,6 +17,7 @@ import {
   createTurnFetcher,
   flush,
   signTestAnswer,
+  textOf,
   waitForSend,
 } from "./fakes.js";
 import type { FakeWebSocket, PeerHarness, RelayHarness, TestHost } from "./fakes.js";
@@ -375,11 +376,11 @@ describe("GuestPeer", () => {
 });
 
 class FakeGuestHandle implements TerminalHandle {
-  written: string[] = [];
+  written: Uint8Array[] = [];
   private inputListeners: ((text: string) => void)[] = [];
 
-  write = (text: string): void => {
-    this.written.push(text);
+  write = (data: Uint8Array): void => {
+    this.written.push(data);
   };
   clear = (): void => {};
   focus = (): void => {};
@@ -491,12 +492,12 @@ describe("createGuestSession", () => {
     session.push(
       JSON.stringify({ t: "out", id: "s1", seq: 8, data: b64encode(new TextEncoder().encode("!")) }),
     );
-    expect(handles[0]?.written.join("")).toBe("hello!");
+    expect(textOf(handles[0]?.written ?? [])).toBe("hello!");
     // Stale output from a reconnect never duplicates.
     session.push(
       JSON.stringify({ t: "out", id: "s1", seq: 8, data: b64encode(new TextEncoder().encode("!")) }),
     );
-    expect(handles[0]?.written.join("")).toBe("hello!");
+    expect(textOf(handles[0]?.written ?? [])).toBe("hello!");
   });
 
   it("sends typed text and key-bar keys as input frames", () => {
@@ -552,7 +553,7 @@ describe("createGuestSession", () => {
   it("clears the collected terminal text on a fresh snapshot", () => {
     const root = document.createElement("div");
     document.body.appendChild(root);
-    const collected: string[] = [];
+    const collected: Uint8Array[] = [];
     const handles: FakeGuestHandle[] = [];
     const factory: TerminalFactory = () => {
       const handle = new FakeGuestHandle();
@@ -566,18 +567,18 @@ describe("createGuestSession", () => {
       onSignOut: () => {},
       onForgetDevice: () => {},
       terminalFactory: factory,
-      onTerminalText: (text) => {
-        collected.push(text);
+      onTerminalBytes: (bytes) => {
+        collected.push(bytes);
       },
       onTerminalClear: () => {
         collected.length = 0;
       },
     });
     joinSession(session);
-    expect(collected.join("")).toBe("hello");
+    expect(textOf(collected)).toBe("hello");
     const full = b64encode(new TextEncoder().encode("fresh"));
     session.push(JSON.stringify({ t: "snapshot", id: "s1", cols: 80, rows: 24, seq: 9, data: full }));
     session.push(JSON.stringify({ t: "snapshot_more", id: "s1", data: "", last: true }));
-    expect(collected.join("")).toBe("fresh");
+    expect(textOf(collected)).toBe("fresh");
   });
 });

@@ -107,6 +107,22 @@ export async function waitForSend(ws: FakeWebSocket, timeoutMs = 5000): Promise<
   }
 }
 
+export function joinBytes(chunks: Uint8Array[]): Uint8Array {
+  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const joined = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    joined.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return joined;
+}
+
+/** The text a terminal's recorded writes decode to, joined first. */
+export function textOf(chunks: Uint8Array[]): string {
+  return new TextDecoder().decode(joinBytes(chunks));
+}
+
 export class FakeDataChannel {
   readonly label: string;
   readonly ordered: boolean;

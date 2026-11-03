@@ -18,7 +18,6 @@ import {
   buildShelfList,
   buildSpawn,
   decodeSnapshotData,
-  decodeUtf8,
   formatLastOutput,
   newReqId,
   parseCatalog,
@@ -309,10 +308,10 @@ describe("frame parsers", () => {
     expect(parseCatalog({ t: "sessions", items: [] })).toBeNull();
   });
 
-  it("decodes snapshot data as UTF-8", () => {
-    const bytes = decodeSnapshotData(b64encode(new TextEncoder().encode("héllo")));
-    expect(bytes).not.toBeNull();
-    expect(decodeUtf8(bytes ?? new Uint8Array())).toBe("héllo");
+  it("decodes snapshot data to the host's bytes", () => {
+    expect(decodeSnapshotData(b64encode(new TextEncoder().encode("héllo")))).toEqual(
+      new TextEncoder().encode("héllo"),
+    );
     expect(decodeSnapshotData("!!!")).toBeNull();
   });
 });

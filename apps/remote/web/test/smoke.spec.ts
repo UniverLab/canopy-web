@@ -59,6 +59,20 @@ test("renders the terminal and the key bar at 360x640", async ({ page }) => {
   expect(overflow).toBeLessThanOrEqual(1);
 });
 
+test("renders a character split across output frames whole", async ({ page }) => {
+  // A braille spinner glyph (3 bytes) and an accented letter (2 bytes),
+  // each cut inside its UTF-8 sequence: xterm keeps the state across the
+  // writes, so the row shows the characters, never two replacement marks.
+  await page.evaluate(() => {
+    window.__fake.pushOutSplit("⠋", 1);
+    window.__fake.pushOutSplit("é", 1);
+  });
+  await expect.poll(() => terminalText(page)).toContain("⠋é");
+  const stream = await terminalText(page);
+  expect(stream).not.toContain("\uFFFD");
+  expect(stream.endsWith("⠋é")).toBe(true);
+});
+
 test("renders a legible 80-column session at 390x844", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   // The terminal opens only after the real face is loaded (or the 1.5 s

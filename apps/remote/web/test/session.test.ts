@@ -5,7 +5,7 @@ import { b64encode } from "../src/crypto.js";
 import { buildList, parseError, parseExited, parseOk, parseOut, parseSessions } from "../src/protocol.js";
 import { SessionController } from "../src/session.js";
 import { SessionStore } from "../src/sessions.js";
-import { FakeDataChannel } from "./fakes.js";
+import { FakeDataChannel, textOf } from "./fakes.js";
 
 const b64 = (text: string): string => b64encode(new TextEncoder().encode(text));
 
@@ -13,7 +13,7 @@ interface Harness {
   channel: FakeDataChannel;
   store: SessionStore;
   controller: SessionController;
-  written: string[];
+  written: Uint8Array[];
   cleared: number;
   exited: { id: string; code: number }[];
   sent: () => unknown[];
@@ -23,7 +23,7 @@ interface Harness {
 function setup(): Harness {
   const channel = new FakeDataChannel("canopy-session-v1", { ordered: true });
   const store = new SessionStore();
-  const written: string[] = [];
+  const written: Uint8Array[] = [];
   const exited: { id: string; code: number }[] = [];
   let clears = 0;
   const controller = new SessionController({
@@ -32,7 +32,7 @@ function setup(): Harness {
       return true;
     },
     terminal: () => ({
-      write: (text) => written.push(text),
+      write: (data) => written.push(data),
       clear: () => {
         clears += 1;
       },
@@ -111,13 +111,41 @@ describe("session flow over a fake data channel", () => {
       h.hostSend(frame);
     }
     expect(h.cleared).toBe(1);
-    expect(h.written.join("")).toBe("hello");
+    expect(textOf(h.written)).toBe("hello");
 
     h.hostSend({ t: "out", id: "s1", seq: 8, data: b64("!") });
-    expect(h.written.join("")).toBe("hello!");
+    expect(textOf(h.written)).toBe("hello!");
 
     h.controller.close();
     expect(h.sent()).toContainEqual({ t: "detach", id: "s1" });
+  });
+
+  it("writes characters split across out frames as bytes that decode whole", () => {
+    const h = setup();
+    h.controller.open("s1");
+    for (const frame of snapshotFrames("s1", 7, "spinner ")) {
+      h.hostSend(frame);
+    }
+    const braille = new TextEncoder().encode("⠋");
+    const accented = new TextEncoder().encode("é");
+    // One character per pair of frames, cut inside its UTF-8 sequence: a
+    // decoder per frame would render two replacement characters.
+    const parts = [braille.slice(0, 1), braille.slice(1), accented.slice(0, 1), accented.slice(1)];
+    parts.forEach((data, index) => {
+      h.hostSend({ t: "out", id: "s1", seq: 8 + index, data: b64encode(data) });
+    });
+    // The snapshot and every out frame reach the terminal as their own
+    // bytes, exactly as the host sent them.
+    expect(h.written).toHaveLength(5);
+    expect(h.written.slice(1).map((chunk) => [...chunk])).toEqual([
+      [0xe2],
+      [0xa0, 0x8b],
+      [0xc3],
+      [0xa9],
+    ]);
+    const text = textOf(h.written);
+    expect(text).toBe("spinner ⠋é");
+    expect(text).not.toContain("\uFFFD");
   });
 
   it("drops out frames at or below the last applied seq", () => {
@@ -131,7 +159,7 @@ describe("session flow over a fake data channel", () => {
     h.hostSend({ t: "out", id: "s1", seq: 8, data: b64("!") });
     h.hostSend({ t: "out", id: "s1", seq: 8, data: b64("DUP") });
     h.hostSend({ t: "out", id: "s2", seq: 99, data: b64("WRONG") });
-    expect(h.written.join("")).toBe("ab!");
+    expect(textOf(h.written)).toBe("ab!");
   });
 
   it("holds early out frames until the snapshot, then applies them in order", () => {
@@ -143,7 +171,7 @@ describe("session flow over a fake data channel", () => {
     for (const frame of snapshotFrames("s1", 7, "a")) {
       h.hostSend(frame);
     }
-    expect(h.written.join("")).toBe("abc");
+    expect(textOf(h.written)).toBe("abc");
   });
 
   it("re-attaches after a reconnect without duplicating output", () => {
@@ -153,7 +181,7 @@ describe("session flow over a fake data channel", () => {
       h.hostSend(frame);
     }
     h.hostSend({ t: "out", id: "s1", seq: 8, data: b64("c") });
-    expect(h.written.join("")).toBe("abc");
+    expect(textOf(h.written)).toBe("abc");
 
     // The reconnect: attach again, a fresh snapshot redraws, and the
     // in-flight out frame from before the drop is dropped by seq.
@@ -165,7 +193,7 @@ describe("session flow over a fake data channel", () => {
     }
     h.hostSend({ t: "out", id: "s1", seq: 9, data: b64("d") });
     expect(h.cleared).toBe(2);
-    expect(h.written.join("")).toBe("abcabcd");
+    expect(textOf(h.written)).toBe("abcabcd");
   });
 
   it("marks sessions exited and notifies the open one", () => {

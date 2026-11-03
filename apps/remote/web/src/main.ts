@@ -149,7 +149,7 @@ async function main(): Promise<void> {
   const controller = new SessionController({
     send: (data) => manager?.send(data) ?? false,
     terminal: () => ({
-      write: (text) => shell.writeTerminal(text),
+      write: (data) => shell.writeTerminal(data),
       clear: () => shell.clearTerminal(),
     }),
     onExited: (_id, code) => shell.showSessionExited(code),

@@ -39,7 +39,7 @@ export interface GuestView {
   showList: (notice?: string | null) => void;
   showSession: (id: string, name: string) => void;
   ensureTerminal: (id: string, cols: number, rows: number) => void;
-  writeTerminal: (text: string) => void;
+  writeTerminal: (data: Uint8Array) => void;
   clearTerminal: () => void;
   composerOk: (req: string) => void;
   composerError: (message: string, req: string | null) => void;
@@ -353,8 +353,8 @@ export function createGuestView(
       });
       terminalView.mount(pane, cols, rows);
     },
-    writeTerminal: (text: string) => {
-      terminalView?.write(text);
+    writeTerminal: (data: Uint8Array) => {
+      terminalView?.write(data);
     },
     clearTerminal: () => {
       terminalView?.clear();

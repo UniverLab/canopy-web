@@ -12,7 +12,7 @@ import {
 import type { TerminalFactory, TerminalHandle } from "../src/terminal.js";
 
 class FakeHandle implements TerminalHandle {
-  written: string[] = [];
+  written: Uint8Array[] = [];
   clears = 0;
   focused = 0;
   disposed = false;
@@ -28,8 +28,8 @@ class FakeHandle implements TerminalHandle {
     this.rows = rows;
   }
 
-  write = (text: string): void => {
-    this.written.push(text);
+  write = (data: Uint8Array): void => {
+    this.written.push(data);
   };
   clear = (): void => {
     this.clears += 1;
@@ -176,8 +176,8 @@ describe("TerminalView", () => {
     expect(handles).toHaveLength(1);
     expect(handles[0]?.cols).toBe(80);
     expect(handles[0]?.rows).toBe(24);
-    view.write("hi");
-    expect(handles[0]?.written).toEqual(["hi"]);
+    view.write(new TextEncoder().encode("hi"));
+    expect(handles[0]?.written).toEqual([new TextEncoder().encode("hi")]);
     handles[0]?.emitInput("x");
     expect(inputs).toEqual(["x"]);
     parent.querySelector(".term-host")?.dispatchEvent(new Event("click", { bubbles: true }));
@@ -206,13 +206,13 @@ describe("TerminalView", () => {
       // open yet and nothing has been written to it.
       expect(view.fitted).toBe(false);
       expect(handles).toHaveLength(0);
-      view.write("hello from the host\r\n");
+      view.write(new TextEncoder().encode("hello from the host\r\n"));
       expect(handles).toHaveLength(0);
       release();
       await view.ready();
       expect(handles).toHaveLength(1);
-      // The buffered snapshot is flushed into xterm when it opens.
-      expect(handles[0]?.written).toEqual(["hello from the host\r\n"]);
+      // The buffered snapshot is flushed into xterm as its bytes when it opens.
+      expect(handles[0]?.written).toEqual([new TextEncoder().encode("hello from the host\r\n")]);
     } finally {
       Reflect.deleteProperty(document, "fonts");
       view.dispose();

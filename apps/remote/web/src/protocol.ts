@@ -202,10 +202,6 @@ export function decodeSnapshotData(data: string): Uint8Array | null {
   return b64Bytes(data);
 }
 
-export function decodeUtf8(bytes: Uint8Array): string {
-  return new TextDecoder().decode(bytes);
-}
-
 export function parseOk(frame: unknown): string | null {
   if (frameType(frame) !== "ok" || !isRecord(frame)) {
     return null;

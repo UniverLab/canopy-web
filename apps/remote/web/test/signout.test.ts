@@ -12,9 +12,9 @@ import type { TerminalHandle } from "../src/terminal.js";
 
 /** Just enough xterm to prove the session view keeps its terminal. */
 class StubTerminal implements TerminalHandle {
-  written: string[] = [];
-  write = (text: string): void => {
-    this.written.push(text);
+  written: Uint8Array[] = [];
+  write = (data: Uint8Array): void => {
+    this.written.push(data);
   };
   clear = (): void => {};
   focus = (): void => {};

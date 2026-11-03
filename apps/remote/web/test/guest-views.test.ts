@@ -5,17 +5,18 @@ import type { GuestView } from "../src/guest-views.js";
 import type { SessionItem } from "../src/protocol.js";
 import { SessionStore } from "../src/sessions.js";
 import type { TerminalFactory, TerminalHandle } from "../src/terminal.js";
+import { textOf } from "./fakes.js";
 
 const NOW = 1793100000_000;
 
 class FakeHandle implements TerminalHandle {
-  written: string[] = [];
+  written: Uint8Array[] = [];
   clears = 0;
   disposed = false;
   private inputListeners: ((text: string) => void)[] = [];
 
-  write = (text: string): void => {
-    this.written.push(text);
+  write = (data: Uint8Array): void => {
+    this.written.push(data);
   };
   clear = (): void => {
     this.clears += 1;
@@ -234,9 +235,9 @@ describe("guest session view", () => {
     view.ensureTerminal("s1", 80, 24);
     expect(handles.length).toBe(1);
     expect(root.querySelector("#term-pane .term-placeholder")).toBeNull();
-    view.writeTerminal("hello");
-    view.writeTerminal("!");
-    expect(handles[0]?.written.join("")).toBe("hello!");
+    view.writeTerminal(new TextEncoder().encode("hello"));
+    view.writeTerminal(new TextEncoder().encode("!"));
+    expect(textOf(handles[0]?.written ?? [])).toBe("hello!");
     view.clearTerminal();
     expect(handles[0]?.clears).toBe(1);
   });
@@ -309,7 +310,7 @@ describe("guest session view", () => {
     const { root, view, handles } = setup();
     view.showSession("s1", "build");
     view.ensureTerminal("s1", 80, 24);
-    view.writeTerminal("kept");
+    view.writeTerminal(new TextEncoder().encode("kept"));
     view.setSessionStatus("Session exited (1)");
     const badge = root.querySelector<HTMLElement>("#guest-exit");
     expect(badge?.hidden).toBe(false);
@@ -322,7 +323,7 @@ describe("guest session view", () => {
     // Still the same terminal: nothing repainted under it.
     expect(handles.length).toBe(1);
     expect(handles[0]?.disposed).toBe(false);
-    expect(handles[0]?.written.join("")).toBe("kept");
+    expect(textOf(handles[0]?.written ?? [])).toBe("kept");
     expect(root.querySelector(".topbar")?.getAttribute("data-conn")).toBe("retrying");
   });
 

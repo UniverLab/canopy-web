@@ -32,7 +32,7 @@ export interface FollowState {
 }
 
 export interface TerminalHandle {
-  write: (text: string) => void;
+  write: (data: Uint8Array) => void;
   clear: () => void;
   focus: () => void;
   scrollToBottom: () => void;
@@ -130,7 +130,7 @@ export function createXtermHandle(
   // context loss leaves xterm's DOM renderer running.
   attachWebgl(terminal);
   return {
-    write: (text) => terminal.write(text),
+    write: (data) => terminal.write(data),
     clear: () => terminal.clear(),
     focus: () => terminal.focus(),
     scrollToBottom: () => terminal.scrollToBottom(),
@@ -176,7 +176,7 @@ export class TerminalView {
   private generation = 0;
   private readyPromise: Promise<void> = Promise.resolve();
   private resolveReady: (() => void) | null = null;
-  private pendingWrites: string[] = [];
+  private pendingWrites: Uint8Array[] = [];
 
   constructor(
     factory: TerminalFactory,
@@ -275,12 +275,12 @@ export class TerminalView {
     return this.fitOnly;
   }
 
-  write(text: string): void {
+  write(data: Uint8Array): void {
     if (this.handle) {
-      this.handle.write(text);
+      this.handle.write(data);
       return;
     }
-    this.pendingWrites.push(text);
+    this.pendingWrites.push(data);
   }
 
   clear(): void {
@@ -396,8 +396,8 @@ export class TerminalView {
     handle.onUserInput((text) => this.callbacks.onUserInput(text));
     handle.onScroll(() => this.refreshFollow());
     handle.onReady(() => this.settleReady());
-    for (const text of this.pendingWrites.splice(0)) {
-      handle.write(text);
+    for (const data of this.pendingWrites.splice(0)) {
+      handle.write(data);
     }
     this.refit();
   }

@@ -14,12 +14,11 @@ import {
   buildPrompt,
   buildPromptDraft,
   decodeSnapshotData,
-  decodeUtf8,
 } from "./protocol.js";
 import type { OutFrame, PromptDraft } from "./protocol.js";
 
 export interface SessionTerminal {
-  write: (text: string) => void;
+  write: (data: Uint8Array) => void;
   clear: () => void;
 }
 
@@ -121,7 +120,7 @@ export class SessionController {
     terminal.clear();
     this.lastSeq = snapshot.seq;
     this.snapshotSeen = true;
-    terminal.write(decodeUtf8(bytes));
+    terminal.write(bytes);
     this.drainPending(terminal);
   }
 
@@ -139,7 +138,7 @@ export class SessionController {
     if (frame.seq <= this.lastSeq) {
       return;
     }
-    this.callbacks.terminal()?.write(decodeUtf8(frame.data));
+    this.callbacks.terminal()?.write(frame.data);
     this.lastSeq = frame.seq;
   }
 
@@ -156,7 +155,7 @@ export class SessionController {
       .sort((a, b) => a.seq - b.seq);
     this.pending = [];
     for (const frame of frames) {
-      terminal.write(decodeUtf8(frame.data));
+      terminal.write(frame.data);
       this.lastSeq = frame.seq;
     }
   }

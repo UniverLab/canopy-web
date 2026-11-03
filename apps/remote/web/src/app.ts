@@ -83,7 +83,7 @@ export interface Shell {
   setPairBusy: (busy: boolean) => void;
   setSignOutError: (message: string | null) => void;
   ensureTerminal: (id: string, cols: number, rows: number) => void;
-  writeTerminal: (text: string) => void;
+  writeTerminal: (data: Uint8Array) => void;
   clearTerminal: () => void;
   showSessionExited: (code: number) => void;
   composerOk: (req: string) => void;
@@ -731,8 +731,8 @@ export function createShell(
       );
       terminalView.mount(pane, cols, rows);
     },
-    writeTerminal(text: string): void {
-      terminalView?.write(text);
+    writeTerminal(data: Uint8Array): void {
+      terminalView?.write(data);
     },
     clearTerminal(): void {
       terminalView?.clear();

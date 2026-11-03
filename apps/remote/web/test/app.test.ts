@@ -11,7 +11,7 @@ import { sessionTitle } from "../src/titles.js";
 import type { PairSubmit } from "../src/ui.js";
 
 class FakeHandle implements TerminalHandle {
-  written: string[] = [];
+  written: Uint8Array[] = [];
   clears = 0;
   disposed = false;
   atBottom = true;
@@ -25,8 +25,8 @@ class FakeHandle implements TerminalHandle {
     this.rows = rows;
   }
 
-  write = (text: string): void => {
-    this.written.push(text);
+  write = (data: Uint8Array): void => {
+    this.written.push(data);
   };
   clear = (): void => {
     this.clears += 1;
@@ -481,8 +481,8 @@ describe("createShell", () => {
     shell.ensureTerminal("s1", 80, 24);
     expect(root.querySelector(".term-host")).not.toBeNull();
     expect(handles).toHaveLength(1);
-    shell.writeTerminal("hi");
-    expect(handles[0]?.written).toEqual(["hi"]);
+    shell.writeTerminal(new TextEncoder().encode("hi"));
+    expect(handles[0]?.written).toEqual([new TextEncoder().encode("hi")]);
     // Same size: no remount.
     shell.ensureTerminal("s1", 80, 24);
     expect(handles).toHaveLength(1);
@@ -497,13 +497,13 @@ describe("createShell", () => {
   it("keeps the terminal and the composer draft across state changes", () => {
     shell.showSession("s1", "build");
     shell.ensureTerminal("s1", 80, 24);
-    shell.writeTerminal("hi");
+    shell.writeTerminal(new TextEncoder().encode("hi"));
     query<HTMLTextAreaElement>(".composer-input").value = "draft";
     shell.setConnectionState("retrying in 2s");
     expect(query(".conn-banner").textContent).toContain("retrying in 2s");
     expect(handles).toHaveLength(1);
     expect(handles[0]?.disposed).toBe(false);
-    expect(handles[0]?.written).toEqual(["hi"]);
+    expect(handles[0]?.written).toEqual([new TextEncoder().encode("hi")]);
     expect(query<HTMLTextAreaElement>(".composer-input").value).toBe("draft");
   });
 

@@ -441,7 +441,7 @@ export interface GuestSessionDeps {
   /** Injected in tests; production opens the real xterm terminal. */
   terminalFactory?: TerminalFactory;
   /** Test hook the fake host uses to read terminal output back. */
-  onTerminalText?: (text: string) => void;
+  onTerminalBytes?: (bytes: Uint8Array) => void;
   /** Test hook the fake host uses to reset that reading on redraw. */
   onTerminalClear?: () => void;
 }
@@ -497,9 +497,9 @@ export function createGuestSession(root: HTMLElement, deps: GuestSessionDeps): G
   const controller = new SessionController({
     send,
     terminal: () => ({
-      write: (text) => {
-        view.writeTerminal(text);
-        deps.onTerminalText?.(text);
+      write: (bytes) => {
+        view.writeTerminal(bytes);
+        deps.onTerminalBytes?.(bytes);
       },
       clear: () => {
         view.clearTerminal();

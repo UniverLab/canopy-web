@@ -11,7 +11,7 @@ import { createFrameRouter } from "../src/router.js";
 import type { FrameRouter } from "../src/router.js";
 import { SessionController } from "../src/session.js";
 import { SessionStore } from "../src/sessions.js";
-import { FakeDataChannel } from "./fakes.js";
+import { FakeDataChannel, textOf } from "./fakes.js";
 
 const b64 = (text: string): string => b64encode(new TextEncoder().encode(text));
 
@@ -20,7 +20,7 @@ interface Harness {
   store: SessionStore;
   catalog: CatalogStore;
   controller: SessionController;
-  written: string[];
+  written: Uint8Array[];
   terminals: { id: string; cols: number; rows: number }[];
   oks: string[];
   errors: { message: string; req: string | null }[];
@@ -36,7 +36,7 @@ function setup(onForbidden?: (id: string | null) => void): Harness {
   const channel = new FakeDataChannel("canopy-session-v1", { ordered: true });
   const store = new SessionStore();
   const catalog = new CatalogStore();
-  const written: string[] = [];
+  const written: Uint8Array[] = [];
   const terminals: Harness["terminals"] = [];
   const oks: string[] = [];
   const errors: Harness["errors"] = [];
@@ -78,7 +78,7 @@ function setup(onForbidden?: (id: string | null) => void): Harness {
       return true;
     },
     terminal: () => ({
-      write: (text: string) => written.push(text),
+      write: (data: Uint8Array) => written.push(data),
       clear: () => {},
     }),
     onExited: (_id, code) => shell.showSessionExited(code),
@@ -141,9 +141,9 @@ describe("createFrameRouter", () => {
     expect(h.written).toEqual([]);
     h.hostSend({ t: "snapshot_more", id: "s1", data: full.slice(3), last: true });
     expect(h.terminals).toEqual([{ id: "s1", cols: 80, rows: 24 }]);
-    expect(h.written.join("")).toBe("hello");
+    expect(textOf(h.written)).toBe("hello");
     h.hostSend({ t: "out", id: "s1", seq: 8, data: b64("!") });
-    expect(h.written.join("")).toBe("hello!");
+    expect(textOf(h.written)).toBe("hello!");
   });
 
   it("routes ok and error replies to the composer and the sheets", () => {

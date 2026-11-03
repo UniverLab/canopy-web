@@ -25,6 +25,21 @@ import "./styles.css";
 
 const b64 = (text: string): string => b64encode(new TextEncoder().encode(text));
 
+// The terminal's recorded writes are bytes, exactly as xterm receives them;
+// joining them before decoding keeps a character split across frames whole.
+const joinBytes = (chunks: Uint8Array[]): Uint8Array => {
+  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const joined = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    joined.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return joined;
+};
+
+const textOf = (chunks: Uint8Array[]): string => new TextDecoder().decode(joinBytes(chunks));
+
 const CATALOG = {
   clis: [
     { cli: "muse", label: "Muse", models: ["spark", "core"], yolo: true },
@@ -84,7 +99,7 @@ function main(): void {
   const store = new SessionStore();
   const catalog = new CatalogStore();
   const sent: unknown[] = [];
-  const terminalOutput: string[] = [];
+  const terminalOutput: Uint8Array[] = [];
   let seq = 7;
   let nextSpawn = 0;
   let promptError: { code: string; message: string } | null = null;
@@ -352,15 +367,15 @@ function main(): void {
   // no peer, the same guest views, store, controller and router that
   // production mounts, already connected.
   if (fakeParams.get("screen") === "guest") {
-    const guestOutput: string[] = [];
+    const guestOutput: Uint8Array[] = [];
     const session = createGuestSession(root, {
       login: "guest-user",
       send,
       onRetry: () => {},
       onSignOut: () => {},
       onForgetDevice: () => {},
-      onTerminalText: (text) => {
-        guestOutput.push(text);
+      onTerminalBytes: (bytes) => {
+        guestOutput.push(bytes);
       },
       onTerminalClear: () => {
         guestOutput.length = 0;
@@ -375,10 +390,17 @@ function main(): void {
       clearSent: () => {
         sent.length = 0;
       },
-      terminalText: () => guestOutput.join(""),
+      terminalText: () => textOf(guestOutput),
       pushOut: (text: string) => {
         seq += 1;
         deliver({ t: "out", id: "smoke", seq, data: b64(text) });
+      },
+      pushOutSplit: (text: string, cut: number) => {
+        const bytes = new TextEncoder().encode(text);
+        seq += 1;
+        deliver({ t: "out", id: "smoke", seq, data: b64encode(bytes.slice(0, cut)) });
+        seq += 1;
+        deliver({ t: "out", id: "smoke", seq, data: b64encode(bytes.slice(cut)) });
       },
       failNextPrompt: (code: string, message: string) => {
         promptError = { code, message };
@@ -453,11 +475,11 @@ function main(): void {
   const controller = new SessionController({
     send,
     terminal: () => ({
-      write: (text) => {
+      write: (bytes) => {
         // Recorded here, not read back from the DOM: the WebGL renderer
         // has no .xterm-rows text to assert on.
-        terminalOutput.push(text);
-        shell.writeTerminal(text);
+        terminalOutput.push(bytes);
+        shell.writeTerminal(bytes);
       },
       clear: () => {
         terminalOutput.length = 0;
@@ -521,10 +543,17 @@ function main(): void {
     clearSent: () => {
       sent.length = 0;
     },
-    terminalText: () => terminalOutput.join(""),
+    terminalText: () => textOf(terminalOutput),
     pushOut: (text: string) => {
       seq += 1;
       deliver({ t: "out", id: "smoke", seq, data: b64(text) });
+    },
+    pushOutSplit: (text: string, cut: number) => {
+      const bytes = new TextEncoder().encode(text);
+      seq += 1;
+      deliver({ t: "out", id: "smoke", seq, data: b64encode(bytes.slice(0, cut)) });
+      seq += 1;
+      deliver({ t: "out", id: "smoke", seq, data: b64encode(bytes.slice(cut)) });
     },
     failNextPrompt: (code: string, message: string) => {
       promptError = { code, message };
@@ -545,6 +574,8 @@ declare global {
       clearSent: () => void;
       terminalText: () => string;
       pushOut: (text: string) => void;
+      /** Push one frame whose UTF-8 bytes are cut at `cut`, splitting a character. */
+      pushOutSplit: (text: string, cut: number) => void;
       failNextPrompt: (code: string, message: string) => void;
       /** Advance the running graph fixture one step and push its state. */
       graphTick: () => void;
