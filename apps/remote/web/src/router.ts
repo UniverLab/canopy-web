@@ -187,6 +187,9 @@ export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
     }
     const ok = parseOk(frame);
     if (ok !== null) {
+      if (shelf?.handleOk(ok)) {
+        return;
+      }
       shell.sheetOk(ok);
       return;
     }

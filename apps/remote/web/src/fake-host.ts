@@ -10,6 +10,7 @@ import { signOut } from "./auth.js";
 import { CatalogStore } from "./catalog.js";
 import { createChannelHandler } from "./channel.js";
 import { b64decode, b64encode, sha256Hex } from "./crypto.js";
+import { createFakeShelfDeleter } from "./fake-delete.js";
 import { createFakeGraphs } from "./fake-graphs.js";
 import { GraphStore } from "./graph-store.js";
 import { createGuestSession } from "./guest.js";
@@ -206,6 +207,7 @@ function main(): void {
     30_000,
   );
 
+  const deleter = createFakeShelfDeleter({ deliver, files: shelfFiles });
   const shelfItemsFor = (sessionId: string | null): ShelfItem[] => {
     if (sessionId !== null && sessions.find((item) => item.id === sessionId)?.kind === "terminal") {
       return [];
@@ -507,6 +509,8 @@ function main(): void {
           });
         }
       }
+    } else if (deleter.handle(frame)) {
+      // shelf_delete: ok plus the removed broadcast, or an error.
     } else if (frame.t === "spawn") {
       nextSpawn += 1;
       const id = `spawned-${nextSpawn}`;

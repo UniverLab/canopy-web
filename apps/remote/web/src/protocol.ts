@@ -566,6 +566,10 @@ export function buildShelfGet(req: string, fileId: string): string {
   return JSON.stringify({ t: "shelf_get", req, file_id: fileId });
 }
 
+export function buildShelfDelete(req: string, fileId: string): string {
+  return JSON.stringify({ t: "shelf_delete", req, file_id: fileId });
+}
+
 // --- Graph watching (additive to v1) --------------------------------
 // The host lets a remote client watch one graph's drawing, active node
 // and spec checklist live: ask with `graphs`, then `graph_watch {id}` —

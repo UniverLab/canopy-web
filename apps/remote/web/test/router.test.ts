@@ -10,6 +10,8 @@ import { b64encode } from "../src/crypto.js";
 import { createFrameRouter } from "../src/router.js";
 import type { FrameRouter } from "../src/router.js";
 import { SessionController } from "../src/session.js";
+import { ShelfController } from "../src/shelf-controller.js";
+import type { ShelfFrames } from "../src/shelf-controller.js";
 import { SessionStore } from "../src/sessions.js";
 import { FakeDataChannel, textOf } from "./fakes.js";
 
@@ -30,7 +32,7 @@ interface Harness {
   hostSend: (frame: unknown) => void;
 }
 
-function setup(onForbidden?: (id: string | null) => void): Harness {
+function setup(onForbidden?: (id: string | null) => void, shelf?: ShelfFrames): Harness {
   const channel = new FakeDataChannel("canopy-session-v1", { ordered: true });
   const store = new SessionStore();
   const catalog = new CatalogStore();
@@ -73,7 +75,7 @@ function setup(onForbidden?: (id: string | null) => void): Harness {
     }),
     onExited: (_id, code) => shell.showSessionExited(code),
   });
-  const router = createFrameRouter({ store, controller, shell, catalog, onForbidden });
+  const router = createFrameRouter({ store, controller, shell, catalog, onForbidden, shelf });
   const frames = createChannelHandler({
     onSnapshot: router.handleSnapshot,
     onFrame: router.handleFrame,
@@ -142,6 +144,33 @@ describe("createFrameRouter", () => {
     expect(h.sheetErrors).toEqual([
       { message: "host is gone", req: "r10", code: "delivery_failed" },
     ]);
+  });
+
+  it("routes a shelf delete ok to the shelf before the sheets", () => {
+    const sent: string[] = [];
+    const shelf = new ShelfController({
+      send: (data) => {
+        sent.push(data);
+        return true;
+      },
+    });
+    shelf.handleHello(["shelf"]);
+    const h = setup(undefined, shelf);
+    shelf.deleteFile({
+      file_id: "f1",
+      session_id: "s1",
+      name: "a.png",
+      mime: "image/png",
+      size: 1,
+      caption: null,
+      from: "muse",
+      created_at: 1,
+    });
+    const req = (JSON.parse(sent[sent.length - 1] ?? "") as { req: string }).req;
+    h.hostSend({ t: "ok", req });
+    expect(h.sheetOks).toEqual([]);
+    h.hostSend({ t: "ok", req: "r-other" });
+    expect(h.sheetOks).toEqual(["r-other"]);
   });
 
   it("spawn_error_hides_paths", () => {

@@ -1281,10 +1281,51 @@ label > textarea {
 }
 
 .shelf-item {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
   min-width: 0;
+}
+
+/* The grid cell's × : a small corner control, danger-tinted on hover. */
+.shelf-delete {
+  position: absolute;
+  top: 0.15rem;
+  right: 0.15rem;
+  min-width: 2rem;
+  min-height: 2rem;
+  padding: 0 0.4rem;
+  line-height: 1;
+  font-size: 1rem;
+  color: var(--muted);
+}
+
+.shelf-delete:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.shelf-delete:disabled,
+.viewer-delete:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* The one inline line a failed delete leaves on the sheet. */
+.shelf-delete-error {
+  margin: 0.5rem 0 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  background: var(--tint-danger, var(--tint-warn));
+  color: var(--danger);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.shelf-delete-error[hidden] {
+  display: none;
 }
 
 .shelf-download {

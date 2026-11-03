@@ -2,46 +2,25 @@
 // The session shelf's surfaces: the Files sheet (a thumbnail grid in the
 // shared modal sheet, two columns on a phone and four from 900 px) and
 // the full-screen viewer behind a cell — wheel/pinch zoom, swipe or
-// arrow keys to step through the shelf, a download link and Esc. What
-// the viewer shows follows the host's sniffed mime (preview.ts): images
-// in <img src="blob:…">, text as text nodes, everything else (HTML
-// included) as a download card — and every download carries a blob URL
-// with download=, never a tab. Names and captions go in as text nodes,
-// so no caption can become markup. The data half (lists, LRU, transfer
-// queue) lives in shelf-store.ts; the controller that binds both halves
-// to the protocol lives in shelf-controller.ts.
+// arrow keys to step through the shelf, a download link, a Delete button
+// and Esc. What the viewer shows follows the host's sniffed mime
+// (preview.ts): images in <img src="blob:…">, text as text nodes,
+// everything else (HTML included) as a download card — and every download
+// carries a blob URL with download=, never a tab. Names and captions go in
+// as text nodes, so no caption can become markup. The data half (lists, LRU,
+// transfer queue) lives in shelf-store.ts; the controller in
+// shelf-controller.ts, the delete controls in shelf-delete.ts.
 
 import type { ShelfItem } from "./protocol.js";
 import { Sheet } from "./sheet.js";
 import { icon } from "./icons-dom.js";
 import { extensionLabel, formatBytes, previewKind } from "./preview.js";
 import type { PreviewKind } from "./preview.js";
+import { ShelfDeleteUi, createCellDelete, createViewerDelete, metaLine } from "./shelf-delete.js";
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 6;
 const SWIPE_PX = 60;
-
-/** The `from · age` line under a file's name, in the grid and the viewer. */
-export function metaLine(item: ShelfItem): string {
-  return [item.from, formatAge(Date.now(), item.created_at)]
-    .filter((part) => part !== "")
-    .join(" · ");
-}
-
-/** A short relative age for the meta line. */
-export function formatAge(nowMs: number, thenMs: number): string {
-  const seconds = Math.max(0, Math.floor((nowMs - thenMs) / 1000));
-  if (seconds < 60) {
-    return "just now";
-  }
-  if (seconds < 3600) {
-    return `${Math.floor(seconds / 60)}m ago`;
-  }
-  if (seconds < 86400) {
-    return `${Math.floor(seconds / 3600)}h ago`;
-  }
-  return `${Math.floor(seconds / 86400)}d ago`;
-}
 
 /** The extension the loading placeholder shows under the thumb. */
 interface ViewerDeps {
@@ -49,6 +28,8 @@ interface ViewerDeps {
   blobUrl: (fileId: string) => string | null;
   blob: (fileId: string) => Blob | null;
   onClose: () => void;
+  onDelete: ((item: ShelfItem) => void) | null;
+  isDeletePending: (fileId: string) => boolean;
 }
 
 /**
@@ -70,6 +51,7 @@ class ShelfViewer {
   private meta: HTMLElement | null = null;
   private counter: HTMLElement | null = null;
   private link: HTMLAnchorElement | null = null;
+  private deleteBtn: HTMLButtonElement | null = null;
   private prev: HTMLButtonElement | null = null;
   private next: HTMLButtonElement | null = null;
   private items: ShelfItem[] = [];
@@ -157,6 +139,7 @@ class ShelfViewer {
     close.setAttribute("aria-label", "Close");
     close.innerHTML = icon("x");
     bar.append(prev, captionBlock, counter, next, link, close);
+    this.deleteBtn = createViewerDelete(bar, close, () => this.items[this.index], this.deps.onDelete);
 
     overlay.append(stage, bar);
     parent.append(overlay);
@@ -201,6 +184,7 @@ class ShelfViewer {
     this.meta = null;
     this.counter = null;
     this.link = null;
+    this.deleteBtn = null;
     this.prev = null;
     this.next = null;
     this.pointers.clear();
@@ -241,6 +225,12 @@ class ShelfViewer {
   applyBlob(fileId: string): void {
     if (this.items[this.index]?.file_id === fileId) {
       this.render();
+    }
+  }
+
+  setDeletePending(fileId: string, pending: boolean): void {
+    if (this.deleteBtn && this.items[this.index]?.file_id === fileId) {
+      this.deleteBtn.disabled = pending;
     }
   }
 
@@ -300,6 +290,9 @@ class ShelfViewer {
         this.link.href = url;
         this.link.download = item.name;
       }
+    }
+    if (this.deleteBtn) {
+      this.deleteBtn.disabled = this.deps.isDeletePending(item.file_id);
     }
     const many = this.items.length > 1;
     if (this.prev) {
@@ -480,6 +473,7 @@ interface SheetOwner {
   blob: (fileId: string) => Blob | null;
   /** True for a file this device uploaded on this connection. */
   isYours: (item: ShelfItem) => boolean;
+  onDelete: ((item: ShelfItem) => void) | null;
   onClosed: () => void;
 }
 
@@ -492,6 +486,7 @@ export class ShelfSheet {
   private observer: IntersectionObserver | null = null;
   private ticker: ReturnType<typeof globalThis.setInterval> | null = null;
   private viewer: ShelfViewer | null = null;
+  private readonly deleteUi = new ShelfDeleteUi();
   private items: ShelfItem[] = [];
   private sheetFocus: Element | null = null;
   private cellFocus: Element | null = null;
@@ -516,6 +511,7 @@ export class ShelfSheet {
     const grid = document.createElement("div");
     grid.className = "shelf-sections";
     body.append(empty, grid);
+    this.deleteUi.mount(body, grid);
     this.sheet = sheet;
     this.empty = empty;
     this.grid = grid;
@@ -572,6 +568,12 @@ export class ShelfSheet {
       }
     }
     this.viewer?.applyBlob(fileId);
+  }
+
+  /** A delete started, answered or failed: pending state plus error line. */
+  deleteState(fileId: string, pending: boolean, error: string | null): void {
+    this.deleteUi.setPending(fileId, pending, this.grid, this.viewer);
+    this.deleteUi.showError(error);
   }
 
   private closeSheet(): void {
@@ -724,6 +726,10 @@ export class ShelfSheet {
     }
     download.addEventListener("click", (ev) => this.download(item, ev));
     holder.append(cell, download);
+    const onDelete = this.owner.onDelete;
+    if (onDelete) {
+      holder.append(createCellDelete(item, onDelete, this.deleteUi.isPending(item.file_id)));
+    }
     return holder;
   }
 
@@ -774,6 +780,8 @@ export class ShelfSheet {
       ensure: this.owner.ensure,
       blobUrl: this.owner.blobUrl,
       blob: this.owner.blob,
+      onDelete: this.owner.onDelete,
+      isDeletePending: (fileId) => this.deleteUi.isPending(fileId),
       onClose: () => {
         if (this.viewer === viewer) {
           this.viewer = null;

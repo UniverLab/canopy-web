@@ -6,8 +6,9 @@
 // request out, no surface up. Every shelf is prefetched from the
 // session store, once per connection, and shown as one union sheet.
 
-import { newReqId } from "./protocol.js";
+import { buildShelfDelete, newReqId } from "./protocol.js";
 import type { FilePart, ReplyError, ShelfItem, ShelfList } from "./protocol.js";
+import { deleteLabel } from "./shelf-delete.js";
 import {
   BlobLru,
   LRU_MAX_BYTES,
@@ -47,6 +48,7 @@ export interface ShelfFrames {
   handleAdded: (item: ShelfItem) => void;
   handleRemoved: (fileId: string) => void;
   handlePart: (part: FilePart) => boolean;
+  handleOk: (req: string) => boolean;
   handleError: (error: ReplyError) => boolean;
   handlePutReady: (frame: ShelfPutReady) => void;
   handlePutAck: (frame: ShelfPutAck) => void;
@@ -69,6 +71,11 @@ export class ShelfController implements ShelfHandle, ShelfFrames {
   private readonly send: (data: string) => boolean;
   private readonly sessions: SessionStore | null;
   private readonly requested = new Set<string>();
+  /** Deletes waiting for an ok or an error, by request id. */
+  private readonly deletes = new Map<string, { fileId: string; label: string }>();
+  /** Deletes whose push landed first: the late reply is swallowed, never shown. */
+  private readonly settledDeletes = new Set<string>();
+  private readonly pendingDeletes = new Set<string>();
   /** Files this device uploaded on this connection: the Yours section. */
   private readonly uploaded = new Set<string>();
   private uploadsEnabled = false;
@@ -167,6 +174,7 @@ export class ShelfController implements ShelfHandle, ShelfFrames {
       blob: (fileId) => this.lru.blob(fileId),
       isYours: (item) =>
         this.uploaded.has(item.file_id) || item.origin === "device" || item.origin === "upload",
+      onDelete: (item) => this.deleteFile(item),
       onClosed: () => {
         if (this.sheet === sheet) {
           this.sheet = null;
@@ -184,6 +192,20 @@ export class ShelfController implements ShelfHandle, ShelfFrames {
     this.sheet = null;
   }
 
+  /** Delete one shelf file now: no confirm, the host answers the truth. */
+  deleteFile(item: ShelfItem): void {
+    if (!this.store.enabled || this.pendingDeletes.has(item.file_id)) {
+      return;
+    }
+    const req = newReqId();
+    if (!this.send(buildShelfDelete(req, item.file_id))) {
+      return;
+    }
+    this.deletes.set(req, { fileId: item.file_id, label: deleteLabel(item) });
+    this.pendingDeletes.add(item.file_id);
+    this.sheet?.deleteState(item.file_id, true, null);
+  }
+
   // --- frame handlers -------------------------------------------------
 
   handleHello(features: string[]): void {
@@ -194,6 +216,14 @@ export class ShelfController implements ShelfHandle, ShelfFrames {
     this.queue.reset();
     this.uploaded.clear();
     this.requested.clear();
+    this.deletes.clear();
+    this.settledDeletes.clear();
+    // Ahead of the reset's re-render, so no disabled × from the old
+    // connection survives into the new one (this also clears its line).
+    for (const fileId of this.pendingDeletes) {
+      this.sheet?.deleteState(fileId, false, null);
+    }
+    this.pendingDeletes.clear();
     this.store.reset();
     if (!on) {
       this.close();
@@ -235,6 +265,17 @@ export class ShelfController implements ShelfHandle, ShelfFrames {
     // Those bytes belonged to a file the host took back: a future file
     // wearing the same id must be fetched again, never served stale.
     this.lru.evict(fileId);
+    // A push landing ahead of its reply settles the delete it answers:
+    // the file is gone, so the late ok or error is swallowed, never shown.
+    for (const [req, deletion] of this.deletes) {
+      if (deletion.fileId === fileId) {
+        this.deletes.delete(req);
+        this.settledDeletes.add(req);
+      }
+    }
+    if (this.pendingDeletes.delete(fileId)) {
+      this.sheet?.deleteState(fileId, false, null);
+    }
   }
 
   handlePart(part: FilePart): boolean {
@@ -244,14 +285,53 @@ export class ShelfController implements ShelfHandle, ShelfFrames {
     return this.fetcher.handlePart(part);
   }
 
+  handleOk(req: string): boolean {
+    if (!this.store.enabled) {
+      return false;
+    }
+    if (this.settledDeletes.delete(req)) {
+      return true;
+    }
+    const deletion = this.deletes.get(req);
+    if (!deletion) {
+      return false;
+    }
+    // The host took the request; the file itself leaves on the push.
+    this.deletes.delete(req);
+    this.finishDelete(deletion.fileId);
+    return true;
+  }
+
   handleError(error: ReplyError): boolean {
     if (!this.store.enabled) {
       return false;
+    }
+    if (error.req !== null) {
+      if (this.settledDeletes.delete(error.req)) {
+        return true;
+      }
+      const deletion = this.deletes.get(error.req);
+      if (deletion) {
+        this.deletes.delete(error.req);
+        // Already gone host-side: not_found removes like the push would.
+        if (error.code === "not_found") {
+          this.handleRemoved(deletion.fileId);
+          return true;
+        }
+        this.finishDelete(deletion.fileId, deletion.label);
+        return true;
+      }
     }
     if (this.queue.handleError(error)) {
       return true;
     }
     return this.fetcher.handleError(error);
+  }
+
+  /** A delete answered: the control re-enables, the error line follows. */
+  private finishDelete(fileId: string, error: string | null = null): void {
+    this.pendingDeletes.delete(fileId);
+    this.sheet?.deleteState(fileId, false, error);
   }
 
   handlePutReady(frame: ShelfPutReady): void {

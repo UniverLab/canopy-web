@@ -14,6 +14,7 @@ import {
   buildList,
   buildPromptDraft,
   buildResize,
+  buildShelfDelete,
   buildShelfGet,
   buildShelfList,
   buildSpawn,
@@ -386,6 +387,11 @@ describe("shelf frames", () => {
     expect(JSON.parse(buildShelfGet("r3", "f9"))).toEqual({
       t: "shelf_get",
       req: "r3",
+      file_id: "f9",
+    });
+    expect(JSON.parse(buildShelfDelete("r4", "f9"))).toEqual({
+      t: "shelf_delete",
+      req: "r4",
       file_id: "f9",
     });
   });

@@ -10,6 +10,7 @@ import type { Shell, ShellCallbacks } from "../src/app.js";
 import type { SessionItem, ShelfItem } from "../src/protocol.js";
 import { BlobLru, ShelfFetcher } from "../src/shelf-store.js";
 import { ShelfController } from "../src/shelf-controller.js";
+import { ShelfSheet } from "../src/shelf.js";
 import { SessionStore } from "../src/sessions.js";
 
 const CALLBACKS: ShellCallbacks = {
@@ -650,5 +651,235 @@ describe("union shelf", () => {
       root.querySelector<HTMLElement>(".shelf-meta")?.textContent,
     );
     noDeleteTraffic(sent);
+  });
+});
+
+describe("shelf delete", () => {
+  /** The delete requests the browser sent, oldest first. */
+  const deleteReqs = (sent: string[]): { req: string; file_id: string }[] =>
+    sent
+      .map((line) => JSON.parse(line) as { t: string; req: string; file_id: string })
+      .filter((frame) => frame.t === "shelf_delete");
+
+  const cellCross = (root: HTMLElement, fileId: string): HTMLButtonElement | null =>
+    root.querySelector<HTMLButtonElement>(`.shelf-delete[data-file-id="${fileId}"]`);
+
+  it("deletes from the viewer button, removed on the push and not the ok", () => {
+    const { root, shelf, sent } = shellHarness();
+    shelf.handleHello(["shelf"]);
+    shelf.open(root);
+    shelf.handleList({ req: null, id: "s1", items: [shelfItem({ file_id: "f1" })] });
+    root.querySelector<HTMLButtonElement>(".shelf-cell")?.click();
+
+    const button = document.querySelector<HTMLButtonElement>("#shelf-delete");
+    expect(button?.textContent).toBe("Delete");
+    button?.click();
+    // Immediate, no confirm: the frame carries the viewed file.
+    expect(deleteReqs(sent)).toHaveLength(1);
+    expect(deleteReqs(sent)[0]?.file_id).toBe("f1");
+    expect(button?.disabled).toBe(true);
+
+    // The ok re-enables the control but removes nothing: the host's push
+    // is the source of truth, and somebody else's ok is not this delete.
+    expect(shelf.handleOk("r-unknown")).toBe(false);
+    expect(shelf.handleOk(deleteReqs(sent)[0]?.req ?? "")).toBe(true);
+    expect(button?.disabled).toBe(false);
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(1);
+
+    shelf.handleRemoved("f1");
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(0);
+    // Its last file gone, the viewer closes with the sheet behind it.
+    expect(document.querySelector("#shelf-viewer")).toBeNull();
+  });
+
+  it("deletes from the cell × without touching the other cells", () => {
+    const { root, shelf, sent } = shellHarness();
+    shelf.handleHello(["shelf"]);
+    shelf.open(root);
+    shelf.handleList({
+      req: null,
+      id: "s1",
+      items: [shelfItem({ file_id: "f1" }), shelfItem({ file_id: "f2", name: "second.png" })],
+    });
+    expect(root.querySelectorAll(".shelf-delete")).toHaveLength(2);
+    const cross = cellCross(root, "f1");
+    expect(cross?.textContent).toBe("×");
+    expect(cross?.getAttribute("aria-label")).toBe("Delete gradient.png");
+
+    cross?.click();
+    expect(deleteReqs(sent)).toHaveLength(1);
+    expect(deleteReqs(sent)[0]?.file_id).toBe("f1");
+    expect(cellCross(root, "f1")?.disabled).toBe(true);
+    expect(cellCross(root, "f2")?.disabled).toBe(false);
+
+    // While the first is in flight a repeat sends nothing new.
+    shelf.deleteFile(shelfItem({ file_id: "f1" }));
+    expect(deleteReqs(sent)).toHaveLength(1);
+
+    // The ok re-enables; only the push removes, and only that file.
+    expect(shelf.handleOk(deleteReqs(sent)[0]?.req ?? "")).toBe(true);
+    expect(cellCross(root, "f1")?.disabled).toBe(false);
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(2);
+    shelf.handleRemoved("f1");
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(1);
+    expect(root.querySelector('.shelf-cell[title="second.png"]')).not.toBeNull();
+  });
+
+  it("treats not_found as removed, with no error line", () => {
+    const { root, shelf, sent } = shellHarness();
+    shelf.handleHello(["shelf"]);
+    shelf.open(root);
+    shelf.handleList({ req: null, id: "s1", items: [shelfItem({ file_id: "f1" })] });
+    cellCross(root, "f1")?.click();
+    const req = deleteReqs(sent)[0]?.req ?? "";
+
+    expect(shelf.handleError({ req, code: "not_found", message: "no shelf file 'f1'" })).toBe(true);
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(0);
+    expect(root.querySelector<HTMLElement>("#shelf-delete-error")?.hidden).toBe(true);
+  });
+
+  it("shows one inline line when a delete fails, and the file stays", () => {
+    const { root, shelf, sent } = shellHarness();
+    shelf.handleHello(["shelf"]);
+    shelf.open(root);
+    shelf.handleList({ req: null, id: "s1", items: [shelfItem({ file_id: "f1" })] });
+    const line = () => root.querySelector<HTMLElement>("#shelf-delete-error");
+    expect(line()?.hidden).toBe(true);
+
+    cellCross(root, "f1")?.click();
+    expect(shelf.handleError({ req: deleteReqs(sent)[0]?.req ?? "", code: "internal", message: "x" })).toBe(
+      true,
+    );
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(1);
+    expect(line()?.hidden).toBe(false);
+    expect(line()?.textContent).toBe("Couldn't delete gradient.png");
+    expect(cellCross(root, "f1")?.disabled).toBe(false);
+
+    // A fresh attempt clears the line; its failure repaints the one line.
+    cellCross(root, "f1")?.click();
+    expect(line()?.hidden).toBe(true);
+    expect(shelf.handleError({ req: deleteReqs(sent)[1]?.req ?? "", code: "internal", message: "x" })).toBe(
+      true,
+    );
+    expect(root.querySelectorAll("#shelf-delete-error")).toHaveLength(1);
+    expect(line()?.textContent).toBe("Couldn't delete gradient.png");
+  });
+
+  it("renders a hostile file name as text in the error line", () => {
+    const { root, shelf, sent } = shellHarness();
+    shelf.handleHello(["shelf"]);
+    shelf.open(root);
+    const name = `<img src="x" onerror="alert(1)">.png`;
+    shelf.handleList({ req: null, id: "s1", items: [shelfItem({ file_id: "f1", name })] });
+    cellCross(root, "f1")?.click();
+    expect(shelf.handleError({ req: deleteReqs(sent)[0]?.req ?? "", code: "internal", message: "x" })).toBe(
+      true,
+    );
+    const line = root.querySelector<HTMLElement>("#shelf-delete-error");
+    expect(line?.textContent).toBe(`Couldn't delete ${name}`);
+    expect(line?.querySelector("img")).toBeNull();
+  });
+
+  it("offers no delete control when the feature is off", () => {
+    const { root, shelf } = shellHarness();
+    shelf.handleHello([]);
+    shelf.open(root);
+    expect(root.querySelector('[data-sheet="shelf"]')).toBeNull();
+    expect(root.querySelector(".shelf-delete")).toBeNull();
+
+    // A sheet built without the feature renders no × and no viewer button.
+    const sheet = new ShelfSheet({
+      items: () => [shelfItem()],
+      ensure: () => {},
+      requestAll: () => {},
+      markSeen: () => {},
+      blobUrl: () => null,
+      blob: () => null,
+      isYours: () => false,
+      onDelete: null,
+      onClosed: () => {},
+    });
+    sheet.open(root);
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(1);
+    expect(root.querySelector(".shelf-delete")).toBeNull();
+    root.querySelector<HTMLButtonElement>(".shelf-cell")?.click();
+    expect(document.querySelector("#shelf-viewer")).not.toBeNull();
+    expect(document.querySelector("#shelf-delete")).toBeNull();
+    sheet.close();
+  });
+
+  it("ends the delete on a push that lands ahead of its ok", () => {
+    const { root, shelf, sent } = shellHarness();
+    shelf.handleHello(["shelf"]);
+    shelf.open(root);
+    shelf.handleList({ req: null, id: "s1", items: [shelfItem({ file_id: "f1" })] });
+    cellCross(root, "f1")?.click();
+    const req = deleteReqs(sent)[0]?.req ?? "";
+
+    // The broadcast lands first: the file leaves at once, with no error.
+    shelf.handleRemoved("f1");
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(0);
+    expect(root.querySelector<HTMLElement>("#shelf-delete-error")?.hidden).toBe(true);
+
+    // The late ok is still the delete's own answer: swallowed, never a dialog.
+    expect(shelf.handleOk(req)).toBe(true);
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(0);
+    expect(root.querySelector<HTMLElement>("#shelf-delete-error")?.hidden).toBe(true);
+  });
+
+  it("swallows a late error after its push removed the file", () => {
+    const { root, shelf, sent } = shellHarness();
+    shelf.handleHello(["shelf"]);
+    shelf.open(root);
+    shelf.handleList({
+      req: null,
+      id: "s1",
+      items: [shelfItem({ file_id: "f1" }), shelfItem({ file_id: "f2", name: "second.png" })],
+    });
+    cellCross(root, "f1")?.click();
+    cellCross(root, "f2")?.click();
+    const [first, second] = deleteReqs(sent);
+    // An eviction racing both deletes takes the files first.
+    shelf.handleRemoved("f1");
+    shelf.handleRemoved("f2");
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(0);
+
+    // Already gone host-side either way: no error line, never a dialog.
+    expect(
+      shelf.handleError({ req: first?.req ?? "", code: "not_found", message: "no shelf file 'f1'" }),
+    ).toBe(true);
+    expect(
+      shelf.handleError({ req: second?.req ?? "", code: "internal", message: "x" }),
+    ).toBe(true);
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(0);
+    expect(root.querySelector<HTMLElement>("#shelf-delete-error")?.hidden).toBe(true);
+  });
+
+  it("clears in-flight deletes and the error line on a fresh hello", () => {
+    const { root, shelf, sent } = shellHarness();
+    shelf.handleHello(["shelf"]);
+    shelf.open(root);
+    const items = () => [shelfItem({ file_id: "f1" }), shelfItem({ file_id: "f2", name: "second.png" })];
+    shelf.handleList({ req: null, id: "s1", items: items() });
+    // One delete is still in flight while another fails and leaves its line.
+    cellCross(root, "f2")?.click();
+    cellCross(root, "f1")?.click();
+    const staleReq = deleteReqs(sent)[0]?.req ?? "";
+    expect(
+      shelf.handleError({ req: deleteReqs(sent)[1]?.req ?? "", code: "internal", message: "x" }),
+    ).toBe(true);
+    expect(root.querySelector<HTMLElement>("#shelf-delete-error")?.hidden).toBe(false);
+    expect(cellCross(root, "f2")?.disabled).toBe(true);
+
+    // A reconnect's hello ends the old connection: its pending state dies.
+    shelf.handleHello(["shelf"]);
+    shelf.handleList({ req: null, id: "s1", items: items() });
+    expect(root.querySelector<HTMLElement>("#shelf-delete-error")?.hidden).toBe(true);
+    expect(cellCross(root, "f2")?.disabled).toBe(false);
+    expect(shelf.handleOk(staleReq)).toBe(false);
+
+    // And deleting again works: the old pending never blocks the new one.
+    cellCross(root, "f2")?.click();
+    expect(deleteReqs(sent)).toHaveLength(3);
   });
 });
