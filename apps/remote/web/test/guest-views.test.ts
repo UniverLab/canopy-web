@@ -149,7 +149,7 @@ describe("guest entry screens", () => {
     // it, so nothing scrolls the terminal out or covers it.
     const main = root.querySelector("main.session-view");
     expect(main?.querySelector("#term-pane")).not.toBeNull();
-    expect(main?.querySelectorAll("#keybar .key").length).toBe(9);
+    expect(main?.querySelectorAll("#keybar .key").length).toBe(10);
     expect(main?.querySelector("textarea")).toBeNull();
     expect(root.querySelector("main.session-view footer.look-colophon")).toBeNull();
   });
@@ -219,7 +219,7 @@ describe("guest session view", () => {
     view.showSession("s1", "build");
     expect(root.querySelector(".session-title")?.textContent).toBe("build");
     expect(root.querySelector("#term-pane .term-placeholder")?.textContent).toBe("Attaching…");
-    expect(root.querySelectorAll("#keybar button.key").length).toBe(9);
+    expect(root.querySelectorAll("#keybar button.key").length).toBe(10);
     // The terminal is the only text input; no builder, no Files either.
     expect(root.querySelector("textarea")).toBeNull();
     expect(root.querySelector("#term-builder")).toBeNull();

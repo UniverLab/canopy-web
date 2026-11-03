@@ -706,9 +706,9 @@ label > textarea {
   color: var(--muted);
 }
 
-/* Nine keys, all visible: two rows of five equal-width touch targets,
- * the last cell empty. The bar is one info block; the keys inside stay
- * flat so the tint reads once. */
+/* Ten keys, all visible: two rows of five equal-width touch targets.
+ * The bar is one info block; the keys inside stay flat so the tint
+ * reads once. */
 .keybar {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -746,7 +746,7 @@ label > textarea {
 }
 
 /* A 360x640 phone: the 96 px banner leaves no slack in the session column,
- * and the nine keys plus the size row must sit inside the viewport without
+ * and the ten keys plus the size row must sit inside the viewport without
  * scrolling. The terminal keeps its 24 rows, so the chrome around it
  * tightens instead: topbar padding and row gap, the column gaps, the
  * keybar padding and gap. The size row holds two short lines, and the
@@ -759,6 +759,12 @@ label > textarea {
   }
 
   .session-view {
+    gap: 0.25rem;
+  }
+
+  /* Five controls share 328 px: at the base gap the Builder label wraps
+   * onto two lines, the row grows, and the size row slides out of view. */
+  .term-controls {
     gap: 0.25rem;
   }
 

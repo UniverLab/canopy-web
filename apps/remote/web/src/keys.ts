@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// The key bar under the terminal: the nine keys a phone keyboard lacks.
-// Esc, Tab, the arrows and Enter send their bytes; Ctrl and Shift are
-// one-shot latching modifiers (see modifiers.ts) with no bytes of their
-// own. Esc, Ctrl and Shift stay words — a phone reader knows them — while
-// Tab, the arrows and Enter wear their Lucide icon. An armed latch is a
+// The key bar under the terminal: the ten keys a phone keyboard lacks.
+// Esc, Tab, the arrows, Backspace and Enter send their bytes; Ctrl and
+// Shift are one-shot latching modifiers (see modifiers.ts) with no bytes
+// of their own. Esc, Ctrl and Shift stay words — a phone reader knows
+// them — while Tab, the arrows, Backspace and Enter wear their Lucide
+// icon. An armed latch is a
 // filled teal button: no indicator, icon or text marks it. Rendering is
 // plain buttons; the bytes table is exported so the session layer and the
 // tests share one definition.
@@ -30,6 +31,7 @@ export const KEY_DEFS: readonly KeyDef[] = [
   { id: "up", label: "", ariaLabel: "Arrow up", bytes: [0x1b, 0x5b, 0x41], icon: "arrowUp" },
   { id: "down", label: "", ariaLabel: "Arrow down", bytes: [0x1b, 0x5b, 0x42], icon: "arrowDown" },
   { id: "right", label: "", ariaLabel: "Arrow right", bytes: [0x1b, 0x5b, 0x43], icon: "arrowRight" },
+  { id: "backspace", label: "", ariaLabel: "Backspace", bytes: [0x7f], icon: "deleteLeft" },
   { id: "enter", label: "", ariaLabel: "Enter", bytes: [0x0d], icon: "cornerDownLeft" },
 ];
 

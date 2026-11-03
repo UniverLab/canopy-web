@@ -122,6 +122,58 @@ test("landing_console_is_clean", async ({ page }) => {
   expect(icon.status()).toBe(200);
 });
 
+test("serves the installable manifest and its icons at their sizes", async ({
+  page,
+  request,
+}) => {
+  // The document links the manifest and names the theme for the OS.
+  await page.goto("/");
+  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute(
+    "href",
+    "/manifest.webmanifest",
+  );
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute(
+    "content",
+    "#011d1c",
+  );
+  await expect(page.locator('meta[name="apple-mobile-web-app-capable"]')).toHaveAttribute(
+    "content",
+    "yes",
+  );
+  // The built dist/ serves the manifest with the app fields.
+  const manifest = await request.get("/manifest.webmanifest");
+  expect(manifest.status()).toBe(200);
+  const body = (await manifest.json()) as {
+    name: string;
+    short_name: string;
+    start_url: string;
+    scope: string;
+    display: string;
+    background_color: string;
+    theme_color: string;
+    icons: { src: string; sizes: string; type: string }[];
+  };
+  expect(body.name).toBe("Canopy Remote");
+  expect(body.short_name).toBe("Remote");
+  expect(body.start_url).toBe("/");
+  expect(body.scope).toBe("/");
+  expect(body.display).toBe("standalone");
+  expect(body.background_color).toBe("#011d1c");
+  expect(body.theme_color).toBe("#011d1c");
+  expect(body.icons).toContainEqual({ src: "/favicon.svg", sizes: "any", type: "image/svg+xml" });
+  // Both PNGs exist with those pixel dimensions, read from the IHDR.
+  for (const size of [192, 512]) {
+    const icon = body.icons.find((entry) => entry.sizes === `${size}x${size}`);
+    expect(icon?.type).toBe("image/png");
+    const response = await request.get(icon?.src ?? "");
+    expect(response.status(), icon?.src).toBe(200);
+    const bytes = await response.body();
+    expect(bytes.subarray(1, 4).toString(), icon?.src).toBe("PNG");
+    expect(bytes.readUInt32BE(16), `${icon?.src} width`).toBe(size);
+    expect(bytes.readUInt32BE(20), `${icon?.src} height`).toBe(size);
+  }
+});
+
 test("serves robots.txt as static text that keeps crawlers out", async ({
   request,
 }) => {

@@ -50,7 +50,7 @@ test.beforeEach(async ({ page }) => {
 test("renders the terminal and the key bar at 360x640", async ({ page }) => {
   expect(await terminalText(page)).toContain("$ muse run");
   const keys = page.locator("#keybar .key");
-  await expect(keys).toHaveCount(9);
+  await expect(keys).toHaveCount(10);
   await expect(page.locator(".topbar .login")).toHaveText("smoke");
   await expect(page.locator(".topbar .host")).toHaveText("smoke host");
   // Live output flows into the terminal.
@@ -167,9 +167,9 @@ test("keeps the terminal text off its border at 1280x900", async ({ page }) => {
   );
 });
 
-test("shows all nine keys inside the viewport at 360x640", async ({ page }) => {
+test("shows all ten keys inside the viewport at 360x640", async ({ page }) => {
   const keys = page.locator("#keybar .key");
-  await expect(keys).toHaveCount(9);
+  await expect(keys).toHaveCount(10);
   // The keybar follows the terminal's first fit, which lands after its
   // face loads — measuring before that blames the placeholder height
   // (the 46dvh fallback) for keys the settled layout holds in view.
@@ -180,14 +180,13 @@ test("shows all nine keys inside the viewport at 360x640", async ({ page }) => {
       return { x: r.x, y: r.y, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
     }),
   );
-  // Two rows of equal-width keys (five, then four), every one a touch
-  // target in view.
+  // Two rows of five equal-width keys, every one a touch target in view.
   const rows = [...new Set(boxes.map((box) => Math.round(box.y)))].sort((a, b) => a - b);
   expect(rows).toHaveLength(2);
   const first = boxes.filter((box) => Math.round(box.y) === rows[0]);
   const second = boxes.filter((box) => Math.round(box.y) === rows[1]);
   expect(first).toHaveLength(5);
-  expect(second).toHaveLength(4);
+  expect(second).toHaveLength(5);
   for (const row of [first, second]) {
     for (const box of row) {
       expect(Math.abs(box.width - row[0]!.width)).toBeLessThanOrEqual(1);
@@ -639,7 +638,7 @@ test("gives the terminal pane the freed height at 360x640", async ({ page }) => 
   expect(layout.visualHeight).toBeGreaterThan(0);
   expect(layout.paneHeight - layout.chrome).toBeGreaterThan(layout.visualHeight);
   // ...while every key and the whole size row stay inside the viewport.
-  expect(layout.keyBottoms).toHaveLength(9);
+  expect(layout.keyBottoms).toHaveLength(10);
   for (const bottom of layout.keyBottoms) {
     expect(bottom).toBeLessThanOrEqual(640);
   }

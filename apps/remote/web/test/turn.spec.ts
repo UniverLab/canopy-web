@@ -33,9 +33,12 @@ function mintSession(uid: number, login: string): string {
 test("a real browser connects past /turn with no forbidden_origin", async ({ page, context }) => {
   // A real session carries both cookies: cr_session plus the readable
   // cr_hint=1 the worker sets beside it (the app's only readable signal).
+  // By domain, never by URL: cookies ignore the port, and the serve
+  // suite's port spreads per checkout and per process (see
+  // scripts/e2e-port.mjs), so no spec may name it.
   await context.addCookies([
-    { name: "cr_session", value: mintSession(UID, LOGIN), url: "http://127.0.0.1:8787/" },
-    { name: "cr_hint", value: "1", url: "http://127.0.0.1:8787/" },
+    { name: "cr_session", value: mintSession(UID, LOGIN), domain: "127.0.0.1", path: "/" },
+    { name: "cr_hint", value: "1", domain: "127.0.0.1", path: "/" },
   ]);
 
   const turnBodies: string[] = [];

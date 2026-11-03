@@ -378,7 +378,14 @@ describe("the look build", () => {
     ];
     for (const target of [GRAPHS_LOOK, REMOTE_LOOK]) {
       for (const [source, dest] of pairs) {
-        expect(readFileSync(path.join(target, dest))).toEqual(readFileSync(path.join(KIT, source)));
+        // Buffer.equals, not expect().toEqual(): the generic deep equality
+        // walks large buffers byte by byte in JS (~2 s here in isolation,
+        // past the 5 s timeout under a loaded full-suite run), while the
+        // native memcmp behind .equals() keeps the same byte-identical
+        // assertion in milliseconds.
+        const actual = readFileSync(path.join(target, dest));
+        const expected = readFileSync(path.join(KIT, source));
+        expect(actual.equals(expected), `${target}/${dest}`).toBe(true);
       }
     }
   });

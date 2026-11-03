@@ -35,7 +35,7 @@ test("a guest joins a granted session with the owner's terminal", async ({ page 
   await page.locator('[data-session="smoke"]').click();
   await expect(page.locator("#term-pane .xterm-screen")).toBeVisible();
   await expect.poll(() => terminalText(page)).toContain("hello from the host");
-  await expect(page.locator("#keybar .key")).toHaveCount(9);
+  await expect(page.locator("#keybar .key")).toHaveCount(10);
   // The terminal is the only text input: xterm's hidden textarea stands
   // alone in the view.
   await expect(page.locator("main.session-view textarea")).toHaveCount(1);

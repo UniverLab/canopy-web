@@ -342,7 +342,7 @@ describe("createShell", () => {
     shell.showSession("s1", "build");
     const main = query("main.session-view");
     expect(main.querySelector("#term-pane")).not.toBeNull();
-    expect(main.querySelectorAll("#keybar .key").length).toBe(9);
+    expect(main.querySelectorAll("#keybar .key").length).toBe(10);
     expect(main.querySelector("#term-builder")).not.toBeNull();
     // The terminal is the only text input: no textarea below it.
     expect(main.querySelector("textarea")).toBeNull();
@@ -453,7 +453,7 @@ describe("createShell", () => {
     shell.showSession("s1", "build");
     expect(query(".session-title").textContent).toBe("build");
     const keys = [...root.querySelectorAll<HTMLButtonElement>("#keybar .key")];
-    expect(keys).toHaveLength(9);
+    expect(keys).toHaveLength(10);
     keys[0]?.click();
     expect(calls.keys.map((bytes) => [...bytes])).toEqual([[0x1b]]);
 
@@ -493,6 +493,20 @@ describe("createShell", () => {
     tab.click();
     expect(calls.keys.map((bytes) => [...bytes])).toEqual([[0x1b, 0x5b, 0x5a]]);
     expect(shift.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("sends Ctrl+Backspace as BS and releases the latch", () => {
+    shell.showSession("s1", "build");
+    const ctrl = query<HTMLButtonElement>('#keybar .key[data-key="ctrl"]');
+    const backspace = query<HTMLButtonElement>('#keybar .key[data-key="backspace"]');
+    ctrl.click();
+    expect(ctrl.getAttribute("aria-pressed")).toBe("true");
+    backspace.click();
+    expect(calls.keys.map((bytes) => [...bytes])).toEqual([[0x08]]);
+    expect(ctrl.getAttribute("aria-pressed")).toBe("false");
+    // Unlatched Backspace is DEL.
+    backspace.click();
+    expect(calls.keys.map((bytes) => [...bytes])).toEqual([[0x08], [0x7f]]);
   });
 
   it("mounts the terminal on ensureTerminal and writes to it", () => {
