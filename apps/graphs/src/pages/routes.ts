@@ -26,6 +26,7 @@
 import { type ApiDeps, type ApiEnv } from "../api.js";
 import { attachDownloads, createAnalytics, type Downloads } from "../analytics.js";
 import { type Log } from "../github.js";
+import type { StoredReviews } from "../review.js";
 import { OFFICIAL_OWNER, OFFICIAL_REPO, OWNER_RE, REPO_RE, SLUG_RE } from "../lib.js";
 import type { DocumentKind } from "../../../../src/schema.js";
 import type { Doc } from "../documents.js";
@@ -247,7 +248,13 @@ async function draftResponse(req: Request, env: PageEnv, id: string): Promise<Re
   );
 }
 
-function homePage(graphs: Doc[], nodes: Doc[], communityGraphs: Doc[], communityNodes: Doc[]): Page {
+function homePage(
+  graphs: Doc[],
+  nodes: Doc[],
+  communityGraphs: Doc[],
+  communityNodes: Doc[],
+  reviews: StoredReviews | null = null,
+): Page {
   const communityHtml =
     communityGraphs.length === 0 && communityNodes.length === 0
       ? []
@@ -256,22 +263,22 @@ function homePage(graphs: Doc[], nodes: Doc[], communityGraphs: Doc[], community
           ? []
           : [
             `<h2 class="kicker">${COMMUNITY_GRAPHS_HEADING}</h2>`,
-            docList(communityGraphs, ""),
+            docList(communityGraphs, "", reviews),
           ]),
         ...(communityNodes.length === 0
           ? []
           : [
             `<h2 class="kicker">${COMMUNITY_NODES_HEADING}</h2>`,
-            docList(communityNodes, ""),
+            docList(communityNodes, "", reviews),
           ]),
       ];
   const html = [
     `<h1 class="index-title">${escapeHtml(TAGLINE)}</h1>`,
     tabs("", null),
     `<h2 class="kicker">${OFFICIAL_GRAPHS_HEADING}</h2>`,
-    docList(graphs, EMPTY_OFFICIAL_GRAPHS),
+    docList(graphs, EMPTY_OFFICIAL_GRAPHS, reviews),
     `<h2 class="kicker">${OFFICIAL_NODES_HEADING}</h2>`,
-    docList(nodes, EMPTY_OFFICIAL_NODES),
+    docList(nodes, EMPTY_OFFICIAL_NODES, reviews),
     ...communityHtml,
     `<h2 class="kicker">${PATTERNS_LABEL}</h2>`,
     `<p>${escapeHtml(PATTERNS_HOME_LEAD)} <a href="${PATTERNS_HREF}">${escapeHtml(PATTERNS_LABEL)}</a></p>`,
@@ -285,14 +292,14 @@ function homePage(graphs: Doc[], nodes: Doc[], communityGraphs: Doc[], community
           : [
             `## ${COMMUNITY_GRAPHS_HEADING}`,
             ``,
-            docListMarkdown(communityGraphs, ""),
+            docListMarkdown(communityGraphs, "", reviews),
           ]),
         ...(communityNodes.length === 0
           ? []
           : [
             `## ${COMMUNITY_NODES_HEADING}`,
             ``,
-            docListMarkdown(communityNodes, ""),
+            docListMarkdown(communityNodes, "", reviews),
           ]),
       ];
   const markdown = [
@@ -302,10 +309,10 @@ function homePage(graphs: Doc[], nodes: Doc[], communityGraphs: Doc[], community
     ``,
     `## ${OFFICIAL_GRAPHS_HEADING}`,
     ``,
-    docListMarkdown(graphs, EMPTY_OFFICIAL_GRAPHS),
+    docListMarkdown(graphs, EMPTY_OFFICIAL_GRAPHS, reviews),
     `## ${OFFICIAL_NODES_HEADING}`,
     ``,
-    docListMarkdown(nodes, EMPTY_OFFICIAL_NODES),
+    docListMarkdown(nodes, EMPTY_OFFICIAL_NODES, reviews),
     ...communityMarkdown,
     `## ${PATTERNS_LABEL}`,
     ``,
@@ -317,19 +324,19 @@ function homePage(graphs: Doc[], nodes: Doc[], communityGraphs: Doc[], community
   return { title: HOME_TITLE, description: TAGLINE, html, markdown };
 }
 
-function searchPage(q: string, sort: SearchSort, items: Doc[]): Page {
+function searchPage(q: string, sort: SearchSort, items: Doc[], reviews: StoredReviews | null = null): Page {
   const heading = resultsFor(q);
   const html = [
     `<h1 class="index-title">${escapeHtml(heading)}</h1>`,
     tabs(q, sort),
-    items.length === 0 ? `<p>${NO_RESULTS}</p>` : docList(items, NO_RESULTS),
+    items.length === 0 ? `<p>${NO_RESULTS}</p>` : docList(items, NO_RESULTS, reviews),
   ].join("\n");
   const markdown = [
     `# ${heading}`,
     ``,
     `## ${TOP_TAB} / ${NEW_TAB}`,
     ``,
-    items.length === 0 ? `${NO_RESULTS}\n` : docListMarkdown(items, NO_RESULTS),
+    items.length === 0 ? `${NO_RESULTS}\n` : docListMarkdown(items, NO_RESULTS, reviews),
   ].join("\n");
   return { title: heading, description: TAGLINE, html, markdown };
 }
@@ -456,7 +463,8 @@ async function patternResponse(
     }
     rows.push({ ref, doc: rowFromEntry(entry), figure });
   }
-  return page(req, patternPage(stored, rows, slug));
+  const reviews = await store.getReviews();
+  return page(req, patternPage(stored, rows, slug, reviews));
 }
 
 /**
@@ -490,6 +498,7 @@ async function homeResponse(req: Request, env: PageEnv, deps: PageDeps): Promise
   const listing = officialFromIndex(index);
   const community = communityFromIndex(index);
   const counts = await volumes();
+  const reviews = await store.getReviews();
   const q = (new URL(req.url).searchParams.get("q") ?? "").slice(0, 256);
   return page(req, {
     ...homePage(
@@ -497,6 +506,7 @@ async function homeResponse(req: Request, env: PageEnv, deps: PageDeps): Promise
       attachDownloads(listing.nodes, counts),
       attachDownloads(community.graphs, counts),
       attachDownloads(community.nodes, counts),
+      reviews,
     ),
     search: q,
   });
@@ -511,7 +521,11 @@ async function searchResponse(req: Request, url: URL, env: PageEnv, deps: PageDe
     return indexing(req);
   }
   const outcome = searchFromIndex(index, { q, sort, page: 1 });
-  return page(req, { ...searchPage(q, sort, attachDownloads(outcome.items, await volumes())), search: q });
+  const reviews = await store.getReviews();
+  return page(req, {
+    ...searchPage(q, sort, attachDownloads(outcome.items, await volumes()), reviews),
+    search: q,
+  });
 }
 
 /** llms.txt: plain text, one tab-separated line per official document. */

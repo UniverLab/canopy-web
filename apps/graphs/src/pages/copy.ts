@@ -202,6 +202,7 @@ export const MD_FOOTER =
 /** The datasheet's field labels, in sheet order. */
 export const SHEET_KIND = "Kind";
 export const SHEET_NAME = "Name";
+export const SHEET_REVIEW = "Review";
 export const SHEET_SOURCE = "Source";
 export const SHEET_REF = "Ref";
 export const SHEET_STARS = "Stars";

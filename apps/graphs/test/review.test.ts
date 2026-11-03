@@ -3,7 +3,8 @@
  * The index-time model review: the provider interface against a mock,
  * `off` disabling the pass, the hash and prompt gates, the per-run cap,
  * failure degrading to `unreviewed`, every verdict label including the
- * placeholder case, stored pattern relations on the patterns pages, the
+ * placeholder case, the verdict pill in the datasheet and chips on rows,
+ * stored pattern relations on the patterns pages, the
  * `meta` provider with its repair retry and usage logs, prompt hygiene
  * (leading comments stripped from wire and page), the meta env wiring,
  * and the bundled prompt plus the pre-rendered diagram. Tests seed a fresh
@@ -12,6 +13,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { DocumentKind, JsonValue } from "../../../src/schema.js";
+import { iconSvg } from "../../../packages/look/icon-svg.js";
 import { sha256 } from "../src/hashes.js";
 import { handlePage, NOT_PAGE } from "../src/pages/routes.js";
 import { REVIEW_PROVIDER_TOKEN, reviewProviderLabel } from "../src/pages/transparency.js";
@@ -429,23 +431,28 @@ describe("verdict labels", () => {
     return kv;
   }
 
-  it("shows every label as Verdict of model with a transparency link", async () => {
+  it("shows every label as a pill in the datasheet with a transparency link", async () => {
     const kv = await reviewed();
     const safe = await (await call("/g/acme/things/safe", kv)).text();
-    expect(safe).toContain(`<a href="/transparency">Verdict of ${MODEL}</a>`);
-    expect(safe).toContain("Looks safe");
-    expect(safe).toContain(`class="review-badge review-looks-safe"`);
+    expect(safe).toContain(
+      `<a class="review-pill review-looks-safe" href="/transparency" title="Verdict of ${MODEL}">`,
+    );
+    expect(safe).toContain(`${MODEL} · Looks safe`);
+    expect(safe).toContain(iconSvg("shieldCheck"));
+    expect(safe).not.toContain("review-badge");
     const placeholder = await (await call("/g/acme/things/placeholder", kv)).text();
     expect(placeholder).toContain("Needs a look");
-    expect(placeholder).toContain(`class="review-badge review-needs-look"`);
+    expect(placeholder).toContain(`class="review-pill review-needs-look"`);
+    expect(placeholder).toContain(iconSvg("shieldQuestion"));
     expect(placeholder).toContain("unresolved placeholder &lt;GATE-SCRIPT&gt;");
     const evil = await (await call("/g/acme/things/evil", kv)).text();
     expect(evil).toContain("Flagged");
-    expect(evil).toContain(`class="review-badge review-flagged"`);
+    expect(evil).toContain(`class="review-pill review-flagged"`);
+    expect(evil).toContain(iconSvg("shieldAlert"));
     expect(evil).toContain("pipe to shell");
     const twin = await (await call("/g/acme/things/evil", kv, "text/markdown")).text();
-    expect(twin).toContain(`Verdict of ${MODEL}: Flagged (/transparency)`);
-    expect(twin).toContain("pipe to shell");
+    expect(twin).toContain(`- Review: Flagged (${MODEL}, ${MODEL})`);
+    expect(twin).toContain("  pipe to shell");
   });
 
   it("shows no badge for unreviewed documents", async () => {
@@ -455,9 +462,223 @@ describe("verdict labels", () => {
     });
     const html = await (await call("/g/acme/things/flow", kv)).text();
     expect(html).not.toContain("Verdict of");
-    expect(html).not.toContain(`class="review-badge`);
+    expect(html).not.toContain('class="review-pill');
+    expect(html).not.toContain('class="review-chip');
+    expect(html).not.toContain("<dt>Review</dt>");
     const twin = await (await call("/g/acme/things/flow", kv, "text/markdown")).text();
     expect(twin).not.toContain("Verdict of");
+    expect(twin).not.toContain("- Review:");
+  });
+});
+
+describe("the verdict pill and row chips", () => {
+  const PILL_MODEL = "muse-spark-1.3-contributor";
+  const NODE_DOC = { format_version: 1, name: "cool-node", kind: "agent", config: {}, description: "d" };
+
+  /** One stored review body; the model shortens to "Muse". */
+  function pillReview(verdict = "looks-safe", reasons = "", model: string = PILL_MODEL): Record<string, unknown> {
+    return {
+      verdict,
+      reasons,
+      patterns: [],
+      hash: "abc123",
+      prompt: "v2",
+      model,
+      reviewed_at: "2026-10-30T12:00:00.000Z",
+    };
+  }
+
+  interface PillRow {
+    kind?: DocumentKind;
+    slug: string;
+    verdict?: string;
+    reasons?: string;
+    model?: string;
+    hint?: string[];
+    reviewed?: boolean;
+  }
+
+  /** Seed the index, documents, per-key reviews and the `reviews:v1` aggregate. */
+  async function seedRows(kv: FakeKV, rows: PillRow[]): Promise<void> {
+    await seed(
+      kv,
+      rows.map((row, index) => ({
+        ...entry(row.kind ?? "graph", "acme", "things", row.slug, `2026-10-${String(29 - index).padStart(2, "0")}`),
+        ...(row.hint === undefined ? {} : { harness_hint: row.hint }),
+      })),
+      Object.fromEntries(rows.map((row) => {
+        const kind = row.kind ?? "graph";
+        const document = kind === "node" ? NODE_DOC : graphDoc(row.slug, "echo hi");
+        return [docKey(kind, "acme", "things", row.slug), document];
+      })),
+    );
+    const reviewed = rows.filter((row) => row.reviewed !== false);
+    for (const row of reviewed) {
+      const body = pillReview(row.verdict, row.reasons, row.model);
+      await kv.put(reviewKey(row.kind ?? "graph", "acme", "things", row.slug), JSON.stringify(body));
+    }
+    await kv.put(REVIEWS_KEY, JSON.stringify({
+      built_at: "2026-10-30T00:00:00.000Z",
+      reviews: reviewed.map((row) => ({
+        kind: row.kind ?? "graph",
+        owner: "acme",
+        repo: "things",
+        slug: row.slug,
+        ...pillReview(row.verdict, row.reasons, row.model),
+      })),
+    }));
+  }
+
+  /** Two graphs, one reviewed; the reviewed one runs on a known harness. */
+  async function seedPair(kv: FakeKV): Promise<void> {
+    await seedRows(kv, [
+      { slug: "flow", verdict: "needs-look", reasons: "unresolved placeholder <X>", hint: ["Muse"] },
+      { slug: "draft", reviewed: false },
+    ]);
+  }
+
+  it("renders the pill with the right icon, label, title and class per verdict", async () => {
+    const kv = new FakeKV();
+    await seedRows(kv, [
+      { slug: "safe" },
+      { slug: "wary", verdict: "needs-look", reasons: "unresolved placeholder <X>" },
+      { slug: "evil", verdict: "flagged", reasons: "pipe to shell" },
+      { kind: "node", slug: "cool-node" },
+    ]);
+    const cases = [
+      { path: "/g/acme/things/safe", verdict: "looks-safe", label: "Looks safe", icon: "shieldCheck" },
+      { path: "/g/acme/things/wary", verdict: "needs-look", label: "Needs a look", icon: "shieldQuestion" },
+      { path: "/g/acme/things/evil", verdict: "flagged", label: "Flagged", icon: "shieldAlert" },
+      { path: "/n/acme/things/cool-node", verdict: "looks-safe", label: "Looks safe", icon: "shieldCheck" },
+    ] as const;
+    for (const { path, verdict, label, icon } of cases) {
+      const html = await (await call(path, kv)).text();
+      expect(html, path).toContain(
+        `<a class="review-pill review-${verdict}" href="/transparency" title="Verdict of ${PILL_MODEL}">`,
+      );
+      expect(html, path).toContain(`Muse · ${label}`);
+      expect(html, path).toContain(iconSvg(icon));
+      // The Review field sits right after Name in the datasheet.
+      const name = html.indexOf("<dt>Name</dt>");
+      const review = html.indexOf("<dt>Review</dt>");
+      const source = html.indexOf("<dt>Source</dt>");
+      expect(name, path).toBeGreaterThan(-1);
+      expect(review, path).toBeGreaterThan(name);
+      expect(source, path).toBeGreaterThan(review);
+      expect(html, path).not.toContain("review-badge");
+    }
+  });
+
+  it("falls back to the full model id for an unknown reviewer", async () => {
+    const kv = new FakeKV();
+    await seedRows(kv, [{ slug: "flow", model: "homebrew-9000" }]);
+    const html = await (await call("/g/acme/things/flow", kv)).text();
+    expect(html).toContain("homebrew-9000 · Looks safe");
+    expect(html).toContain(`title="Verdict of homebrew-9000"`);
+  });
+
+  it("shows reasons under the pill for needs-look and flagged only", async () => {
+    const kv = new FakeKV();
+    await seedRows(kv, [
+      { slug: "safe" },
+      { slug: "wary", verdict: "needs-look", reasons: "unresolved placeholder <X>" },
+      { slug: "evil", verdict: "flagged", reasons: "pipe to shell" },
+      { slug: "quiet", verdict: "needs-look" },
+    ]);
+    // A safe verdict never shows reasons, even in the same field.
+    const safe = await (await call("/g/acme/things/safe", kv)).text();
+    expect(safe).toContain(`class="review-pill review-looks-safe"`);
+    expect(safe).not.toContain('class="review-reasons"');
+    const wary = await (await call("/g/acme/things/wary", kv)).text();
+    expect(wary).toContain(`<p class="review-reasons">unresolved placeholder &lt;X&gt;</p>`);
+    const evil = await (await call("/g/acme/things/evil", kv)).text();
+    expect(evil).toContain(`<p class="review-reasons">pipe to shell</p>`);
+    // Empty reasons render no paragraph, whatever the verdict.
+    const quiet = await (await call("/g/acme/things/quiet", kv)).text();
+    expect(quiet).toContain(`class="review-pill review-needs-look"`);
+    expect(quiet).not.toContain('class="review-reasons"');
+    // The twin carries the verdict line after Name, with a continuation for reasons.
+    const twin = await (await call("/g/acme/things/wary", kv, "text/markdown")).text();
+    const name = twin.indexOf("- Name: wary");
+    const review = twin.indexOf(`- Review: Needs a look (Muse, ${PILL_MODEL})`);
+    const reasons = twin.indexOf("  unresolved placeholder <X>");
+    expect(name).toBeGreaterThan(-1);
+    expect(review).toBeGreaterThan(name);
+    expect(reasons).toBeGreaterThan(review);
+    const safeTwin = await (await call("/g/acme/things/safe", kv, "text/markdown")).text();
+    expect(safeTwin).toContain(`- Review: Looks safe (Muse, ${PILL_MODEL})`);
+    const safeLines = safeTwin.split("\n");
+    const safeReviewAt = safeLines.findIndex((line) => line.startsWith("- Review:"));
+    expect(safeReviewAt).toBeGreaterThan(-1);
+    expect(safeLines[safeReviewAt + 1]?.startsWith("  ") ?? false).toBe(false);
+  });
+
+  it("shows one chip per reviewed row on home and search, beside the harness dots", async () => {
+    const kv = new FakeKV();
+    await seedPair(kv);
+    const home = await (await call("/", kv)).text();
+    expect(home.match(/class="review-chip review-/g) ?? []).toHaveLength(1);
+    expect(home).toContain(
+      `<a class="review-chip review-needs-look" href="/transparency" title="Verdict of ${PILL_MODEL}">`,
+    );
+    expect(home).toContain("<span>Needs a look</span>");
+    expect(home).not.toContain("Muse ·");
+    // The chip rides right after the row's harness dots.
+    expect(home.indexOf('class="dots"')).toBeGreaterThan(-1);
+    expect(home.indexOf('class="dots"')).toBeLessThan(home.indexOf('class="review-chip'));
+    const search = await (await call("/search?q=flow", kv)).text();
+    expect(search.match(/class="review-chip review-/g) ?? []).toHaveLength(1);
+    expect(search).toContain("<span>Needs a look</span>");
+    // The unreviewed row shows no chip anywhere.
+    const unreviewed = await (await call("/search?q=draft", kv)).text();
+    expect(unreviewed).not.toContain('class="review-chip');
+  });
+
+  it("shows chips on pattern rows from the same aggregate", async () => {
+    const kv = new FakeKV();
+    await seedRows(kv, [{ slug: "flow", verdict: "flagged", reasons: "pipe to shell" }]);
+    await kv.put(REVIEW_PATTERNS_KEY, JSON.stringify({
+      built_at: "2026-10-30T00:00:00.000Z",
+      relations: { "deterministic-gates": [{ kind: "graph", owner: "acme", repo: "things", slug: "flow" }] },
+    }));
+    const html = await (await call("/patterns/deterministic-gates", kv)).text();
+    expect(html).toContain(`<a class="row-name" href="/g/acme/things/flow">flow</a>`);
+    expect(html).toContain(`class="review-chip review-flagged"`);
+    const twin = await (await call("/patterns/deterministic-gates", kv, "text/markdown")).text();
+    expect(twin).toContain(`[flow](/g/acme/things/flow)`);
+    expect(twin).toContain(" · Verdict: Flagged");
+  });
+
+  it("reads the reviews aggregate once per list request, never for a document", async () => {
+    const kv = new FakeKV();
+    let aggregateReads = 0;
+    const rawGet = kv.get.bind(kv);
+    kv.get = (key: string): Promise<string | null> => {
+      if (key === REVIEWS_KEY) {
+        aggregateReads += 1;
+      }
+      return rawGet(key);
+    };
+    await seedPair(kv);
+    for (const path of ["/", "/search?q=flow", "/patterns/deterministic-gates"]) {
+      aggregateReads = 0;
+      const response = await call(path, kv);
+      expect(response.status, path).toBe(200);
+      expect(aggregateReads, path).toBe(1);
+    }
+    aggregateReads = 0;
+    await call("/g/acme/things/flow", kv);
+    expect(aggregateReads).toBe(0);
+  });
+
+  it("appends the verdict to reviewed rows in list twins only", async () => {
+    const kv = new FakeKV();
+    await seedPair(kv);
+    const twin = await (await call("/", kv, "text/markdown")).text();
+    const flowLine = twin.split("\n").find((line) => line.includes("[flow]"));
+    expect(flowLine).toMatch(/ · Verdict: Needs a look$/);
+    const draftLine = twin.split("\n").find((line) => line.includes("[draft]"));
+    expect(draftLine).not.toContain("Verdict:");
   });
 });
 

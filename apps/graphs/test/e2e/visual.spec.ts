@@ -22,6 +22,9 @@
  * plate and the datasheet on black panels, the community warning and runs
  * summary in warn, the 404 block in error — no body banner anywhere, and
  * the colophon links share one row at desktop width.
+ * Reviewed rows carry verdict chips, and a reviewed document's datasheet
+ * carries the verdict pill in its Review field — the verdict ink in the
+ * body face, a 44 px touch target on a phone.
  */
 import { expect, test } from "@playwright/test";
 
@@ -657,6 +660,55 @@ test("the colophon wraps without sideways scroll at 390x844", async ({ page }) =
     view: window.innerWidth,
   }));
   expect(width.scroll).toBeLessThanOrEqual(width.view);
+});
+
+test("the verdict pill and row chips at 1280x900", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/", { waitUntil: "load" });
+
+  // Two of the three rows are reviewed: safe and flagged chips, no reviewer prefix.
+  const chips = page.locator("ol.index .review-chip");
+  await expect(chips).toHaveCount(2);
+  await expect(chips.first()).toHaveText("Looks safe");
+  await expect(chips.first()).toHaveAttribute("href", "/transparency");
+  await expect(chips.nth(1)).toHaveText("Flagged");
+
+  await page.goto("/g/hello-graph", { waitUntil: "load" });
+  const pill = page.locator("dl.sheet .review-pill");
+  await expect(pill).toHaveCount(1);
+  await expect(pill).toHaveText("Muse · Looks safe");
+  await expect(pill).toHaveAttribute("href", "/transparency");
+  await expect(pill).toHaveAttribute("title", "Verdict of muse-spark-1.3-contributor");
+  // The verdict ink in the body face, never mono.
+  const painted = await pill.evaluate((el) => {
+    const style = getComputedStyle(el);
+    return { color: style.color, font: style.fontFamily };
+  });
+  expect(painted.color).toBe("rgb(0, 169, 160)");
+  expect(painted.font).toContain("EB Garamond");
+  expect(painted.font).not.toContain("Sometype Mono");
+  // A safe verdict carries no reasons.
+  await expect(page.locator("dl.sheet .review-reasons")).toHaveCount(0);
+
+  await page.goto("/g/acme/evil/evil", { waitUntil: "load" });
+  await expect(page.locator("dl.sheet .review-pill")).toHaveText("Muse · Flagged");
+  await expect(page.locator("dl.sheet .review-reasons")).toHaveText("Pipes a download into a shell.");
+
+  const shot = await page.screenshot({
+    fullPage: true,
+    path: testInfo.outputPath("verdict-pill.png"),
+  });
+  await testInfo.attach("verdict-pill", {
+    body: shot,
+    contentType: "image/png",
+  });
+});
+
+test("the verdict pill stays a 44 px target at 390x844", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/g/hello-graph", { waitUntil: "load" });
+  const box = await page.locator("dl.sheet .review-pill").boundingBox();
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
 });
 
 test("missing document at 390x844", async ({ page }, testInfo) => {

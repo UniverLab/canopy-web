@@ -18,9 +18,11 @@ import type { JsonValue } from "../../../../src/schema.js";
 import type { Doc } from "../documents.js";
 import type { PatternEntry, PatternRef, PatternStatus, StoredPattern } from "../patterns.js";
 import { comparePatterns } from "../patterns.js";
+import { VERDICT_LABELS, type StoredReview, type StoredReviews } from "../review.js";
 import { escapeHtml, isSafeUrl, renderMarkdown } from "./md.js";
 import { fencedBlock, mdText } from "./document.js";
 import { linkAttrs, type Page } from "./layout.js";
+import { reviewFor } from "./review-badge.js";
 import { docRowInner } from "./rows.js";
 import { docPath, docRef } from "./ref.js";
 import {
@@ -118,10 +120,10 @@ export interface ImplementsRow {
 }
 
 /** One known ref: the catalogue's index row, a graph's small plate below. */
-function implementsItem(row: ImplementsRow): string {
+function implementsItem(row: ImplementsRow, review: StoredReview | null = null): string {
   const doc = row.doc as Doc;
   const thumb = row.figure === null ? "" : thumbFigure(row.figure, doc.name, row.ref.slug);
-  return `<li class="row">${docRowInner(doc)}${thumb}</li>`;
+  return `<li class="row">${docRowInner(doc, review)}${thumb}</li>`;
 }
 
 /** One missing ref: the ref as text, with the not-in-the-catalogue line. */
@@ -135,9 +137,10 @@ function missingItem(ref: PatternRef): string {
 }
 
 /** One known ref for the twin, in the listing's own shape. */
-function implementsMarkdown(row: ImplementsRow): string {
+function implementsMarkdown(row: ImplementsRow, review: StoredReview | null = null): string {
   const doc = row.doc as Doc;
-  return `- [${mdText(doc.name)}](${docPath(doc)}) — ${mdText(doc.description)} — ${docRef(doc).ref}`;
+  const line = `- [${mdText(doc.name)}](${docPath(doc)}) — ${mdText(doc.description)} — ${docRef(doc).ref}`;
+  return review === null ? line : `${line} · Verdict: ${VERDICT_LABELS[review.verdict]}`;
 }
 
 /** One missing ref for the twin: the ref and the not-in-the-catalogue line. */
@@ -179,7 +182,12 @@ export function dropLeadingTitle(body: string, title: string): string {
  * order, with the figure as a fenced JSON block. The route's `slug`
  * scopes the plate's marker ids among the page's other figures.
  */
-export function patternPage(pattern: StoredPattern, rows: ImplementsRow[], slug: string): Page {
+export function patternPage(
+  pattern: StoredPattern,
+  rows: ImplementsRow[],
+  slug: string,
+  reviews: StoredReviews | null = null,
+): Page {
   // One seed for the figure's H/V pair, like the thumbnails'; the marker
   // ids take the pattern's slug, which is unique among the page's figures.
   const seed = Date.now() >>> 0;
@@ -196,11 +204,13 @@ export function patternPage(pattern: StoredPattern, rows: ImplementsRow[], slug:
   const sources =
     `<h2 class="kicker">${iconSvg("bookOpen")}<span>${escapeHtml(PATTERN_SOURCES_HEADING)}</span></h2>\n` +
     `<ul class="sources">${pattern.sources.map(sourceItem).join("")}</ul>`;
+  const reviewOf = (row: ImplementsRow): StoredReview | null =>
+    row.doc === null ? null : reviewFor(reviews, row.doc);
   const implementedBy = rows.length === 0
     ? `<h2 class="kicker">${iconSvg("blocks")}<span>${escapeHtml(IMPLEMENTED_BY_HEADING)}</span></h2>\n` +
       `<p>${escapeHtml(PATTERNS_NO_IMPLEMENTS)}</p>`
     : `<h2 class="kicker">${iconSvg("blocks")}<span>${escapeHtml(IMPLEMENTED_BY_HEADING)}</span></h2>\n` +
-      `<ol class="index">${rows.map((row) => row.doc === null ? missingItem(row.ref) : implementsItem(row)).join("")}</ol>`;
+      `<ol class="index">${rows.map((row) => row.doc === null ? missingItem(row.ref) : implementsItem(row, reviewOf(row))).join("")}</ol>`;
 
   const html = [
     plate,
@@ -234,7 +244,7 @@ export function patternPage(pattern: StoredPattern, rows: ImplementsRow[], slug:
     ``,
     ...(rows.length === 0
       ? [PATTERNS_NO_IMPLEMENTS, ``]
-      : [...rows.map((row) => row.doc === null ? missingMarkdown(row.ref) : implementsMarkdown(row)), ``]),
+      : [...rows.map((row) => row.doc === null ? missingMarkdown(row.ref) : implementsMarkdown(row, reviewOf(row))), ``]),
   ].join("\n");
 
   return { title: pattern.title, description: pattern.summary, html, markdown };

@@ -508,21 +508,27 @@ details.run-prompt summary .run-where { color: var(--surface-ink); }
 .run-builtin { margin: 0.5rem 0 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--surface-ink-dim); }
 details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
-/* The fuzzy verdict: one line under the description, tinted by label —
- * safe reads ok, needs-a-look warns, flagged errors — with the reasons
- * as plain prose below. Unreviewed renders nothing at all. */
-.review-badge {
-  display: inline-block;
-  margin: 0 0 0.5rem;
-  padding: 0.35rem 0.7rem;
-  border: 1px solid var(--tint-line);
-  border-radius: var(--radius-ctl);
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
+/* The fuzzy verdict: a compact pill in the datasheet's Review field and a
+ * small chip on catalogue rows — shield, words and border in the verdict
+ * ink on a 12% wash of itself, never the meaning tints — with the reasons
+ * as plain prose under the pill. Unreviewed renders nothing at all. */
+.review-pill, .review-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--verdict);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--verdict) 12%, transparent);
+  color: var(--verdict);
+  font-family: var(--font-body);
+  text-decoration: none;
+  white-space: nowrap;
 }
-.review-badge.review-looks-safe { background: var(--tint-ok); }
-.review-badge.review-needs-look { background: var(--tint-warn); }
-.review-badge.review-flagged { background: var(--tint-error); }
+.review-pill { padding: 0.35rem 0.8rem; font-size: 1rem; }
+.review-chip { padding: 0.1rem 0.5rem; font-size: 0.78rem; }
+.review-looks-safe { --verdict: var(--canopy); }
+.review-needs-look { --verdict: var(--attention); }
+.review-flagged { --verdict: var(--err-label); }
 .review-reasons { font-family: var(--font-body); font-size: 1rem; color: var(--surface-ink-dim); }
 
 /* The transparency page: the pre-rendered diagram scrolls inside itself,
@@ -581,6 +587,8 @@ pre.prompt, pre.hash {
   /* Phones: every control that holds an icon alone is a 44 × 44 target. */
   .copy { min-width: 44px; min-height: 44px; justify-content: center; }
   .search button, .site-nav a { min-height: 44px; }
+  /* The verdict pill stays a 44 px touch target on a phone. */
+  .review-pill { min-height: 44px; }
 }
 @media (max-width: 899px) {
   .row-desc { order: 1; }
@@ -1181,21 +1189,27 @@ details.run-prompt summary .run-where { color: var(--surface-ink); }
 .run-builtin { margin: 0.5rem 0 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--surface-ink-dim); }
 details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
-/* The fuzzy verdict: one line under the description, tinted by label —
- * safe reads ok, needs-a-look warns, flagged errors — with the reasons
- * as plain prose below. Unreviewed renders nothing at all. */
-.review-badge {
-  display: inline-block;
-  margin: 0 0 0.5rem;
-  padding: 0.35rem 0.7rem;
-  border: 1px solid var(--tint-line);
-  border-radius: var(--radius-ctl);
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
+/* The fuzzy verdict: a compact pill in the datasheet's Review field and a
+ * small chip on catalogue rows — shield, words and border in the verdict
+ * ink on a 12% wash of itself, never the meaning tints — with the reasons
+ * as plain prose under the pill. Unreviewed renders nothing at all. */
+.review-pill, .review-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--verdict);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--verdict) 12%, transparent);
+  color: var(--verdict);
+  font-family: var(--font-body);
+  text-decoration: none;
+  white-space: nowrap;
 }
-.review-badge.review-looks-safe { background: var(--tint-ok); }
-.review-badge.review-needs-look { background: var(--tint-warn); }
-.review-badge.review-flagged { background: var(--tint-error); }
+.review-pill { padding: 0.35rem 0.8rem; font-size: 1rem; }
+.review-chip { padding: 0.1rem 0.5rem; font-size: 0.78rem; }
+.review-looks-safe { --verdict: var(--canopy); }
+.review-needs-look { --verdict: var(--attention); }
+.review-flagged { --verdict: var(--err-label); }
 .review-reasons { font-family: var(--font-body); font-size: 1rem; color: var(--surface-ink-dim); }
 
 /* The transparency page: the pre-rendered diagram scrolls inside itself,
@@ -1254,6 +1268,8 @@ pre.prompt, pre.hash {
   /* Phones: every control that holds an icon alone is a 44 × 44 target. */
   .copy { min-width: 44px; min-height: 44px; justify-content: center; }
   .search button, .site-nav a { min-height: 44px; }
+  /* The verdict pill stays a 44 px touch target on a phone. */
+  .review-pill { min-height: 44px; }
 }
 @media (max-width: 899px) {
   .row-desc { order: 1; }
@@ -1863,21 +1879,27 @@ details.run-prompt summary .run-where { color: var(--surface-ink); }
 .run-builtin { margin: 0.5rem 0 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--surface-ink-dim); }
 details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
-/* The fuzzy verdict: one line under the description, tinted by label —
- * safe reads ok, needs-a-look warns, flagged errors — with the reasons
- * as plain prose below. Unreviewed renders nothing at all. */
-.review-badge {
-  display: inline-block;
-  margin: 0 0 0.5rem;
-  padding: 0.35rem 0.7rem;
-  border: 1px solid var(--tint-line);
-  border-radius: var(--radius-ctl);
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
+/* The fuzzy verdict: a compact pill in the datasheet's Review field and a
+ * small chip on catalogue rows — shield, words and border in the verdict
+ * ink on a 12% wash of itself, never the meaning tints — with the reasons
+ * as plain prose under the pill. Unreviewed renders nothing at all. */
+.review-pill, .review-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--verdict);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--verdict) 12%, transparent);
+  color: var(--verdict);
+  font-family: var(--font-body);
+  text-decoration: none;
+  white-space: nowrap;
 }
-.review-badge.review-looks-safe { background: var(--tint-ok); }
-.review-badge.review-needs-look { background: var(--tint-warn); }
-.review-badge.review-flagged { background: var(--tint-error); }
+.review-pill { padding: 0.35rem 0.8rem; font-size: 1rem; }
+.review-chip { padding: 0.1rem 0.5rem; font-size: 0.78rem; }
+.review-looks-safe { --verdict: var(--canopy); }
+.review-needs-look { --verdict: var(--attention); }
+.review-flagged { --verdict: var(--err-label); }
 .review-reasons { font-family: var(--font-body); font-size: 1rem; color: var(--surface-ink-dim); }
 
 /* The transparency page: the pre-rendered diagram scrolls inside itself,
@@ -1936,6 +1958,8 @@ pre.prompt, pre.hash {
   /* Phones: every control that holds an icon alone is a 44 × 44 target. */
   .copy { min-width: 44px; min-height: 44px; justify-content: center; }
   .search button, .site-nav a { min-height: 44px; }
+  /* The verdict pill stays a 44 px touch target on a phone. */
+  .review-pill { min-height: 44px; }
 }
 @media (max-width: 899px) {
   .row-desc { order: 1; }
@@ -2565,21 +2589,27 @@ details.run-prompt summary .run-where { color: var(--surface-ink); }
 .run-builtin { margin: 0.5rem 0 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--surface-ink-dim); }
 details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
-/* The fuzzy verdict: one line under the description, tinted by label —
- * safe reads ok, needs-a-look warns, flagged errors — with the reasons
- * as plain prose below. Unreviewed renders nothing at all. */
-.review-badge {
-  display: inline-block;
-  margin: 0 0 0.5rem;
-  padding: 0.35rem 0.7rem;
-  border: 1px solid var(--tint-line);
-  border-radius: var(--radius-ctl);
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
+/* The fuzzy verdict: a compact pill in the datasheet's Review field and a
+ * small chip on catalogue rows — shield, words and border in the verdict
+ * ink on a 12% wash of itself, never the meaning tints — with the reasons
+ * as plain prose under the pill. Unreviewed renders nothing at all. */
+.review-pill, .review-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--verdict);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--verdict) 12%, transparent);
+  color: var(--verdict);
+  font-family: var(--font-body);
+  text-decoration: none;
+  white-space: nowrap;
 }
-.review-badge.review-looks-safe { background: var(--tint-ok); }
-.review-badge.review-needs-look { background: var(--tint-warn); }
-.review-badge.review-flagged { background: var(--tint-error); }
+.review-pill { padding: 0.35rem 0.8rem; font-size: 1rem; }
+.review-chip { padding: 0.1rem 0.5rem; font-size: 0.78rem; }
+.review-looks-safe { --verdict: var(--canopy); }
+.review-needs-look { --verdict: var(--attention); }
+.review-flagged { --verdict: var(--err-label); }
 .review-reasons { font-family: var(--font-body); font-size: 1rem; color: var(--surface-ink-dim); }
 
 /* The transparency page: the pre-rendered diagram scrolls inside itself,
@@ -2638,6 +2668,8 @@ pre.prompt, pre.hash {
   /* Phones: every control that holds an icon alone is a 44 × 44 target. */
   .copy { min-width: 44px; min-height: 44px; justify-content: center; }
   .search button, .site-nav a { min-height: 44px; }
+  /* The verdict pill stays a 44 px touch target on a phone. */
+  .review-pill { min-height: 44px; }
 }
 @media (max-width: 899px) {
   .row-desc { order: 1; }
@@ -3241,21 +3273,27 @@ details.run-prompt summary .run-where { color: var(--surface-ink); }
 .run-builtin { margin: 0.5rem 0 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--surface-ink-dim); }
 details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
-/* The fuzzy verdict: one line under the description, tinted by label —
- * safe reads ok, needs-a-look warns, flagged errors — with the reasons
- * as plain prose below. Unreviewed renders nothing at all. */
-.review-badge {
-  display: inline-block;
-  margin: 0 0 0.5rem;
-  padding: 0.35rem 0.7rem;
-  border: 1px solid var(--tint-line);
-  border-radius: var(--radius-ctl);
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
+/* The fuzzy verdict: a compact pill in the datasheet's Review field and a
+ * small chip on catalogue rows — shield, words and border in the verdict
+ * ink on a 12% wash of itself, never the meaning tints — with the reasons
+ * as plain prose under the pill. Unreviewed renders nothing at all. */
+.review-pill, .review-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--verdict);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--verdict) 12%, transparent);
+  color: var(--verdict);
+  font-family: var(--font-body);
+  text-decoration: none;
+  white-space: nowrap;
 }
-.review-badge.review-looks-safe { background: var(--tint-ok); }
-.review-badge.review-needs-look { background: var(--tint-warn); }
-.review-badge.review-flagged { background: var(--tint-error); }
+.review-pill { padding: 0.35rem 0.8rem; font-size: 1rem; }
+.review-chip { padding: 0.1rem 0.5rem; font-size: 0.78rem; }
+.review-looks-safe { --verdict: var(--canopy); }
+.review-needs-look { --verdict: var(--attention); }
+.review-flagged { --verdict: var(--err-label); }
 .review-reasons { font-family: var(--font-body); font-size: 1rem; color: var(--surface-ink-dim); }
 
 /* The transparency page: the pre-rendered diagram scrolls inside itself,
@@ -3314,6 +3352,8 @@ pre.prompt, pre.hash {
   /* Phones: every control that holds an icon alone is a 44 × 44 target. */
   .copy { min-width: 44px; min-height: 44px; justify-content: center; }
   .search button, .site-nav a { min-height: 44px; }
+  /* The verdict pill stays a 44 px touch target on a phone. */
+  .review-pill { min-height: 44px; }
 }
 @media (max-width: 899px) {
   .row-desc { order: 1; }
@@ -3909,21 +3949,27 @@ details.run-prompt summary .run-where { color: var(--surface-ink); }
 .run-builtin { margin: 0.5rem 0 0; font-family: var(--font-mono); font-size: 0.82rem; color: var(--surface-ink-dim); }
 details.run-prompt pre.run-prompt-text { margin-top: 0.5rem; }
 
-/* The fuzzy verdict: one line under the description, tinted by label —
- * safe reads ok, needs-a-look warns, flagged errors — with the reasons
- * as plain prose below. Unreviewed renders nothing at all. */
-.review-badge {
-  display: inline-block;
-  margin: 0 0 0.5rem;
-  padding: 0.35rem 0.7rem;
-  border: 1px solid var(--tint-line);
-  border-radius: var(--radius-ctl);
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
+/* The fuzzy verdict: a compact pill in the datasheet's Review field and a
+ * small chip on catalogue rows — shield, words and border in the verdict
+ * ink on a 12% wash of itself, never the meaning tints — with the reasons
+ * as plain prose under the pill. Unreviewed renders nothing at all. */
+.review-pill, .review-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--verdict);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--verdict) 12%, transparent);
+  color: var(--verdict);
+  font-family: var(--font-body);
+  text-decoration: none;
+  white-space: nowrap;
 }
-.review-badge.review-looks-safe { background: var(--tint-ok); }
-.review-badge.review-needs-look { background: var(--tint-warn); }
-.review-badge.review-flagged { background: var(--tint-error); }
+.review-pill { padding: 0.35rem 0.8rem; font-size: 1rem; }
+.review-chip { padding: 0.1rem 0.5rem; font-size: 0.78rem; }
+.review-looks-safe { --verdict: var(--canopy); }
+.review-needs-look { --verdict: var(--attention); }
+.review-flagged { --verdict: var(--err-label); }
 .review-reasons { font-family: var(--font-body); font-size: 1rem; color: var(--surface-ink-dim); }
 
 /* The transparency page: the pre-rendered diagram scrolls inside itself,
@@ -3982,6 +4028,8 @@ pre.prompt, pre.hash {
   /* Phones: every control that holds an icon alone is a 44 × 44 target. */
   .copy { min-width: 44px; min-height: 44px; justify-content: center; }
   .search button, .site-nav a { min-height: 44px; }
+  /* The verdict pill stays a 44 px touch target on a phone. */
+  .review-pill { min-height: 44px; }
 }
 @media (max-width: 899px) {
   .row-desc { order: 1; }

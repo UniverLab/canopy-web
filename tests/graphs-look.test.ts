@@ -44,6 +44,16 @@ function contrast(a: string, b: string): number {
   return ((high ?? 0) + 0.05) / ((low ?? 0) + 0.05);
 }
 
+/** `color-mix(in srgb, ink amount, base)` over two opaque #rrggbb colours. */
+function mix(ink: string, base: string, amount: number): string {
+  const channels = [1, 3, 5].map((offset) => {
+    const top = parseInt(ink.slice(offset, offset + 2), 16);
+    const bottom = parseInt(base.slice(offset, offset + 2), 16);
+    return Math.round(top * amount + bottom * (1 - amount)).toString(16).padStart(2, "0");
+  });
+  return `#${channels.join("")}`;
+}
+
 describe("the tokens on the Canopy surface", () => {
   const css = readFileSync(TOKENS, "utf8");
   const bg = token(css, "bg-deep");
@@ -109,6 +119,48 @@ describe("the install command field", () => {
     expect(contrast(field, card)).toBeCloseTo(2.13, 1);
     expect(contrast(field, page)).toBeCloseTo(1.83, 1);
     expect(contrast(ink, field)).toBeCloseTo(9.3, 1);
+  });
+});
+
+describe("the verdict inks", () => {
+  const css = readFileSync(TOKENS, "utf8");
+  const page = token(css, "page");
+  const panel = token(css, "surface-panel");
+  const inks: Array<[string, string]> = [
+    ["looks-safe", token(css, "canopy")],
+    ["needs-look", token(css, "attention")],
+    ["flagged", token(css, "err-label")],
+  ];
+
+  it.each(inks)("keeps %s on the page at 4.5:1 or better", (_label, ink) => {
+    expect(contrast(ink, page)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it.each(inks)("keeps %s on its own 12% wash at 4.5:1 or better", (_label, ink) => {
+    expect(contrast(ink, mix(ink, panel, 0.12))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("pins the lowest verdict pair at 6.0:1, the safe ink on the page", () => {
+    const ratios = inks.flatMap(([, ink]) => [contrast(ink, page), contrast(ink, mix(ink, panel, 0.12))]);
+    expect(Math.min(...ratios)).toBeCloseTo(6.0, 1);
+  });
+});
+
+describe("the verdict rules never read red", () => {
+  const look = readFileSync(path.join(ROOT, "apps", "graphs", "src", "pages", "look.ts"), "utf8");
+
+  it("paints needs-look from the attention amber", () => {
+    const rule = /\.review-needs-look\s*\{[^}]*\}/.exec(look)?.[0] ?? "";
+    expect(rule).toContain("var(--attention)");
+  });
+
+  it("paints no verdict from the warn or error tints", () => {
+    const rules = [...look.matchAll(/\.review-[^{]*\{[^}]*\}/g)].map((match) => match[0]);
+    expect(rules.length).toBeGreaterThan(0);
+    for (const rule of rules) {
+      expect(rule).not.toContain("--tint-warn");
+      expect(rule).not.toContain("--tint-error");
+    }
   });
 });
 

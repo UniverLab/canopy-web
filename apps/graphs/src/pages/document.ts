@@ -20,6 +20,7 @@ import { VERDICT_LABELS, type StoredReview } from "../review.js";
 import { escapeHtml, renderMarkdown } from "./md.js";
 import { copyButton } from "./look.js";
 import { editorQuery, pagePath, type PageRef } from "./ref.js";
+import { reviewPill, reviewerOf } from "./review-badge.js";
 import { reportUrl, REPORT_REPOSITORY_HREF } from "./report.js";
 import { linkAttrs, type Page } from "./layout.js";
 import { attentionFor, type RunCommand, type RunPrompt, runsOf } from "./runs.js";
@@ -35,7 +36,6 @@ import {
   RUNS_HEADING,
   RUNS_REVIEW_LINE,
   RUNS_SECTION_ID,
-  TRANSPARENCY_HREF,
   SHEET_AGENTS,
   SHEET_EDGES,
   SHEET_ENSEMBLES,
@@ -43,6 +43,7 @@ import {
   SHEET_NAME,
   SHEET_NODES,
   SHEET_REF,
+  SHEET_REVIEW,
   SHEET_SOURCE,
   SHEET_STARS,
   SITE_NAME,
@@ -58,7 +59,6 @@ import {
   installCommand,
   nodesByKindLine,
   runsSummary,
-  verdictOf,
 } from "./copy.js";
 
 /** One line of twin text: flattened, with markdown punctuation backslashed. */
@@ -248,18 +248,25 @@ export interface DocumentPageOptions {
 }
 
 /**
- * The datasheet beside the plate: kind, name, source, ref and stars, then —
- * for graphs — nodes by kind, edges with the fail count, ensembles and the
- * agent nodes a harness must run, then install and the report link. A field
- * with no data is omitted, never printed as a placeholder. A standalone page
- * (a draft) keeps kind, name, the graph fields and the install box, and drops
- * everything that only makes sense for a published, sourced document.
+ * The datasheet beside the plate: kind, name, the verdict pill when
+ * reviewed (with the reasons under it for a careful or flagged verdict),
+ * source, ref and stars, then — for graphs — nodes by kind, edges with the
+ * fail count, ensembles and the agent nodes a harness must run, then
+ * install and the report link. A field with no data is omitted, never
+ * printed as a placeholder. A standalone page (a draft) keeps kind, name,
+ * the graph fields and the install box, and drops everything that only
+ * makes sense for a published, sourced document.
  */
 function datasheet(
   doc: Doc,
   document: JsonValue,
   ref: PageRef,
-  options: { install: string; standalone: boolean; patterns: Array<{ slug: string; title: string }> },
+  options: {
+    install: string;
+    standalone: boolean;
+    patterns: Array<{ slug: string; title: string }>;
+    review: StoredReview | null;
+  },
 ): { html: string; lines: string[] } {
   const install = options.install;
   const kindMark = iconSvg(ref.kind === "graph" ? "workflow" : "box");
@@ -271,6 +278,20 @@ function datasheet(
     `- ${SHEET_KIND}: ${ref.kind}`,
     `- ${SHEET_NAME}: ${mdText(doc.name)}`,
   ];
+  const review = options.review;
+  if (review !== null) {
+    const reasons = review.reasons !== "" &&
+        (review.verdict === "flagged" || review.verdict === "needs-look")
+      ? `<p class="review-reasons">${escapeHtml(review.reasons)}</p>`
+      : "";
+    fields.push(sheetField(SHEET_REVIEW, `${reviewPill(review)}${reasons}`));
+    lines.push(
+      `- ${SHEET_REVIEW}: ${VERDICT_LABELS[review.verdict]} (${reviewerOf(review.model)}, ${review.model})`,
+    );
+    if (reasons !== "") {
+      lines.push(`  ${mdText(review.reasons)}`);
+    }
+  }
   if (!options.standalone) {
     fields.push(sheetField(SHEET_SOURCE, externalLink(ref.repoUrl, doc.repo)));
     lines.push(`- ${SHEET_SOURCE}: ${ref.repoUrl}`);
@@ -361,6 +382,7 @@ export function documentPage(
     install,
     standalone,
     patterns: options.patterns ?? [],
+    review: options.review ?? null,
   });
   const badge = doc.official
     ? ` <span class="badge-official">${iconSvg("badgeCheck")}<span>${OFFICIAL_BADGE}</span></span>`
@@ -385,35 +407,11 @@ export function documentPage(
     `<a class="button" href="/editor${editorQuery(ref)}">${iconSvg("pencilRuler")}<span>` +
     `${ref.kind === "graph" ? EDITOR_EDIT_COPY : EDITOR_ADD_TO_GRAPH}</span></a>`;
   const actions = `<p>${[star, edit].filter((part) => part !== "").join(" ")}</p>`;
-  // The fuzzy verdict, when reviewed: "Verdict of <model>" links to the
-  // transparency page, the label carries the tint, the reasons follow for
-  // a flagged (or a careful) verdict. Unreviewed shows no badge at all.
-  const review = options.review ?? null;
-  const reviewBadge = review === null
-    ? ""
-    : `<p class="review-badge review-${review.verdict}">` +
-      `<a href="${TRANSPARENCY_HREF}">${escapeHtml(verdictOf(review.model))}</a>` +
-      `<span> · ${escapeHtml(VERDICT_LABELS[review.verdict])}</span></p>`;
-  const reviewReasons = review !== null && review.reasons !== "" &&
-      (review.verdict === "flagged" || review.verdict === "needs-look")
-    ? `<p class="review-reasons">${escapeHtml(review.reasons)}</p>`
-    : "";
-  const reviewTwin = review === null
-    ? []
-    : [
-      `${verdictOf(review.model)}: ${VERDICT_LABELS[review.verdict]} (${TRANSPARENCY_HREF})`,
-      ...(review.reasons !== "" && (review.verdict === "flagged" || review.verdict === "needs-look")
-        ? [review.reasons]
-        : []),
-      ``,
-    ];
 
   const html = [
     banner,
     `<h1 class="doc-title">${escapeHtml(doc.name)}${badge}</h1>`,
     `<p class="description">${escapeHtml(doc.description)}</p>`,
-    reviewBadge,
-    reviewReasons,
     actions,
     warning,
     `<div class="doc-cols">`,
@@ -430,7 +428,6 @@ export function documentPage(
     ``,
     doc.description,
     ``,
-    ...reviewTwin,
     ...(doc.official || standalone ? [] : [communityWarningMarkdown(`#${RUNS_SECTION_ID}`), ``]),
     ...sheet.lines,
     ``,

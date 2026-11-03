@@ -13,10 +13,12 @@
 import type { Doc } from "../documents.js";
 import { harnessColor } from "../../../../packages/plate/vocabulary.js";
 import { iconSvg } from "../../../../packages/look/icon-svg.js";
+import { VERDICT_LABELS, type StoredReview, type StoredReviews } from "../review.js";
 import { escapeHtml } from "./md.js";
 import { copyButton } from "./look.js";
 import { mdText } from "./document.js";
 import { docPath, docRef } from "./ref.js";
+import { reviewChip, reviewFor } from "./review-badge.js";
 import {
   NODES_LABEL,
   OFFICIAL_BADGE,
@@ -39,13 +41,13 @@ export function harnessDots(harnesses: string[]): string {
 
 /**
  * One index row's contents: the name in the display face, the kind badge,
- * the node count for graphs, harness dots, stars, last updated and the
- * install box. One flex line on desktop, three stacked lines under 900 px;
- * the description rides along as the row's second block. Official rows
- * carry the badge next to the name; community rows show their source
- * instead.
+ * the node count for graphs, harness dots, the verdict chip when reviewed,
+ * stars, last updated and the install box. One flex line on desktop, three
+ * stacked lines under 900 px; the description rides along as the row's
+ * second block. Official rows carry the badge next to the name; community
+ * rows show their source instead.
  */
-export function docRowInner(doc: Doc): string {
+export function docRowInner(doc: Doc, review: StoredReview | null = null): string {
   const install = installCommand(doc.kind, docRef(doc).ref);
   const standing = doc.official
     ? `<span class="badge-official">${iconSvg("badgeCheck")}<span>${OFFICIAL_BADGE}</span></span>`
@@ -67,6 +69,7 @@ export function docRowInner(doc: Doc): string {
     kind +
     nodes +
     harnessDots(doc.harnesses) +
+    (review === null ? "" : reviewChip(review)) +
     stars +
     updated +
     `<span class="row-install"><code>${escapeHtml(install)}</code>${copyButton(install)}</span>` +
@@ -75,23 +78,29 @@ export function docRowInner(doc: Doc): string {
 }
 
 /** One index row: the shared contents in its `<li>`. */
-export function docItem(doc: Doc): string {
-  return `<li class="row">${docRowInner(doc)}</li>`;
+export function docItem(doc: Doc, review: StoredReview | null = null): string {
+  return `<li class="row">${docRowInner(doc, review)}</li>`;
 }
 
-export function docList(docs: Doc[], emptyLine: string): string {
+export function docList(docs: Doc[], emptyLine: string, reviews: StoredReviews | null = null): string {
   if (docs.length === 0) {
     return `<p>${emptyLine}</p>`;
   }
-  return `<ol class="index">${docs.map(docItem).join("")}</ol>`;
+  return `<ol class="index">${docs.map((doc) => docItem(doc, reviewFor(reviews, doc))).join("")}</ol>`;
 }
 
-export function docListMarkdown(docs: Doc[], emptyLine: string): string {
+export function docListMarkdown(
+  docs: Doc[],
+  emptyLine: string,
+  reviews: StoredReviews | null = null,
+): string {
   if (docs.length === 0) {
     return `${emptyLine}\n`;
   }
-  const lines = docs.map(
-    (doc) => `- [${mdText(doc.name)}](${docPath(doc)}) — ${mdText(doc.description)} — ${docRef(doc).ref}`,
-  );
+  const lines = docs.map((doc) => {
+    const line = `- [${mdText(doc.name)}](${docPath(doc)}) — ${mdText(doc.description)} — ${docRef(doc).ref}`;
+    const review = reviewFor(reviews, doc);
+    return review === null ? line : `${line} · Verdict: ${VERDICT_LABELS[review.verdict]}`;
+  });
   return `${lines.join("\n")}\n`;
 }

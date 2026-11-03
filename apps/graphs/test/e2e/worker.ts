@@ -17,6 +17,7 @@
 import { createWorker, type Env } from "../../src/index.js";
 import { createGitHub } from "../../src/github.js";
 import { runIndexer } from "../../src/indexer.js";
+import { REVIEWS_KEY, reviewKey } from "../../src/review.js";
 import { FakeCache, FakeKV, fakeFetch, fileBody, type Stub } from "../fakes.js";
 import { officialStubs } from "../stubs.js";
 
@@ -54,6 +55,36 @@ const cache = new FakeCache();
 const kv = new FakeKV();
 const worker = createWorker({ fetchImpl: github.fetchImpl, cache });
 
+/** The model the fixture verdicts carry: shortens to "Muse" on the pill. */
+const REVIEW_MODEL = "muse-spark-1.3-contributor";
+
+/**
+ * Two fixture verdicts, after the index lands: hello-graph reads safe,
+ * evil reads flagged with reasons. hello-node stays unreviewed, so the
+ * home shows reviewed and unreviewed rows side by side.
+ */
+async function seedReviews(): Promise<void> {
+  const safe = {
+    verdict: "looks-safe",
+    reasons: "",
+    patterns: [],
+    hash: "e2e",
+    prompt: "v2",
+    model: REVIEW_MODEL,
+    reviewed_at: "2026-11-03T00:00:00.000Z",
+  };
+  const flagged = { ...safe, verdict: "flagged", reasons: "Pipes a download into a shell." };
+  await kv.put(reviewKey("graph", "UniverLab", "canopy-graphs", "hello-graph"), JSON.stringify(safe));
+  await kv.put(reviewKey("graph", "acme", "evil", "evil"), JSON.stringify(flagged));
+  await kv.put(REVIEWS_KEY, JSON.stringify({
+    built_at: "2026-11-03T00:00:00.000Z",
+    reviews: [
+      { kind: "graph", owner: "univerlab", repo: "canopy-graphs", slug: "hello-graph", ...safe },
+      { kind: "graph", owner: "acme", repo: "evil", slug: "evil", ...flagged },
+    ],
+  }));
+}
+
 let seeded: Promise<unknown> | null = null;
 
 function seed(): Promise<unknown> {
@@ -62,7 +93,7 @@ function seed(): Promise<unknown> {
       github: createGitHub({ fetchImpl: github.fetchImpl, cache: null }),
       index: kv,
       authenticated: false,
-    });
+    }).then(() => seedReviews());
   }
   return seeded;
 }
