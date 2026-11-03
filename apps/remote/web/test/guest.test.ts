@@ -514,33 +514,14 @@ describe("createGuestSession", () => {
     expect(outbound[2]).toEqual({ t: "input", id: "s1", data: b64encode(new Uint8Array([0x0d])) });
   });
 
-  it("sends prompts through the composer and answers ok and error", () => {
-    const { root, sent, session } = setupSession();
-    joinSession(session);
-    const area = root.querySelector<HTMLTextAreaElement>(".composer-input");
-    area!.value = "fix the build";
-    root.querySelector<HTMLButtonElement>(".composer-send")?.click();
-    const prompt = frames(sent)[1] as { t: string; req: string; id: string; text: string };
-    expect(prompt.t).toBe("prompt");
-    expect(prompt.id).toBe("s1");
-    expect(prompt.text).toBe("fix the build");
-    session.push(JSON.stringify({ t: "ok", req: prompt.req }));
-    expect(root.querySelector<HTMLElement>(".composer-ok")?.hidden).toBe(false);
-    expect(area?.value).toBe("");
-    area!.value = "again";
-    root.querySelector<HTMLButtonElement>(".composer-send")?.click();
-    const retry = frames(sent)[2] as { req: string };
-    session.push(JSON.stringify({ t: "error", req: retry.req, code: "busy", message: "host is busy" }));
-    expect(root.querySelector<HTMLElement>(".composer-error")?.textContent).toBe("host is busy");
-    expect(area?.value).toBe("again");
-  });
-
   it("offers no builder, no sheets and no spawn in a granted session", () => {
     const { root, session } = setupSession();
     joinSession(session);
-    expect(root.querySelector<HTMLButtonElement>(".composer-builder")?.hidden).toBe(true);
+    expect(root.querySelector("#term-builder")).toBeNull();
     expect(root.querySelector("#session-files")).toBeNull();
     expect(root.querySelector("#session-new")).toBeNull();
+    // The terminal is the only text input.
+    expect(root.querySelector("textarea")).toBeNull();
   });
 
   it("announces the exit on the session badge", () => {

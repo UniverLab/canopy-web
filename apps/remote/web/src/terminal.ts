@@ -122,6 +122,92 @@ function touchDistance(a: Touch, b: Touch): number {
   return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
 }
 
+// One-finger scroll: the first 8 px decide vertical (the terminal scrolls
+// its history) or horizontal (left to the browser, which pans the pane).
+export const TOUCH_GESTURE_PX = 8;
+
+export type TouchGestureKind = "undecided" | "vertical" | "horizontal";
+
+export function classifyTouchGesture(dx: number, dy: number): TouchGestureKind {
+  if (Math.max(Math.abs(dx), Math.abs(dy)) < TOUCH_GESTURE_PX) {
+    return "undecided";
+  }
+  // A tie at 45 degrees scrolls the terminal.
+  return Math.abs(dy) >= Math.abs(dx) ? "vertical" : "horizontal";
+}
+
+export interface TouchScrollSplit {
+  pane: number; // CSS px the pane absorbs by moving its own scrollTop.
+  terminal: number; // CSS px left for the terminal (the scroll remainder).
+}
+
+// Scroll chaining for one step: the zoomed pane moves first while it can
+// still go in the drag's direction, the rest goes to the terminal.
+// scrollDelta is positive downwards, like scrollTop and deltaY.
+export function splitTouchScroll(
+  scrollDelta: number,
+  scrollTop: number,
+  scrollHeight: number,
+  clientHeight: number,
+): TouchScrollSplit {
+  if (scrollDelta === 0) {
+    return { pane: 0, terminal: 0 };
+  }
+  const maxScroll = Math.max(0, scrollHeight - clientHeight);
+  const pane = Math.min(Math.max(scrollDelta, -scrollTop), maxScroll - scrollTop);
+  const terminal = scrollDelta - pane;
+  // Math.min/max can hand back -0 at a clamped edge; the contract is +0.
+  return { pane: pane === 0 ? 0 : pane, terminal: terminal === 0 ? 0 : terminal };
+}
+
+// The terminal half of a chained scroll as xterm's deltaY: finger-space CSS px back into unscaled px.
+export function touchWheelDelta(terminalPx: number, scale: number): number {
+  if (!(scale > 0)) {
+    return terminalPx;
+  }
+  return terminalPx / scale;
+}
+
+// Fling: lifting a vertical drag faster than 0.3 px/ms (over its last 100 ms)
+// keeps scrolling with a 0.95 decay per frame until under 0.05 px/ms.
+export const FLING_WINDOW_MS = 100;
+export const FLING_START_PX_PER_MS = 0.3;
+export const FLING_DECAY = 0.95;
+export const FLING_STOP_PX_PER_MS = 0.05;
+
+export interface FlingSample {
+  y: number; // Finger clientY in CSS px.
+  t: number; // Event timeStamp in ms.
+}
+
+// Finger velocity over the samples' last 100 ms, in px/ms (positive down).
+// Fewer than two samples in the window, or no time elapsed, means no fling.
+export function flingVelocity(samples: readonly FlingSample[]): number {
+  const end = samples[samples.length - 1];
+  if (!end || samples.length < 2) {
+    return 0;
+  }
+  const cutoff = end.t - FLING_WINDOW_MS;
+  const start = samples.find((sample) => sample.t >= cutoff) ?? end;
+  const dt = end.t - start.t;
+  if (!(dt > 0)) {
+    return 0;
+  }
+  return (end.y - start.y) / dt;
+}
+
+export function decayFlingVelocity(velocity: number): number {
+  return velocity * FLING_DECAY;
+}
+
+export function shouldStartFling(velocity: number): boolean {
+  return Math.abs(velocity) > FLING_START_PX_PER_MS;
+}
+
+export function shouldContinueFling(velocity: number): boolean {
+  return Math.abs(velocity) >= FLING_STOP_PX_PER_MS;
+}
+
 export function createXtermHandle(
   host: HTMLElement,
   cols: number,
@@ -201,7 +287,14 @@ export class TerminalView {
   private following = true;
   private alternate = false;
   private stopObserving: (() => void) | null = null;
+  private paneClick: { parent: HTMLElement; handler: () => void } | null = null;
   private pinchStart: { distance: number; zoom: number } | null = null;
+  private touchGesture: {
+    startX: number; startY: number; lastX: number; lastY: number;
+    kind: TouchGestureKind; samples: FlingSample[];
+    clientX: number; clientY: number;
+  } | null = null;
+  private flingFrame: number | null = null;
   private generation = 0;
   private readyPromise: Promise<void> = Promise.resolve();
   private resolveReady: (() => void) | null = null;
@@ -233,12 +326,31 @@ export class TerminalView {
     this.host = host;
     this.pane = parent;
     this.rows = rows;
-    host.addEventListener("click", () => this.handle?.focus());
-    fit.addEventListener("touchstart", (ev) => this.onTouchStart(ev), { passive: true });
-    fit.addEventListener("touchmove", (ev) => this.onTouchMove(ev), { passive: true });
-    fit.addEventListener("touchend", () => {
-      this.pinchStart = null;
-    });
+    // Tapping anywhere in the pane — the terminal or its padding — focuses
+    // xterm's hidden textarea so the phone keyboard opens. The listener
+    // lives on the shell-owned pane (host clicks bubble up to it), so
+    // dispose removes it; the fit's own listeners go with the scaffold.
+    const onPaneClick = (): void => {
+      if (this.handle) {
+        this.handle.focus();
+        return;
+      }
+      // Tapped while xterm is still behind the font gate: focus once it
+      // opens, unless a remount or dispose replaced this attach first.
+      void this.readyPromise.then(() => {
+        if (this.generation === generation) {
+          this.handle?.focus();
+        }
+      });
+    };
+    parent.addEventListener("click", onPaneClick);
+    this.paneClick = { parent, handler: onPaneClick };
+    // One-finger scroll (capture pre-empts xterm's own touch scroll; the move
+    // listener is non-passive so vertical drags preventDefault, horizontal never do).
+    fit.addEventListener("touchstart", (ev) => this.onTouchStart(ev), { passive: true, capture: true });
+    fit.addEventListener("touchmove", (ev) => this.onTouchMove(ev), { passive: false, capture: true });
+    fit.addEventListener("touchend", (ev) => this.onTouchEnd(ev), { passive: true });
+    fit.addEventListener("touchcancel", () => this.onTouchCancel(), { passive: true });
     const refit = () => this.refit();
     if (typeof ResizeObserver !== "undefined") {
       const observer = new ResizeObserver(refit);
@@ -401,8 +513,13 @@ export class TerminalView {
   dispose(): void {
     this.generation += 1;
     this.settleReady();
+    this.stopFling();
     this.stopObserving?.();
     this.stopObserving = null;
+    if (this.paneClick) {
+      this.paneClick.parent.removeEventListener("click", this.paneClick.handler);
+      this.paneClick = null;
+    }
     this.handle?.dispose();
     this.handle = null;
     this.fit?.remove();
@@ -412,6 +529,7 @@ export class TerminalView {
     this.pane = null;
     this.rows = 0;
     this.pinchStart = null;
+    this.touchGesture = null;
     this.following = true;
     this.alternate = false;
     this.pendingWrites.length = 0;
@@ -427,6 +545,9 @@ export class TerminalView {
     this.handle = handle;
     handle.onUserInput((text) => this.callbacks.onUserInput(text));
     handle.onScroll(() => this.refreshFollow());
+    // Wheel and touch scrolling never fire onScroll (xterm suppresses it on
+    // the viewport path), so follow-bottom watches the viewport itself.
+    host.querySelector(".xterm-viewport")?.addEventListener("scroll", () => this.refreshFollow());
     handle.onBufferChange?.(() => this.syncBufferMode());
     handle.onReady(() => this.settleReady());
     for (const data of this.pendingWrites.splice(0)) {
@@ -481,22 +602,194 @@ export class TerminalView {
   }
 
   private onTouchStart(ev: TouchEvent): void {
+    this.stopFling();
     if (ev.touches.length === 2) {
+      // The second finger turns the gesture into the existing pinch: drop
+      // one-finger tracking and let the event reach xterm untouched.
+      this.touchGesture = null;
       const [a, b] = [ev.touches[0], ev.touches[1]];
       if (a && b) {
         this.pinchStart = { distance: touchDistance(a, b), zoom: this.zoom };
       }
+      return;
     }
+    if (ev.touches.length !== 1) {
+      this.touchGesture = null;
+      this.pinchStart = null;
+      return;
+    }
+    const touch = ev.touches[0];
+    if (!touch) {
+      return;
+    }
+    this.beginGesture(touch, ev.timeStamp);
+    // One finger stays with the view, never with xterm's touch scroll as well.
+    ev.stopPropagation();
   }
 
   private onTouchMove(ev: TouchEvent): void {
-    if (ev.touches.length !== 2 || !this.pinchStart) {
+    if (ev.touches.length === 2) {
+      // The existing pinch, untouched — xterm still sees it as before.
+      if (!this.pinchStart) {
+        return;
+      }
+      const [a, b] = [ev.touches[0], ev.touches[1]];
+      if (!a || !b) {
+        return;
+      }
+      this.setZoom(zoomFromPinch(this.pinchStart.distance, touchDistance(a, b), this.pinchStart.zoom));
       return;
     }
-    const [a, b] = [ev.touches[0], ev.touches[1]];
-    if (!a || !b) {
+    const gesture = this.touchGesture;
+    const touch = ev.touches[0];
+    if (!gesture || !touch || ev.touches.length !== 1) {
       return;
     }
-    this.setZoom(zoomFromPinch(this.pinchStart.distance, touchDistance(a, b), this.pinchStart.zoom));
+    ev.stopPropagation();
+    gesture.clientX = touch.clientX;
+    gesture.clientY = touch.clientY;
+    if (gesture.kind === "undecided") {
+      gesture.kind = classifyTouchGesture(touch.clientX - gesture.startX, touch.clientY - gesture.startY);
+      if (gesture.kind === "undecided") {
+        gesture.lastX = touch.clientX;
+        gesture.lastY = touch.clientY;
+        return;
+      }
+      // The classifying move carries the whole gesture so far: nothing under 8 px is dropped.
+      gesture.lastX = gesture.startX;
+      gesture.lastY = gesture.startY;
+    }
+    if (gesture.kind === "horizontal") {
+      // Left to the browser: the zoomed pane pans sideways natively.
+      gesture.lastX = touch.clientX;
+      gesture.lastY = touch.clientY;
+      return;
+    }
+    ev.preventDefault();
+    gesture.samples.push({ y: touch.clientY, t: ev.timeStamp });
+    const fingerDy = touch.clientY - gesture.lastY;
+    gesture.lastX = touch.clientX;
+    gesture.lastY = touch.clientY;
+    this.applyTouchScroll(fingerDy, touch.clientX, touch.clientY);
+  }
+
+  private onTouchEnd(ev: TouchEvent): void {
+    this.pinchStart = null;
+    const gesture = this.touchGesture;
+    if (ev.touches.length === 1) {
+      // A lifted finger leaves one behind: it starts a fresh gesture from
+      // where it is, never a jump from the old anchor.
+      const touch = ev.touches[0];
+      this.touchGesture = null;
+      if (touch) {
+        this.beginGesture(touch, ev.timeStamp);
+      }
+      return;
+    }
+    this.touchGesture = null;
+    if (ev.touches.length !== 0 || !gesture || gesture.kind !== "vertical") {
+      return;
+    }
+    // A tap and a horizontal drag never fling; a fast vertical tail does.
+    const lifted = ev.changedTouches[0];
+    const samples = lifted ? [...gesture.samples, { y: lifted.clientY, t: ev.timeStamp }] : gesture.samples;
+    const velocity = flingVelocity(samples);
+    if (shouldStartFling(velocity)) {
+      this.startFling(velocity, gesture.clientX, gesture.clientY);
+    }
+  }
+
+  private onTouchCancel(): void {
+    this.pinchStart = null;
+    this.touchGesture = null;
+  }
+
+  private beginGesture(touch: Touch, timeStamp: number): void {
+    this.touchGesture = {
+      startX: touch.clientX, startY: touch.clientY,
+      lastX: touch.clientX, lastY: touch.clientY,
+      kind: "undecided",
+      samples: [{ y: touch.clientY, t: timeStamp }],
+      clientX: touch.clientX, clientY: touch.clientY,
+    };
+  }
+
+  // One vertical step in finger space (positive when the finger moved down):
+  // the pane absorbs what it can while zoomed, the rest reaches xterm as a
+  // synthetic wheel on .xterm — history scroll or mouse reports, like a real wheel.
+  private applyTouchScroll(fingerDy: number, clientX: number, clientY: number): void {
+    const scrollDelta = -fingerDy;
+    if (scrollDelta === 0) {
+      return;
+    }
+    let terminalPx = scrollDelta;
+    const pane = this.pane;
+    if (pane) {
+      const split = splitTouchScroll(scrollDelta, pane.scrollTop, pane.scrollHeight, pane.clientHeight);
+      if (split.pane !== 0) {
+        pane.scrollTop += split.pane;
+      }
+      terminalPx = split.terminal;
+    }
+    if (terminalPx === 0) {
+      return;
+    }
+    const target = this.host?.querySelector(".xterm");
+    if (!target) {
+      return;
+    }
+    target.dispatchEvent(
+      new WheelEvent("wheel", {
+        deltaMode: WheelEvent.DOM_DELTA_PIXEL,
+        deltaX: 0,
+        deltaY: touchWheelDelta(terminalPx, this.currentScale()),
+        clientX,
+        clientY,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  }
+
+  private currentScale(): number {
+    const scale = Number(this.fit?.dataset.scale);
+    return scale > 0 ? scale : 1;
+  }
+
+  private startFling(velocity: number, clientX: number, clientY: number): void {
+    this.stopFling();
+    if (typeof globalThis.requestAnimationFrame !== "function") {
+      return;
+    }
+    let speed = velocity;
+    let previous = -1;
+    const step = (now: number): void => {
+      if (this.flingFrame === null) {
+        return;
+      }
+      if (previous < 0) {
+        previous = now;
+      } else {
+        const dt = now - previous;
+        previous = now;
+        if (dt > 0) {
+          this.applyTouchScroll(speed * dt, clientX, clientY);
+        }
+      }
+      speed = decayFlingVelocity(speed);
+      if (!shouldContinueFling(speed)) {
+        this.flingFrame = null;
+        return;
+      }
+      this.flingFrame = globalThis.requestAnimationFrame(step);
+    };
+    this.flingFrame = globalThis.requestAnimationFrame(step);
+  }
+
+  private stopFling(): void {
+    if (this.flingFrame !== null) {
+      globalThis.cancelAnimationFrame(this.flingFrame);
+      this.flingFrame = null;
+    }
   }
 }

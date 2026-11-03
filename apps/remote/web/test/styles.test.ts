@@ -22,7 +22,6 @@ describe("web/src/styles.css", () => {
 
   it("labels error blocks in the error ink", () => {
     for (const selector of [
-      ".composer-error::before",
       ".sheet-error:not(:empty)::before",
       "#pair-error:not(:empty)::before",
       ".signout-error:not(:empty)::before",
@@ -33,8 +32,8 @@ describe("web/src/styles.css", () => {
     expect(styles).toContain("color: var(--err-label)");
   });
 
-  it("keeps the single teal fill on Send in the session view", () => {
-    const rule = styles.slice(styles.indexOf(".composer-send"));
+  it("keeps the single teal fill on primary buttons", () => {
+    const rule = styles.slice(styles.indexOf("button.primary"));
     expect(rule.slice(0, rule.indexOf("}"))).toContain("background: var(--accent)");
   });
 

@@ -13,6 +13,7 @@ class FakeHandle implements TerminalHandle {
   written: Uint8Array[] = [];
   clears = 0;
   disposed = false;
+  focuses = 0;
   private inputListeners: ((text: string) => void)[] = [];
 
   write = (data: Uint8Array): void => {
@@ -21,7 +22,9 @@ class FakeHandle implements TerminalHandle {
   clear = (): void => {
     this.clears += 1;
   };
-  focus = (): void => {};
+  focus = (): void => {
+    this.focuses += 1;
+  };
   scrollToBottom = (): void => {};
   isAtBottom = (): boolean => true;
   onUserInput = (callback: (text: string) => void): (() => void) => {
@@ -52,6 +55,7 @@ function item(overrides: Partial<SessionItem> = {}): SessionItem {
     model: "spark",
     workdir: "/home/u/proj",
     status: "running",
+    kind: "agent",
     lastOutputAt: NOW - 12_000,
     ...overrides,
   };
@@ -63,7 +67,6 @@ interface Setup {
   store: SessionStore;
   opened: string[];
   inputs: Uint8Array[];
-  sends: { text: string; req: string }[];
   handles: FakeHandle[];
   counts: { leaves: number; retries: number };
 }
@@ -74,7 +77,6 @@ function setup(): Setup {
   const store = new SessionStore();
   const opened: string[] = [];
   const inputs: Uint8Array[] = [];
-  const sends: { text: string; req: string }[] = [];
   const handles: FakeHandle[] = [];
   const counts = { leaves: 0, retries: 0 };
   const factory: TerminalFactory = () => {
@@ -96,11 +98,10 @@ function setup(): Setup {
       onSignOut: () => {},
       onForgetDevice: () => {},
       onInput: (bytes) => inputs.push(bytes),
-      onComposerSend: (text, req) => sends.push({ text, req }),
     },
     { terminalFactory: factory },
   );
-  return { root, view, store, opened, inputs, sends, handles, counts };
+  return { root, view, store, opened, inputs, handles, counts };
 }
 
 afterEach(() => {
@@ -145,12 +146,12 @@ describe("guest entry screens", () => {
     footerAfterMain();
     view.showSession("s1", "build");
     footerAfterMain();
-    // The terminal, key bar and composer stay inside the main; the footer
-    // follows it, so nothing scrolls the terminal out or covers it.
+    // The terminal and key bar stay inside the main; the footer follows
+    // it, so nothing scrolls the terminal out or covers it.
     const main = root.querySelector("main.session-view");
     expect(main?.querySelector("#term-pane")).not.toBeNull();
-    expect(main?.querySelectorAll("#keybar .key").length).toBe(9);
-    expect(main?.querySelector(".composer-input")).not.toBeNull();
+    expect(main?.querySelectorAll("#keybar .key").length).toBe(10);
+    expect(main?.querySelector("textarea")).toBeNull();
     expect(root.querySelector("main.session-view footer.look-colophon")).toBeNull();
   });
 
@@ -214,16 +215,15 @@ describe("guest session list", () => {
 });
 
 describe("guest session view", () => {
-  it("shows the owner's terminal, key bar and composer, minus the builder", () => {
+  it("shows the owner's terminal and key bar, minus the builder", () => {
     const { root, view, counts } = setup();
     view.showSession("s1", "build");
     expect(root.querySelector(".session-title")?.textContent).toBe("build");
     expect(root.querySelector("#term-pane .term-placeholder")?.textContent).toBe("Attaching…");
-    expect(root.querySelectorAll("#keybar button.key").length).toBe(9);
-    expect(root.querySelector(".composer-input")).not.toBeNull();
-    expect(root.querySelector(".composer-send")).not.toBeNull();
-    // No builder, no sheets, no Files: a guest sends text prompts only.
-    expect(root.querySelector<HTMLButtonElement>(".composer-builder")?.hidden).toBe(true);
+    expect(root.querySelectorAll("#keybar button.key").length).toBe(10);
+    // The terminal is the only text input; no builder, no Files either.
+    expect(root.querySelector("textarea")).toBeNull();
+    expect(root.querySelector("#term-builder")).toBeNull();
     expect(root.querySelector("#session-files")).toBeNull();
     root.querySelector<HTMLButtonElement>("#session-back")?.click();
     expect(counts.leaves).toBe(1);
@@ -250,13 +250,10 @@ describe("guest session view", () => {
     view.ensureTerminal("s1", 80, 24);
     view.ensureTerminal("s1", 80, 24);
     expect(handles.length).toBe(1);
-    // A changed host size remounts the terminal but keeps the draft.
-    const area = document.querySelector<HTMLTextAreaElement>(".composer-input");
-    area!.value = "draft kept";
+    // A changed host size remounts the terminal.
     view.ensureTerminal("s1", 100, 30);
     expect(handles.length).toBe(2);
     expect(handles[0]?.disposed).toBe(true);
-    expect(document.querySelector<HTMLTextAreaElement>(".composer-input")?.value).toBe("draft kept");
   });
 
   it("sends typed text and key-bar keys as input", () => {
@@ -286,24 +283,34 @@ describe("guest session view", () => {
     );
   });
 
-  it("sends prompts through the composer and answers ok and error", () => {
-    const { root, view, sends } = setup();
-    view.showSession("s1", "build");
-    const area = root.querySelector<HTMLTextAreaElement>(".composer-input");
-    area!.value = "fix the build";
-    root.querySelector<HTMLButtonElement>(".composer-send")?.click();
-    expect(sends.length).toBe(1);
-    expect(sends[0]?.text).toBe("fix the build");
-    view.composerOk(sends[0]?.req ?? "");
-    expect(root.querySelector<HTMLElement>(".composer-ok")?.hidden).toBe(false);
-    expect(area?.value).toBe("");
-    area!.value = "again";
-    root.querySelector<HTMLButtonElement>(".composer-send")?.click();
-    view.composerError("host is busy", sends[1]?.req ?? null);
-    const error = root.querySelector<HTMLElement>(".composer-error");
-    expect(error?.hidden).toBe(false);
-    expect(error?.textContent).toBe("host is busy");
-    expect(area?.value).toBe("again");
+  it("focuses the terminal once on attach under a fine pointer", async () => {
+    const { view, handles } = setup();
+    const realMatchMedia = globalThis.matchMedia;
+    globalThis.matchMedia = ((query: string) => ({
+      matches: query === "(pointer: fine)",
+    })) as unknown as typeof globalThis.matchMedia;
+    try {
+      view.showSession("s1", "build");
+      view.ensureTerminal("s1", 80, 24);
+      await Promise.resolve();
+      expect(handles[0]?.focuses).toBe(1);
+    } finally {
+      globalThis.matchMedia = realMatchMedia;
+    }
+  });
+
+  it("leaves the terminal unfocused on attach without a fine pointer", async () => {
+    const { view, handles } = setup();
+    const realMatchMedia = globalThis.matchMedia;
+    globalThis.matchMedia = (() => ({ matches: false })) as unknown as typeof globalThis.matchMedia;
+    try {
+      view.showSession("s1", "build");
+      view.ensureTerminal("s1", 80, 24);
+      await Promise.resolve();
+      expect(handles[0]?.focuses).toBe(0);
+    } finally {
+      globalThis.matchMedia = realMatchMedia;
+    }
   });
 
   it("patches the exit badge and the header in place, keeping the terminal", () => {

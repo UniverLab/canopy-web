@@ -92,6 +92,10 @@ export class GraphStore {
     }
     this.summary = reply.summary;
     this.doc = reply.doc;
+    // The reply carries the first live state: apply it exactly like a
+    // push, so the view paints without waiting for the next one.
+    this.state = reply.state;
+    this.receivedAt = Date.now();
     this.notify();
   }
 

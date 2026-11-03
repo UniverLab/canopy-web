@@ -13,6 +13,7 @@ function item(overrides: Partial<SessionItem> = {}): SessionItem {
     model: "spark",
     workdir: "/home/u/proj",
     status: "running",
+    kind: "agent",
     lastOutputAt: NOW - 12_000,
     ...overrides,
   };
@@ -79,9 +80,9 @@ describe("renderSessions", () => {
 
   it("marks what each row is: bot, shell or the square of a dead one", () => {
     const { root } = render([
-      item({ id: "agent", cli: "muse" }),
-      item({ id: "shell", cli: "" }),
-      item({ id: "dead", cli: "muse", status: "exited" }),
+      item({ id: "agent", cli: "muse", kind: "agent" }),
+      item({ id: "shell", cli: "", kind: "terminal" }),
+      item({ id: "dead", cli: "muse", status: "exited", kind: "agent" }),
     ]);
     const kind = (id: string) =>
       root.querySelector(`[data-session="${id}"] .session-kind`)?.getAttribute("data-kind");
@@ -130,6 +131,174 @@ describe("renderSessions", () => {
     expect(root.querySelector("#session-new")).toBeNull();
     root.querySelector<HTMLButtonElement>('[data-session="s1"]')?.click();
     expect(opened).toEqual(["s1"]);
+  });
+
+  it("sessions-groups-ordering: agents above terminals whatever the names", () => {
+    const { root } = render([
+      item({ id: "t1", name: "aaa-shell", kind: "terminal", cli: "" }),
+      item({ id: "a1", name: "zzz-agent", kind: "agent" }),
+      item({ id: "a2", name: "mmm-agent", kind: "agent" }),
+      item({ id: "t2", name: "zzz-shell", kind: "terminal", cli: "" }),
+    ]);
+    const order = [...root.querySelectorAll("[data-session]")].map((row) =>
+      row.getAttribute("data-session"),
+    );
+    expect(order).toEqual(["a2", "a1", "t1", "t2"]);
+    const headings = [...root.querySelectorAll(".session-group")].map((h) => h.textContent);
+    expect(headings).toEqual(["Agents", "Terminals"]);
+    expect(root.querySelectorAll("ul.session-list")).toHaveLength(2);
+  });
+
+  it("sessions-groups-icon-per-kind: the host kind picks the mark, not the cli", () => {
+    const { root } = render([
+      item({ id: "bare-agent", cli: "", kind: "agent" }),
+      item({ id: "cli-shell", cli: "muse", kind: "terminal" }),
+    ]);
+    const mark = (id: string) =>
+      root.querySelector(`[data-session="${id}"] .session-kind`)?.getAttribute("data-kind");
+    expect(mark("bare-agent")).toBe("bot");
+    expect(mark("cli-shell")).toBe("squareTerminal");
+  });
+
+  it("sessions-groups-headings-only-for-non-empty: one group hides the other", () => {
+    const agents = render([item({ id: "a1", kind: "agent" })]);
+    expect([...agents.root.querySelectorAll(".session-group")].map((h) => h.textContent)).toEqual([
+      "Agents",
+    ]);
+    expect(agents.root.querySelectorAll("ul.session-list")).toHaveLength(1);
+    const terminals = render([item({ id: "t1", kind: "terminal", cli: "" })]);
+    expect(
+      [...terminals.root.querySelectorAll(".session-group")].map((h) => h.textContent),
+    ).toEqual(["Terminals"]);
+    expect(terminals.root.querySelectorAll("ul.session-list")).toHaveLength(1);
+    const empty = render([]);
+    expect(empty.root.querySelector(".session-group")).toBeNull();
+    expect(empty.root.querySelector("p.empty")?.textContent).toBe("No sessions on this host.");
+  });
+
+  it("sessions-groups-unknown-kind: anything but terminal reads as an agent", () => {
+    const { root } = render([
+      item({ id: "odd", name: "odd", kind: "sidecar" }),
+      item({ id: "blank", name: "blank", kind: "" }),
+      item({ id: "shell", name: "shell", kind: "terminal", cli: "" }),
+    ]);
+    const lists = root.querySelectorAll("ul.session-list");
+    expect(lists).toHaveLength(2);
+    const inList = (list: number) =>
+      [...(lists[list]?.querySelectorAll("[data-session]") ?? [])].map((row) =>
+        row.getAttribute("data-session"),
+      );
+    expect(inList(0)).toEqual(["blank", "odd"]);
+    expect(inList(1)).toEqual(["shell"]);
+    const mark = (id: string) =>
+      root.querySelector(`[data-session="${id}"] .session-kind`)?.getAttribute("data-kind");
+    expect(mark("odd")).toBe("bot");
+    expect(mark("blank")).toBe("bot");
+  });
+
+  it("sessions-groups-guest: the shared list groups identically", () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    renderSessions(
+      root,
+      [
+        item({ id: "t1", name: "aaa-shell", kind: "terminal", cli: "" }),
+        item({ id: "a1", name: "zzz-agent", kind: "agent" }),
+      ],
+      NOW,
+      { onOpen: () => {}, onNew: () => {} },
+      undefined,
+      true,
+      true,
+    );
+    expect(root.querySelector(".sessions-head h2")?.textContent).toBe("Shared sessions");
+    expect(root.querySelector("#session-new")).toBeNull();
+    expect([...root.querySelectorAll(".session-group")].map((h) => h.textContent)).toEqual([
+      "Agents",
+      "Terminals",
+    ]);
+    const order = [...root.querySelectorAll("[data-session]")].map((row) =>
+      row.getAttribute("data-session"),
+    );
+    expect(order).toEqual(["a1", "t1"]);
+  });
+
+  it("sessions-groups-shelf-above: the host shelf row stays above the first group", () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    renderSessions(
+      root,
+      [
+        item({ id: "t1", name: "aaa-shell", kind: "terminal", cli: "" }),
+        item({ id: "a1", name: "zzz-agent", kind: "agent" }),
+      ],
+      NOW,
+      { onOpen: () => {}, onNew: () => {} },
+      { enabled: true, unseen: 2, onOpenShelf: () => {} },
+    );
+    const order = [...root.querySelectorAll("#host-shelf-row, .session-group")].map((el) =>
+      el.id === "host-shelf-row" ? "shelf" : el.textContent,
+    );
+    expect(order).toEqual(["shelf", "Agents", "Terminals"]);
+  });
+
+  it("sessions-union-row: one Shelf row at zero files, no per-row counts", () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    let opened = 0;
+    renderSessions(root, [item()], NOW, { onOpen: () => {}, onNew: () => {} }, {
+      enabled: true,
+      unseen: 0,
+      onOpenShelf: () => {
+        opened += 1;
+      },
+    });
+    const row = root.querySelector("#host-shelf-row");
+    expect(row?.querySelector(".session-name")?.textContent).toBe("Shelf");
+    expect(row?.querySelector(".session-sub")?.textContent).toBe(
+      "Files from the host and its sessions",
+    );
+    expect(root.querySelector<HTMLElement>("#shelf-row-badge")?.hidden).toBe(true);
+    expect(root.querySelector(".session-files")).toBeNull();
+    expect(root.querySelector(".session-files-count")).toBeNull();
+    root.querySelector<HTMLButtonElement>("#host-shelf-row")?.click();
+    expect(opened).toBe(1);
+  });
+
+  it("sessions-union-badge: the row badges the total unseen", () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    renderSessions(root, [item()], NOW, { onOpen: () => {}, onNew: () => {} }, {
+      enabled: true,
+      unseen: 3,
+      onOpenShelf: () => {},
+    });
+    const badge = root.querySelector<HTMLElement>("#shelf-row-badge");
+    expect(badge?.hidden).toBe(false);
+    expect(badge?.textContent).toBe("3");
+  });
+
+  it("sessions-union-empty: zero sessions keeps the row and the empty note", () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    renderSessions(root, [], NOW, { onOpen: () => {}, onNew: () => {} }, {
+      enabled: true,
+      unseen: 0,
+      onOpenShelf: () => {},
+    });
+    expect(root.querySelector("#host-shelf-row")).not.toBeNull();
+    expect(root.querySelector("p.empty")?.textContent).toBe("No sessions on this host.");
+  });
+
+  it("sessions-union-off: no row without the feature", () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    renderSessions(root, [item()], NOW, { onOpen: () => {}, onNew: () => {} }, {
+      enabled: false,
+      unseen: 0,
+      onOpenShelf: () => {},
+    });
+    expect(root.querySelector("#host-shelf-row")).toBeNull();
   });
 
   it("tells a guest what an empty grant means", () => {

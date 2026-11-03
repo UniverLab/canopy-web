@@ -31,6 +31,7 @@ describe("keyBytesWithModifiers", () => {
     expect([...keyBytesWithModifiers("esc", NONE)]).toEqual([0x1b]);
     expect([...keyBytesWithModifiers("tab", NONE)]).toEqual([0x09]);
     expect([...keyBytesWithModifiers("enter", NONE)]).toEqual([0x0d]);
+    expect([...keyBytesWithModifiers("backspace", NONE)]).toEqual([0x7f]);
     expect([...keyBytesWithModifiers("up", NONE)]).toEqual([0x1b, 0x5b, 0x41]);
     expect([...keyBytesWithModifiers("down", NONE)]).toEqual([0x1b, 0x5b, 0x42]);
     expect([...keyBytesWithModifiers("right", NONE)]).toEqual([0x1b, 0x5b, 0x43]);
@@ -42,6 +43,12 @@ describe("keyBytesWithModifiers", () => {
       expect([...keyBytesWithModifiers("esc", mods)]).toEqual([0x1b]);
       expect([...keyBytesWithModifiers("enter", mods)]).toEqual([0x0d]);
     }
+  });
+
+  it("sends BS for Ctrl+Backspace and ignores Shift", () => {
+    expect([...keyBytesWithModifiers("backspace", CTRL)]).toEqual([0x08]);
+    expect([...keyBytesWithModifiers("backspace", BOTH)]).toEqual([0x08]);
+    expect([...keyBytesWithModifiers("backspace", SHIFT)]).toEqual([0x7f]);
   });
 
   it("sends back-tab with Shift latched", () => {

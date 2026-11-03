@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Watching graphs against the fake host: the Graphs tab lists both
+// Watching graphs against the fake host: the Graphs tab lists all five
 // fixtures, the running graph opens on a plate with one lit node over
 // its spec checklist, pushes move the lit node and tick the specs, and
 // leaving the view unwatches. The fake host also ticks on its own every
@@ -21,10 +21,10 @@ async function litNodeKey(page: Page): Promise<string | null> {
 test.beforeEach(async ({ page }) => {
   await page.goto("/fake.html");
   await page.locator('[data-tab="graphs"]').click();
-  await expect(page.locator(".graph-row")).toHaveCount(3);
+  await expect(page.locator(".graph-row")).toHaveCount(5);
 });
 
-test("lists the three graphs with chips, fractions, specs and workdirs", async ({ page }) => {
+test("lists the five graphs with chips, fractions, specs and workdirs", async ({ page }) => {
   // Showing the tab asked the host for the list.
   const sent = await page.evaluate(() => window.__fake.sent());
   expect(sent).toContainEqual(expect.objectContaining({ t: "graphs" }));
@@ -45,6 +45,16 @@ test("lists the three graphs with chips, fractions, specs and workdirs", async (
   await expect(builder.locator(".graph-name")).toHaveText("canopy-builder");
   await expect(builder.locator(".status-chip")).toHaveAttribute("data-status", "running");
   await expect(builder.locator(".graph-count")).toHaveText("0/3");
+
+  const paused = page.locator('[data-graph="g-paused"]');
+  await expect(paused.locator(".graph-name")).toHaveText("paused-sketch");
+  await expect(paused.locator(".status-chip")).toHaveAttribute("data-status", "paused");
+  await expect(paused.locator(".graph-count")).toHaveText("1/2");
+
+  const failed = page.locator('[data-graph="g-failed"]');
+  await expect(failed.locator(".graph-name")).toHaveText("failed-sketch");
+  await expect(failed.locator(".status-chip")).toHaveAttribute("data-status", "failed");
+  await expect(failed.locator(".graph-count")).toHaveText("2/5");
 });
 
 test("watches the running graph live on its plate and checklist", async ({ page }) => {

@@ -170,8 +170,7 @@ button:active {
   filter: brightness(0.94);
 }
 
-button.primary,
-.composer-send {
+button.primary {
   background: var(--accent);
   color: var(--accent-ink);
   border-color: transparent;
@@ -493,6 +492,12 @@ label > textarea {
   margin: 0.75rem 0;
 }
 
+/* The Agents / Terminals group headings: the h3 scale, one step down
+ * from the Sessions title, spacing only. */
+.session-group {
+  margin: 0.75rem 0 0.5rem;
+}
+
 .session-list {
   list-style: none;
   margin: 0;
@@ -620,7 +625,9 @@ label > textarea {
   padding: 8px;
   overflow: auto;
   overscroll-behavior: contain;
-  touch-action: pan-x pan-y;
+  /* The browser only ever pans sideways here: a vertical drag is the
+   * terminal's one-finger history scroll (see terminal.ts). */
+  touch-action: pan-x;
 }
 
 .term-placeholder {
@@ -631,12 +638,16 @@ label > textarea {
 
 /* Width 100 % of the pane's content box: the fit scale is measured from
  * this width, and because .term-fit itself never scrolls (the pane does)
- * its clientWidth cannot feed back into the scale. */
+ * its clientWidth cannot feed back into the scale. The floor keeps the
+ * pane taller than the fitted 24 rows at 360x640: the pane grows past
+ * the visual box while the key bar and the size row stay in view. */
 .term-fit {
   width: 100%;
   height: min(var(--term-visual-h, 46dvh), 60vh);
+  min-height: 34vh;
   overflow: visible;
-  touch-action: pan-x pan-y;
+  /* Same as the pane: vertical drags belong to the terminal. */
+  touch-action: pan-x;
 }
 
 /* The visual box: natural size × the scale refit wrote, clipping the
@@ -683,6 +694,17 @@ label > textarea {
   align-items: center;
   gap: 0.4rem;
   font-size: 0.85rem;
+  margin: 0;
+}
+
+/* The toggle's checkbox keeps its own box: without this the global
+ * label > input rule stretches it into a full-width 44 px control and
+ * the size row doubles in height. */
+.term-size-toggle input {
+  display: inline-block;
+  width: auto;
+  min-height: 0;
+  margin: 0;
 }
 
 .term-size-note {
@@ -691,9 +713,9 @@ label > textarea {
   color: var(--muted);
 }
 
-/* Nine keys, all visible: two rows of five equal-width touch targets,
- * the last cell empty. The bar is one info block; the keys inside stay
- * flat so the tint reads once. */
+/* Ten keys, all visible: two rows of five equal-width touch targets.
+ * The bar is one info block; the keys inside stay flat so the tint
+ * reads once. */
 .keybar {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -717,7 +739,7 @@ label > textarea {
   gap: 0.3rem;
 }
 
-/* The Keys switch hides the bar without touching the zoom or the composer. */
+/* The Keys switch hides the bar without touching the zoom or the builder. */
 .keybar[hidden] {
   display: none;
 }
@@ -731,11 +753,11 @@ label > textarea {
 }
 
 /* A 360x640 phone: the 96 px banner leaves no slack in the session column,
- * and the nine keys must sit inside the viewport without scrolling. The
- * terminal keeps its 24 rows, so the chrome around it tightens instead:
- * topbar padding and row gap, the column gaps, the keybar padding and gap.
- * Reclaims 12.8 px; the fitted terminal is shorter still, so the second
- * key row ends at 577 px. */
+ * and the ten keys plus the size row must sit inside the viewport without
+ * scrolling. The terminal keeps its 24 rows, so the chrome around it
+ * tightens instead: topbar padding and row gap, the column gaps, the
+ * keybar padding and gap. The size row holds two short lines, and the
+ * terminal floor above leaves the second key row ending near 586 px. */
 @media (max-width: 639px) {
   .topbar-inner {
     padding-top: max(0.5rem, env(safe-area-inset-top));
@@ -744,7 +766,18 @@ label > textarea {
   }
 
   .session-view {
-    gap: 0.4rem;
+    gap: 0.25rem;
+  }
+
+  /* Seven controls share 328 px once the paperclip and the shelf button
+   * are up: the tight gap keeps all seven 44 px targets on one row, and
+   * the Builder word steps aside so the blocks icon names it alone. */
+  .term-controls {
+    gap: 0.15rem;
+  }
+
+  #term-builder span {
+    display: none;
   }
 
   .keybar {
@@ -753,55 +786,8 @@ label > textarea {
   }
 }
 
-.composer {
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap);
-  background: var(--tint-info);
-  border: 1px solid var(--tint-line);
-  border-radius: var(--radius-card);
-  padding: 0.5rem;
-}
-
-.composer-input {
-  width: 100%;
-  resize: vertical;
-  min-height: 3.5rem;
-  padding: 0.5rem 0.6rem;
-  background: transparent;
-  border-color: var(--tint-line);
-}
-
-.composer-row {
-  display: flex;
-  gap: var(--gap);
-  align-items: center;
-}
-
-.composer-error {
-  flex: 1;
-  margin: 0;
-  font-size: 0.85rem;
-  color: var(--ink);
-  background: var(--tint-error);
-  border: 1px solid var(--tint-line);
-  border-radius: var(--radius);
-  padding: 0.5rem 0.75rem;
-  overflow-wrap: anywhere;
-}
-
-.composer-error[hidden] {
-  display: none;
-}
-
-.composer-error::before {
-  content: "Error: ";
-  color: var(--err-label);
-}
-
-/* The one-line success confirmation after a spawn or a send. The "Sent" /
- * "Session started" words carry a check, so the ok tint is never the only
- * signal. */
+/* The one-line success confirmation after a spawn. The "Session started"
+ * words carry a check, so the ok tint is never the only signal. */
 .flash-ok {
   background: var(--tint-ok);
   border: 1px solid var(--tint-line);
@@ -816,20 +802,6 @@ label > textarea {
 
 .flash-ok[hidden] {
   display: none;
-}
-
-.composer-ok {
-  flex: 1;
-}
-
-.composer-send {
-  margin-left: auto;
-}
-
-/* The Send icon's error state: the one icon that wears red, as the error
- * blocks' label does. */
-.composer-send[data-state="error"] .icon-slot {
-  color: var(--err-label);
 }
 
 /* The yolo checkbox row in the New dialog: calm until checked,
@@ -1137,17 +1109,6 @@ label > textarea {
   display: none;
 }
 
-/* The folder-and-count a row carries when its shelf holds files. */
-.session-files {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  color: var(--muted);
-  flex-shrink: 0;
-}
-
 /* The Files sheet: a thumbnail grid, two columns on a phone and four
  * from 900 px. */
 .shelf-empty {
@@ -1215,13 +1176,220 @@ label > textarea {
   -webkit-box-orient: vertical;
 }
 
-.shelf-meta {
+.shelf-meta,
+.viewer-meta {
   font-family: var(--font-mono);
   font-size: 0.7rem;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* The upload tray above the key bar: one progress row per file, the
+ * inline refusal naming the file, and the Attach chip a finished upload
+ * leaves. */
+.upload-tray {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.upload-tray[hidden] {
+  display: none;
+}
+
+.upload-item,
+.upload-error {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  background: var(--tint-info);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.upload-error {
+  background: var(--tint-danger, var(--tint-warn));
+  color: var(--danger);
+}
+
+.upload-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-bar {
+  flex: 1;
+  min-width: 3rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--bg-deep);
+  overflow: hidden;
+}
+
+.upload-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.upload-pct {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.upload-cancel {
+  min-width: 2rem;
+  min-height: 2rem;
+  padding: 0 0.4rem;
+  line-height: 1;
+}
+
+.upload-attach {
+  align-self: flex-start;
+  min-height: 2.75rem;
+  padding: 0.35rem 0.7rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  background: var(--tint-ok);
+  border-color: var(--tint-line);
+}
+
+/* The Files sheet's two directions: From agent and Yours. A picker shows
+ * the same grid flat, in union order, where a tap attaches. */
+.shelf-sections {
+  padding: 0.25rem 0 0.75rem;
+}
+
+.shelf-pick .shelf-grid {
+  padding-top: 0.25rem;
+}
+
+.shelf-section-title {
+  margin: 0.5rem 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.shelf-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+/* The grid cell's × : a small corner control, danger-tinted on hover. */
+.shelf-delete {
+  position: absolute;
+  top: 0.15rem;
+  right: 0.15rem;
+  min-width: 2rem;
+  min-height: 2rem;
+  padding: 0 0.4rem;
+  line-height: 1;
+  font-size: 1rem;
+  color: var(--muted);
+}
+
+.shelf-delete:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.shelf-delete:disabled,
+.viewer-delete:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* The one inline line a failed delete leaves on the sheet. */
+.shelf-delete-error {
+  margin: 0.5rem 0 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  background: var(--tint-danger, var(--tint-warn));
+  color: var(--danger);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.shelf-delete-error[hidden] {
+  display: none;
+}
+
+.shelf-download {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  background: var(--tint-info);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  text-decoration: none;
+}
+
+/* Text and code in the viewer: a plain-text page, scrollable, never a
+ * markup parse. */
+.viewer-stage[data-kind="text"] {
+  display: block;
+  overflow: auto;
+  touch-action: pan-y;
+}
+
+.viewer-text {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.viewer-text[hidden],
+.viewer-card[hidden] {
+  display: none;
+}
+
+.viewer-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1.25rem;
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius-card);
+  background: var(--surface-bg-raise);
+  text-align: center;
+}
+
+.viewer-card-name {
+  margin: 0;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.viewer-card-meta {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--muted);
 }
 
 /* The full-screen viewer, above every sheet. */
@@ -1283,8 +1451,15 @@ label > textarea {
   padding: 0.4rem 0.6rem;
 }
 
-.viewer-caption {
+.viewer-caption-block {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.viewer-caption {
   min-width: 0;
   font-family: var(--font-mono);
   font-size: 0.8rem;

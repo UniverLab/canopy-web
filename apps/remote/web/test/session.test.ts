@@ -205,16 +205,14 @@ describe("session flow over a fake data channel", () => {
     expect(h.exited).toEqual([{ id: "s1", code: 1 }]);
   });
 
-  it("sends input and prompt frames for the open session", () => {
+  it("sends input frames for the open session", () => {
     const h = setup();
     expect(h.controller.sendInputText("x")).toBe(false);
     h.controller.open("s1");
     expect(h.controller.sendInputBytes(new Uint8Array([0x1b]))).toBe(true);
     expect(h.controller.sendInputText("y")).toBe(true);
-    expect(h.controller.sendPrompt("do it", "r9")).toBe(true);
     expect(h.sent()).toContainEqual({ t: "input", id: "s1", data: "Gw==" });
     expect(h.sent()).toContainEqual({ t: "input", id: "s1", data: "eQ==" });
-    expect(h.sent()).toContainEqual({ t: "prompt", req: "r9", id: "s1", text: "do it" });
   });
 
   it("detaches the previous session when opening another", () => {

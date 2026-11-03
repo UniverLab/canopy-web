@@ -148,9 +148,8 @@ export class GraphRoute {
     }
     return {
       enabled: shelf.enabled(),
-      hostCount: shelf.count(null),
-      count: (id) => shelf.count(id),
-      onOpenShelf: () => shelf.open(this.root, null),
+      unseen: shelf.unseenTotal(),
+      onOpenShelf: () => shelf.open(this.root),
     };
   }
 

@@ -2,12 +2,19 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   clampZoom,
+  classifyTouchGesture,
   computeFitScale,
   computeMinScale,
   computeScale,
+  decayFlingVelocity,
+  flingVelocity,
   MAX_ZOOM,
   MIN_ZOOM,
+  shouldContinueFling,
+  shouldStartFling,
+  splitTouchScroll,
   TerminalView,
+  touchWheelDelta,
   zoomFromPinch,
 } from "../src/terminal.js";
 import type { TerminalFactory, TerminalHandle } from "../src/terminal.js";
@@ -197,6 +204,69 @@ describe("readable floor", () => {
   });
 });
 
+describe("one-finger touch scroll", () => {
+  it("classifies a gesture by its first 8 px", () => {
+    expect(classifyTouchGesture(0, 0)).toBe("undecided");
+    expect(classifyTouchGesture(5, 5)).toBe("undecided");
+    expect(classifyTouchGesture(0, 8)).toBe("vertical");
+    expect(classifyTouchGesture(0, -8)).toBe("vertical");
+    expect(classifyTouchGesture(8, 0)).toBe("horizontal");
+    expect(classifyTouchGesture(-9, 2)).toBe("horizontal");
+    expect(classifyTouchGesture(6, 10)).toBe("vertical");
+    expect(classifyTouchGesture(10, 6)).toBe("horizontal");
+    // A tie at 45 degrees scrolls the terminal.
+    expect(classifyTouchGesture(8, 8)).toBe("vertical");
+  });
+
+  it("chains the pane first and hands the rest to the terminal", () => {
+    // No pane overflow (zoom 1): everything goes to the terminal.
+    expect(splitTouchScroll(-100, 0, 400, 400)).toEqual({ pane: 0, terminal: -100 });
+    expect(splitTouchScroll(100, 0, 400, 400)).toEqual({ pane: 0, terminal: 100 });
+    // The zoomed pane absorbs what it can…
+    expect(splitTouchScroll(-30, 50, 600, 400)).toEqual({ pane: -30, terminal: 0 });
+    expect(splitTouchScroll(50, 10, 600, 400)).toEqual({ pane: 50, terminal: 0 });
+    // …and the remainder reaches the terminal at either edge.
+    expect(splitTouchScroll(-30, 10, 600, 400)).toEqual({ pane: -10, terminal: -20 });
+    expect(splitTouchScroll(50, 190, 600, 400)).toEqual({ pane: 10, terminal: 40 });
+    expect(splitTouchScroll(0, 50, 600, 400)).toEqual({ pane: 0, terminal: 0 });
+  });
+
+  it("scales the terminal remainder back into xterm px", () => {
+    expect(touchWheelDelta(-100, 0.5)).toBe(-200);
+    expect(touchWheelDelta(50, 2)).toBe(25);
+    expect(touchWheelDelta(-100, 1)).toBe(-100);
+    expect(touchWheelDelta(-100, 0)).toBe(-100);
+  });
+
+  it("flings only fast vertical tails and decays them per frame", () => {
+    // Velocity over the last 100 ms, in px/ms, finger space.
+    expect(flingVelocity([])).toBe(0);
+    expect(flingVelocity([{ y: 0, t: 0 }])).toBe(0);
+    expect(flingVelocity([{ y: 0, t: 0 }, { y: 100, t: 50 }])).toBe(2);
+    // Older history leaves the window: only 150→200 ms counts.
+    expect(
+      flingVelocity([
+        { y: 0, t: 0 },
+        { y: 10, t: 150 },
+        { y: 60, t: 200 },
+      ]),
+    ).toBe(1);
+    // No time elapsed, no fling.
+    expect(flingVelocity([{ y: 0, t: 100 }, { y: 50, t: 100 }])).toBe(0);
+    // Faster than 0.3 px/ms starts a fling; at 0.3 it stays put.
+    expect(shouldStartFling(0.31)).toBe(true);
+    expect(shouldStartFling(-0.31)).toBe(true);
+    expect(shouldStartFling(0.3)).toBe(false);
+    expect(shouldStartFling(0)).toBe(false);
+    // A 0.95 decay per frame until under 0.05 px/ms.
+    expect(decayFlingVelocity(2)).toBeCloseTo(1.9, 10);
+    expect(decayFlingVelocity(-2)).toBeCloseTo(-1.9, 10);
+    expect(shouldContinueFling(0.05)).toBe(true);
+    expect(shouldContinueFling(0.049)).toBe(false);
+    expect(shouldContinueFling(-0.05)).toBe(true);
+  });
+});
+
 describe("TerminalView", () => {
   afterEach(() => {
     document.body.innerHTML = "";
@@ -219,6 +289,44 @@ describe("TerminalView", () => {
     view.dispose();
     expect(handles[0]?.disposed).toBe(true);
     expect(view.fitted).toBe(false);
+  });
+
+  it("focuses the terminal when the pane itself is tapped", () => {
+    const { parent, view, handles } = setup();
+    view.mount(parent, 80, 24);
+    // A tap on the pane padding (not the terminal) still focuses xterm.
+    parent.dispatchEvent(new Event("click", { bubbles: true }));
+    expect(handles[0]?.focused).toBe(1);
+    // Dispose removes the pane listener: a later tap focuses nothing new.
+    view.dispose();
+    parent.dispatchEvent(new Event("click", { bubbles: true }));
+    expect(handles[0]?.focused).toBe(1);
+  });
+
+  it("focuses once open when tapped behind the font gate", async () => {
+    const { parent, view, handles } = setup();
+    let release: () => void = () => {};
+    const loaded = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    Object.defineProperty(document, "fonts", {
+      configurable: true,
+      value: { load: () => loaded, ready: Promise.resolve() },
+    });
+    try {
+      view.mount(parent, 80, 24);
+      expect(view.fitted).toBe(false);
+      // The tap lands before xterm exists; the keyboard still opens once it does.
+      parent.dispatchEvent(new Event("click", { bubbles: true }));
+      expect(handles).toHaveLength(0);
+      release();
+      await view.ready();
+      expect(handles).toHaveLength(1);
+      expect(handles[0]?.focused).toBe(1);
+    } finally {
+      Reflect.deleteProperty(document, "fonts");
+      view.dispose();
+    }
   });
 
   it("waits for the real face and keeps the writes that arrive first", async () => {
@@ -261,6 +369,40 @@ describe("TerminalView", () => {
     expect(follows).toEqual([false]);
     view.scrollToLatest();
     expect(handles[0]?.scrolledToBottom).toBe(1);
+    expect(view.isFollowing).toBe(true);
+    expect(follows).toEqual([false, true]);
+    view.dispose();
+  });
+
+  it("follows the viewport's own scroll event, which wheels funnel through", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const handle = new FakeHandle(80, 24);
+    const follows: boolean[] = [];
+    const view = new TerminalView(
+      (host) => {
+        // Real xterm builds its viewport inside host at open; the view
+        // attaches its follow listener to it (xterm's onScroll never fires
+        // for wheel or touch scrolling: that path suppresses the event).
+        const viewport = document.createElement("div");
+        viewport.className = "xterm-viewport";
+        host.appendChild(viewport);
+        return handle;
+      },
+      { onUserInput: () => {}, onFollowChange: ({ following }) => follows.push(following) },
+    );
+    view.mount(parent, 80, 24);
+    const viewport = parent.querySelector(".xterm-viewport");
+    expect(viewport).not.toBeNull();
+    expect(view.isFollowing).toBe(true);
+    // Scrolled up: follow drops and the latest button shows.
+    handle.atBottom = false;
+    viewport?.dispatchEvent(new Event("scroll"));
+    expect(view.isFollowing).toBe(false);
+    expect(follows).toEqual([false]);
+    // Back at the bottom: follow resumes.
+    handle.atBottom = true;
+    viewport?.dispatchEvent(new Event("scroll"));
     expect(view.isFollowing).toBe(true);
     expect(follows).toEqual([false, true]);
     view.dispose();

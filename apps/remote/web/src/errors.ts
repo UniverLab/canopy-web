@@ -3,7 +3,7 @@
 // name the harness and the reason only — never the host's filesystem
 // (no PATH, no home directory, no binary location). The frame router
 // applies this at the crossing point, so every present and future
-// caller — composer, sheets, guests — is covered. Pure module: no DOM.
+// caller — sheets, guests — is covered. Pure module: no DOM.
 
 /**
  * The browser-safe form of a host error. A bad directory echoes what the

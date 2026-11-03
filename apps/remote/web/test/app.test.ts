@@ -15,6 +15,7 @@ class FakeHandle implements TerminalHandle {
   written: Uint8Array[] = [];
   clears = 0;
   disposed = false;
+  focuses = 0;
   atBottom = true;
   alternate = false;
   cols: number;
@@ -34,7 +35,9 @@ class FakeHandle implements TerminalHandle {
   clear = (): void => {
     this.clears += 1;
   };
-  focus = (): void => {};
+  focus = (): void => {
+    this.focuses += 1;
+  };
   scrollToBottom = (): void => {
     this.atBottom = true;
   };
@@ -91,7 +94,6 @@ describe("createShell", () => {
     keys: Uint8Array[];
     inputs: Uint8Array[];
     controlSizes: { cols: number; rows: number }[];
-    composerSends: { text: string; req: string }[];
     spawns: { spawn: SpawnRequest; req: string }[];
     composes: { draft: PromptDraft; req: string }[];
     draftSends: { draft: PromptDraft; req: string }[];
@@ -138,7 +140,6 @@ describe("createShell", () => {
     const keys: Uint8Array[] = [];
     const inputs: Uint8Array[] = [];
     const controlSizes: { cols: number; rows: number }[] = [];
-    const composerSends: { text: string; req: string }[] = [];
     const spawns: { spawn: SpawnRequest; req: string }[] = [];
     const composes: { draft: PromptDraft; req: string }[] = [];
     const draftSends: { draft: PromptDraft; req: string }[] = [];
@@ -155,7 +156,6 @@ describe("createShell", () => {
       keys,
       inputs,
       controlSizes,
-      composerSends,
       spawns,
       composes,
       draftSends,
@@ -179,7 +179,6 @@ describe("createShell", () => {
       onKeyPress: (bytes) => keys.push(bytes),
       onTerminalInput: (bytes) => inputs.push(bytes),
       onControlSize: (cols, rows) => controlSizes.push({ cols, rows }),
-      onComposerSend: (text, req) => composerSends.push({ text, req }),
       onSpawn: (spawn, req) => {
         spawns.push({ spawn, req });
         return sendable;
@@ -303,6 +302,8 @@ describe("createShell", () => {
     expect(query("#session-back").textContent).toBe("");
     expect(query("#term-zoom-out svg")).not.toBeNull();
     expect(query("#term-zoom-in svg")).not.toBeNull();
+    expect(query("#term-builder svg")).not.toBeNull();
+    expect(query("#term-builder").textContent).toContain("Builder");
     // The Keys switch stays a word: it names the bar it shows.
     expect(query("#term-keys").textContent).toBe("Keys");
   });
@@ -337,15 +338,16 @@ describe("createShell", () => {
     expect(footerHtml()).toContain("Canopy remote");
   });
 
-  it("keeps the session view's terminal, key bar and composer above the footer", () => {
+  it("keeps the session view's terminal and key bar above the footer", () => {
     shell.showSession("s1", "build");
     const main = query("main.session-view");
     expect(main.querySelector("#term-pane")).not.toBeNull();
-    expect(main.querySelectorAll("#keybar .key").length).toBe(9);
-    expect(main.querySelector(".composer-input")).not.toBeNull();
-    expect(main.querySelector(".composer-send")).not.toBeNull();
-    // The terminal, key bar and composer live inside the main; the footer
-    // follows it, so nothing scrolls the terminal out or covers it.
+    expect(main.querySelectorAll("#keybar .key").length).toBe(10);
+    expect(main.querySelector("#term-builder")).not.toBeNull();
+    // The terminal is the only text input: no textarea below it.
+    expect(main.querySelector("textarea")).toBeNull();
+    // The terminal and key bar live inside the main; the footer follows
+    // it, so nothing scrolls the terminal out or covers it.
     expect(root.querySelector("main.session-view footer.look-colophon")).toBeNull();
     const footer = root.querySelector("footer.look-colophon");
     expect(footer).not.toBeNull();
@@ -411,6 +413,7 @@ describe("createShell", () => {
         model: "spark",
         workdir: "/home/u/proj",
         status: "running",
+        kind: "agent",
         lastOutputAt: Date.now() - 30_000,
       },
     ]);
@@ -442,27 +445,27 @@ describe("createShell", () => {
       model: "",
       workdir: "",
       status: "running",
+      kind: "terminal",
       lastOutputAt: null,
     });
     expect(root.querySelector('[data-session="s1"]')).not.toBeNull();
   });
 
-  it("opens the session view with key bar and composer", () => {
+  it("opens the session view with key bar and builder", () => {
     shell.showSession("s1", "build");
     expect(query(".session-title").textContent).toBe("build");
     const keys = [...root.querySelectorAll<HTMLButtonElement>("#keybar .key")];
-    expect(keys).toHaveLength(9);
+    expect(keys).toHaveLength(10);
     keys[0]?.click();
     expect(calls.keys.map((bytes) => [...bytes])).toEqual([[0x1b]]);
 
-    query<HTMLTextAreaElement>(".composer-input").value = "hello";
-    query<HTMLButtonElement>(".composer-send").click();
-    expect(calls.composerSends).toHaveLength(1);
-    expect(calls.composerSends[0]?.text).toBe("hello");
-    shell.composerOk(calls.composerSends[0]?.req ?? "");
-    expect(query<HTMLTextAreaElement>(".composer-input").value).toBe("");
+    // The terminal is the only text input: no textarea below it.
+    expect(root.querySelector("textarea")).toBeNull();
 
-    query<HTMLButtonElement>(".composer-builder").click();
+    // The Builder button lives in the controls row and opens the sheet.
+    const builder = query<HTMLButtonElement>("#term-builder");
+    expect(builder.closest(".term-controls")).not.toBeNull();
+    builder.click();
     expect(root.querySelector("#builder-form")).not.toBeNull();
     query<HTMLButtonElement>("#builder-close").click();
     query<HTMLButtonElement>("#session-back").click();
@@ -494,6 +497,20 @@ describe("createShell", () => {
     expect(shift.getAttribute("aria-pressed")).toBe("false");
   });
 
+  it("sends Ctrl+Backspace as BS and releases the latch", () => {
+    shell.showSession("s1", "build");
+    const ctrl = query<HTMLButtonElement>('#keybar .key[data-key="ctrl"]');
+    const backspace = query<HTMLButtonElement>('#keybar .key[data-key="backspace"]');
+    ctrl.click();
+    expect(ctrl.getAttribute("aria-pressed")).toBe("true");
+    backspace.click();
+    expect(calls.keys.map((bytes) => [...bytes])).toEqual([[0x08]]);
+    expect(ctrl.getAttribute("aria-pressed")).toBe("false");
+    // Unlatched Backspace is DEL.
+    backspace.click();
+    expect(calls.keys.map((bytes) => [...bytes])).toEqual([[0x08], [0x7f]]);
+  });
+
   it("mounts the terminal on ensureTerminal and writes to it", () => {
     shell.showSession("s1", "build");
     expect(root.querySelector(".term-host")).toBeNull();
@@ -511,6 +528,39 @@ describe("createShell", () => {
     // Terminal input flows to the host.
     handles[0]?.emitInput("x");
     expect(calls.inputs.map((bytes) => [...bytes])).toEqual([[0x78]]);
+  });
+
+  it("focuses the terminal once on attach under a fine pointer", async () => {
+    const realMatchMedia = globalThis.matchMedia;
+    globalThis.matchMedia = ((query: string) => ({
+      matches: query === "(pointer: fine)",
+    })) as unknown as typeof globalThis.matchMedia;
+    try {
+      shell.showSession("s1", "build");
+      shell.ensureTerminal("s1", 80, 24);
+      await Promise.resolve();
+      expect(handles[0]?.focuses).toBe(1);
+      // A remount focuses its own attach, never the stale one.
+      shell.ensureTerminal("s1", 100, 40);
+      await Promise.resolve();
+      expect(handles[0]?.focuses).toBe(1);
+      expect(handles[1]?.focuses).toBe(1);
+    } finally {
+      globalThis.matchMedia = realMatchMedia;
+    }
+  });
+
+  it("leaves the terminal unfocused on attach without a fine pointer", async () => {
+    const realMatchMedia = globalThis.matchMedia;
+    globalThis.matchMedia = (() => ({ matches: false })) as unknown as typeof globalThis.matchMedia;
+    try {
+      shell.showSession("s1", "build");
+      shell.ensureTerminal("s1", 80, 24);
+      await Promise.resolve();
+      expect(handles[0]?.focuses).toBe(0);
+    } finally {
+      globalThis.matchMedia = realMatchMedia;
+    }
   });
 
   it("offers control-size per session, default off, with its explainer", () => {
@@ -559,20 +609,18 @@ describe("createShell", () => {
     expect(calls.controlSizes).toEqual([{ cols: 80, rows: 24 }]);
   });
 
-  it("keeps the terminal and the composer draft across state changes", () => {
+  it("keeps the terminal across state changes", () => {
     shell.showSession("s1", "build");
     shell.ensureTerminal("s1", 80, 24);
     shell.writeTerminal(new TextEncoder().encode("hi"));
-    query<HTMLTextAreaElement>(".composer-input").value = "draft";
     shell.setConnectionState("retrying in 2s");
     expect(query(".conn-banner").textContent).toContain("retrying in 2s");
     expect(handles).toHaveLength(1);
     expect(handles[0]?.disposed).toBe(false);
     expect(handles[0]?.written).toEqual([new TextEncoder().encode("hi")]);
-    expect(query<HTMLTextAreaElement>(".composer-input").value).toBe("draft");
   });
 
-  it("disposes the terminal and composer when leaving the session route", () => {
+  it("disposes the terminal when leaving the session route", () => {
     const leaves: (() => void)[] = [
       () => shell.showPair(),
       () => shell.showHosts(),
@@ -582,12 +630,11 @@ describe("createShell", () => {
     for (const leave of leaves) {
       shell.showSession("s1", "build");
       shell.ensureTerminal("s1", 80, 24);
-      expect(root.querySelector(".composer")).not.toBeNull();
+      expect(root.querySelector(".term-host")).not.toBeNull();
       const handle = handles[handles.length - 1];
       leave();
       expect(handle?.disposed).toBe(true);
       expect(root.querySelector(".term-host")).toBeNull();
-      expect(root.querySelector(".composer")).toBeNull();
     }
   });
 
@@ -661,11 +708,11 @@ describe("createShell", () => {
     shell.showSession("s1", "build");
     expect(query<HTMLElement>("#keybar").hidden).toBe(true);
     expect(query<HTMLButtonElement>("#term-keys").getAttribute("aria-pressed")).toBe("false");
-    // And the switch shows it again without touching zoom or composer.
+    // And the switch shows it again without touching zoom or builder.
     query<HTMLButtonElement>("#term-keys").click();
     expect(query<HTMLElement>("#keybar").hidden).toBe(false);
     expect(query("#term-zoom-in")).not.toBeNull();
-    expect(query(".composer-input")).not.toBeNull();
+    expect(query("#term-builder")).not.toBeNull();
     expect(localStorage.getItem(KEYBAR_KEY)).toBe("1");
   });
 
@@ -734,6 +781,7 @@ describe("createShell", () => {
       model: "",
       workdir: "/home/u/demo",
       status: "running",
+      kind: "agent",
       lastOutputAt: null,
     });
     expect(query(".session-title").textContent).toBe("rubidio");
@@ -770,7 +818,7 @@ describe("createShell", () => {
 
   it("previews and sends a draft from the Builder", () => {
     shell.showSession("s1", "build");
-    query<HTMLButtonElement>(".composer-builder").click();
+    query<HTMLButtonElement>("#term-builder").click();
     expect(root.querySelector("#builder-form")).not.toBeNull();
     query<HTMLButtonElement>("#builder-preview").click();
     expect(calls.composes).toHaveLength(1);
@@ -792,7 +840,7 @@ describe("createShell", () => {
     shell.showSession("s1", "build");
     expect(root.querySelector(".sheet-overlay")).toBeNull();
 
-    query<HTMLButtonElement>(".composer-builder").click();
+    query<HTMLButtonElement>("#term-builder").click();
     expect(root.querySelector("#builder-form")).not.toBeNull();
     shell.showSessions();
     expect(root.querySelector(".sheet-overlay")).toBeNull();

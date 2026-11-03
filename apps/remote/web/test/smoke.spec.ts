@@ -50,7 +50,7 @@ test.beforeEach(async ({ page }) => {
 test("renders the terminal and the key bar at 360x640", async ({ page }) => {
   expect(await terminalText(page)).toContain("$ muse run");
   const keys = page.locator("#keybar .key");
-  await expect(keys).toHaveCount(9);
+  await expect(keys).toHaveCount(10);
   await expect(page.locator(".topbar .login")).toHaveText("smoke");
   await expect(page.locator(".topbar .host")).toHaveText("smoke host");
   // Live output flows into the terminal.
@@ -167,9 +167,9 @@ test("keeps the terminal text off its border at 1280x900", async ({ page }) => {
   );
 });
 
-test("shows all nine keys inside the viewport at 360x640", async ({ page }) => {
+test("shows all ten keys inside the viewport at 360x640", async ({ page }) => {
   const keys = page.locator("#keybar .key");
-  await expect(keys).toHaveCount(9);
+  await expect(keys).toHaveCount(10);
   // The keybar follows the terminal's first fit, which lands after its
   // face loads — measuring before that blames the placeholder height
   // (the 46dvh fallback) for keys the settled layout holds in view.
@@ -180,14 +180,13 @@ test("shows all nine keys inside the viewport at 360x640", async ({ page }) => {
       return { x: r.x, y: r.y, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
     }),
   );
-  // Two rows of equal-width keys (five, then four), every one a touch
-  // target in view.
+  // Two rows of five equal-width keys, every one a touch target in view.
   const rows = [...new Set(boxes.map((box) => Math.round(box.y)))].sort((a, b) => a - b);
   expect(rows).toHaveLength(2);
   const first = boxes.filter((box) => Math.round(box.y) === rows[0]);
   const second = boxes.filter((box) => Math.round(box.y) === rows[1]);
   expect(first).toHaveLength(5);
-  expect(second).toHaveLength(4);
+  expect(second).toHaveLength(5);
   for (const row of [first, second]) {
     for (const box of row) {
       expect(Math.abs(box.width - row[0]!.width)).toBeLessThanOrEqual(1);
@@ -243,7 +242,7 @@ for (const viewport of [
   { label: "390x844", width: 390, height: 844 },
   { label: "1280x900", width: 1280, height: 900 },
 ] as const) {
-  test(`stages the terminal on black with one teal Send at ${viewport.label}`, async ({
+  test(`stages the terminal on black with no teal call-to-action at ${viewport.label}`, async ({
     page,
   }, testInfo) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
@@ -252,13 +251,14 @@ for (const viewport of [
       () => getComputedStyle(document.querySelector(".term-pane") as HTMLElement).backgroundColor,
     );
     expect(pane).toBe("rgb(5, 5, 5)");
-    // Send is the only teal-filled button in the session view: rgb(63, 184, 176).
+    // No teal-filled button in the session view at rest: the terminal is
+    // the input now, and only a pressed latch fills teal — rgb(63, 184, 176).
     const teal = await page.evaluate(() =>
       [...document.querySelectorAll("main.session-view button")]
         .filter((button) => getComputedStyle(button).backgroundColor === "rgb(63, 184, 176)")
         .map((button) => button.className),
     );
-    expect(teal).toEqual(["composer-send primary"]);
+    expect(teal).toEqual([]);
     const shot = await page.screenshot({ path: testInfo.outputPath(`stage-${viewport.label}.png`) });
     await testInfo.attach(`stage-${viewport.label}`, { body: shot, contentType: "image/png" });
   });
@@ -409,7 +409,7 @@ test("stacks the banner over a centred chips row at 1280x900", async ({ page }) 
 
 test("puts the Content textarea full width in its card", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.locator(".composer-builder").click();
+  await page.locator("#term-builder").click();
   await expect(page.locator("#builder-form")).toBeVisible();
   const measured = await page.evaluate(() => {
     const card = document.querySelector(".builder-section") as HTMLElement;
@@ -426,7 +426,7 @@ test("puts the Content textarea full width in its card", async ({ page }, testIn
 
 test("builder picks sections by kind at 390x844", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.locator(".composer-builder").click();
+  await page.locator("#term-builder").click();
   await expect(page.locator("#builder-form")).toBeVisible();
   // One Instruction section, no free title field.
   await expect(page.locator(".section-kind")).toHaveValue("instruction");
@@ -508,9 +508,9 @@ test("the Keys switch hides the bar and remembers the choice across reload", asy
   await toggle.click();
   await expect(bar).toBeHidden();
   await expect(toggle).toHaveAttribute("aria-pressed", "false");
-  // Only the key bar goes: zoom and composer stay.
+  // Only the key bar goes: zoom and builder stay.
   await expect(page.locator("#term-zoom-in")).toBeVisible();
-  await expect(page.locator(".composer-input")).toBeVisible();
+  await expect(page.locator("#term-builder")).toBeVisible();
   // The choice survives a reload.
   await page.reload();
   await expect(page.locator('[data-session="smoke"]')).toBeVisible();
@@ -529,44 +529,9 @@ for (const viewport of [
 
     // The host chip reads the link: wifi while connected.
     await expect(page.locator("#conn-icon")).toHaveAttribute("data-icon", "wifi");
-
-    const send = page.locator(".composer-send");
-    const icon = send.locator(".icon-slot");
-    await expect(icon).toHaveAttribute("data-icon", "send");
-    // The terminal reports its row height once it has measured itself, and
-    // the composer below it settles a moment later. Measuring before that
-    // would blame the session's own fit for an icon-sized move. The box is
-    // page-relative: the header banner makes a 900 px page scroll when the
-    // composer takes focus, and that scroll is not the icon moving.
-    const inPage = (): Promise<{ x: number; y: number; width: number; height: number }> =>
-      page.evaluate(() => {
-        const slot = document.querySelector(".composer-send .icon-slot") as HTMLElement;
-        const box = slot.getBoundingClientRect();
-        return { x: box.x, y: box.y + window.scrollY, width: box.width, height: box.height };
-      });
-    const settled = await settledBox(page, ".composer-send .icon-slot");
-    expect(settled).not.toBeNull();
-    const before = await inPage();
-
-    // Send → (loader while the frame is out) → check on the host's ok.
-    await page.locator(".composer-input").fill("do the thing");
-    await send.click();
-    await expect(icon).toHaveAttribute("data-icon", "check", { timeout: 10_000 });
-    await expect(page.locator(".composer-ok")).toContainText("Sent");
-    await expect(page.locator(".composer-ok svg.icon")).toBeVisible();
-    expect(await inPage()).toEqual(before);
-    const sentShot = await page.screenshot({ path: testInfo.outputPath(`morph-sent-${viewport.label}.png`) });
-    await testInfo.attach(`morph-sent-${viewport.label}`, { body: sentShot, contentType: "image/png" });
-
-    // Error → x, and the one icon that wears red.
-    await page.evaluate(() => window.__fake.failNextPrompt("delivery_failed", "host is gone"));
-    await page.locator(".composer-input").fill("do it again");
-    await send.click();
-    await expect(icon).toHaveAttribute("data-icon", "x", { timeout: 10_000 });
-    expect(await icon.evaluate((el) => getComputedStyle(el).color)).toBe("rgb(255, 107, 107)");
-    expect(await inPage()).toEqual(before);
-    const errorShot = await page.screenshot({ path: testInfo.outputPath(`morph-error-${viewport.label}.png`) });
-    await testInfo.attach(`morph-error-${viewport.label}`, { body: errorShot, contentType: "image/png" });
+    // The Builder button wears the blocks icon beside its label.
+    await expect(page.locator("#term-builder svg.icon")).toBeVisible();
+    await expect(page.locator("#term-builder")).toContainText("Builder");
 
     // The Ctrl latch: a filled teal button, with no circle or dot icon.
     const ctrl = page.locator('#keybar .key[data-key="ctrl"]');
@@ -586,6 +551,9 @@ for (const viewport of [
     // The header says the link is up.
     await expect(page.locator("#conn-icon")).toHaveAttribute("data-icon", "wifi");
     await page.locator("#session-back").click();
+    // The host pushes a fourth shelf file 2 s after attach and the list
+    // repaints around it, recreating New mid-click; wait it out first.
+    await expect(page.locator("#shelf-row-badge")).toHaveText("1");
     // The session row says what it is, and New wears its plus.
     await expect(page.locator('[data-session="smoke"] .session-kind')).toHaveAttribute("data-kind", "bot");
     await expect(page.locator("#session-new svg.icon")).toBeVisible();
@@ -624,6 +592,8 @@ test("latches Ctrl so the keyboard's c sends 0x03", async ({ page }) => {
 
 test("spawns a terminal from the New dialog", async ({ page }) => {
   await page.locator("#session-back").click();
+  // Same 2 s shelf push as the icons test: the repaint recreates New.
+  await expect(page.locator("#shelf-row-badge")).toHaveText("1");
   await page.locator("#session-new").click();
   await expect(page.locator("#new-form")).toBeVisible();
   await page.locator("#new-kind-terminal").check();
@@ -643,21 +613,91 @@ test("spawns a terminal from the New dialog", async ({ page }) => {
   await expect(page.locator("main.session-view > .flash-ok svg.icon")).toBeVisible();
 });
 
-test("composer sends a prompt and clears on ok", async ({ page }) => {
-  await page.locator(".composer-input").fill("do the thing");
-  await page.locator(".composer-send").click();
+test("typing in the terminal reaches the host as input bytes", async ({ page }) => {
+  await page.evaluate(() => window.__fake.clearSent());
+  await page.locator(".xterm-helper-textarea").press("l");
+  await page.locator(".xterm-helper-textarea").press("s");
   const sent = await page.evaluate(() => window.__fake.sent());
-  const prompt = (sent as { t: string }[]).find((frame) => frame.t === "prompt");
-  expect(prompt).toMatchObject({ t: "prompt", id: "smoke", text: "do the thing" });
-  await expect(page.locator(".composer-input")).toHaveValue("");
+  expect(sent).toContainEqual({ t: "input", id: "smoke", data: "bA==" });
+  expect(sent).toContainEqual({ t: "input", id: "smoke", data: "cw==" });
 });
 
-test("composer keeps the text and shows the error", async ({ page }) => {
+test("tapping the terminal pane focuses xterm", async ({ page }) => {
+  // The attach focuses xterm on this fine-pointer browser; blur first so
+  // the tap below proves the pane focuses it, not the attach.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur?.());
+  await expect(page.locator(".xterm-helper-textarea")).not.toBeFocused();
+  // The pane's own padding, not the terminal: (4, 4) sits inside the 8 px
+  // inset, off the fitted terminal.
+  await page.locator("#term-pane").click({ position: { x: 4, y: 4 } });
+  await expect(page.locator(".xterm-helper-textarea")).toBeFocused();
+});
+
+test("gives the terminal pane the freed height at 360x640", async ({ page }) => {
+  // The default viewport is already 360x640; the beforeEach pinned the
+  // key bar visible the way a touch device shows it.
+  await settledBox(page, "#keybar");
+  const layout = await page.evaluate(() => {
+    const pane = document.querySelector("#term-pane") as HTMLElement;
+    const paneBox = pane.getBoundingClientRect();
+    const style = getComputedStyle(pane);
+    const size = document.querySelector(".term-size") as HTMLElement;
+    return {
+      paneHeight: paneBox.height,
+      visualHeight: Number(pane.style.getPropertyValue("--term-visual-h").replace("px", "")),
+      chrome:
+        parseFloat(style.paddingTop) +
+        parseFloat(style.paddingBottom) +
+        parseFloat(style.borderTopWidth) +
+        parseFloat(style.borderBottomWidth),
+      keyBottoms: [...document.querySelectorAll("#keybar .key")].map(
+        (key) => key.getBoundingClientRect().bottom,
+      ),
+      sizeBottom: size.getBoundingClientRect().bottom,
+      textareas: document.querySelectorAll("main.session-view textarea").length,
+      helperTextareas: document.querySelectorAll(".xterm-helper-textarea").length,
+    };
+  });
+  // The pane stands taller than the fitted terminal it holds: the floor
+  // engaged, so the terminal took height instead of a second input.
+  expect(layout.visualHeight).toBeGreaterThan(0);
+  expect(layout.paneHeight - layout.chrome).toBeGreaterThan(layout.visualHeight);
+  // ...while every key and the whole size row stay inside the viewport.
+  expect(layout.keyBottoms).toHaveLength(10);
+  for (const bottom of layout.keyBottoms) {
+    expect(bottom).toBeLessThanOrEqual(640);
+  }
+  expect(layout.sizeBottom).toBeLessThanOrEqual(640);
+  // xterm's hidden textarea is the only text input left in the view.
+  expect(layout.textareas).toBe(1);
+  expect(layout.helperTextareas).toBe(1);
+});
+
+test("builder sends the draft and closes on ok", async ({ page }) => {
+  await page.locator("#term-builder").click();
+  await expect(page.locator("#builder-form")).toBeVisible();
+  await page.locator(".section-content").fill("ship it");
+  await page.evaluate(() => window.__fake.clearSent());
+  await page.locator("#builder-send").click();
+  const sent = await page.evaluate(() => window.__fake.sent());
+  const prompt = (sent as Record<string, unknown>[]).find((frame) => frame.t === "prompt");
+  expect(prompt).toMatchObject({ t: "prompt", id: "smoke" });
+  // The draft form, never the removed text form.
+  expect(prompt).not.toHaveProperty("text");
+  const draft = prompt?.draft as { sections: { title: string; content: string }[] };
+  expect(draft.sections).toHaveLength(1);
+  expect(draft.sections[0]?.content).toBe("ship it");
+  await expect(page.locator("#builder-form")).toHaveCount(0);
+});
+
+test("builder keeps the draft and shows the error", async ({ page }) => {
   await page.evaluate(() => window.__fake.failNextPrompt("delivery_failed", "host is gone"));
-  await page.locator(".composer-input").fill("do the thing");
-  await page.locator(".composer-send").click();
-  await expect(page.locator(".composer-error")).toHaveText("host is gone");
-  await expect(page.locator(".composer-input")).toHaveValue("do the thing");
+  await page.locator("#term-builder").click();
+  await expect(page.locator("#builder-form")).toBeVisible();
+  await page.locator(".section-content").fill("ship it");
+  await page.locator("#builder-send").click();
+  await expect(page.locator("#builder-error")).toHaveText("host is gone");
+  await expect(page.locator(".section-content")).toHaveValue("ship it");
 });
 
 // --- The session shelf (hello.features "shelf") -------------------------
@@ -693,7 +733,7 @@ test("shelf badge, sheet and viewer at 390x844", async ({ page }, testInfo) => {
 
   await expect(page.locator("#session-files-icon")).toHaveAttribute("data-icon", "folder");
   await page.locator("#session-files").click();
-  await expect(page.locator(".shelf-cell")).toHaveCount(4);
+  await expect(page.locator(".shelf-cell")).toHaveCount(5);
   // The folder opens with the sheet.
   await expect(page.locator("#session-files-icon")).toHaveAttribute("data-icon", "folderOpen");
   // The shelf was looked at, so the badge clears as the sheet opens.
@@ -720,7 +760,7 @@ test("shelf badge, sheet and viewer at 390x844", async ({ page }, testInfo) => {
   await page.locator('.shelf-cell[title="layout.svg"]').click();
   await expect(page.locator("#shelf-viewer")).toBeVisible();
   await expect(page.locator("#shelf-viewer-img")).toBeVisible();
-  await expect(page.locator("#shelf-count")).toHaveText("3 / 4");
+  await expect(page.locator("#shelf-count")).toHaveText("3 / 5");
   const viewerShot = await page.screenshot({
     path: testInfo.outputPath("shelf-viewer-390x844.png"),
   });
@@ -728,7 +768,7 @@ test("shelf badge, sheet and viewer at 390x844", async ({ page }, testInfo) => {
   expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
   await page.keyboard.press("Escape");
   await expect(page.locator("#shelf-viewer")).toBeHidden();
-  await expect(page.locator(".shelf-cell")).toHaveCount(4);
+  await expect(page.locator(".shelf-cell")).toHaveCount(5);
   await page.keyboard.press("Escape");
   await expect(page.locator('[data-sheet="shelf"]')).toBeHidden();
 });
@@ -740,7 +780,7 @@ test("shelf grid, arrow steps and list counts at 1280x900", async ({ page }, tes
   await expect(badge).toHaveText("1");
 
   await page.locator("#session-files").click();
-  await expect(page.locator(".shelf-cell")).toHaveCount(4);
+  await expect(page.locator(".shelf-cell")).toHaveCount(5);
   // Four columns from 900 px up.
   expect(await gridColumns(page)).toBe(4);
   await expect(page.locator('.shelf-cell[title="gradient.png"] img')).toBeVisible();
@@ -750,10 +790,10 @@ test("shelf grid, arrow steps and list counts at 1280x900", async ({ page }, tes
   // The viewer steps with the arrow keys and downloads the blob URL.
   await page.locator(".shelf-cell").first().click();
   await expect(page.locator("#shelf-viewer")).toBeVisible();
-  await expect(page.locator("#shelf-count")).toHaveText("1 / 4");
+  await expect(page.locator("#shelf-count")).toHaveText("1 / 5");
   await expect(page.locator("#shelf-download")).toHaveAttribute("href", /^blob:/);
   await page.keyboard.press("ArrowRight");
-  await expect(page.locator("#shelf-count")).toHaveText("2 / 4");
+  await expect(page.locator("#shelf-count")).toHaveText("2 / 5");
   const viewerShot = await page.screenshot({
     path: testInfo.outputPath("shelf-viewer-1280x900.png"),
   });
@@ -763,23 +803,34 @@ test("shelf grid, arrow steps and list counts at 1280x900", async ({ page }, tes
   await page.keyboard.press("Escape");
   await expect(page.locator('[data-sheet="shelf"]')).toBeHidden();
 
-  // The session list carries the counts: one 📎 per row plus the host's own.
+  // The home carries one union Shelf row and no per-row counts.
   await page.locator("#session-back").click();
   await expect(page.locator("#host-shelf-row")).toBeVisible();
-  await expect(page.locator("#host-shelf-row .session-files-count")).toHaveText("1");
-  await expect(page.locator('[data-session="smoke"] .session-files-count')).toHaveText("4");
-  // The count's folder is an icon, not a glyph in the text.
-  await expect(page.locator("#host-shelf-row .session-files svg.icon")).toBeVisible();
+  await expect(page.locator("#host-shelf-row .session-sub")).toHaveText(
+    "Files from the host and its sessions",
+  );
+  await expect(page.locator(".session-files-count")).toHaveCount(0);
+  // The row's folder is an icon, not a glyph in the text.
+  await expect(page.locator("#host-shelf-row .session-kind svg.icon")).toBeVisible();
   const listShot = await page.screenshot({
     path: testInfo.outputPath("shelf-list-1280x900.png"),
   });
   await testInfo.attach("shelf-list-1280x900", { body: listShot, contentType: "image/png" });
   expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
 
-  // The Shelf row opens the same sheet over the host's own files.
+  // The Shelf row opens the union sheet: the host file beside the
+  // session's, under the one Shelf title — and never the terminal's.
   await page.locator("#host-shelf-row").click();
-  await expect(page.locator(".shelf-cell")).toHaveCount(1);
+  await expect(page.locator('[data-sheet="shelf"] .sheet-head h2')).toHaveText("Shelf");
+  await expect(page.locator(".shelf-cell")).toHaveCount(5);
   await expect(page.locator('.shelf-cell[title="host-mark.png"] img')).toBeVisible();
+  await expect(page.locator('.shelf-cell[title="terminal-note.txt"]')).toHaveCount(0);
+  // The viewer carries the same from · age line as the grid cell.
+  await page.locator('.shelf-cell[title="layout.svg"]').click();
+  await expect(page.locator("#shelf-viewer")).toBeVisible();
+  await expect(page.locator("#shelf-meta")).toContainText("muse · ");
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#shelf-viewer")).toBeHidden();
   await page.keyboard.press("Escape");
   await expect(page.locator('[data-sheet="shelf"]')).toBeHidden();
 });

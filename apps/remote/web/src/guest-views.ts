@@ -4,20 +4,19 @@
 // unauthorized states. Same markup classes as the owner shell, so the
 // guest list is the owner list minus the New button and the guest session
 // is the owner session minus the builder, the sheets and the Files: the
-// terminal, the key bar and the composer are the owner's own widgets,
-// sharing the main bundle's chunk. No pairing, no picker, no hub-level
-// control of any kind.
+// terminal and the key bar are the owner's own widgets, sharing the main
+// bundle's chunk. No pairing, no picker, no hub-level control of any kind.
 
 import { armSessionHint } from "./auth.js";
 import { renderTopbar, wireAccount } from "./chrome.js";
 import { syncHeaderFondo } from "./fondo.js";
-import { Composer } from "./composer.js";
 import { REMOTE_FOOTER } from "./footer.js";
 import { renderKeyBar, updateKeyBarLatches } from "./keys.js";
 import { keyBytesWithModifiers, ModifierLatches, textBytesWithModifiers } from "./modifiers.js";
 import { SessionStore, renderSessions } from "./sessions.js";
 import { TerminalView, createXtermHandle } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
+import { pointerIsFine } from "./terminal-prefs.js";
 import { remoteTitle, sessionTitle } from "./titles.js";
 
 export interface GuestViewCallbacks {
@@ -28,7 +27,6 @@ export interface GuestViewCallbacks {
   onForgetDevice: () => void;
   /** Terminal and key-bar bytes with the latches applied. */
   onInput: (bytes: Uint8Array) => void;
-  onComposerSend: (text: string, req: string) => void;
 }
 
 export interface GuestView {
@@ -41,8 +39,6 @@ export interface GuestView {
   ensureTerminal: (id: string, cols: number, rows: number) => void;
   writeTerminal: (data: Uint8Array) => void;
   clearTerminal: () => void;
-  composerOk: (req: string) => void;
-  composerError: (message: string, req: string | null) => void;
   setSessionStatus: (status: string | null) => void;
   setConnectionState: (state: string) => void;
   setLogin: (login: string | null) => void;
@@ -82,7 +78,6 @@ export function createGuestView(
   let sessionCols = 0;
   let sessionRows = 0;
   let terminalView: TerminalView | null = null;
-  let composer: Composer | null = null;
   const latches = new ModifierLatches();
 
   function header(): string {
@@ -117,8 +112,6 @@ export function createGuestView(
   function teardownSessionWidgets(): void {
     terminalView?.dispose();
     terminalView = null;
-    composer?.unmount();
-    composer = null;
     sessionCols = 0;
     sessionRows = 0;
   }
@@ -232,7 +225,6 @@ export function createGuestView(
         <p class="term-placeholder">Attaching…</p>
       </div>
       <div class="keybar" id="keybar"></div>
-      <div class="composer-slot" id="composer-slot"></div>
     </main>
     ${REMOTE_FOOTER}`;
     wireChrome();
@@ -256,15 +248,6 @@ export function createGuestView(
         callbacks.onInput(bytes);
       });
     }
-    const slot = root.querySelector<HTMLElement>("#composer-slot");
-    if (slot) {
-      // No builder: a guest sends plain text prompts, never drafts.
-      composer = new Composer(
-        { onSend: (text, req) => callbacks.onComposerSend(text, req), onBuilder: () => {} },
-        { builder: false },
-      );
-      composer.mount(slot);
-    }
   }
 
   function repaint(): void {
@@ -281,9 +264,9 @@ export function createGuestView(
     }
   }
 
-  // The session route never repaints for chrome state: it would drop the
-  // terminal and the composer's draft. Only the header carries the state,
-  // so patch it in place, exactly as the owner shell does.
+  // The session route never repaints for chrome state: it would drop
+  // the terminal. Only the header carries the state, so patch it in
+  // place, exactly as the owner shell does.
   function patchHeader(): void {
     const topbar = root.querySelector(".topbar");
     if (topbar) {
@@ -328,7 +311,8 @@ export function createGuestView(
       if (terminalView && cols === sessionCols && rows === sessionRows) {
         return;
       }
-      // A remount keeps the composer: only the terminal goes.
+      // A remount drops only the terminal; the rest of the session
+      // route stays painted around it.
       terminalView?.dispose();
       terminalView = null;
       sessionCols = cols;
@@ -352,18 +336,22 @@ export function createGuestView(
         },
       });
       terminalView.mount(pane, cols, rows);
+      // As the owner's: a fine pointer takes focus once on attach, after
+      // xterm is open; a touch device waits for the first tap instead.
+      if (pointerIsFine()) {
+        const attached = terminalView;
+        void attached.ready().then(() => {
+          if (terminalView === attached) {
+            attached.focus();
+          }
+        });
+      }
     },
     writeTerminal: (data: Uint8Array) => {
       terminalView?.write(data);
     },
     clearTerminal: () => {
       terminalView?.clear();
-    },
-    composerOk: (req: string) => {
-      composer?.handleOk(req);
-    },
-    composerError: (message: string, req: string | null) => {
-      composer?.handleError(message, req);
     },
     setSessionStatus: (status: string | null) => {
       const badge = root.querySelector<HTMLElement>("#guest-exit");

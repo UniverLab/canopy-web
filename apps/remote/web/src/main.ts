@@ -2,7 +2,7 @@
 // Browser entry point: auth check, device key, relay socket, pairing,
 // and the reconnecting host connection behind the session shell. Joined
 // snapshots feed the open session; every other protocol frame is routed
-// to the session store, the catalog cache, a sheet, or the composer.
+// to the session store, the catalog cache, or a sheet.
 
 import { createShell } from "./app.js";
 import type { Shell } from "./app.js";
@@ -121,11 +121,6 @@ async function main(): Promise<void> {
       },
       onControlSize: (cols, rows) => {
         controller.sendResize(cols, rows);
-      },
-      onComposerSend: (text, req) => {
-        if (!controller.sendPrompt(text, req)) {
-          shell.composerError("Not connected", req);
-        }
       },
       onSpawn: (spawn, req) => manager?.send(buildSpawn(req, spawn)) ?? false,
       onCompose: (draft, req) => manager?.send(buildCompose(req, draft)) ?? false,

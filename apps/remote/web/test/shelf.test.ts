@@ -10,6 +10,7 @@ import type { Shell, ShellCallbacks } from "../src/app.js";
 import type { SessionItem, ShelfItem } from "../src/protocol.js";
 import { BlobLru, ShelfFetcher } from "../src/shelf-store.js";
 import { ShelfController } from "../src/shelf-controller.js";
+import { ShelfSheet } from "../src/shelf.js";
 import { SessionStore } from "../src/sessions.js";
 
 const CALLBACKS: ShellCallbacks = {
@@ -25,7 +26,6 @@ const CALLBACKS: ShellCallbacks = {
   onKeyPress: () => {},
   onTerminalInput: () => {},
   onControlSize: () => {},
-  onComposerSend: () => {},
   onSpawn: () => true,
   onCompose: () => true,
   onSendDraft: () => true,
@@ -56,6 +56,7 @@ function session(id: string, name: string): SessionItem {
     model: "spark",
     workdir: "/home/u/demo",
     status: "running",
+    kind: "agent",
     lastOutputAt: 1793100000_000,
   };
 }
@@ -265,6 +266,68 @@ describe("blob url cache", () => {
   });
 });
 
+describe("preview by sniffed mime", () => {
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  function openFile(
+    harness: ShellHarness,
+    item: ShelfItem,
+    bytes: Uint8Array,
+  ): void {
+    harness.shelf.handleHello(["shelf"]);
+    harness.shelf.open(harness.root);
+    harness.shelf.handleList({ req: null, id: "s1", items: [item] });
+    harness.root.querySelector<HTMLButtonElement>(".shelf-cell")?.click();
+    const get = harness.sent
+      .map((line) => JSON.parse(line) as { t: string; req?: string })
+      .filter((frame) => frame.t === "shelf_get")
+      .pop();
+    harness.shelf.handlePart({
+      req: get?.req ?? "",
+      file_id: item.file_id,
+      part: 0,
+      data: bytes,
+      last: true,
+    });
+  }
+
+  it("shows markdown as text nodes, never markup", async () => {
+    const harness = shellHarness();
+    openFile(
+      harness,
+      shelfItem({ file_id: "md", name: "notes.md", mime: "text/markdown", caption: null }),
+      new TextEncoder().encode("# Title\n<script>alert(1)</script>"),
+    );
+    await tick();
+    const text = document.querySelector<HTMLElement>("#shelf-viewer-text");
+    expect(text?.hidden).toBe(false);
+    expect(text?.textContent).toContain("# Title");
+    expect(text?.textContent).toContain("<script>alert(1)</script>");
+    expect(document.querySelector("#shelf-viewer script")).toBeNull();
+    expect(document.querySelector<HTMLElement>("#shelf-viewer-card")?.hidden).toBe(true);
+  });
+
+  it("shows html only as a download card with a blob link", async () => {
+    const harness = shellHarness();
+    openFile(
+      harness,
+      shelfItem({ file_id: "html", name: "page.html", mime: "text/html", caption: null }),
+      new TextEncoder().encode("<script>alert(1)</script>"),
+    );
+    await tick();
+    const card = document.querySelector<HTMLElement>("#shelf-viewer-card");
+    expect(card?.hidden).toBe(false);
+    expect(card?.textContent).toContain("page.html");
+    expect(card?.textContent).toContain("Download");
+    expect(document.querySelector("#shelf-viewer script")).toBeNull();
+    expect(document.querySelector("#shelf-viewer iframe")).toBeNull();
+    const link = card?.querySelector<HTMLAnchorElement>(".viewer-download");
+    expect(link?.getAttribute("href")).toMatch(/^blob:/);
+    expect(link?.getAttribute("download")).toBe("page.html");
+    expect(document.querySelector<HTMLElement>("#shelf-viewer-text")?.hidden).toBe(true);
+  });
+});
+
 describe("shelf surfaces", () => {
   it("hides every shelf surface until hello carries the feature", () => {
     const { root, sessions, shelf, shell, sent } = shellHarness();
@@ -328,7 +391,7 @@ describe("shelf surfaces", () => {
       });
     try {
       shelf.handleHello(["shelf"]);
-      shelf.open(root, "s1");
+      shelf.open(root);
       shelf.handleList({ req: null, id: "s1", items: [shelfItem({ file_id: "f1" })] });
       // The cell is on screen; tapping it asks for the bytes.
       root.querySelector<HTMLButtonElement>(".shelf-cell")?.click();
@@ -361,7 +424,7 @@ describe("shelf surfaces", () => {
   it("renders a caption carrying markup as plain text", () => {
     const { root, shelf } = shellHarness();
     shelf.handleHello(["shelf"]);
-    shelf.open(root, "s1");
+    shelf.open(root);
     const caption = `<script>alert("pwn")</script> & friends`;
     shelf.handleList({
       req: null,
@@ -399,7 +462,7 @@ describe("shelf surfaces", () => {
     expect(folder()).toBe("folder");
   });
 
-  it("lists the host shelf row and per-session counts", () => {
+  it("opens one union sheet from the home row and the session bar", () => {
     const { root, sessions, shelf, shell, sent } = shellHarness();
     sessions.replace([session("s1", "build")]);
     shelf.handleHello(["shelf"]);
@@ -408,7 +471,8 @@ describe("shelf surfaces", () => {
       "shelf_list",
     ]);
     shell.showSessions();
-    expect(root.querySelector("#host-shelf-row")).toBeNull();
+    // The row is up before any reply lands.
+    expect(root.querySelector("#host-shelf-row")).not.toBeNull();
 
     shelf.handleList({
       req: null,
@@ -420,13 +484,402 @@ describe("shelf surfaces", () => {
       id: "s1",
       items: [shelfItem({ file_id: "f1" }), shelfItem({ file_id: "f2" })],
     });
-    // The count rides beside the folder icon, with no glyph in the text.
-    expect(root.querySelector("#host-shelf-row .session-files-count")?.textContent).toBe("1");
-    expect(root.querySelector('[data-session="s1"] .session-files-count')?.textContent).toBe("2");
-    expect(root.querySelector('[data-session="s1"] .session-files svg')).not.toBeNull();
+    // No per-row counts under a union.
+    expect(root.querySelector(".session-files")).toBeNull();
+    expect(root.querySelector(".session-files-count")).toBeNull();
+
+    // The home row opens the union: the host file beside the session's.
+    root.querySelector<HTMLButtonElement>("#host-shelf-row")?.click();
+    expect(root.querySelector('[data-sheet="shelf"]')).not.toBeNull();
+    expect(root.querySelector('[data-sheet="shelf"] h2')?.textContent).toBe("Shelf");
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(3);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+
+    // The session bar opens the same union sheet.
+    shell.showSession("s1", "build");
+    root.querySelector<HTMLButtonElement>("#session-files")?.click();
+    expect(root.querySelector('[data-sheet="shelf"] h2')?.textContent).toBe("Shelf");
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(3);
+  });
+});
+
+describe("union shelf", () => {
+  /** The union never deletes: no shelf_delete frame leaves the browser. */
+  const noDeleteTraffic = (sent: string[]): void => {
+    for (const line of sent) {
+      expect((JSON.parse(line) as { t: string }).t).not.toBe("shelf_delete");
+    }
+  };
+
+  it("merges host and session shelves newest first, deduped by file_id", () => {
+    const { root, sessions, shelf, sent } = shellHarness();
+    sessions.replace([session("s1", "build"), session("s2", "docs")]);
+    shelf.handleHello(["shelf"]);
+    shelf.handleList({
+      req: null,
+      id: null,
+      items: [shelfItem({ file_id: "h1", session_id: null, name: "host.png", created_at: 1793100000_000 })],
+    });
+    shelf.handleList({
+      req: null,
+      id: "s1",
+      items: [
+        shelfItem({ file_id: "dup", name: "dup-s1.png", created_at: 1793100060_000 }),
+        shelfItem({ file_id: "s1-old", name: "s1-old.png", created_at: 1793099940_000 }),
+      ],
+    });
+    shelf.handleList({
+      req: null,
+      id: "s2",
+      items: [
+        shelfItem({ file_id: "dup", session_id: "s2", name: "dup-s2.png", created_at: 1793100120_000 }),
+        shelfItem({ file_id: "s2-new", session_id: "s2", name: "s2-new.png", created_at: 1793100180_000 }),
+      ],
+    });
+    shelf.open(root);
+    const titles = [...root.querySelectorAll(".shelf-cell")].map((cell) =>
+      cell.getAttribute("title"),
+    );
+    // One row per file_id — the first shelf's copy wins — newest first.
+    expect(titles).toEqual(["s2-new.png", "dup-s1.png", "host.png", "s1-old.png"]);
+    noDeleteTraffic(sent);
+  });
+
+  it("shows nothing from a terminal shelf the bridge never sends", () => {
+    const { root, sessions, shelf, sent } = shellHarness();
+    sessions.replace([
+      session("s1", "build"),
+      { ...session("t1", "shell"), kind: "terminal", cli: "", model: "" },
+    ]);
+    shelf.handleHello(["shelf"]);
+    // The prefetch still asks every shelf, terminals included.
+    expect(
+      sent.map((frame) => (JSON.parse(frame) as { t: string; id?: string }).id ?? null),
+    ).toEqual([null, "s1", "t1"]);
+    // The bridge answers the terminal's shelf_list with no items.
+    shelf.handleList({ req: null, id: "t1", items: [] });
+    shelf.handleList({ req: null, id: "s1", items: [shelfItem({ file_id: "f1" })] });
+    shelf.handleList({
+      req: null,
+      id: null,
+      items: [shelfItem({ file_id: "h1", session_id: null, name: "host.png" })],
+    });
+    shelf.open(root);
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(2);
+    expect(root.querySelector('.shelf-cell[title="terminal-note.txt"]')).toBeNull();
+    noDeleteTraffic(sent);
+  });
+
+  it("badges the total unseen on the home row and the session bar", () => {
+    const { root, sessions, shelf, shell, sent } = shellHarness();
+    sessions.replace([session("s1", "build")]);
+    shelf.handleHello(["shelf"]);
+    shelf.handleAdded(shelfItem({ file_id: "h1", session_id: null }));
+    shelf.handleAdded(shelfItem({ file_id: "f1" }));
+    shelf.handleAdded(shelfItem({ file_id: "f2", session_id: "s2" }));
+    expect(shelf.unseenTotal()).toBe(3);
+
+    shell.showSessions();
+    const homeBadge = root.querySelector<HTMLElement>("#shelf-row-badge");
+    expect(homeBadge?.hidden).toBe(false);
+    expect(homeBadge?.textContent).toBe("3");
+
+    shell.showSession("s1", "build");
+    const barBadge = root.querySelector<HTMLElement>("#session-files-badge");
+    expect(barBadge?.hidden).toBe(false);
+    expect(barBadge?.textContent).toBe("3");
+    noDeleteTraffic(sent);
+  });
+
+  it("marks every shelf seen when the union sheet opens", () => {
+    const { root, sessions, shelf, shell, sent } = shellHarness();
+    sessions.replace([session("s1", "build")]);
+    shelf.handleHello(["shelf"]);
+    shelf.handleAdded(shelfItem({ file_id: "h1", session_id: null }));
+    shelf.handleAdded(shelfItem({ file_id: "f1" }));
+    shell.showSessions();
+    expect(root.querySelector<HTMLElement>("#shelf-row-badge")?.hidden).toBe(false);
 
     root.querySelector<HTMLButtonElement>("#host-shelf-row")?.click();
     expect(root.querySelector('[data-sheet="shelf"]')).not.toBeNull();
+    expect(shelf.unseenTotal()).toBe(0);
+    expect(root.querySelector<HTMLElement>("#shelf-row-badge")?.hidden).toBe(true);
+
+    shell.showSession("s1", "build");
+    expect(root.querySelector<HTMLElement>("#session-files-badge")?.hidden).toBe(true);
+    noDeleteTraffic(sent);
+  });
+
+  it("keeps the Shelf row up at zero files, beside the empty note", () => {
+    const { root, sessions, shelf, shell, sent } = shellHarness();
+    sessions.replace([]);
+    shelf.handleHello(["shelf"]);
+    shell.showSessions();
+    // Zero sessions and zero files: the entry row and the empty note.
+    const row = root.querySelector("#host-shelf-row");
+    expect(row).not.toBeNull();
+    expect(row?.querySelector(".session-sub")?.textContent).toBe(
+      "Files from the host and its sessions",
+    );
+    expect(root.querySelector<HTMLElement>("#shelf-row-badge")?.hidden).toBe(true);
+    expect(root.querySelector("p.empty")?.textContent).toBe("No sessions on this host.");
+
+    sessions.replace([session("s1", "build")]);
+    expect(root.querySelector("#host-shelf-row")).not.toBeNull();
+    expect(root.querySelector("p.empty")).toBeNull();
+
+    root.querySelector<HTMLButtonElement>("#host-shelf-row")?.click();
+    expect(root.querySelector('[data-sheet="shelf"] h2')?.textContent).toBe("Shelf");
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(0);
+    expect(root.querySelector(".shelf-empty")?.textContent).toBe("No files on this shelf yet.");
+    noDeleteTraffic(sent);
+  });
+
+  it("shows from · age under the viewer caption, like the grid cell", () => {
+    const { root, shelf, sent } = shellHarness();
+    shelf.handleHello(["shelf"]);
+    shelf.open(root);
+    shelf.handleList({
+      req: null,
+      id: "s1",
+      items: [shelfItem({ from: "muse", created_at: Date.now() - 90_000 })],
+    });
+    root.querySelector<HTMLButtonElement>(".shelf-cell")?.click();
+    expect(document.querySelector("#shelf-viewer")).not.toBeNull();
+    expect(document.querySelector<HTMLElement>("#shelf-meta")?.textContent).toBe("muse · 1m ago");
+    expect(document.querySelector<HTMLElement>("#shelf-meta")?.textContent).toBe(
+      root.querySelector<HTMLElement>(".shelf-meta")?.textContent,
+    );
+    noDeleteTraffic(sent);
+  });
+});
+
+describe("shelf delete", () => {
+  /** The delete requests the browser sent, oldest first. */
+  const deleteReqs = (sent: string[]): { req: string; file_id: string }[] =>
+    sent
+      .map((line) => JSON.parse(line) as { t: string; req: string; file_id: string })
+      .filter((frame) => frame.t === "shelf_delete");
+
+  const cellCross = (root: HTMLElement, fileId: string): HTMLButtonElement | null =>
+    root.querySelector<HTMLButtonElement>(`.shelf-delete[data-file-id="${fileId}"]`);
+
+  it("deletes from the viewer button, removed on the push and not the ok", () => {
+    const { root, shelf, sent } = shellHarness();
+    shelf.handleHello(["shelf"]);
+    shelf.open(root);
+    shelf.handleList({ req: null, id: "s1", items: [shelfItem({ file_id: "f1" })] });
+    root.querySelector<HTMLButtonElement>(".shelf-cell")?.click();
+
+    const button = document.querySelector<HTMLButtonElement>("#shelf-delete");
+    expect(button?.textContent).toBe("Delete");
+    button?.click();
+    // Immediate, no confirm: the frame carries the viewed file.
+    expect(deleteReqs(sent)).toHaveLength(1);
+    expect(deleteReqs(sent)[0]?.file_id).toBe("f1");
+    expect(button?.disabled).toBe(true);
+
+    // The ok re-enables the control but removes nothing: the host's push
+    // is the source of truth, and somebody else's ok is not this delete.
+    expect(shelf.handleOk("r-unknown")).toBe(false);
+    expect(shelf.handleOk(deleteReqs(sent)[0]?.req ?? "")).toBe(true);
+    expect(button?.disabled).toBe(false);
     expect(root.querySelectorAll(".shelf-cell")).toHaveLength(1);
+
+    shelf.handleRemoved("f1");
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(0);
+    // Its last file gone, the viewer closes with the sheet behind it.
+    expect(document.querySelector("#shelf-viewer")).toBeNull();
+  });
+
+  it("deletes from the cell × without touching the other cells", () => {
+    const { root, shelf, sent } = shellHarness();
+    shelf.handleHello(["shelf"]);
+    shelf.open(root);
+    shelf.handleList({
+      req: null,
+      id: "s1",
+      items: [shelfItem({ file_id: "f1" }), shelfItem({ file_id: "f2", name: "second.png" })],
+    });
+    expect(root.querySelectorAll(".shelf-delete")).toHaveLength(2);
+    const cross = cellCross(root, "f1");
+    expect(cross?.textContent).toBe("×");
+    expect(cross?.getAttribute("aria-label")).toBe("Delete gradient.png");
+
+    cross?.click();
+    expect(deleteReqs(sent)).toHaveLength(1);
+    expect(deleteReqs(sent)[0]?.file_id).toBe("f1");
+    expect(cellCross(root, "f1")?.disabled).toBe(true);
+    expect(cellCross(root, "f2")?.disabled).toBe(false);
+
+    // While the first is in flight a repeat sends nothing new.
+    shelf.deleteFile(shelfItem({ file_id: "f1" }));
+    expect(deleteReqs(sent)).toHaveLength(1);
+
+    // The ok re-enables; only the push removes, and only that file.
+    expect(shelf.handleOk(deleteReqs(sent)[0]?.req ?? "")).toBe(true);
+    expect(cellCross(root, "f1")?.disabled).toBe(false);
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(2);
+    shelf.handleRemoved("f1");
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(1);
+    expect(root.querySelector('.shelf-cell[title="second.png"]')).not.toBeNull();
+  });
+
+  it("treats not_found as removed, with no error line", () => {
+    const { root, shelf, sent } = shellHarness();
+    shelf.handleHello(["shelf"]);
+    shelf.open(root);
+    shelf.handleList({ req: null, id: "s1", items: [shelfItem({ file_id: "f1" })] });
+    cellCross(root, "f1")?.click();
+    const req = deleteReqs(sent)[0]?.req ?? "";
+
+    expect(shelf.handleError({ req, code: "not_found", message: "no shelf file 'f1'" })).toBe(true);
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(0);
+    expect(root.querySelector<HTMLElement>("#shelf-delete-error")?.hidden).toBe(true);
+  });
+
+  it("shows one inline line when a delete fails, and the file stays", () => {
+    const { root, shelf, sent } = shellHarness();
+    shelf.handleHello(["shelf"]);
+    shelf.open(root);
+    shelf.handleList({ req: null, id: "s1", items: [shelfItem({ file_id: "f1" })] });
+    const line = () => root.querySelector<HTMLElement>("#shelf-delete-error");
+    expect(line()?.hidden).toBe(true);
+
+    cellCross(root, "f1")?.click();
+    expect(shelf.handleError({ req: deleteReqs(sent)[0]?.req ?? "", code: "internal", message: "x" })).toBe(
+      true,
+    );
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(1);
+    expect(line()?.hidden).toBe(false);
+    expect(line()?.textContent).toBe("Couldn't delete gradient.png");
+    expect(cellCross(root, "f1")?.disabled).toBe(false);
+
+    // A fresh attempt clears the line; its failure repaints the one line.
+    cellCross(root, "f1")?.click();
+    expect(line()?.hidden).toBe(true);
+    expect(shelf.handleError({ req: deleteReqs(sent)[1]?.req ?? "", code: "internal", message: "x" })).toBe(
+      true,
+    );
+    expect(root.querySelectorAll("#shelf-delete-error")).toHaveLength(1);
+    expect(line()?.textContent).toBe("Couldn't delete gradient.png");
+  });
+
+  it("renders a hostile file name as text in the error line", () => {
+    const { root, shelf, sent } = shellHarness();
+    shelf.handleHello(["shelf"]);
+    shelf.open(root);
+    const name = `<img src="x" onerror="alert(1)">.png`;
+    shelf.handleList({ req: null, id: "s1", items: [shelfItem({ file_id: "f1", name })] });
+    cellCross(root, "f1")?.click();
+    expect(shelf.handleError({ req: deleteReqs(sent)[0]?.req ?? "", code: "internal", message: "x" })).toBe(
+      true,
+    );
+    const line = root.querySelector<HTMLElement>("#shelf-delete-error");
+    expect(line?.textContent).toBe(`Couldn't delete ${name}`);
+    expect(line?.querySelector("img")).toBeNull();
+  });
+
+  it("offers no delete control when the feature is off", () => {
+    const { root, shelf } = shellHarness();
+    shelf.handleHello([]);
+    shelf.open(root);
+    expect(root.querySelector('[data-sheet="shelf"]')).toBeNull();
+    expect(root.querySelector(".shelf-delete")).toBeNull();
+
+    // A sheet built without the feature renders no × and no viewer button.
+    const sheet = new ShelfSheet({
+      items: () => [shelfItem()],
+      ensure: () => {},
+      requestAll: () => {},
+      markSeen: () => {},
+      blobUrl: () => null,
+      blob: () => null,
+      isYours: () => false,
+      onDelete: null,
+      onClosed: () => {},
+    });
+    sheet.open(root);
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(1);
+    expect(root.querySelector(".shelf-delete")).toBeNull();
+    root.querySelector<HTMLButtonElement>(".shelf-cell")?.click();
+    expect(document.querySelector("#shelf-viewer")).not.toBeNull();
+    expect(document.querySelector("#shelf-delete")).toBeNull();
+    sheet.close();
+  });
+
+  it("ends the delete on a push that lands ahead of its ok", () => {
+    const { root, shelf, sent } = shellHarness();
+    shelf.handleHello(["shelf"]);
+    shelf.open(root);
+    shelf.handleList({ req: null, id: "s1", items: [shelfItem({ file_id: "f1" })] });
+    cellCross(root, "f1")?.click();
+    const req = deleteReqs(sent)[0]?.req ?? "";
+
+    // The broadcast lands first: the file leaves at once, with no error.
+    shelf.handleRemoved("f1");
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(0);
+    expect(root.querySelector<HTMLElement>("#shelf-delete-error")?.hidden).toBe(true);
+
+    // The late ok is still the delete's own answer: swallowed, never a dialog.
+    expect(shelf.handleOk(req)).toBe(true);
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(0);
+    expect(root.querySelector<HTMLElement>("#shelf-delete-error")?.hidden).toBe(true);
+  });
+
+  it("swallows a late error after its push removed the file", () => {
+    const { root, shelf, sent } = shellHarness();
+    shelf.handleHello(["shelf"]);
+    shelf.open(root);
+    shelf.handleList({
+      req: null,
+      id: "s1",
+      items: [shelfItem({ file_id: "f1" }), shelfItem({ file_id: "f2", name: "second.png" })],
+    });
+    cellCross(root, "f1")?.click();
+    cellCross(root, "f2")?.click();
+    const [first, second] = deleteReqs(sent);
+    // An eviction racing both deletes takes the files first.
+    shelf.handleRemoved("f1");
+    shelf.handleRemoved("f2");
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(0);
+
+    // Already gone host-side either way: no error line, never a dialog.
+    expect(
+      shelf.handleError({ req: first?.req ?? "", code: "not_found", message: "no shelf file 'f1'" }),
+    ).toBe(true);
+    expect(
+      shelf.handleError({ req: second?.req ?? "", code: "internal", message: "x" }),
+    ).toBe(true);
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(0);
+    expect(root.querySelector<HTMLElement>("#shelf-delete-error")?.hidden).toBe(true);
+  });
+
+  it("clears in-flight deletes and the error line on a fresh hello", () => {
+    const { root, shelf, sent } = shellHarness();
+    shelf.handleHello(["shelf"]);
+    shelf.open(root);
+    const items = () => [shelfItem({ file_id: "f1" }), shelfItem({ file_id: "f2", name: "second.png" })];
+    shelf.handleList({ req: null, id: "s1", items: items() });
+    // One delete is still in flight while another fails and leaves its line.
+    cellCross(root, "f2")?.click();
+    cellCross(root, "f1")?.click();
+    const staleReq = deleteReqs(sent)[0]?.req ?? "";
+    expect(
+      shelf.handleError({ req: deleteReqs(sent)[1]?.req ?? "", code: "internal", message: "x" }),
+    ).toBe(true);
+    expect(root.querySelector<HTMLElement>("#shelf-delete-error")?.hidden).toBe(false);
+    expect(cellCross(root, "f2")?.disabled).toBe(true);
+
+    // A reconnect's hello ends the old connection: its pending state dies.
+    shelf.handleHello(["shelf"]);
+    shelf.handleList({ req: null, id: "s1", items: items() });
+    expect(root.querySelector<HTMLElement>("#shelf-delete-error")?.hidden).toBe(true);
+    expect(cellCross(root, "f2")?.disabled).toBe(false);
+    expect(shelf.handleOk(staleReq)).toBe(false);
+
+    // And deleting again works: the old pending never blocks the new one.
+    cellCross(root, "f2")?.click();
+    expect(deleteReqs(sent)).toHaveLength(3);
   });
 });

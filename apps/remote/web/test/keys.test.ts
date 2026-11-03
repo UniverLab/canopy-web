@@ -19,6 +19,7 @@ describe("key bar bytes", () => {
     expect(bytesOf("down")).toEqual([0x1b, 0x5b, 0x42]);
     expect(bytesOf("left")).toEqual([0x1b, 0x5b, 0x44]);
     expect(bytesOf("right")).toEqual([0x1b, 0x5b, 0x43]);
+    expect(bytesOf("backspace")).toEqual([0x7f]);
     expect(bytesOf("enter")).toEqual([0x0d]);
   });
 
@@ -30,7 +31,7 @@ describe("key bar bytes", () => {
     expect(isLatchKey("tab")).toBe(false);
   });
 
-  it("defines nine keys in bar order", () => {
+  it("defines ten keys in bar order", () => {
     expect(KEY_DEFS.map((def) => def.id)).toEqual([
       "esc",
       "ctrl",
@@ -40,6 +41,7 @@ describe("key bar bytes", () => {
       "up",
       "down",
       "right",
+      "backspace",
       "enter",
     ]);
     expect(keyById("nope")).toBeNull();
@@ -60,18 +62,18 @@ describe("renderKeyBar", () => {
     const pressed: KeyDef[] = [];
     renderKeyBar(bar, (def) => pressed.push(def));
     const buttons = [...bar.querySelectorAll<HTMLButtonElement>("button.key")];
-    expect(buttons).toHaveLength(9);
+    expect(buttons).toHaveLength(10);
     expect(buttons[0]?.textContent).toBe("Esc");
     buttons[4]?.click();
     expect(pressed.map((def) => def.id)).toEqual(["left"]);
     expect(bar.getAttribute("role")).toBe("toolbar");
   });
 
-  it("draws Tab, the arrows and Enter as icons", () => {
+  it("draws Tab, the arrows, Backspace and Enter as icons", () => {
     const bar = document.createElement("div");
     document.body.appendChild(bar);
     renderKeyBar(bar, () => {});
-    for (const id of ["tab", "left", "up", "down", "right", "enter"]) {
+    for (const id of ["tab", "left", "up", "down", "right", "backspace", "enter"]) {
       const button = bar.querySelector<HTMLButtonElement>(`button.key[data-key="${id}"]`);
       expect(button?.textContent, id).toBe("");
       expect(button?.querySelector("svg"), id).not.toBeNull();

@@ -12,9 +12,9 @@ import {
   buildInput,
   buildInputText,
   buildList,
-  buildPrompt,
   buildPromptDraft,
   buildResize,
+  buildShelfDelete,
   buildShelfGet,
   buildShelfList,
   buildSpawn,
@@ -52,12 +52,6 @@ describe("builders", () => {
     expect(JSON.parse(buildCatalog("r1"))).toEqual({ t: "catalog", req: "r1" });
     expect(JSON.parse(buildAttach("s1"))).toEqual({ t: "attach", id: "s1" });
     expect(JSON.parse(buildDetach("s1"))).toEqual({ t: "detach", id: "s1" });
-    expect(JSON.parse(buildPrompt("r2", "s1", "hello"))).toEqual({
-      t: "prompt",
-      req: "r2",
-      id: "s1",
-      text: "hello",
-    });
   });
 
   it("builds the exact spawn, compose and draft frames", () => {
@@ -170,6 +164,7 @@ describe("parseSessionItem", () => {
         model: "spark",
         workdir: "/home/u/proj",
         status: "running",
+        kind: "agent",
         last_output_at: 1793100000,
       }),
     ).toEqual({
@@ -179,6 +174,7 @@ describe("parseSessionItem", () => {
       model: "spark",
       workdir: "/home/u/proj",
       status: "running",
+      kind: "agent",
       lastOutputAt: 1793100000_000,
     });
   });
@@ -200,6 +196,7 @@ describe("parseSessionItem", () => {
       model: "",
       workdir: "",
       status: "",
+      kind: "",
       lastOutputAt: null,
     });
     expect(parseSessionItem({ name: "x" })).toBeNull();
@@ -210,7 +207,7 @@ describe("parseSessionItem", () => {
 describe("frame parsers", () => {
   it("parses sessions and skips invalid items", () => {
     expect(parseSessions({ t: "sessions", req: "r1", items: [{ id: "a" }, { nope: true }] })).toEqual([
-      { id: "a", name: "", cli: "", model: "", workdir: "", status: "", lastOutputAt: null },
+      { id: "a", name: "", cli: "", model: "", workdir: "", status: "", kind: "", lastOutputAt: null },
     ]);
     expect(parseSessions({ t: "sessions" })).toBeNull();
     expect(parseSessions({ t: "out", id: "a", seq: 1, data: "eQ==" })).toBeNull();
@@ -392,6 +389,11 @@ describe("shelf frames", () => {
       req: "r3",
       file_id: "f9",
     });
+    expect(JSON.parse(buildShelfDelete("r4", "f9"))).toEqual({
+      t: "shelf_delete",
+      req: "r4",
+      file_id: "f9",
+    });
   });
 
   it("reads hello features and treats a broken hello as featureless", () => {
@@ -506,10 +508,15 @@ describe("shelf frames", () => {
   });
 });
 
-// The graph-watching frames: the list, the watch reply (summary plus the
-// drawing the plate draws) and the live-state pushes. Malformed frames
+// The graph-watching frames: the list, the watch reply (the id, the
+// document the plate draws and the first live state) and the live-state
+// pushes. Shapes are the host's verbatim (graphs.rs); malformed frames
 // are rejected like the existing ones; one bad row never empties a reply.
 describe("graph frames", () => {
+  // The host's updated_at is RFC3339 (graphs.rs:48-67,71-86).
+  const AT = "2026-11-02T10:30:00.000Z";
+  const AT_MS = Date.parse(AT);
+
   const summary = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
     id: "g1",
     name: "palette-loop",
@@ -520,12 +527,11 @@ describe("graph frames", () => {
     done: 1,
     total: 4,
     blocked: false,
-    updated_at: 1793100000,
+    updated_at: AT,
     ...overrides,
   });
 
-  const state = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
-    t: "graph_state",
+  const statePayload = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
     status: "running",
     blocked: false,
     blocker: null,
@@ -536,7 +542,23 @@ describe("graph frames", () => {
       { id: "s1", code: "FIX-1", name: "Lock the palette", status: "completed", attempts: 2 },
       { id: "s2", code: "FIX-2", name: "Draw the plate", status: "running", attempts: 1 },
     ],
-    updated_at: 1793100000,
+    updated_at: AT,
+    ...overrides,
+  });
+
+  const state = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
+    t: "graph_state",
+    id: "g1",
+    state: statePayload(),
+    ...overrides,
+  });
+
+  const reply = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
+    t: "graph",
+    req: "r7",
+    id: "g1",
+    document: { name: "palette-loop", nodes: [], edges: [] },
+    state: statePayload(),
     ...overrides,
   });
 
@@ -550,7 +572,7 @@ describe("graph frames", () => {
     const parsed = parseGraphs({
       t: "graphs",
       req: "r1",
-      items: [summary(), summary({ id: "g2", status: "completed" }), { nope: true }],
+      graphs: [summary(), summary({ id: "g2", status: "completed" }), { nope: true }],
     });
     expect(parsed).toEqual([
       {
@@ -563,34 +585,72 @@ describe("graph frames", () => {
         done: 1,
         total: 4,
         blocked: false,
-        updated_at: 1793100000_000,
+        updated_at: AT_MS,
       },
       expect.objectContaining({ id: "g2", status: "completed" }),
     ]);
     expect(parseGraphs({ t: "graphs" })).toBeNull();
-    expect(parseGraphs({ t: "graphs", items: {} })).toBeNull();
-    expect(parseGraphs({ t: "sessions", items: [] })).toBeNull();
+    expect(parseGraphs({ t: "graphs", graphs: {} })).toBeNull();
+    // The pre-fix `items` shape answers nothing: a frame shaped like the
+    // drift parses to null instead of an empty list.
+    expect(parseGraphs({ t: "graphs", items: [] })).toBeNull();
+    expect(parseGraphs({ t: "sessions", graphs: [] })).toBeNull();
     expect(parseGraphs(null)).toBeNull();
   });
 
   it("rejects a summary without an id or a status", () => {
-    expect(parseGraphs({ t: "graphs", items: [summary({ id: "" })] })).toEqual([]);
-    expect(parseGraphs({ t: "graphs", items: [summary({ status: "" })] })).toEqual([]);
-    expect(parseGraphs({ t: "graphs", items: [{ name: "nameless" }] })).toEqual([]);
+    expect(parseGraphs({ t: "graphs", graphs: [summary({ id: "" })] })).toEqual([]);
+    expect(parseGraphs({ t: "graphs", graphs: [summary({ status: "" })] })).toEqual([]);
+    expect(parseGraphs({ t: "graphs", graphs: [{ name: "nameless" }] })).toEqual([]);
   });
 
-  it("parses the watch reply with its drawing", () => {
-    const doc = { name: "palette-loop", nodes: [], edges: [] };
-    const parsed = parseGraph({ t: "graph", item: summary(), doc });
-    expect(parsed?.summary.id).toBe("g1");
-    expect(parsed?.summary.current_spec).toBe("Draw the plate");
-    expect(parsed?.doc).toEqual(doc);
+  it("reads numeric updated_at as seconds or milliseconds", () => {
+    expect(
+      parseGraphs({ t: "graphs", graphs: [summary({ updated_at: 1793100000 })] })?.[0]?.updated_at,
+    ).toBe(1793100000_000);
+    expect(
+      parseGraphs({ t: "graphs", graphs: [summary({ updated_at: 1793100000_000 })] })?.[0]
+        ?.updated_at,
+    ).toBe(1793100000_000);
+    expect(
+      parseGraphState(state({ state: statePayload({ updated_at: 1793100000 }) }))?.updated_at,
+    ).toBe(1793100000_000);
+  });
+
+  it("rebuilds the watch reply summary from the document and the state", () => {
+    const parsed = parseGraph(reply());
+    expect(parsed?.summary).toEqual({
+      id: "g1",
+      name: "palette-loop",
+      status: "running",
+      workdir: "",
+      current_spec: "Draw the plate",
+      current_node: "implementer",
+      done: 1,
+      total: 2,
+      blocked: false,
+      updated_at: AT_MS,
+    });
+    expect(parsed?.doc).toEqual({ name: "palette-loop", nodes: [], edges: [] });
+    // The reply's initial state rides along for the store.
+    expect(parsed?.state.current_node).toBe("implementer");
+    // A current spec id with no matching row reads as no current spec.
+    expect(
+      parseGraph(reply({ state: statePayload({ current_spec_id: "gone" }) }))?.summary
+        .current_spec,
+    ).toBe("");
     // An unreadable drawing still delivers the summary: the view holds
     // the stage instead of the plate.
-    expect(parseGraph({ t: "graph", item: summary() })?.doc).toBeNull();
-    expect(parseGraph({ t: "graph", item: summary(), doc: "nope" })?.doc).toBeNull();
-    expect(parseGraph({ t: "graph", item: { nope: true }, doc })).toBeNull();
-    expect(parseGraph({ t: "graphs", items: [] })).toBeNull();
+    expect(parseGraph(reply({ document: "nope" }))?.doc).toBeNull();
+    expect(parseGraph(reply({ document: "nope" }))?.summary.name).toBe("");
+    // The legacy doc field still answers when document is absent.
+    expect(
+      parseGraph({ t: "graph", id: "g1", state: statePayload(), doc: { name: "old" } })?.doc,
+    ).toEqual({ name: "old" });
+    expect(parseGraph(reply({ id: "" }))).toBeNull();
+    expect(parseGraph(reply({ state: { nope: true } }))).toBeNull();
+    expect(parseGraph(reply({ state: statePayload({ status: "" }) }))).toBeNull();
+    expect(parseGraph({ t: "graphs", graphs: [] })).toBeNull();
   });
 
   it("parses a live state with its overlay and checklist", () => {
@@ -606,23 +666,27 @@ describe("graph frames", () => {
         { id: "s1", code: "FIX-1", name: "Lock the palette", status: "completed", attempts: 2 },
         { id: "s2", code: "FIX-2", name: "Draw the plate", status: "running", attempts: 1 },
       ],
-      updated_at: 1793100000_000,
+      updated_at: AT_MS,
     });
+    // The frame id selects nothing: a push for any id parses the same.
+    expect(parseGraphState(state({ id: "other" }))?.status).toBe("running");
   });
 
   it("reads the blocker and tolerates thin rows", () => {
     const parsed = parseGraphState(
       state({
-        blocked: true,
-        blocker: "waiting on review",
-        current_spec_id: "",
-        current_node: null,
-        nodes: { start: "pass", ghost: "exploded", "": "pass" },
-        specs: [
-          { id: "s9" },
-          { id: "", status: "completed" },
-          { id: "s10", code: "", name: "Retry", status: "interrupted", attempts: -1 },
-        ],
+        state: statePayload({
+          blocked: true,
+          blocker: "waiting on review",
+          current_spec_id: "",
+          current_node: null,
+          nodes: { start: "pass", ghost: "exploded", "": "pass" },
+          specs: [
+            { id: "s9" },
+            { id: "", status: "completed" },
+            { id: "s10", code: "", name: "Retry", status: "interrupted", attempts: -1 },
+          ],
+        }),
       }),
     );
     expect(parsed?.blocked).toBe(true);
@@ -638,10 +702,27 @@ describe("graph frames", () => {
     ]);
   });
 
+  it("reads prototype-named spec states as pending, never as inherited members", () => {
+    // A word like "constructor" resolves to a prototype member through a
+    // plain lookup; the checklist paint (specMark) would then read
+    // undefined and throw inside the view. Own keys only, like the chips.
+    for (const word of ["constructor", "__proto__", "toString", "hasOwnProperty"]) {
+      const parsed = parseGraphState(
+        state({ state: statePayload({ specs: [{ id: "s1", status: word }] }) }),
+      );
+      expect(parsed?.specs).toEqual([
+        { id: "s1", code: null, name: "", status: "pending", attempts: 0 },
+      ]);
+    }
+  });
+
   it("rejects a state without a status, an overlay or a queue", () => {
-    expect(parseGraphState(state({ status: "" }))).toBeNull();
-    expect(parseGraphState(state({ nodes: "nope" }))).toBeNull();
-    expect(parseGraphState(state({ specs: {} }))).toBeNull();
+    expect(parseGraphState(state({ state: statePayload({ status: "" }) }))).toBeNull();
+    expect(parseGraphState(state({ state: statePayload({ nodes: "nope" }) }))).toBeNull();
+    expect(parseGraphState(state({ state: statePayload({ specs: {} }) }))).toBeNull();
+    expect(parseGraphState(state({ state: null }))).toBeNull();
+    // The pre-fix flat shape answers nothing: the payload lives nested.
+    expect(parseGraphState({ t: "graph_state", id: "g1", ...statePayload() })).toBeNull();
     expect(parseGraphState(state({ t: "graph" }))).toBeNull();
     expect(parseGraphState(null)).toBeNull();
   });

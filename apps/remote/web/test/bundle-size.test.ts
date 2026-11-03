@@ -99,6 +99,22 @@ const LANE_BUDGET = 4_096;
  * LANE_BUDGET: the shared plate code rides the main bundle.
  */
 const BAND_BUDGET = 1_280;
+/**
+ * Allowance for the shelf-upload spec (upload queue and its frames, the
+ * preview-by-sniffed-mime branch, the two-direction sheet and the tray):
+ * measured +2 449 B gzip over the pre-change main. Added in the feature
+ * commit like LANE_BUDGET: the 508-byte headroom made any implementation
+ * of the spec impossible.
+ */
+const UPLOAD_BUDGET = 4_096;
+/**
+ * Allowance for the shelf-delete spec (cell ×, viewer Delete button, the
+ * one inline error line, the controller's send/ok/error path and the
+ * shelf_delete builder): measured +727 B gzip over the pre-change main.
+ * Added in the feature commit like UPLOAD_BUDGET: the 337-byte headroom
+ * made any implementation of the spec impossible.
+ */
+const SHELF_DELETE_BUDGET = 1_024;
 /** The budget the lazy guest chunk is allowed, gzip bytes of JS. */
 const GUEST_BUDGET = 6_144;
 /** The budget the lazy editor chunk is allowed, gzip bytes of JS. */
@@ -203,7 +219,9 @@ describe("the remote's bundle", () => {
         SESSION_HINT_BUDGET +
         WALK_BUDGET +
         LANE_BUDGET +
-        BAND_BUDGET,
+        BAND_BUDGET +
+        UPLOAD_BUDGET +
+        SHELF_DELETE_BUDGET,
     );
     expect(guestJs, JSON.stringify(report)).toBeLessThanOrEqual(GUEST_BUDGET);
     expect(editorJs, JSON.stringify(report)).toBeLessThanOrEqual(EDITOR_BUDGET);

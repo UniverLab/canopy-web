@@ -11,7 +11,6 @@ import {
   buildDetach,
   buildInput,
   buildInputText,
-  buildPrompt,
   buildPromptDraft,
   buildResize,
   decodeSnapshotData,
@@ -88,13 +87,6 @@ export class SessionController {
       return false;
     }
     return this.callbacks.send(buildInput(this.openId, bytes));
-  }
-
-  sendPrompt(text: string, req: string): boolean {
-    if (this.openId === null) {
-      return false;
-    }
-    return this.callbacks.send(buildPrompt(req, this.openId, text));
   }
 
   // The Prompt Builder path: the host composes the final text from the

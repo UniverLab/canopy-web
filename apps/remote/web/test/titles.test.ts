@@ -5,7 +5,7 @@ import type { Shell } from "../src/app.js";
 import { CatalogStore } from "../src/catalog.js";
 import { GraphStore } from "../src/graph-store.js";
 import { createGuestView } from "../src/guest-views.js";
-import type { GraphSummary } from "../src/protocol.js";
+import type { GraphState, GraphSummary } from "../src/protocol.js";
 import { SessionStore } from "../src/sessions.js";
 import type { TerminalFactory } from "../src/terminal.js";
 import { graphTitle, remoteTitle, sessionTitle } from "../src/titles.js";
@@ -23,6 +23,19 @@ function summary(overrides: Partial<GraphSummary> = {}): GraphSummary {
     blocked: false,
     updated_at: 1793100000_000,
     ...overrides,
+  };
+}
+
+function graphState(): GraphState {
+  return {
+    status: "running",
+    blocked: false,
+    blocker: null,
+    current_spec_id: null,
+    current_node: null,
+    nodes: {},
+    specs: [],
+    updated_at: 1793100000_000,
   };
 }
 
@@ -69,7 +82,6 @@ describe("shell titles", () => {
         onKeyPress: () => {},
         onTerminalInput: () => {},
         onControlSize: () => {},
-        onComposerSend: () => {},
         onSpawn: () => true,
         onCompose: () => true,
         onSendDraft: () => true,
@@ -120,7 +132,11 @@ describe("shell titles", () => {
     root.querySelector<HTMLButtonElement>('[data-tab="graphs"]')?.click();
     root.querySelector<HTMLButtonElement>('[data-graph="g1"]')?.click();
     expect(document.title).toBe("palette-loop · Canopy remote");
-    graphs.handleGraph({ summary: summary({ name: "renamed-loop" }), doc: null });
+    graphs.handleGraph({
+      summary: summary({ name: "renamed-loop" }),
+      doc: null,
+      state: graphState(),
+    });
     expect(document.title).toBe("renamed-loop · Canopy remote");
   });
 });
@@ -148,7 +164,6 @@ describe("guest titles", () => {
       onSignOut: () => {},
       onForgetDevice: () => {},
       onInput: () => {},
-      onComposerSend: () => {},
     });
     view.showSignIn();
     expect(document.title).toBe("Sign in · Canopy remote");

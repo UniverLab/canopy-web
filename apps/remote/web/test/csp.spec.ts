@@ -95,17 +95,19 @@ test("opening a session, typing, resizing and listing graphs fires zero CSP viol
   // The graphs list renders one `style="width:…"` attribute per row: the
   // leg that pins `style-src-attr` (refused without it, and the bars lose
   // their widths). Fixtures: palette-loop 1/4, quality-bubble 3/3,
-  // canopy-builder 0/3.
+  // canopy-builder 0/3, paused-sketch 1/2, failed-sketch 2/5.
   await page.locator("#session-back").click();
   await page.locator('[data-tab="graphs"]').click();
-  await expect(page.locator(".graph-row")).toHaveCount(3);
+  await expect(page.locator(".graph-row")).toHaveCount(5);
   const widths = await page.locator(".progress-fill").evaluateAll((bars) =>
     bars.map((bar) => (bar as HTMLElement).style.width),
   );
-  expect(widths).toHaveLength(3);
+  expect(widths).toHaveLength(5);
   expect(widths).toContain("25%");
   expect(widths).toContain("100%");
   expect(widths).toContain("0%");
+  expect(widths).toContain("50%");
+  expect(widths).toContain("40%");
   // "missing listener" fails loudly if the init script never ran: an empty
   // array must mean zero violations, never a lost collector.
   const violations = await page.evaluate(() => window.__cspViolations ?? "missing listener");

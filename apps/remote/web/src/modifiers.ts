@@ -63,7 +63,8 @@ function arrowBytes(id: string, mods: ModifierState): Uint8Array | null {
 }
 
 // The bar key with the latch applied. Esc and Enter are unaffected by the
-// modifiers; Tab with Shift is back-tab; arrows carry the xterm modifier.
+// modifiers; Tab with Shift is back-tab; Backspace sends DEL, or BS with
+// Ctrl latched (Shift is ignored); arrows carry the xterm modifier.
 // Modifier keys themselves have no bytes (the shell toggles the latch).
 export function keyBytesWithModifiers(id: string, mods: ModifierState): Uint8Array {
   const arrow = arrowBytes(id, mods);
@@ -75,6 +76,9 @@ export function keyBytesWithModifiers(id: string, mods: ModifierState): Uint8Arr
   }
   if (id === "enter") {
     return new Uint8Array([0x0d]);
+  }
+  if (id === "backspace") {
+    return mods.ctrl ? new Uint8Array([0x08]) : new Uint8Array([0x7f]);
   }
   if (id === "tab") {
     return mods.shift ? new Uint8Array([0x1b, 0x5b, 0x5a]) : new Uint8Array([0x09]);

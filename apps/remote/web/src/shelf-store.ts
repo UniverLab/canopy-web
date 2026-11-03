@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // The session shelf's data half: the per-shelf item lists behind the
-// Files sheet (with the per-session unseen badge), the blob URL cache
+// union Files sheet (with the total unseen badge), the blob URL cache
 // that keeps the shelf inside 50 MB of memory, and the transfer queue
 // behind shelf_get — at most two files in flight, parts reassembled in
 // part order, a busy reply retried after 500 ms. No DOM here: the
@@ -12,6 +12,17 @@ import type { FilePart, ReplyError, ShelfItem, ShelfList } from "./protocol.js";
 
 /** A shelf to address: a session id, or null for the host's own shelf. */
 export type ShelfKey = string | null;
+
+/**
+ * The unseen map's key for the host shelf. A session id can never carry
+ * a NUL, so the marker can never collide with a real session.
+ */
+export const HOST_SHELF_MARKER = "\u0000host";
+
+/** The unseen map's key for a shelf: the session id, or the host marker. */
+export function shelfMarker(key: ShelfKey): string {
+  return key === null ? HOST_SHELF_MARKER : key;
+}
 
 /** Most blob bytes the shelf keeps alive before the oldest is revoked. */
 export const LRU_MAX_BYTES = 50 * 1024 * 1024;
@@ -72,8 +83,8 @@ export class ShelfStore {
   }
 
   /**
-   * A pushed file lands on top of its shelf. `seen` is true while that
-   * shelf's sheet is on screen: a file the person is already looking at
+   * A pushed file lands on top of its shelf. `seen` is true while the
+   * union sheet is on screen: a file the person is already looking at
    * is not unseen, so the badge only counts arrivals nobody has seen.
    */
   add(item: ShelfItem, seen = false): void {
@@ -83,11 +94,12 @@ export class ShelfStore {
       const key = item.session_id;
       const list = this.sessionItems.get(key) ?? [];
       this.sessionItems.set(key, [item, ...list.filter((row) => row.file_id !== item.file_id)]);
-      if (!seen) {
-        const files = this.unseenFiles.get(key) ?? new Set<string>();
-        files.add(item.file_id);
-        this.unseenFiles.set(key, files);
-      }
+    }
+    if (!seen) {
+      const marker = shelfMarker(item.session_id);
+      const files = this.unseenFiles.get(marker) ?? new Set<string>();
+      files.add(item.file_id);
+      this.unseenFiles.set(marker, files);
     }
     this.notify();
   }
@@ -105,11 +117,12 @@ export class ShelfStore {
     this.hostItems = keep(this.hostItems);
     for (const [key, rows] of this.sessionItems) {
       this.sessionItems.set(key, keep(rows));
-      const files = this.unseenFiles.get(key);
-      if (files?.delete(fileId)) {
+    }
+    for (const [marker, files] of this.unseenFiles) {
+      if (files.delete(fileId)) {
         changed = true;
         if (files.size === 0) {
-          this.unseenFiles.delete(key);
+          this.unseenFiles.delete(marker);
         }
       }
     }
@@ -118,34 +131,54 @@ export class ShelfStore {
     }
   }
 
-  /** The sheet looked at this shelf: nothing on it is unseen any more. */
-  markSeen(key: ShelfKey): void {
-    if (key === null) {
+  /** The union sheet opened: nothing on any shelf is unseen any more. */
+  markSeen(): void {
+    if (this.unseenFiles.size === 0) {
       return;
     }
-    if (this.unseenFiles.delete(key)) {
-      this.notify();
-    }
+    this.unseenFiles.clear();
+    this.notify();
   }
 
-  items(key: ShelfKey): ShelfItem[] {
-    if (key === null) {
-      return this.hostItems;
+  /**
+   * Every shelf's items as one list, deduped by file_id (the host's copy
+   * wins, then the earliest session's) and newest first — the same merge
+   * rule parseShelf applies within one reply.
+   */
+  unionItems(): ShelfItem[] {
+    const seen = new Map<string, ShelfItem>();
+    for (const row of this.hostItems) {
+      if (!seen.has(row.file_id)) {
+        seen.set(row.file_id, row);
+      }
     }
-    return this.sessionItems.get(key) ?? [];
-  }
-
-  count(key: ShelfKey): number {
-    return this.items(key).length;
+    for (const rows of this.sessionItems.values()) {
+      for (const row of rows) {
+        if (!seen.has(row.file_id)) {
+          seen.set(row.file_id, row);
+        }
+      }
+    }
+    return [...seen.values()].sort((a, b) => b.created_at - a.created_at);
   }
 
   unseen(sessionId: string): number {
-    return this.unseenFiles.get(sessionId)?.size ?? 0;
+    return this.unseenFiles.get(shelfMarker(sessionId))?.size ?? 0;
+  }
+
+  /** The unseen files on every shelf together: the one badge number. */
+  unseenTotal(): number {
+    let total = 0;
+    for (const files of this.unseenFiles.values()) {
+      total += files.size;
+    }
+    return total;
   }
 }
 
 interface BlobEntry {
   url: string;
+  blob: Blob;
   bytes: number;
 }
 
@@ -174,12 +207,18 @@ export class BlobLru {
     return entry.url;
   }
 
+  /** The bytes behind a url, for the text preview; null until loaded. */
+  blob(fileId: string): Blob | null {
+    return this.entries.get(fileId)?.blob ?? null;
+  }
+
   put(fileId: string, data: Uint8Array, mime: string): string {
     this.drop(fileId);
     // The copy keeps the blob on a plain ArrayBuffer (never a view into
     // somebody else's buffer) and gives the URL exactly these bytes.
-    const url = URL.createObjectURL(new Blob([new Uint8Array(data)], { type: mime }));
-    this.entries.set(fileId, { url, bytes: data.byteLength });
+    const blob = new Blob([new Uint8Array(data)], { type: mime });
+    const url = URL.createObjectURL(blob);
+    this.entries.set(fileId, { url, blob, bytes: data.byteLength });
     this.totalBytes += data.byteLength;
     while (this.totalBytes > this.maxBytes && this.entries.size > 1) {
       const oldest = this.entries.keys().next().value;

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // The session view's terminal controls: zoom, the key-bar switch, the
-// latest button, and the per-session control-size toggle with its
-// explainer. Rendered as HTML beside the terminal pane and wired to the
-// open TerminalView plus the shell's live session state.
+// Prompt Builder button, the fullscreen button, the latest button, and
+// the per-session control-size toggle with its explainer. Rendered as
+// HTML beside the terminal pane and wired to the open TerminalView plus
+// the shell's live session state.
 
 import { icon } from "./icons-dom.js";
 import type { TerminalView } from "./terminal.js";
@@ -13,7 +14,28 @@ import {
   writeKeyBarVisible,
 } from "./terminal-prefs.js";
 
+// The fullscreen control only exists where the browser can honour it:
+// iPhone Safari reports fullscreenEnabled false, and an installed
+// standalone app is already chromeless.
+function fullscreenAvailable(): boolean {
+  try {
+    if (typeof document === "undefined" || document.fullscreenEnabled !== true) {
+      return false;
+    }
+    return (
+      typeof globalThis.matchMedia !== "function" ||
+      !globalThis.matchMedia("(display-mode: standalone)").matches
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function termControlsHtml(): string {
+  const fullscreen = fullscreenAvailable()
+    ? `
+        <button type="button" id="term-fullscreen" aria-pressed="false" aria-label="Enter fullscreen">${icon("maximize")}</button>`
+    : "";
   return `
       <div class="term-controls">
         <button type="button" id="term-zoom-out" aria-label="Zoom out">${icon("minus")}</button>
@@ -25,11 +47,12 @@ export function termControlsHtml(): string {
           aria-label="Show terminal keys"
           title="Show or hide the terminal keys"
         >Keys</button>
+        <button type="button" id="term-builder" aria-label="Builder">${icon("blocks")}<span>Builder</span></button>${fullscreen}
         <button type="button" id="term-latest" hidden aria-label="Scroll to the latest output">${icon("arrowDown")}<span>latest</span></button>
       </div>`;
 }
 
-// The size row lives below the keybar, not beside the controls: the nine
+// The size row lives below the keybar, not beside the controls: the ten
 // keys must all stay inside a 360×640 viewport, and any row above them
 // pushes the second key row out of view.
 export function termSizeHtml(sessionId: string | null): string {
@@ -50,6 +73,8 @@ export interface TermControlsDeps {
   terminalView: () => TerminalView | null;
   sessionSize: () => { cols: number; rows: number };
   onControlSize: (cols: number, rows: number) => void;
+  /** Open the Prompt Builder sheet; the controls row owns its button. */
+  onBuilder: () => void;
 }
 
 export interface TermControls {
@@ -61,8 +86,9 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
   const { root } = deps;
   root.querySelector("#term-zoom-in")?.addEventListener("click", () => deps.terminalView()?.zoomIn());
   root.querySelector("#term-zoom-out")?.addEventListener("click", () => deps.terminalView()?.zoomOut());
-  // The Keys switch hides the nine-key bar and nothing else: the zoom and
-  // the composer stay put. The choice is remembered per device.
+  root.querySelector("#term-builder")?.addEventListener("click", () => deps.onBuilder());
+  // The Keys switch hides the ten-key bar and nothing else: the zoom and
+  // the builder stay put. The choice is remembered per device.
   const keysButton = root.querySelector<HTMLButtonElement>("#term-keys");
   const keyBar = root.querySelector<HTMLElement>("#keybar");
   const showKeyBar = (visible: boolean): void => {
@@ -78,6 +104,34 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
       writeKeyBarVisible(next);
       showKeyBar(next);
     });
+  }
+  // Fullscreen is a tap, not a latch the shell tracks: the browser owns
+  // the state, and fullscreenchange repaints the button (maximize when
+  // windowed, minimize while fullscreen). The document listener drops
+  // itself once a re-render orphans the button.
+  const fsButton = root.querySelector<HTMLButtonElement>("#term-fullscreen");
+  if (fsButton) {
+    const paintFullscreen = (): void => {
+      if (!fsButton.isConnected) {
+        document.removeEventListener("fullscreenchange", paintFullscreen);
+        return;
+      }
+      const active = document.fullscreenElement !== null;
+      fsButton.setAttribute("aria-pressed", active ? "true" : "false");
+      fsButton.setAttribute("aria-label", active ? "Exit fullscreen" : "Enter fullscreen");
+      fsButton.innerHTML = icon(active ? "minimize" : "maximize");
+    };
+    fsButton.addEventListener("click", () => {
+      if (document.fullscreenElement === null) {
+        void document.documentElement
+          .requestFullscreen({ navigationUI: "hide" })
+          .catch(() => undefined);
+      } else {
+        void document.exitFullscreen().catch(() => undefined);
+      }
+    });
+    document.addEventListener("fullscreenchange", paintFullscreen);
+    paintFullscreen();
   }
   const latestButton = root.querySelector<HTMLButtonElement>("#term-latest");
   latestButton?.addEventListener("click", () => {

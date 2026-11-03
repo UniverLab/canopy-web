@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
-// Test-only entry behind fake.html (served by vite dev, never built):
-// the session shell driven by a fake host over an in-memory channel.
-// Playwright drives it through window.__fake. It answers catalog, spawn,
-// compose and prompt exactly like the daemon's session protocol.
+// Test-only entry behind fake.html (served by vite dev, never built): the
+// session shell driven by a fake host over an in-memory channel, which
+// Playwright drives through window.__fake exactly like the daemon's protocol.
 
 import type { Terminal } from "@xterm/xterm";
 import { createShell } from "./app.js";
 import { signOut } from "./auth.js";
 import { CatalogStore } from "./catalog.js";
 import { createChannelHandler } from "./channel.js";
-import { b64encode } from "./crypto.js";
+import { b64decode, b64encode, sha256Hex } from "./crypto.js";
+import { createFakeShelfDeleter } from "./fake-delete.js";
 import { createFakeGraphs } from "./fake-graphs.js";
 import { GraphStore } from "./graph-store.js";
 import { createGuestSession } from "./guest.js";
@@ -20,6 +20,7 @@ import { createFrameRouter } from "./router.js";
 import { SessionController } from "./session.js";
 import { ShelfController } from "./shelf-controller.js";
 import { openSessionName, SessionStore } from "./sessions.js";
+import { MAX_UPLOAD_BYTES } from "./upload.js";
 import { hostShelfImage, pushedShelfImage, smokeShelfImages } from "../test/fixtures/shelf-images.js";
 import type { ShelfImage } from "../test/fixtures/shelf-images.js";
 import "./styles.css";
@@ -130,7 +131,18 @@ function main(): void {
       model: "spark",
       workdir: "/home/u/demo",
       status: "running",
+      kind: "agent",
       lastOutputAt: Date.now() - 30_000,
+    },
+    {
+      id: "shell",
+      name: "shell",
+      cli: "",
+      model: "",
+      workdir: "/home/u/demo",
+      status: "running",
+      kind: "terminal",
+      lastOutputAt: Date.now() - 120_000,
     },
   ];
 
@@ -143,7 +155,8 @@ function main(): void {
   };
 
   // The shelf: three images for the smoke session, one on the host's
-  // own shelf, and one more the host pushes 2 s after attach.
+  // own shelf, one on the terminal's shelf the bridge never sends, and
+  // one more the host pushes 2 s after attach.
   interface FakeShelfFile {
     item: ShelfItem;
     bytes: Uint8Array;
@@ -169,6 +182,7 @@ function main(): void {
       caption: image.caption,
       from,
       created_at: startedAt - ageMs,
+      path: `${sessionId === null ? "/home/u/shelf" : "/home/u/demo"}/${image.name}`,
     };
     shelfFiles.push({ item, bytes: image.bytes });
     return item;
@@ -178,12 +192,104 @@ function main(): void {
     putShelfFile(image, "smoke", "muse", (index + 1) * 60_000);
   }
   putShelfFile(hostShelfImage(), null, "canopy", 5 * 60_000);
+  // A file on the terminal's own shelf that the bridge never sends:
+  // shelf_list for a terminal session answers empty, so it never
+  // surfaces in the union.
+  putShelfFile(
+    {
+      name: "terminal-note.txt",
+      mime: "text/plain",
+      caption: "a terminal's note",
+      bytes: new TextEncoder().encode("the bridge never sends terminal shelves\n"),
+    },
+    "shell",
+    "shell",
+    30_000,
+  );
 
-  const shelfItemsFor = (sessionId: string | null): ShelfItem[] =>
-    shelfFiles
+  const deleter = createFakeShelfDeleter({ deliver, files: shelfFiles });
+  const shelfItemsFor = (sessionId: string | null): ShelfItem[] => {
+    if (sessionId !== null && sessions.find((item) => item.id === sessionId)?.kind === "terminal") {
+      return [];
+    }
+    return shelfFiles
       .filter((file) => file.item.session_id === sessionId)
       .map((file) => file.item)
       .sort((a, b) => b.created_at - a.created_at);
+  };
+
+  // The upload half of the shelf: ?upload=off advertises no shelf_upload,
+  // ?upload=denied advertises it but refuses every begin with forbidden
+  // (a guest whose grant lacks upload), and otherwise a begun file is
+  // stored on the target shelf with the mime the host sniffs.
+  const uploadMode = new URLSearchParams(globalThis.location.search).get("upload");
+
+  interface FakeUpload {
+    fileId: string;
+    sessionId: string | null;
+    name: string;
+    size: number;
+    mime: string;
+    sha256: string;
+    parts: Map<number, Uint8Array>;
+  }
+
+  const uploads = new Map<string, FakeUpload>();
+  let uploadCounter = 0;
+  const MIME_BY_EXT: Record<string, string> = {
+    txt: "text/plain",
+    md: "text/markdown",
+    csv: "text/csv",
+    json: "application/json",
+    html: "text/html",
+    htm: "text/html",
+    svg: "image/svg+xml",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    webp: "image/webp",
+    pdf: "application/pdf",
+    zip: "application/zip",
+  };
+
+  const sniffMime = (name: string, provided: string | undefined): string => {
+    const dot = name.lastIndexOf(".");
+    const ext = dot >= 0 ? name.slice(dot + 1).toLowerCase() : "";
+    return MIME_BY_EXT[ext] ?? (provided !== undefined && provided !== "" ? provided : "application/octet-stream");
+  };
+
+  const finishUpload = async (upload: FakeUpload): Promise<void> => {
+    const ordered = [...upload.parts.entries()].sort((a, b) => a[0] - b[0]);
+    const total = ordered.reduce((sum, [, bytes]) => sum + bytes.length, 0);
+    const bytes = new Uint8Array(total);
+    let offset = 0;
+    for (const [, part] of ordered) {
+      bytes.set(part, offset);
+      offset += part.length;
+    }
+    if ((await sha256Hex(bytes)) !== upload.sha256) {
+      uploads.delete(upload.fileId);
+      deliver({ t: "error", code: "checksum_mismatch", message: "checksum mismatch", file_id: upload.fileId });
+      return;
+    }
+    uploads.delete(upload.fileId);
+    const workdir = sessions.find((item) => item.id === upload.sessionId)?.workdir ?? "/home/u/demo";
+    const item: ShelfItem = {
+      file_id: upload.fileId,
+      session_id: upload.sessionId,
+      name: upload.name,
+      mime: upload.mime,
+      size: bytes.length,
+      caption: null,
+      from: "you",
+      created_at: Date.now(),
+      path: `${workdir}/${upload.name}`,
+      origin: "device",
+    };
+    shelfFiles.push({ item, bytes });
+    deliver({ t: "shelf_added", item });
+  };
 
   const sessionItems = () =>
     sessions.map((item) => ({
@@ -193,6 +299,7 @@ function main(): void {
       model: item.model,
       workdir: item.workdir,
       status: item.status,
+      kind: item.kind,
       last_output_at: item.lastOutputAt === null ? null : Math.floor(item.lastOutputAt / 1000),
     }));
 
@@ -273,6 +380,11 @@ function main(): void {
       file_id?: string;
       interval?: number;
       draft?: PromptDraft;
+      size?: number;
+      sha256?: string;
+      mime?: string;
+      part?: number;
+      data?: string;
     };
     sent.push(frame);
     if (frame.t === "list") {
@@ -290,6 +402,7 @@ function main(): void {
             model: "spark",
             workdir: "/home/u/secret",
             status: "running",
+            kind: "agent",
             last_output_at: null,
           },
         ];
@@ -319,6 +432,51 @@ function main(): void {
           }, 2000);
         }
       }
+    } else if (frame.t === "shelf_put_begin" && typeof frame.req === "string") {
+      if (uploadMode === "denied") {
+        deliver({ t: "error", req: frame.req, code: "forbidden", message: "upload not allowed" });
+      } else if (
+        typeof frame.name !== "string" ||
+        frame.name === "" ||
+        typeof frame.size !== "number" ||
+        typeof frame.sha256 !== "string"
+      ) {
+        deliver({ t: "error", req: frame.req, code: "bad_request", message: "bad upload" });
+      } else if (frame.size > MAX_UPLOAD_BYTES) {
+        deliver({ t: "error", req: frame.req, code: "too_large", message: "file is larger than 20 MiB" });
+      } else {
+        uploadCounter += 1;
+        const fileId = `u${uploadCounter}`;
+        uploads.set(fileId, {
+          fileId,
+          sessionId: typeof frame.id === "string" && frame.id !== "" ? frame.id : null,
+          name: frame.name,
+          size: frame.size,
+          mime: sniffMime(frame.name, frame.mime),
+          sha256: frame.sha256,
+          parts: new Map(),
+        });
+        deliver({ t: "shelf_put_ready", req: frame.req, file_id: fileId });
+      }
+    } else if (frame.t === "shelf_put_part" && typeof frame.file_id === "string") {
+      const upload = uploads.get(frame.file_id);
+      if (!upload || typeof frame.part !== "number" || typeof frame.data !== "string") {
+        deliver({ t: "error", code: "bad_request", message: "bad part", file_id: frame.file_id });
+      } else {
+        upload.parts.set(frame.part, b64decode(frame.data));
+        if ((frame.part + 1) % 8 === 0) {
+          deliver({ t: "shelf_put_ack", file_id: frame.file_id, part: frame.part });
+        }
+      }
+    } else if (frame.t === "shelf_put_end" && typeof frame.file_id === "string") {
+      const upload = uploads.get(frame.file_id);
+      if (upload) {
+        void finishUpload(upload);
+      } else {
+        deliver({ t: "error", code: "not_found", message: "no such upload", file_id: frame.file_id });
+      }
+    } else if (frame.t === "shelf_put_abort" && typeof frame.file_id === "string") {
+      uploads.delete(frame.file_id);
     } else if (frame.t === "shelf_list") {
       const id = typeof frame.id === "string" && frame.id !== "" ? frame.id : null;
       const reply: Record<string, unknown> = {
@@ -351,6 +509,8 @@ function main(): void {
           });
         }
       }
+    } else if (deleter.handle(frame)) {
+      // shelf_delete: ok plus the removed broadcast, or an error.
     } else if (frame.t === "spawn") {
       nextSpawn += 1;
       const id = `spawned-${nextSpawn}`;
@@ -362,6 +522,7 @@ function main(): void {
         model: "",
         workdir: frame.workdir ?? "",
         status: "running",
+        kind: terminal ? "terminal" : "agent",
         lastOutputAt: null,
       };
       sessions.push(item);
@@ -468,9 +629,6 @@ function main(): void {
       onControlSize: (cols, rows) => {
         controller.sendResize(cols, rows);
       },
-      onComposerSend: (text, req) => {
-        controller.sendPrompt(text, req);
-      },
       onSpawn: (spawn, req) => send(buildSpawn(req, spawn)),
       onCompose: (draft, req) => send(JSON.stringify({ t: "compose", req, draft })),
       onSendDraft: (draft, req) => controller.sendPromptDraft(draft, req),
@@ -535,7 +693,11 @@ function main(): void {
 
   // The host greets first: hello.features is what turns the shelf UI on,
   // and hello.harnesses is what the New dialog may offer (both installed).
-  deliver({ t: "hello", features: ["shelf"], harnesses: ["muse", "claude"] });
+  deliver({
+    t: "hello",
+    features: uploadMode === "off" ? ["shelf"] : ["shelf", "shelf_upload"],
+    harnesses: ["muse", "claude"],
+  });
 
   // Playwright picks the opening screen: the sessions home by default,
   // the hosts list for the sign-out walk, the sign-in for the colophon,

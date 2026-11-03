@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Test-only graph fixtures behind fake.html: the three graphs the remote's
+// Test-only graph fixtures behind fake.html: the five graphs the remote's
 // Graphs tab and graph view speak over the session wire, and the in-memory
 // channel handler that answers their frames. Split out of fake-host.ts to
 // keep the fake entry a readable size.
@@ -7,12 +7,14 @@ import type { GraphState, GraphSummary, NodeStatus } from "./protocol.js";
 import builderGraph from "../test/fixtures/builder-graph.json" with { type: "json" };
 
 // --- The graph fixtures ----------------------------------------------
-// Three graphs over the session wire: one running with an ensemble whose
+// Five graphs over the session wire: one running with an ensemble whose
 // live state advances every 2 s (and completes a spec every few ticks),
-// one already completed, and the lab's own builder loop — a plate whose
-// failure terminals live in a side lane, with a `done` end and grouped
-// error buses. The graph frames the remote's Graphs tab and graph view
-// speak are answered exactly like the host spec describes.
+// one paused mid-queue, one failed at its gate, one completed long ago,
+// and the lab's own builder loop — a plate whose failure terminals live
+// in a side lane, with a `done` end and grouped error buses. The graph
+// frames the remote's Graphs tab and graph view speak are answered
+// exactly like the host spec describes (graphs.rs): the list carries
+// `graphs`, the watch reply `id`/`document`/`state`, pushes `id`/`state`.
 
 /** The running graph's drawing: two checks, an agent, a commit and an ensemble. */
 const LOOP_DOC = {
@@ -91,6 +93,95 @@ function builderSummary(nowMs: number): GraphSummary {
   };
 }
 
+/** The paused graph's drawing: a chain parked after its first step. */
+const PAUSED_DOC = {
+  name: "paused-sketch",
+  nodes: [
+    { name: "collect", kind: "check", position: 1, config: { command: "make collect" } },
+    { name: "measure", kind: "agent", position: 2, config: { prompt_template: "Measure it." } },
+  ],
+  edges: [{ from_node: "collect", to_node: "measure", condition: "pass" }],
+};
+
+/** The failed graph's drawing: a chain refused at its gate. */
+const FAILED_DOC = {
+  name: "failed-sketch",
+  nodes: [
+    { name: "collect", kind: "check", position: 1, config: { command: "make collect" } },
+    { name: "gate", kind: "check", position: 2, config: { command: "make gate" } },
+  ],
+  edges: [{ from_node: "collect", to_node: "gate", condition: "pass" }],
+};
+
+/** The paused graph's live state: parked mid-queue, nothing running. */
+function pausedState(nowMs: number): GraphState {
+  return {
+    status: "paused",
+    blocked: false,
+    blocker: null,
+    current_spec_id: null,
+    current_node: null,
+    nodes: { collect: "pass" },
+    specs: [
+      { id: "p1", code: "PAU-1", name: "Collect the numbers", status: "completed", attempts: 1 },
+      { id: "p2", code: "PAU-2", name: "Measure the gap", status: "pending", attempts: 1 },
+    ],
+    updated_at: nowMs,
+  };
+}
+
+function pausedSummary(nowMs: number): GraphSummary {
+  return {
+    id: "g-paused",
+    name: "paused-sketch",
+    status: "paused",
+    workdir: "/home/u/demo",
+    current_spec: "",
+    current_node: "",
+    done: 1,
+    total: 2,
+    blocked: false,
+    updated_at: nowMs,
+  };
+}
+
+/** The failed graph's live state: refused at its gate, blocked on it. */
+function failedState(nowMs: number): GraphState {
+  return {
+    status: "failed",
+    blocked: true,
+    blocker: "gate refused the diff",
+    current_spec_id: "f3",
+    current_node: "gate",
+    nodes: { collect: "pass", measure: "pass", gate: "fail" },
+    specs: [
+      { id: "f1", code: "BRK-1", name: "Collect the numbers", status: "completed", attempts: 1 },
+      { id: "f2", code: "BRK-2", name: "Measure the gap", status: "completed", attempts: 2 },
+      { id: "f3", code: "BRK-3", name: "Pass the gate", status: "failed", attempts: 3 },
+      { id: "f4", code: null, name: "Publish the report", status: "pending", attempts: 1 },
+      { id: "f5", code: null, name: "Announce the release", status: "pending", attempts: 1 },
+    ],
+    updated_at: nowMs,
+  };
+}
+
+function failedSummary(nowMs: number): GraphSummary {
+  return {
+    id: "g-failed",
+    name: "failed-sketch",
+    status: "failed",
+    workdir: "/home/u/demo",
+    current_spec: "Pass the gate",
+    current_node: "gate",
+    done: 2,
+    total: 5,
+    // Unblocked on the list, so the mix reads failed; the live state
+    // still parks the open view on the gate's blocker.
+    blocked: false,
+    updated_at: nowMs,
+  };
+}
+
 /** The drawn units of the running graph, in walk order. */
 const LOOP_UNITS = ["start", "implementer", "1·muse", "2·spark", "full-gates", "commit"];
 /** The unit that runs at each tick of one round. */
@@ -138,6 +229,9 @@ interface FakeGraphs {
 
 export function createFakeGraphs(deliver: (frame: unknown) => void): FakeGraphs {
   const startedAt = Date.now();
+  // The completed fixture settled a month ago: the mix covers an old,
+  // finished run next to the live ones.
+  const settledAt = startedAt - 30 * 24 * 3600 * 1000;
   const specs = (): GraphState["specs"] => [
     { id: "s1", code: "FIX-1", name: "Lock the palette", status: "completed", attempts: 2 },
     { id: "s2", code: "FIX-2", name: "Draw the plate", status: "running", attempts: 1 },
@@ -157,7 +251,7 @@ export function createFakeGraphs(deliver: (frame: unknown) => void): FakeGraphs 
     current_node: null,
     nodes: { collect: "pass", measure: "pass", report: "pass" },
     specs: doneSpecs,
-    updated_at: startedAt,
+    updated_at: settledAt,
   };
   const doneSummary: GraphSummary = {
     id: "g-done",
@@ -169,7 +263,7 @@ export function createFakeGraphs(deliver: (frame: unknown) => void): FakeGraphs 
     done: 3,
     total: 3,
     blocked: false,
-    updated_at: startedAt,
+    updated_at: settledAt,
   };
 
   let loopStep = 0;
@@ -227,39 +321,76 @@ export function createFakeGraphs(deliver: (frame: unknown) => void): FakeGraphs 
     deliver(stateFrame("g-loop", loopState()));
   };
 
-  const stateFrame = (id: string, state: GraphState): unknown => ({ t: "graph_state", id, ...state });
+  // The host sends updated_at as RFC3339 (graphs.rs:48-67,71-86);
+  // the fixtures keep epoch ms inside and render the wire shape here.
+  const wireSummary = (row: GraphSummary): unknown => ({
+    ...row,
+    updated_at: new Date(row.updated_at).toISOString(),
+  });
+  const wireState = (state: GraphState): unknown => ({
+    ...state,
+    updated_at: new Date(state.updated_at).toISOString(),
+  });
+  // graphs.rs:119-121: {"t": "graph_state", "id": id, "state": state}.
+  const stateFrame = (id: string, state: GraphState): unknown => ({
+    t: "graph_state",
+    id,
+    state: wireState(state),
+  });
+
+  const replyFor = (id: string, nowMs: number): { document: unknown; state: GraphState } | null => {
+    if (id === "g-loop") {
+      return { document: LOOP_DOC, state: loopState() };
+    }
+    if (id === "g-done") {
+      return { document: DONE_DOC, state: doneState };
+    }
+    if (id === "g-builder") {
+      return { document: BUILDER_DOC, state: { ...BUILDER_STATE, updated_at: nowMs } };
+    }
+    if (id === "g-paused") {
+      return { document: PAUSED_DOC, state: pausedState(nowMs) };
+    }
+    if (id === "g-failed") {
+      return { document: FAILED_DOC, state: failedState(nowMs) };
+    }
+    return null;
+  };
 
   return {
     handle(frame: Record<string, unknown>): boolean {
       if (frame.t === "graphs") {
+        // graphs.rs:101-103: {"t": "graphs", "req": req, "graphs": graphs}.
         deliver({
           t: "graphs",
           req: typeof frame.req === "string" ? frame.req : null,
-          items: [loopSummary(startedAt, loopState()), doneSummary, builderSummary(startedAt)],
+          graphs: [
+            loopSummary(startedAt, loopState()),
+            pausedSummary(startedAt),
+            failedSummary(startedAt),
+            doneSummary,
+            builderSummary(startedAt),
+          ].map(wireSummary),
         });
         return true;
       }
       if (frame.t === "graph_watch" && typeof frame.id === "string") {
-        if (frame.id !== "g-loop" && frame.id !== "g-done" && frame.id !== "g-builder") {
+        const reply = replyFor(frame.id, Date.now());
+        if (reply === null) {
           return true;
         }
         watched = frame.id;
-        if (frame.id === "g-builder") {
-          deliver({
-            t: "graph",
-            item: builderSummary(Date.now()),
-            doc: BUILDER_DOC,
-          });
-          deliver(stateFrame("g-builder", { ...BUILDER_STATE, updated_at: Date.now() }));
-        } else if (frame.id === "g-loop") {
-          deliver({ t: "graph", item: loopSummary(Date.now(), loopState()), doc: LOOP_DOC });
-          deliver(stateFrame("g-loop", loopState()));
-          if (loopTimer === null) {
-            loopTimer = globalThis.setInterval(tick, 2000);
-          }
-        } else {
-          deliver({ t: "graph", item: doneSummary, doc: DONE_DOC });
-          deliver(stateFrame("g-done", doneState));
+        // graphs.rs:106-116: {"t": "graph", "req", "id", "document", "state"}.
+        deliver({
+          t: "graph",
+          req: typeof frame.req === "string" ? frame.req : null,
+          id: frame.id,
+          document: reply.document,
+          state: wireState(reply.state),
+        });
+        deliver(stateFrame(frame.id, reply.state));
+        if (frame.id === "g-loop" && loopTimer === null) {
+          loopTimer = globalThis.setInterval(tick, 2000);
         }
         return true;
       }

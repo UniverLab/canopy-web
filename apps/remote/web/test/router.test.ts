@@ -10,6 +10,8 @@ import { b64encode } from "../src/crypto.js";
 import { createFrameRouter } from "../src/router.js";
 import type { FrameRouter } from "../src/router.js";
 import { SessionController } from "../src/session.js";
+import { ShelfController } from "../src/shelf-controller.js";
+import type { ShelfFrames } from "../src/shelf-controller.js";
 import { SessionStore } from "../src/sessions.js";
 import { FakeDataChannel, textOf } from "./fakes.js";
 
@@ -22,8 +24,6 @@ interface Harness {
   controller: SessionController;
   written: Uint8Array[];
   terminals: { id: string; cols: number; rows: number }[];
-  oks: string[];
-  errors: { message: string; req: string | null }[];
   exits: number[];
   spawned: { req: string; id: string }[];
   composed: { req: string; text: string }[];
@@ -32,14 +32,12 @@ interface Harness {
   hostSend: (frame: unknown) => void;
 }
 
-function setup(onForbidden?: (id: string | null) => void): Harness {
+function setup(onForbidden?: (id: string | null) => void, shelf?: ShelfFrames): Harness {
   const channel = new FakeDataChannel("canopy-session-v1", { ordered: true });
   const store = new SessionStore();
   const catalog = new CatalogStore();
   const written: Uint8Array[] = [];
   const terminals: Harness["terminals"] = [];
-  const oks: string[] = [];
-  const errors: Harness["errors"] = [];
   const exits: number[] = [];
   const spawned: Harness["spawned"] = [];
   const composed: Harness["composed"] = [];
@@ -49,12 +47,6 @@ function setup(onForbidden?: (id: string | null) => void): Harness {
   const shell = {
     ensureTerminal: (id: string, cols: number, rows: number) => {
       terminals.push({ id, cols, rows });
-    },
-    composerOk: (req: string) => {
-      oks.push(req);
-    },
-    composerError: (message: string, req: string | null) => {
-      errors.push({ message, req });
     },
     showSessionExited: (code: number) => {
       exits.push(code);
@@ -83,7 +75,7 @@ function setup(onForbidden?: (id: string | null) => void): Harness {
     }),
     onExited: (_id, code) => shell.showSessionExited(code),
   });
-  const router = createFrameRouter({ store, controller, shell, catalog, onForbidden });
+  const router = createFrameRouter({ store, controller, shell, catalog, onForbidden, shelf });
   const frames = createChannelHandler({
     onSnapshot: router.handleSnapshot,
     onFrame: router.handleFrame,
@@ -100,8 +92,6 @@ function setup(onForbidden?: (id: string | null) => void): Harness {
     controller,
     written,
     terminals,
-    oks,
-    errors,
     exits,
     spawned,
     composed,
@@ -146,16 +136,41 @@ describe("createFrameRouter", () => {
     expect(textOf(h.written)).toBe("hello!");
   });
 
-  it("routes ok and error replies to the composer and the sheets", () => {
+  it("routes ok and error replies to the sheets", () => {
     const h = setup();
     h.hostSend({ t: "ok", req: "r9" });
-    expect(h.oks).toEqual(["r9"]);
     expect(h.sheetOks).toEqual(["r9"]);
     h.hostSend({ t: "error", req: "r10", code: "delivery_failed", message: "host is gone" });
-    expect(h.errors).toEqual([{ message: "host is gone", req: "r10" }]);
     expect(h.sheetErrors).toEqual([
       { message: "host is gone", req: "r10", code: "delivery_failed" },
     ]);
+  });
+
+  it("routes a shelf delete ok to the shelf before the sheets", () => {
+    const sent: string[] = [];
+    const shelf = new ShelfController({
+      send: (data) => {
+        sent.push(data);
+        return true;
+      },
+    });
+    shelf.handleHello(["shelf"]);
+    const h = setup(undefined, shelf);
+    shelf.deleteFile({
+      file_id: "f1",
+      session_id: "s1",
+      name: "a.png",
+      mime: "image/png",
+      size: 1,
+      caption: null,
+      from: "muse",
+      created_at: 1,
+    });
+    const req = (JSON.parse(sent[sent.length - 1] ?? "") as { req: string }).req;
+    h.hostSend({ t: "ok", req });
+    expect(h.sheetOks).toEqual([]);
+    h.hostSend({ t: "ok", req: "r-other" });
+    expect(h.sheetOks).toEqual(["r-other"]);
   });
 
   it("spawn_error_hides_paths", () => {
@@ -169,8 +184,7 @@ describe("createFrameRouter", () => {
     expect(h.sheetErrors).toEqual([
       { message: 'harness "opencode" is not installed on this host', req: "r11", code: "spawn_failed" },
     ]);
-    expect(h.errors).toEqual([{ message: 'harness "opencode" is not installed on this host', req: "r11" }]);
-    for (const seen of [...h.errors.map((entry) => entry.message), ...h.sheetErrors.map((entry) => entry.message)]) {
+    for (const seen of h.sheetErrors.map((entry) => entry.message)) {
       expect(seen).toContain("opencode");
       expect(seen).not.toContain("/");
       expect(seen).not.toContain("usr/bin");
@@ -180,12 +194,11 @@ describe("createFrameRouter", () => {
     expect(h.sheetErrors[1]?.message).toBe("unknown workdir: /home/u/nope");
   });
 
-  it("routes a denied guest attach to onForbidden, past the composer", () => {
+  it("routes a denied guest attach to onForbidden, past the sheets", () => {
     const denied: (string | null)[] = [];
     const h = setup((id) => denied.push(id));
     h.hostSend({ t: "error", code: "forbidden", id: "s9" });
     expect(denied).toEqual(["s9"]);
-    expect(h.errors).toEqual([]);
     expect(h.sheetErrors).toEqual([]);
   });
 
@@ -193,10 +206,9 @@ describe("createFrameRouter", () => {
     const h = setup();
     // With a message the owner flow sees a plain error, as before.
     h.hostSend({ t: "error", code: "forbidden", id: "s9", message: "no grant" });
-    expect(h.errors).toEqual([{ message: "no grant", req: null }]);
+    expect(h.sheetErrors).toEqual([{ message: "no grant", req: null, code: "forbidden" }]);
     // Without one the frame parses to nothing and lands nowhere.
     h.hostSend({ t: "error", code: "forbidden", id: "s9" });
-    expect(h.errors).toHaveLength(1);
     expect(h.sheetErrors).toHaveLength(1);
   });
 
@@ -251,8 +263,8 @@ describe("createFrameRouter", () => {
       h.router.handleFrame(null);
     }).not.toThrow();
     expect(h.store.size).toBe(0);
-    expect(h.oks).toEqual([]);
-    expect(h.errors).toEqual([]);
+    expect(h.sheetOks).toEqual([]);
+    expect(h.sheetErrors).toEqual([]);
     expect(h.spawned).toEqual([]);
     expect(h.composed).toEqual([]);
   });
