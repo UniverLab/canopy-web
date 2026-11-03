@@ -22,12 +22,15 @@ routes = [{ pattern = "graphs.univerlab.org", custom_domain = true }]
 CF_ACCOUNT_ID = "d7b81bdd721f503968523dd903d967be"
 # The index-time model review: "Muse" or "meta" enables the pass, "off"
 # disables it entirely with indexing unaffected, and anything else fails
-# closed (no scan, one log line). The model id the badge names and the
-# per-run scan cap; the Muse key arrives as a secret (CLAUDE_API_KEY).
-# Meta additionally needs META_API_BASE_URL (its chat-completions endpoint,
-# no default anywhere; add it here for meta) and REVIEW_MODEL set verbatim, plus
-# its key as a secret (META_API_KEY). Local values live in `.dev.vars`
-# (see `.dev.vars.example`); production keys via `wrangler secret put`.
+# closed (no scan, one log line). The transparency diagram labels the scan
+# by provider, exactly: Muse -> Muse API, claude/anthropic -> Claude API,
+# meta -> Meta API, off/unset/unknown -> Review API. The model id the badge
+# names and the per-run scan cap; the Muse key arrives as a secret
+# (CLAUDE_API_KEY). Meta additionally needs META_API_BASE_URL (its
+# chat-completions endpoint, no default anywhere; add it here for meta) and
+# REVIEW_MODEL set verbatim, plus its key as a secret (META_API_KEY). Local
+# values live in `.dev.vars` (see `.dev.vars.example`); production keys via
+# `wrangler secret put`.
 REVIEW_PROVIDER = "meta"
 REVIEW_MODEL = "muse-spark-1.3-contributor"
 META_API_BASE_URL = "https://api.meta.ai/v1/chat/completions"

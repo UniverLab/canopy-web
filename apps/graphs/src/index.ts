@@ -301,11 +301,11 @@ function reviewCap(env: Env): number {
 export async function reviewProviderFromEnv(env: Env, deps: WorkerDeps): Promise<ReviewProvider | null> {
   const log = deps.log ?? (() => undefined);
   const raw = env.REVIEW_PROVIDER ?? "off";
-  const name = raw.toLowerCase();
+  const name = raw.trim().toLowerCase();
   if (name === "off" || name === "") {
     return null;
   }
-  if (name === "claude") {
+  if (name === "claude" || name === "muse") {
     const apiKey = env.CLAUDE_API_KEY ?? "";
     if (apiKey === "") {
       return null;

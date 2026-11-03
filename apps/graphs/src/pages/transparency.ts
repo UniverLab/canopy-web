@@ -48,13 +48,16 @@ export const REVIEW_PROVIDER_TOKEN = "{{REVIEW_PROVIDER}}";
 
 /**
  * The review provider's display name, as the indexing diagram labels it:
- * Meta's API by provider id, Claude's by either of its ids, and the
- * generic Review API when scanning is off or unconfigured.
+ * Muse's API by its id, Meta's by provider id, Claude's by either of its
+ * ids, and the generic Review API when scanning is off or unconfigured.
  */
 export function reviewProviderLabel(provider?: string): string {
   const name = (provider ?? "").trim().toLowerCase();
   if (name === "meta") {
     return "Meta API";
+  }
+  if (name === "muse") {
+    return "Muse API";
   }
   if (name === "claude" || name === "anthropic") {
     return "Claude API";

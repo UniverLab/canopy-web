@@ -14,6 +14,7 @@ import { describe, expect, it } from "vitest";
 import type { DocumentKind, JsonValue } from "../../../src/schema.js";
 import { sha256 } from "../src/hashes.js";
 import { handlePage, NOT_PAGE } from "../src/pages/routes.js";
+import { REVIEW_PROVIDER_TOKEN, reviewProviderLabel } from "../src/pages/transparency.js";
 import {
   TRANSPARENCY_NO_VERDICTS,
   TRANSPARENCY_TITLE,
@@ -516,6 +517,36 @@ describe("the transparency page", () => {
     }
   });
 
+  it("labels every provider value exactly", () => {
+    const cases: Array<[string | undefined, string]> = [
+      ["Muse", "Muse API"],
+      ["  MUSE  ", "Muse API"],
+      ["meta", "Meta API"],
+      ["Meta", "Meta API"],
+      ["claude", "Claude API"],
+      ["Anthropic", "Claude API"],
+      ["off", "Review API"],
+      ["", "Review API"],
+      [undefined, "Review API"],
+      ["garbage", "Review API"],
+    ];
+    for (const [provider, label] of cases) {
+      expect(reviewProviderLabel(provider), provider ?? "undefined").toBe(label);
+    }
+  });
+
+  it("labels a Muse scan in the diagram and its markdown twin", async () => {
+    const html = await (await call("/transparency", new FakeKV(), undefined, "Muse")).text();
+    expect(html).toContain("Muse API");
+    expect(html).not.toContain("Meta API");
+    expect(html).not.toContain("Claude API");
+    expect(html).not.toContain(REVIEW_PROVIDER_TOKEN);
+    const twin = await (await call("/transparency", new FakeKV(), "text/markdown", "Muse")).text();
+    expect(twin).toContain("Muse API");
+    expect(twin).toContain("participant Review as Muse API");
+    expect(twin).not.toContain(REVIEW_PROVIDER_TOKEN);
+  });
+
   it("keeps the diagram with a generic label when scanning is off", async () => {
     for (const provider of [undefined, "off"]) {
       const html = await (await call("/transparency", new FakeKV(), undefined, provider)).text();
@@ -1016,6 +1047,18 @@ describe("the meta wiring", () => {
       expect(provider, name).not.toBeNull();
       expect(provider?.model, name).toBe("Custom-Model-1.0");
       expect(lines, name).toEqual([]);
+    }
+  });
+
+  it("builds the Muse provider case-insensitively on the Claude wiring", async () => {
+    for (const name of ["Muse", "muse", " MUSE "]) {
+      const provider = await reviewProviderFromEnv({
+        REVIEW_PROVIDER: name,
+        CLAUDE_API_KEY: "test-claude-key",
+        REVIEW_MODEL: "muse-spark-1.3-contributor",
+      }, {});
+      expect(provider, name).not.toBeNull();
+      expect(provider?.model, name).toBe("muse-spark-1.3-contributor");
     }
   });
 
