@@ -32,6 +32,11 @@ export interface ShelfHandle {
   /** True while the Files sheet is up (the Files button's folder opens). */
   isOpen: () => boolean;
   open: (parent: HTMLElement) => void;
+  /**
+   * The same grid as an attachment picker: a tap hands the file back and
+   * closes. Only while hello.features carries shelf_upload.
+   */
+  openPick: (parent: HTMLElement, onPick: (item: ShelfItem) => void) => void;
   close: () => void;
   /** hello.features carried shelf_upload: the attach UI may exist. */
   uploadEnabled: () => boolean;
@@ -165,6 +170,24 @@ export class ShelfController implements ShelfHandle, ShelfFrames {
       return;
     }
     this.close();
+    const sheet = this.createSheet();
+    this.sheet = sheet;
+    sheet.open(parent);
+    this.notifyUi();
+  }
+
+  openPick(parent: HTMLElement, onPick: (item: ShelfItem) => void): void {
+    if (!this.uploadEnabled()) {
+      return;
+    }
+    this.close();
+    const sheet = this.createSheet();
+    this.sheet = sheet;
+    sheet.open(parent, onPick);
+    this.notifyUi();
+  }
+
+  private createSheet(): ShelfSheet {
     const sheet = new ShelfSheet({
       items: () => this.store.unionItems(),
       ensure: (item) => this.fetcher.ensure(item),
@@ -182,9 +205,7 @@ export class ShelfController implements ShelfHandle, ShelfFrames {
         this.notifyUi();
       },
     });
-    this.sheet = sheet;
-    sheet.open(parent);
-    this.notifyUi();
+    return sheet;
   }
 
   close(): void {

@@ -40,9 +40,12 @@ test("a guest joins a granted session with the owner's terminal", async ({ page 
   // alone in the view.
   await expect(page.locator("main.session-view textarea")).toHaveCount(1);
   await expect(page.locator(".xterm-helper-textarea")).toHaveCount(1);
-  // The grant's boundary in the UI: no builder, no files, no new session.
+  // The grant's boundary in the UI: no builder, no files, no new session,
+  // and no attach surfaces of either source.
   await expect(page.locator("#term-builder")).toHaveCount(0);
   await expect(page.locator("#session-files")).toHaveCount(0);
+  await expect(page.locator("#term-attach")).toHaveCount(0);
+  await expect(page.locator("#term-attach-shelf")).toHaveCount(0);
   await expect(page.locator("#guest-exit")).toBeHidden();
 });
 

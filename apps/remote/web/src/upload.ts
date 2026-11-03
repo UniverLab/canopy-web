@@ -15,6 +15,14 @@ export const UPLOAD_WINDOW = 8;
 export const MAX_ACTIVE_UPLOADS = 3;
 export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 
+/**
+ * The chip both attach sources type into the terminal: an uploaded file and
+ * a file picked off the shelf produce this one string, byte for byte.
+ */
+export function attachmentText(path: string): string {
+  return `Attachment: ${path}`;
+}
+
 export type UploadStatus = "queued" | "hashing" | "waiting" | "uploading" | "done" | "error";
 
 /** One upload as the tray and the attach chips read it. */

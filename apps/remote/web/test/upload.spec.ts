@@ -9,6 +9,18 @@ async function terminalText(page: Page): Promise<string> {
   return page.evaluate(() => window.__fake.terminalText());
 }
 
+async function frameTypes(page: Page): Promise<string[]> {
+  return page.evaluate(() => (window.__fake.sent() as { t?: string }[]).map((frame) => frame.t ?? ""));
+}
+
+async function lastInput(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const frames = window.__fake.sent() as { t?: string; data?: string }[];
+    const input = [...frames].reverse().find((frame) => frame.t === "input");
+    return input?.data === undefined ? "" : atob(input.data);
+  });
+}
+
 async function openSession(page: Page, search = ""): Promise<void> {
   await page.goto(`/fake.html${search}`);
   await expect(page.locator('[data-session="smoke"]')).toBeVisible();
@@ -85,6 +97,37 @@ test("refuses a 25 MiB upload before any data flows", async ({ page }) => {
   expect(parts).toBe(0);
 });
 
+test("picks a shelved file and types its Attachment chip with no upload", async ({ page }) => {
+  await openSession(page);
+  await expect(page.locator("#term-attach-shelf")).toBeVisible();
+
+  await page.evaluate(() => window.__fake.clearSent());
+  await page.locator("#term-attach-shelf").click();
+  const sheet = page.locator('[data-sheet="shelf"]');
+  await expect(sheet).toBeVisible();
+
+  // The union is one flat list, newest first. The host's push lands two
+  // seconds after attach; once it is here, the whole order is stable.
+  await expect(page.locator('.shelf-cell[title="pushed.png"]')).toHaveCount(1);
+  const titles = await page
+    .locator('[data-sheet="shelf"] .shelf-cell')
+    .evaluateAll((cells) => cells.map((cell) => cell.getAttribute("title")));
+  expect(titles).toEqual([
+    "pushed.png",
+    "gradient.png",
+    "layout.svg",
+    "capture.jpg",
+    "host-mark.png",
+  ]);
+  // Nothing was downloaded to list the shelf: the pick attaches on metadata.
+  expect(await frameTypes(page)).not.toContain("shelf_get");
+
+  await page.locator('.shelf-cell[title="host-mark.png"]').click();
+  await expect(sheet).toHaveCount(0);
+  await expect.poll(() => lastInput(page)).toBe("Attachment: /home/u/shelf/host-mark.png");
+  expect((await frameTypes(page)).filter((type) => type.startsWith("shelf_put"))).toEqual([]);
+});
+
 test("a guest without upload sees the forbidden message", async ({ page }) => {
   await openSession(page, "?upload=denied");
   await expect(page.locator("#term-attach")).toBeVisible();
@@ -94,8 +137,9 @@ test("a guest without upload sees the forbidden message", async ({ page }) => {
   await expect(error).toContainText("forbidden");
 });
 
-test("a hello without shelf_upload renders no paperclip", async ({ page }) => {
+test("a hello without shelf_upload renders no paperclip and no shelf entry", async ({ page }) => {
   await openSession(page, "?upload=off");
   await expect(page.locator("#term-attach")).toHaveCount(0);
+  await expect(page.locator("#term-attach-shelf")).toHaveCount(0);
   await expect(page.locator("#upload-input")).toHaveCount(0);
 });

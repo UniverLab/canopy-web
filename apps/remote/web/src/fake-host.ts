@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-// Test-only entry behind fake.html (served by vite dev, never built):
-// the session shell driven by a fake host over an in-memory channel.
-// Playwright drives it through window.__fake. It answers catalog, spawn,
-// compose and prompt exactly like the daemon's session protocol.
+// Test-only entry behind fake.html (served by vite dev, never built): the
+// session shell driven by a fake host over an in-memory channel, which
+// Playwright drives through window.__fake exactly like the daemon's protocol.
 
 import type { Terminal } from "@xterm/xterm";
 import { createShell } from "./app.js";
@@ -183,6 +182,7 @@ function main(): void {
       caption: image.caption,
       from,
       created_at: startedAt - ageMs,
+      path: `${sessionId === null ? "/home/u/shelf" : "/home/u/demo"}/${image.name}`,
     };
     shelfFiles.push({ item, bytes: image.bytes });
     return item;

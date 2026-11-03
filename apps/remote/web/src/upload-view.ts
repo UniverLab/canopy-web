@@ -8,6 +8,7 @@
 
 import { icon } from "./icons-dom.js";
 import type { ShelfHandle } from "./shelf-controller.js";
+import { attachmentText } from "./upload.js";
 import type { UploadTaskView } from "./upload.js";
 
 export interface UploadViewOptions {
@@ -80,11 +81,11 @@ function attachChip(task: UploadTaskView, opts: UploadViewOptions, render: () =>
   chip.className = "upload-attach";
   chip.dataset.uploadId = task.id;
   chip.textContent = `Attach ${task.path ?? task.name}`;
-  chip.title = `Type “Attachment: ${task.path ?? task.name}”`;
+  chip.title = `Type “${attachmentText(task.path ?? task.name)}”`;
   chip.addEventListener("click", () => {
     const attachment = opts.shelf.takeAttachment(task.id);
     if (attachment !== null) {
-      opts.typeText(`Attachment: ${attachment.path}`);
+      opts.typeText(attachmentText(attachment.path));
     }
     render();
   });
@@ -132,6 +133,7 @@ export function mountUploads(opts: UploadViewOptions): UploadView {
     const enabled = shelf.uploadEnabled();
     if (!enabled) {
       controls.querySelector("#term-attach")?.remove();
+      controls.querySelector("#term-attach-shelf")?.remove();
       input?.remove();
       input = null;
       return;
@@ -147,6 +149,25 @@ export function mountUploads(opts: UploadViewOptions): UploadView {
       const builder = controls.querySelector("#term-builder");
       if (builder) {
         builder.insertAdjacentElement("afterend", button);
+      } else {
+        controls.append(button);
+      }
+    }
+    // The second source: a file the host already holds, so no upload runs
+    // and the chip it types is the paperclip's own.
+    if (!controls.querySelector("#term-attach-shelf")) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.id = "term-attach-shelf";
+      button.setAttribute("aria-label", "Attach from shelf");
+      button.title = "Attach from shelf";
+      button.innerHTML = icon("folder");
+      button.addEventListener("click", () => {
+        shelf.openPick(root, (item) => opts.typeText(attachmentText(item.path ?? item.name)));
+      });
+      const paperclip = controls.querySelector("#term-attach");
+      if (paperclip) {
+        paperclip.insertAdjacentElement("afterend", button);
       } else {
         controls.append(button);
       }

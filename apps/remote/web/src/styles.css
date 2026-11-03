@@ -771,12 +771,11 @@ label > textarea {
     gap: 0.25rem;
   }
 
-  /* Five controls share 328 px: at the base gap the Builder label wraps
-   * onto two lines, the row grows, and the size row slides out of view.
-   * Six controls with the paperclip fit once the Builder word steps
-   * aside: the blocks icon still says which control it is. */
+  /* Seven controls share 328 px once the paperclip and the shelf button
+   * are up: the tight gap keeps all seven 44 px targets on one row, and
+   * the Builder word steps aside so the blocks icon names it alone. */
   .term-controls {
-    gap: 0.25rem;
+    gap: 0.15rem;
   }
 
   #term-builder span {
@@ -1266,9 +1265,14 @@ label > textarea {
   border-color: var(--tint-line);
 }
 
-/* The Files sheet's two directions: From agent and Yours. */
+/* The Files sheet's two directions: From agent and Yours. A picker shows
+ * the same grid flat, in union order, where a tap attaches. */
 .shelf-sections {
   padding: 0.25rem 0 0.75rem;
+}
+
+.shelf-pick .shelf-grid {
+  padding-top: 0.25rem;
 }
 
 .shelf-section-title {
