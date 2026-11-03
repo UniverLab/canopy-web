@@ -131,7 +131,18 @@ function main(): void {
       model: "spark",
       workdir: "/home/u/demo",
       status: "running",
+      kind: "agent",
       lastOutputAt: Date.now() - 30_000,
+    },
+    {
+      id: "shell",
+      name: "shell",
+      cli: "",
+      model: "",
+      workdir: "/home/u/demo",
+      status: "running",
+      kind: "terminal",
+      lastOutputAt: Date.now() - 120_000,
     },
   ];
 
@@ -267,6 +278,7 @@ function main(): void {
       model: item.model,
       workdir: item.workdir,
       status: item.status,
+      kind: item.kind,
       last_output_at: item.lastOutputAt === null ? null : Math.floor(item.lastOutputAt / 1000),
     }));
 
@@ -369,6 +381,7 @@ function main(): void {
             model: "spark",
             workdir: "/home/u/secret",
             status: "running",
+            kind: "agent",
             last_output_at: null,
           },
         ];
@@ -486,6 +499,7 @@ function main(): void {
         model: "",
         workdir: frame.workdir ?? "",
         status: "running",
+        kind: terminal ? "terminal" : "agent",
         lastOutputAt: null,
       };
       sessions.push(item);

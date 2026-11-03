@@ -55,6 +55,7 @@ function item(overrides: Partial<SessionItem> = {}): SessionItem {
     model: "spark",
     workdir: "/home/u/proj",
     status: "running",
+    kind: "agent",
     lastOutputAt: NOW - 12_000,
     ...overrides,
   };

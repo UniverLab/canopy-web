@@ -55,6 +55,7 @@ function session(id: string, name: string): SessionItem {
     model: "spark",
     workdir: "/home/u/demo",
     status: "running",
+    kind: "agent",
     lastOutputAt: 1793100000_000,
   };
 }

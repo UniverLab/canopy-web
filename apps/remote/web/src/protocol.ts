@@ -13,6 +13,8 @@ export interface SessionItem {
   model: string;
   workdir: string;
   status: string;
+  /** The host's session kind: "agent" or "terminal". */
+  kind: string;
   /** Last output time as epoch milliseconds, or null when unknown. */
   lastOutputAt: number | null;
 }
@@ -133,6 +135,7 @@ export function parseSessionItem(item: unknown): SessionItem | null {
     model: asString(item.model),
     workdir: asString(item.workdir),
     status: asString(item.status),
+    kind: asString(item.kind),
     lastOutputAt: parseEpochMs(item.last_output_at),
   };
 }

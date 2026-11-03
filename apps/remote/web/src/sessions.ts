@@ -157,26 +157,37 @@ export function renderSessions(
       ? ""
       : `<span class="session-files">${icon("folder")}<span class="session-files-count">${count}</span></span>`;
   };
-  const rows = items
-    .map((item) => {
-      const cliModel = [item.cli, item.model].filter((part) => part !== "").join(" · ");
-      const base = workdirBasename(item.workdir);
-      const sub = [cliModel, base].filter((part) => part !== "").join(" · ");
-      // What the row is, at a glance: a dead session is the square the
-      // kill left behind, an agent is the bot, a shell its own terminal.
-      const mark = statusDot(item.status) === "dead" ? "square" : item.cli === "" ? "squareTerminal" : "bot";
-      return (
-        `<li><button type="button" class="session-row" data-session="${esc(item.id)}">` +
-        `<span class="session-kind" data-kind="${mark}" aria-hidden="true">${icon(mark)}</span>` +
-        `<span class="dot dot-${esc(statusDot(item.status))}" title="${esc(item.status)}" aria-hidden="true"></span>` +
-        `<span class="session-main"><span class="session-name">${esc(item.name || item.id)}</span>` +
-        (sub === "" ? "" : `<span class="session-sub">${esc(sub)}</span>`) +
-        `</span>${files(item.id)}` +
-        `<span class="session-age">${esc(formatLastOutput(nowMs, item.lastOutputAt))}</span>` +
-        `</button></li>`
-      );
-    })
-    .join("");
+  const row = (item: SessionItem): string => {
+    const cliModel = [item.cli, item.model].filter((part) => part !== "").join(" · ");
+    const base = workdirBasename(item.workdir);
+    const sub = [cliModel, base].filter((part) => part !== "").join(" · ");
+    // What the row is, at a glance: a dead session is the square the
+    // kill left behind, an agent is the bot, a shell its own terminal.
+    // The host's kind decides — never the cli heuristic — and anything
+    // that is not a terminal reads as an agent, like the TUI's hub.
+    const mark =
+      statusDot(item.status) === "dead" ? "square" : item.kind === "terminal" ? "squareTerminal" : "bot";
+    return (
+      `<li><button type="button" class="session-row" data-session="${esc(item.id)}">` +
+      `<span class="session-kind" data-kind="${mark}" aria-hidden="true">${icon(mark)}</span>` +
+      `<span class="dot dot-${esc(statusDot(item.status))}" title="${esc(item.status)}" aria-hidden="true"></span>` +
+      `<span class="session-main"><span class="session-name">${esc(item.name || item.id)}</span>` +
+      (sub === "" ? "" : `<span class="session-sub">${esc(sub)}</span>`) +
+      `</span>${files(item.id)}` +
+      `<span class="session-age">${esc(formatLastOutput(nowMs, item.lastOutputAt))}</span>` +
+      `</button></li>`
+    );
+  };
+  // Agents above terminals, each group in name order; every kind but
+  // "terminal" belongs to Agents.
+  const byName = (a: SessionItem, b: SessionItem): number => a.name.localeCompare(b.name);
+  const agents = items.filter((item) => item.kind !== "terminal").sort(byName);
+  const terminals = items.filter((item) => item.kind === "terminal").sort(byName);
+  const group = (title: string, rows: SessionItem[]): string =>
+    rows.length === 0
+      ? ""
+      : `<h3 class="session-group">${title}</h3>` +
+        `<ul class="session-list">${rows.map(row).join("")}</ul>`;
   // The host's own shelf rides above the sessions, but only while it
   // holds files and only behind the feature flag.
   const shelfOn = shelf?.enabled === true && shelf.hostCount > 0;
@@ -188,6 +199,7 @@ export function renderSessions(
       `<span class="session-files">${icon("folderOpen")}` +
       `<span class="session-files-count">${shelf.hostCount}</span></span></button></li>`
     : "";
+  const shelfList = shelfRow === "" ? "" : `<ul class="session-list">${shelfRow}</ul>`;
   const list = items.length === 0 && shelfRow === "";
   const heading = guest ? "Shared sessions" : "Sessions";
   const empty = loaded
@@ -200,7 +212,9 @@ export function renderSessions(
     : `<button type="button" id="session-new">${icon("plus")}<span>New session</span></button>`;
   root.innerHTML =
     `<div class="sessions-head"><h2>${heading}</h2>${newButton}</div>` +
-    (list ? `<p class="empty">${empty}</p>` : `<ul class="session-list">${shelfRow}${rows}</ul>`);
+    (list
+      ? `<p class="empty">${empty}</p>`
+      : `${shelfList}${group("Agents", agents)}${group("Terminals", terminals)}`);
   root.querySelector("#session-new")?.addEventListener("click", () => callbacks.onNew());
   if (shelfOn) {
     root.querySelector("#host-shelf-row")?.addEventListener("click", () => shelf?.onOpenShelf());

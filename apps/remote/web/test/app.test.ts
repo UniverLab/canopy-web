@@ -413,6 +413,7 @@ describe("createShell", () => {
         model: "spark",
         workdir: "/home/u/proj",
         status: "running",
+        kind: "agent",
         lastOutputAt: Date.now() - 30_000,
       },
     ]);
@@ -444,6 +445,7 @@ describe("createShell", () => {
       model: "",
       workdir: "",
       status: "running",
+      kind: "terminal",
       lastOutputAt: null,
     });
     expect(root.querySelector('[data-session="s1"]')).not.toBeNull();
@@ -779,6 +781,7 @@ describe("createShell", () => {
       model: "",
       workdir: "/home/u/demo",
       status: "running",
+      kind: "agent",
       lastOutputAt: null,
     });
     expect(query(".session-title").textContent).toBe("rubidio");

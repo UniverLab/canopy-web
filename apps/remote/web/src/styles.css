@@ -494,6 +494,12 @@ label > textarea {
   margin: 0.75rem 0;
 }
 
+/* The Agents / Terminals group headings: the h3 scale, one step down
+ * from the Sessions title, spacing only. */
+.session-group {
+  margin: 0.75rem 0 0.5rem;
+}
+
 .session-list {
   list-style: none;
   margin: 0;

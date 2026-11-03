@@ -27,6 +27,7 @@ const SESSIONS: SessionItem[] = [
     model: "spark",
     workdir: "/home/u/live",
     status: "running",
+    kind: "agent",
     lastOutputAt: null,
   },
 ];

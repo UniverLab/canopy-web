@@ -163,6 +163,7 @@ describe("parseSessionItem", () => {
         model: "spark",
         workdir: "/home/u/proj",
         status: "running",
+        kind: "agent",
         last_output_at: 1793100000,
       }),
     ).toEqual({
@@ -172,6 +173,7 @@ describe("parseSessionItem", () => {
       model: "spark",
       workdir: "/home/u/proj",
       status: "running",
+      kind: "agent",
       lastOutputAt: 1793100000_000,
     });
   });
@@ -193,6 +195,7 @@ describe("parseSessionItem", () => {
       model: "",
       workdir: "",
       status: "",
+      kind: "",
       lastOutputAt: null,
     });
     expect(parseSessionItem({ name: "x" })).toBeNull();
@@ -203,7 +206,7 @@ describe("parseSessionItem", () => {
 describe("frame parsers", () => {
   it("parses sessions and skips invalid items", () => {
     expect(parseSessions({ t: "sessions", req: "r1", items: [{ id: "a" }, { nope: true }] })).toEqual([
-      { id: "a", name: "", cli: "", model: "", workdir: "", status: "", lastOutputAt: null },
+      { id: "a", name: "", cli: "", model: "", workdir: "", status: "", kind: "", lastOutputAt: null },
     ]);
     expect(parseSessions({ t: "sessions" })).toBeNull();
     expect(parseSessions({ t: "out", id: "a", seq: 1, data: "eQ==" })).toBeNull();
