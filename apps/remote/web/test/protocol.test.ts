@@ -12,7 +12,6 @@ import {
   buildInput,
   buildInputText,
   buildList,
-  buildPrompt,
   buildPromptDraft,
   buildResize,
   buildShelfGet,
@@ -52,12 +51,6 @@ describe("builders", () => {
     expect(JSON.parse(buildCatalog("r1"))).toEqual({ t: "catalog", req: "r1" });
     expect(JSON.parse(buildAttach("s1"))).toEqual({ t: "attach", id: "s1" });
     expect(JSON.parse(buildDetach("s1"))).toEqual({ t: "detach", id: "s1" });
-    expect(JSON.parse(buildPrompt("r2", "s1", "hello"))).toEqual({
-      t: "prompt",
-      req: "r2",
-      id: "s1",
-      text: "hello",
-    });
   });
 
   it("builds the exact spawn, compose and draft frames", () => {

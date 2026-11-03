@@ -462,9 +462,9 @@ export interface GuestSession {
 // store, controller and router over one guarded send function — the
 // allowlist drops whatever the guest may not send. The hub's grant
 // arrives as the sessions frame; a denied attach lands back on the list
-// with the unauthorized notice. Typing and prompts flow exactly as the
-// owner's do: the same controller over the same widgets, one shared
-// stream with no locking.
+// with the unauthorized notice. Typing flows exactly as the owner's
+// does: the same controller over the same widgets, one shared stream
+// with no locking.
 export function createGuestSession(root: HTMLElement, deps: GuestSessionDeps): GuestSession {
   const store = new SessionStore();
   const catalog = new CatalogStore();
@@ -483,11 +483,6 @@ export function createGuestSession(root: HTMLElement, deps: GuestSessionDeps): G
       onForgetDevice: deps.onForgetDevice,
       onInput: (bytes) => {
         controller.sendInputBytes(bytes);
-      },
-      onComposerSend: (text, req) => {
-        if (!controller.sendPrompt(text, req)) {
-          view.composerError("Not connected", req);
-        }
       },
     },
     { terminalFactory: deps.terminalFactory },
@@ -514,14 +509,12 @@ export function createGuestSession(root: HTMLElement, deps: GuestSessionDeps): G
     controller.open(id);
   }
 
-  // The router's shell slice for a guest: snapshots mount the terminal,
-  // prompts answer the composer, and anything sheet-shaped is inert — a
-  // guest opens no sheets. A denied attach bypasses this entirely and
-  // reaches onForbidden below.
+  // The router's shell slice for a guest: snapshots mount the terminal
+  // and every reply lands on an inert sheet stub — a guest opens no
+  // sheets and sends no prompts; typing flows as input. A denied attach
+  // bypasses this entirely and reaches onForbidden below.
   const routerShell: RouterShell = {
     ensureTerminal: (id, cols, rows) => view.ensureTerminal(id, cols, rows),
-    composerOk: (req) => view.composerOk(req),
-    composerError: (message, req) => view.composerError(message, req),
     sheetSpawned: () => {},
     sheetComposed: () => {},
     sheetOk: () => {},

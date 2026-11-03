@@ -468,9 +468,6 @@ function main(): void {
       onControlSize: (cols, rows) => {
         controller.sendResize(cols, rows);
       },
-      onComposerSend: (text, req) => {
-        controller.sendPrompt(text, req);
-      },
       onSpawn: (spawn, req) => send(buildSpawn(req, spawn)),
       onCompose: (draft, req) => send(JSON.stringify({ t: "compose", req, draft })),
       onSendDraft: (draft, req) => controller.sendPromptDraft(draft, req),

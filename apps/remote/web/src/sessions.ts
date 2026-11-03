@@ -90,8 +90,8 @@ export function openSessionName(id: string, store: SessionStore, spawnName?: str
 }
 
 // The late session_added converges the open view in place: the store row
-// wins, the title and header patch without a full render (which would drop
-// the terminal and the composer's draft). Returns the name to keep.
+// wins, the title and header patch without a full render (which would
+// drop the terminal). Returns the name to keep.
 export function convergeOpenSessionName(
   root: HTMLElement,
   store: SessionStore,

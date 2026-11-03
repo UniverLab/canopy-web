@@ -3,7 +3,7 @@
 // tabs), the session shell, the graph and SysInfo views, and the guest
 // list and session. The footer sits at the end of the scroll — after the
 // main in the DOM and below it on the page — so it never overlays the
-// terminal, the key bar, the composer or the session list, and the
+// terminal, the key bar, the size row or the session list, and the
 // terminal keeps its size. Phone assertions run at 390 px, the reference
 // width, with no sideways scroll.
 import { expect, test, type Page } from "@playwright/test";
@@ -62,7 +62,7 @@ test("ends the sessions home, both tabs, in the footer at 390x844", async ({ pag
   expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
 });
 
-test("keeps the session's terminal, key bar and composer above the footer at 390x844", async ({
+test("keeps the session's terminal, key bar and size row above the footer at 390x844", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -72,26 +72,26 @@ test("keeps the session's terminal, key bar and composer above the footer at 390
   await expect.poll(() => terminalText(page)).toContain("hello from the host");
   await expect(page.locator("#term-pane .xterm-screen")).toBeVisible();
   // The key bar is hidden under a fine pointer by default: show it so its
-  // box sits in the terminal → key bar → composer order below.
+  // box sits in the terminal → key bar → size row order below.
   if (!(await page.locator("#keybar").isVisible())) {
     await page.locator("#term-keys").click();
   }
   await expectFooterAfterMain(page);
-  // Top to bottom: terminal, key bar, composer, then the footer — the
+  // Top to bottom: terminal, key bar, size row, then the footer — the
   // footer never overlays any of them, and the terminal keeps its height.
-  const [term, keys, composer, footer] = await vboxes(page, [
+  const [term, keys, size, footer] = await vboxes(page, [
     "#term-pane",
     "#keybar",
-    ".composer",
+    ".term-size",
     "footer.look-colophon",
   ]);
   expect(term).not.toBeNull();
   expect(keys).not.toBeNull();
-  expect(composer).not.toBeNull();
+  expect(size).not.toBeNull();
   expect(footer).not.toBeNull();
   expect(term!.bottom).toBeLessThanOrEqual(keys!.top + 1);
-  expect(keys!.bottom).toBeLessThanOrEqual(composer!.top + 1);
-  expect(composer!.bottom).toBeLessThanOrEqual(footer!.top + 1);
+  expect(keys!.bottom).toBeLessThanOrEqual(size!.top + 1);
+  expect(size!.bottom).toBeLessThanOrEqual(footer!.top + 1);
   expect(term!.bottom - term!.top).toBeGreaterThan(200);
   expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
 });
@@ -237,16 +237,16 @@ test("ends the guest list and session in the footer at 390x844", async ({ page }
   await expect(page.locator("#term-pane .xterm-screen")).toBeVisible();
   await expect.poll(() => terminalText(page)).toContain("hello from the host");
   await expectFooterAfterMain(page);
-  const [term, keys, composer, footer] = await vboxes(page, [
+  const [term, keys, footer] = await vboxes(page, [
     "#term-pane",
     "#keybar",
-    ".composer",
     "footer.look-colophon",
   ]);
   expect(term).not.toBeNull();
+  expect(keys).not.toBeNull();
   expect(footer).not.toBeNull();
   expect(term!.bottom).toBeLessThanOrEqual(keys!.top + 1);
-  expect(composer!.bottom).toBeLessThanOrEqual(footer!.top + 1);
+  expect(keys!.bottom).toBeLessThanOrEqual(footer!.top + 1);
   expect(term!.bottom - term!.top).toBeGreaterThan(200);
   expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
 });

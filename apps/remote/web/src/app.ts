@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // The app shell: Sign in → Pair → Sessions → Session, with a header
 // carrying the GitHub login, the host label and the connection state.
-// The shell owns the views and the terminal/key-bar/composer widgets;
-// main.ts owns the relay, the peer and the frame routing. A host picker
-// appears only when several hosts are paired.
+// The shell owns the views and the terminal/key-bar widgets; main.ts
+// owns the relay, the peer and the frame routing. A host picker appears
+// only when several hosts are paired.
 
-import { Composer } from "./composer.js";
 import { CatalogStore } from "./catalog.js";
 import { Builder } from "./builder.js";
 import { renderConnBanner, renderTopbar, wireAccount, wireConnActions } from "./chrome.js";
@@ -29,7 +28,7 @@ import { convergeOpenSessionName, type SessionStore } from "./sessions.js";
 import { createXtermHandle, TerminalView } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
 import { termControlsHtml, termSizeHtml, wireTermControls } from "./term-controls.js";
-import { readControlSize } from "./terminal-prefs.js";
+import { pointerIsFine, readControlSize } from "./terminal-prefs.js";
 import { shellTitle } from "./titles.js";
 import type { PairSubmit } from "./ui.js";
 
@@ -55,7 +54,6 @@ export interface ShellCallbacks {
    * on every terminal mount while it is on.
    */
   onControlSize: (cols: number, rows: number) => void;
-  onComposerSend: (text: string, req: string) => void;
   /** False when the frame could not be sent; the dialog then says so. */
   onSpawn: (spawn: SpawnRequest, req: string) => boolean;
   onCompose: (draft: PromptDraft, req: string) => boolean;
@@ -93,8 +91,6 @@ export interface Shell {
   writeTerminal: (data: Uint8Array) => void;
   clearTerminal: () => void;
   showSessionExited: (code: number) => void;
-  composerOk: (req: string) => void;
-  composerError: (message: string, req: string | null) => void;
   sheetSpawned: (req: string, id: string) => void;
   sheetComposed: (req: string, text: string) => void;
   sheetOk: (req: string) => void;
@@ -151,10 +147,9 @@ export function createShell(
   let sessionCols = 0;
   let sessionRows = 0;
   let terminalView: TerminalView | null = null;
-  let composer: Composer | null = null;
   let latestButton: HTMLButtonElement | null = null;
-  // The three state-telling slots: the host chip's link icon, the Files
-  // button's folder, and nothing else — the composer owns its Send.
+  // The two state-telling slots: the host chip's link icon and the Files
+  // button's folder.
   let hostIcon: MorphSlot | null = null;
   let shelfIcon: MorphSlot | null = null;
   // The one-shot spawn confirmation: set by sheetSpawned, consumed by the
@@ -289,8 +284,6 @@ export function createShell(
   const teardownSessionWidgets = () => {
     terminalView?.dispose();
     terminalView = null;
-    composer?.unmount();
-    composer = null;
     latestButton = null;
     shelfIcon?.destroy();
     shelfIcon = null;
@@ -324,7 +317,6 @@ export function createShell(
       ${termControlsHtml()}
       <div class="keybar" id="keybar"></div>
       ${termSizeHtml(sessionId)}
-      <div class="composer-slot" id="composer-slot"></div>
     </main>
     ${REMOTE_FOOTER}`;
     wireConnBanner();
@@ -347,6 +339,7 @@ export function createShell(
       terminalView: () => terminalView,
       sessionSize: () => ({ cols: sessionCols, rows: sessionRows }),
       onControlSize: (cols, rows) => callbacks.onControlSize(cols, rows),
+      onBuilder: () => openBuilder(),
     }).latestButton;
     const bar = root.querySelector<HTMLElement>("#keybar");
     if (bar) {
@@ -369,14 +362,6 @@ export function createShell(
         updateKeyBarLatches(bar, latches.snapshot());
         callbacks.onKeyPress(bytes);
       });
-    }
-    const slot = root.querySelector<HTMLElement>("#composer-slot");
-    if (slot) {
-      composer = new Composer({
-        onSend: (text, req) => callbacks.onComposerSend(text, req),
-        onBuilder: () => openBuilder(),
-      });
-      composer.mount(slot);
     }
   };
 
@@ -600,9 +585,9 @@ export function createShell(
     setConnectionState(state: string): void {
       connectionState = state;
       if (route === "sessions" || route === "session" || route === "graph" || route === "metrics") {
-        // Never a full re-render here: it would drop the terminal and
-        // the composer's draft. Only the header and the banner carry the
-        // state, so patch them in place — the host chip's link icon too. The
+        // Never a full re-render here: it would drop the terminal. Only
+        // the header and the banner carry the state, so patch them in
+        // place — the host chip's link icon too. The
         // chip only morphs when its meaning flips: connecting → retrying is
         // still the same crossed-out link, and must not restart the morph.
         const topbar = root.querySelector(".topbar");
@@ -683,7 +668,7 @@ export function createShell(
       if (terminalView && cols === sessionCols && rows === sessionRows) {
         return;
       }
-      teardownSessionWidgetsKeepComposer();
+      teardownTerminal();
       const pane = root.querySelector<HTMLElement>("#term-pane");
       if (!pane) {
         return;
@@ -715,6 +700,17 @@ export function createShell(
         },
       );
       terminalView.mount(pane, cols, rows);
+      // A fine pointer types straight into the session: focus once on
+      // attach, after xterm is open. A touch device never auto-opens its
+      // keyboard — the first tap on the pane focuses instead.
+      if (pointerIsFine()) {
+        const attached = terminalView;
+        void attached.ready().then(() => {
+          if (terminalView === attached) {
+            attached.focus();
+          }
+        });
+      }
       // A remembered control-size toggle re-asserts on every (re)mount, so
       // a reconnected session keeps the size this device asked for.
       if (readControlSize(id)) {
@@ -733,12 +729,6 @@ export function createShell(
         badge.textContent = `exited (${code})`;
         badge.hidden = false;
       }
-    },
-    composerOk(req: string): void {
-      composer?.handleOk(req);
-    },
-    composerError(message: string, req: string | null): void {
-      composer?.handleError(message, req);
     },
     sheetSpawned(req: string, id: string): void {
       const spawnName = newDialog.handleSpawned(req);
@@ -770,14 +760,12 @@ export function createShell(
       teardownSessionWidgets();
       hostIcon?.destroy();
       hostIcon = null;
-      composer?.unmount();
-      composer = null;
     },
   };
 
-  // Remounting the terminal (a changed host size) must not drop the
-  // composer's draft, so the composer survives a terminal teardown.
-  function teardownSessionWidgetsKeepComposer(): void {
+  // Remounting the terminal (a changed host size) drops the view only;
+  // the rest of the session route stays painted around it.
+  function teardownTerminal(): void {
     terminalView?.dispose();
     terminalView = null;
     sessionCols = 0;

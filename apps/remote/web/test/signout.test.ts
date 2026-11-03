@@ -70,7 +70,6 @@ describe("sign out", () => {
       onKeyPress: () => {},
       onTerminalInput: () => {},
       onControlSize: () => {},
-      onComposerSend: () => {},
       onSpawn: () => true,
       onCompose: () => true,
       onSendDraft: () => true,

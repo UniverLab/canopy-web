@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// The Prompt Builder sheet, opened from the session composer. Ordered
+// The Prompt Builder sheet, opened from the session's controls row. Ordered
 // sections with add / remove / move, an optional preset with its preview,
 // skills, and an optional project — all from the host catalog. Preview
 // asks the host to compose (compose/composed) and shows the text

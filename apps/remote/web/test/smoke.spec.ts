@@ -243,7 +243,7 @@ for (const viewport of [
   { label: "390x844", width: 390, height: 844 },
   { label: "1280x900", width: 1280, height: 900 },
 ] as const) {
-  test(`stages the terminal on black with one teal Send at ${viewport.label}`, async ({
+  test(`stages the terminal on black with no teal call-to-action at ${viewport.label}`, async ({
     page,
   }, testInfo) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
@@ -252,13 +252,14 @@ for (const viewport of [
       () => getComputedStyle(document.querySelector(".term-pane") as HTMLElement).backgroundColor,
     );
     expect(pane).toBe("rgb(5, 5, 5)");
-    // Send is the only teal-filled button in the session view: rgb(63, 184, 176).
+    // No teal-filled button in the session view at rest: the terminal is
+    // the input now, and only a pressed latch fills teal — rgb(63, 184, 176).
     const teal = await page.evaluate(() =>
       [...document.querySelectorAll("main.session-view button")]
         .filter((button) => getComputedStyle(button).backgroundColor === "rgb(63, 184, 176)")
         .map((button) => button.className),
     );
-    expect(teal).toEqual(["composer-send primary"]);
+    expect(teal).toEqual([]);
     const shot = await page.screenshot({ path: testInfo.outputPath(`stage-${viewport.label}.png`) });
     await testInfo.attach(`stage-${viewport.label}`, { body: shot, contentType: "image/png" });
   });
@@ -389,7 +390,7 @@ test("keeps the banner left-aligned on the first row at 1280x900", async ({ page
 
 test("puts the Content textarea full width in its card", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.locator(".composer-builder").click();
+  await page.locator("#term-builder").click();
   await expect(page.locator("#builder-form")).toBeVisible();
   const measured = await page.evaluate(() => {
     const card = document.querySelector(".builder-section") as HTMLElement;
@@ -406,7 +407,7 @@ test("puts the Content textarea full width in its card", async ({ page }, testIn
 
 test("builder picks sections by kind at 390x844", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.locator(".composer-builder").click();
+  await page.locator("#term-builder").click();
   await expect(page.locator("#builder-form")).toBeVisible();
   // One Instruction section, no free title field.
   await expect(page.locator(".section-kind")).toHaveValue("instruction");
@@ -488,9 +489,9 @@ test("the Keys switch hides the bar and remembers the choice across reload", asy
   await toggle.click();
   await expect(bar).toBeHidden();
   await expect(toggle).toHaveAttribute("aria-pressed", "false");
-  // Only the key bar goes: zoom and composer stay.
+  // Only the key bar goes: zoom and builder stay.
   await expect(page.locator("#term-zoom-in")).toBeVisible();
-  await expect(page.locator(".composer-input")).toBeVisible();
+  await expect(page.locator("#term-builder")).toBeVisible();
   // The choice survives a reload.
   await page.reload();
   await expect(page.locator('[data-session="smoke"]')).toBeVisible();
@@ -509,44 +510,9 @@ for (const viewport of [
 
     // The host chip reads the link: wifi while connected.
     await expect(page.locator("#conn-icon")).toHaveAttribute("data-icon", "wifi");
-
-    const send = page.locator(".composer-send");
-    const icon = send.locator(".icon-slot");
-    await expect(icon).toHaveAttribute("data-icon", "send");
-    // The terminal reports its row height once it has measured itself, and
-    // the composer below it settles a moment later. Measuring before that
-    // would blame the session's own fit for an icon-sized move. The box is
-    // page-relative: the header banner makes a 900 px page scroll when the
-    // composer takes focus, and that scroll is not the icon moving.
-    const inPage = (): Promise<{ x: number; y: number; width: number; height: number }> =>
-      page.evaluate(() => {
-        const slot = document.querySelector(".composer-send .icon-slot") as HTMLElement;
-        const box = slot.getBoundingClientRect();
-        return { x: box.x, y: box.y + window.scrollY, width: box.width, height: box.height };
-      });
-    const settled = await settledBox(page, ".composer-send .icon-slot");
-    expect(settled).not.toBeNull();
-    const before = await inPage();
-
-    // Send → (loader while the frame is out) → check on the host's ok.
-    await page.locator(".composer-input").fill("do the thing");
-    await send.click();
-    await expect(icon).toHaveAttribute("data-icon", "check", { timeout: 10_000 });
-    await expect(page.locator(".composer-ok")).toContainText("Sent");
-    await expect(page.locator(".composer-ok svg.icon")).toBeVisible();
-    expect(await inPage()).toEqual(before);
-    const sentShot = await page.screenshot({ path: testInfo.outputPath(`morph-sent-${viewport.label}.png`) });
-    await testInfo.attach(`morph-sent-${viewport.label}`, { body: sentShot, contentType: "image/png" });
-
-    // Error → x, and the one icon that wears red.
-    await page.evaluate(() => window.__fake.failNextPrompt("delivery_failed", "host is gone"));
-    await page.locator(".composer-input").fill("do it again");
-    await send.click();
-    await expect(icon).toHaveAttribute("data-icon", "x", { timeout: 10_000 });
-    expect(await icon.evaluate((el) => getComputedStyle(el).color)).toBe("rgb(255, 107, 107)");
-    expect(await inPage()).toEqual(before);
-    const errorShot = await page.screenshot({ path: testInfo.outputPath(`morph-error-${viewport.label}.png`) });
-    await testInfo.attach(`morph-error-${viewport.label}`, { body: errorShot, contentType: "image/png" });
+    // The Builder button wears the blocks icon beside its label.
+    await expect(page.locator("#term-builder svg.icon")).toBeVisible();
+    await expect(page.locator("#term-builder")).toContainText("Builder");
 
     // The Ctrl latch: a filled teal button, with no circle or dot icon.
     const ctrl = page.locator('#keybar .key[data-key="ctrl"]');
@@ -623,21 +589,91 @@ test("spawns a terminal from the New dialog", async ({ page }) => {
   await expect(page.locator("main.session-view > .flash-ok svg.icon")).toBeVisible();
 });
 
-test("composer sends a prompt and clears on ok", async ({ page }) => {
-  await page.locator(".composer-input").fill("do the thing");
-  await page.locator(".composer-send").click();
+test("typing in the terminal reaches the host as input bytes", async ({ page }) => {
+  await page.evaluate(() => window.__fake.clearSent());
+  await page.locator(".xterm-helper-textarea").press("l");
+  await page.locator(".xterm-helper-textarea").press("s");
   const sent = await page.evaluate(() => window.__fake.sent());
-  const prompt = (sent as { t: string }[]).find((frame) => frame.t === "prompt");
-  expect(prompt).toMatchObject({ t: "prompt", id: "smoke", text: "do the thing" });
-  await expect(page.locator(".composer-input")).toHaveValue("");
+  expect(sent).toContainEqual({ t: "input", id: "smoke", data: "bA==" });
+  expect(sent).toContainEqual({ t: "input", id: "smoke", data: "cw==" });
 });
 
-test("composer keeps the text and shows the error", async ({ page }) => {
+test("tapping the terminal pane focuses xterm", async ({ page }) => {
+  // The attach focuses xterm on this fine-pointer browser; blur first so
+  // the tap below proves the pane focuses it, not the attach.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur?.());
+  await expect(page.locator(".xterm-helper-textarea")).not.toBeFocused();
+  // The pane's own padding, not the terminal: (4, 4) sits inside the 8 px
+  // inset, off the fitted terminal.
+  await page.locator("#term-pane").click({ position: { x: 4, y: 4 } });
+  await expect(page.locator(".xterm-helper-textarea")).toBeFocused();
+});
+
+test("gives the terminal pane the freed height at 360x640", async ({ page }) => {
+  // The default viewport is already 360x640; the beforeEach pinned the
+  // key bar visible the way a touch device shows it.
+  await settledBox(page, "#keybar");
+  const layout = await page.evaluate(() => {
+    const pane = document.querySelector("#term-pane") as HTMLElement;
+    const paneBox = pane.getBoundingClientRect();
+    const style = getComputedStyle(pane);
+    const size = document.querySelector(".term-size") as HTMLElement;
+    return {
+      paneHeight: paneBox.height,
+      visualHeight: Number(pane.style.getPropertyValue("--term-visual-h").replace("px", "")),
+      chrome:
+        parseFloat(style.paddingTop) +
+        parseFloat(style.paddingBottom) +
+        parseFloat(style.borderTopWidth) +
+        parseFloat(style.borderBottomWidth),
+      keyBottoms: [...document.querySelectorAll("#keybar .key")].map(
+        (key) => key.getBoundingClientRect().bottom,
+      ),
+      sizeBottom: size.getBoundingClientRect().bottom,
+      textareas: document.querySelectorAll("main.session-view textarea").length,
+      helperTextareas: document.querySelectorAll(".xterm-helper-textarea").length,
+    };
+  });
+  // The pane stands taller than the fitted terminal it holds: the floor
+  // engaged, so the terminal took height instead of a second input.
+  expect(layout.visualHeight).toBeGreaterThan(0);
+  expect(layout.paneHeight - layout.chrome).toBeGreaterThan(layout.visualHeight);
+  // ...while every key and the whole size row stay inside the viewport.
+  expect(layout.keyBottoms).toHaveLength(9);
+  for (const bottom of layout.keyBottoms) {
+    expect(bottom).toBeLessThanOrEqual(640);
+  }
+  expect(layout.sizeBottom).toBeLessThanOrEqual(640);
+  // xterm's hidden textarea is the only text input left in the view.
+  expect(layout.textareas).toBe(1);
+  expect(layout.helperTextareas).toBe(1);
+});
+
+test("builder sends the draft and closes on ok", async ({ page }) => {
+  await page.locator("#term-builder").click();
+  await expect(page.locator("#builder-form")).toBeVisible();
+  await page.locator(".section-content").fill("ship it");
+  await page.evaluate(() => window.__fake.clearSent());
+  await page.locator("#builder-send").click();
+  const sent = await page.evaluate(() => window.__fake.sent());
+  const prompt = (sent as Record<string, unknown>[]).find((frame) => frame.t === "prompt");
+  expect(prompt).toMatchObject({ t: "prompt", id: "smoke" });
+  // The draft form, never the removed text form.
+  expect(prompt).not.toHaveProperty("text");
+  const draft = prompt?.draft as { sections: { title: string; content: string }[] };
+  expect(draft.sections).toHaveLength(1);
+  expect(draft.sections[0]?.content).toBe("ship it");
+  await expect(page.locator("#builder-form")).toHaveCount(0);
+});
+
+test("builder keeps the draft and shows the error", async ({ page }) => {
   await page.evaluate(() => window.__fake.failNextPrompt("delivery_failed", "host is gone"));
-  await page.locator(".composer-input").fill("do the thing");
-  await page.locator(".composer-send").click();
-  await expect(page.locator(".composer-error")).toHaveText("host is gone");
-  await expect(page.locator(".composer-input")).toHaveValue("do the thing");
+  await page.locator("#term-builder").click();
+  await expect(page.locator("#builder-form")).toBeVisible();
+  await page.locator(".section-content").fill("ship it");
+  await page.locator("#builder-send").click();
+  await expect(page.locator("#builder-error")).toHaveText("host is gone");
+  await expect(page.locator(".section-content")).toHaveValue("ship it");
 });
 
 // --- The session shelf (hello.features "shelf") -------------------------

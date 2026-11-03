@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // The session view's terminal controls: zoom, the key-bar switch, the
-// latest button, and the per-session control-size toggle with its
-// explainer. Rendered as HTML beside the terminal pane and wired to the
-// open TerminalView plus the shell's live session state.
+// Prompt Builder button, the latest button, and the per-session
+// control-size toggle with its explainer. Rendered as HTML beside the
+// terminal pane and wired to the open TerminalView plus the shell's live
+// session state.
 
 import { icon } from "./icons-dom.js";
 import type { TerminalView } from "./terminal.js";
@@ -25,6 +26,7 @@ export function termControlsHtml(): string {
           aria-label="Show terminal keys"
           title="Show or hide the terminal keys"
         >Keys</button>
+        <button type="button" id="term-builder">${icon("blocks")}<span>Builder</span></button>
         <button type="button" id="term-latest" hidden aria-label="Scroll to the latest output">${icon("arrowDown")}<span>latest</span></button>
       </div>`;
 }
@@ -50,6 +52,8 @@ export interface TermControlsDeps {
   terminalView: () => TerminalView | null;
   sessionSize: () => { cols: number; rows: number };
   onControlSize: (cols: number, rows: number) => void;
+  /** Open the Prompt Builder sheet; the controls row owns its button. */
+  onBuilder: () => void;
 }
 
 export interface TermControls {
@@ -61,8 +65,9 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
   const { root } = deps;
   root.querySelector("#term-zoom-in")?.addEventListener("click", () => deps.terminalView()?.zoomIn());
   root.querySelector("#term-zoom-out")?.addEventListener("click", () => deps.terminalView()?.zoomOut());
+  root.querySelector("#term-builder")?.addEventListener("click", () => deps.onBuilder());
   // The Keys switch hides the nine-key bar and nothing else: the zoom and
-  // the composer stay put. The choice is remembered per device.
+  // the builder stay put. The choice is remembered per device.
   const keysButton = root.querySelector<HTMLButtonElement>("#term-keys");
   const keyBar = root.querySelector<HTMLElement>("#keybar");
   const showKeyBar = (visible: boolean): void => {

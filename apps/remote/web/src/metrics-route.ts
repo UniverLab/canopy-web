@@ -140,8 +140,8 @@ export class MetricsRoute {
   }
 
   // A push repaints the strip where it sits — beside the host chip, at the
-  // header's end — without touching the rest of the header, so the
-  // terminal and the composer's draft survive it.
+  // header's end — without touching the rest of the header, so the open
+  // terminal survives it.
   syncStrip(): void {
     const html = this.stripHtml();
     const existing = this.root.querySelector("#metrics-strip");

@@ -535,10 +535,6 @@ export function buildInputText(id: string, text: string): string {
   return buildInput(id, new TextEncoder().encode(text));
 }
 
-export function buildPrompt(req: string, id: string, text: string): string {
-  return JSON.stringify({ t: "prompt", req, id, text });
-}
-
 // The shelf requests: a list carries the session id, absent for the
 // host's own shelf; a get always names one file.
 export function buildShelfList(req: string, id?: string): string {

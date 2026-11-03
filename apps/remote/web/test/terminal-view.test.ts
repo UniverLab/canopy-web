@@ -221,6 +221,44 @@ describe("TerminalView", () => {
     expect(view.fitted).toBe(false);
   });
 
+  it("focuses the terminal when the pane itself is tapped", () => {
+    const { parent, view, handles } = setup();
+    view.mount(parent, 80, 24);
+    // A tap on the pane padding (not the terminal) still focuses xterm.
+    parent.dispatchEvent(new Event("click", { bubbles: true }));
+    expect(handles[0]?.focused).toBe(1);
+    // Dispose removes the pane listener: a later tap focuses nothing new.
+    view.dispose();
+    parent.dispatchEvent(new Event("click", { bubbles: true }));
+    expect(handles[0]?.focused).toBe(1);
+  });
+
+  it("focuses once open when tapped behind the font gate", async () => {
+    const { parent, view, handles } = setup();
+    let release: () => void = () => {};
+    const loaded = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    Object.defineProperty(document, "fonts", {
+      configurable: true,
+      value: { load: () => loaded, ready: Promise.resolve() },
+    });
+    try {
+      view.mount(parent, 80, 24);
+      expect(view.fitted).toBe(false);
+      // The tap lands before xterm exists; the keyboard still opens once it does.
+      parent.dispatchEvent(new Event("click", { bubbles: true }));
+      expect(handles).toHaveLength(0);
+      release();
+      await view.ready();
+      expect(handles).toHaveLength(1);
+      expect(handles[0]?.focused).toBe(1);
+    } finally {
+      Reflect.deleteProperty(document, "fonts");
+      view.dispose();
+    }
+  });
+
   it("waits for the real face and keeps the writes that arrive first", async () => {
     const { parent, view, handles } = setup();
     let release: () => void = () => {};

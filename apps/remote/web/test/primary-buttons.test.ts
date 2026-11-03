@@ -4,7 +4,6 @@ import { isAbsolute, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { Builder } from "../src/builder.js";
 import { CatalogStore } from "../src/catalog.js";
-import { Composer } from "../src/composer.js";
 import { renderPair, renderSignIn } from "../src/entry-views.js";
 import type { EntryViewHooks } from "../src/entry-views.js";
 import { NewDialog } from "../src/new-dialog.js";
@@ -75,12 +74,6 @@ describe("primary buttons", () => {
     expect(create?.textContent).toBe("Create");
     expect(create?.classList.contains("primary")).toBe(true);
     dialog.close();
-
-    const composerRoot = mount();
-    new Composer({ onSend: () => {}, onBuilder: () => {} }).mount(composerRoot);
-    const composerSend = composerRoot.querySelector<HTMLButtonElement>(".composer-send");
-    expect(composerSend?.textContent).toContain("Send");
-    expect(composerSend?.classList.contains("primary")).toBe(true);
 
     const builderRoot = mount();
     const builderCatalog = new CatalogStore();

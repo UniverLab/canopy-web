@@ -4,8 +4,8 @@ import { expect, test } from "@playwright/test";
 // The guest app against the fake host (?screen=guest): the grant the hub
 // would enforce, played by fixtures — the list carries the granted subset,
 // any other attach is forbidden, and the untrusted guest gets nothing.
-// Inside a granted session the guest drives the owner's own terminal, key
-// bar and composer over the one shared stream.
+// Inside a granted session the guest drives the owner's own terminal and
+// key bar over the one shared stream.
 
 async function guestOpen(page: import("@playwright/test").Page, id: string): Promise<void> {
   await page.evaluate((sessionId: string) => {
@@ -30,18 +30,18 @@ test("a trusted guest sees the granted session only", async ({ page }) => {
   await expect(page.locator("#session-new")).toHaveCount(0);
 });
 
-test("a guest joins a granted session with the owner's terminal and composer", async ({
-  page,
-}) => {
+test("a guest joins a granted session with the owner's terminal", async ({ page }) => {
   await page.goto("/fake.html?screen=guest");
   await page.locator('[data-session="smoke"]').click();
   await expect(page.locator("#term-pane .xterm-screen")).toBeVisible();
   await expect.poll(() => terminalText(page)).toContain("hello from the host");
   await expect(page.locator("#keybar .key")).toHaveCount(9);
-  await expect(page.locator(".composer-input")).toBeVisible();
-  await expect(page.locator(".composer-send")).toBeVisible();
+  // The terminal is the only text input: xterm's hidden textarea stands
+  // alone in the view.
+  await expect(page.locator("main.session-view textarea")).toHaveCount(1);
+  await expect(page.locator(".xterm-helper-textarea")).toHaveCount(1);
   // The grant's boundary in the UI: no builder, no files, no new session.
-  await expect(page.locator(".composer-builder")).toBeHidden();
+  await expect(page.locator("#term-builder")).toHaveCount(0);
   await expect(page.locator("#session-files")).toHaveCount(0);
   await expect(page.locator("#guest-exit")).toBeHidden();
 });
@@ -62,26 +62,6 @@ test("a guest types and the shared stream answers, like the owner's", async ({ p
   // locking, one stream for the owner and every guest on the session.
   await page.evaluate(() => window.__fake.pushOut("live line\r\n"));
   await expect.poll(() => terminalText(page)).toContain("live line");
-});
-
-test("a guest sends prompts and the host answers ok and error", async ({ page }) => {
-  await page.goto("/fake.html?screen=guest");
-  await page.locator('[data-session="smoke"]').click();
-  await expect(page.locator("#term-pane .xterm-screen")).toBeVisible();
-  await page.locator(".composer-input").fill("do the thing");
-  await page.locator(".composer-send").click();
-  const sent = await page.evaluate(() => window.__fake.sent());
-  const prompt = (sent as { t: string }[]).find((frame) => frame.t === "prompt");
-  expect(prompt).toMatchObject({ t: "prompt", id: "smoke", text: "do the thing" });
-  await expect(page.locator(".composer-input")).toHaveValue("");
-  await expect(page.locator(".composer-ok")).toContainText("Sent");
-  await page.evaluate(() =>
-    window.__fake.failNextPrompt("busy", "host is busy"),
-  );
-  await page.locator(".composer-input").fill("do it again");
-  await page.locator(".composer-send").click();
-  await expect(page.locator(".composer-error")).toHaveText("host is busy");
-  await expect(page.locator(".composer-input")).toHaveValue("do it again");
 });
 
 test("joining outside the grant fails closed with unauthorized", async ({ page }) => {
@@ -121,6 +101,5 @@ test("screenshots a guest inside a granted session", async ({ page }, testInfo) 
   await page.locator('[data-session="smoke"]').click();
   await expect(page.locator("#term-pane .xterm-screen")).toBeVisible();
   await expect.poll(() => terminalText(page)).toContain("hello from the host");
-  await page.locator(".composer-input").fill("summarize the run");
   await page.screenshot({ path: testInfo.outputPath("guest-session.png") });
 });

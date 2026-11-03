@@ -201,6 +201,7 @@ export class TerminalView {
   private following = true;
   private alternate = false;
   private stopObserving: (() => void) | null = null;
+  private paneClick: { parent: HTMLElement; handler: () => void } | null = null;
   private pinchStart: { distance: number; zoom: number } | null = null;
   private generation = 0;
   private readyPromise: Promise<void> = Promise.resolve();
@@ -233,7 +234,25 @@ export class TerminalView {
     this.host = host;
     this.pane = parent;
     this.rows = rows;
-    host.addEventListener("click", () => this.handle?.focus());
+    // Tapping anywhere in the pane — the terminal or its padding — focuses
+    // xterm's hidden textarea so the phone keyboard opens. The listener
+    // lives on the shell-owned pane (host clicks bubble up to it), so
+    // dispose removes it; the fit's own listeners go with the scaffold.
+    const onPaneClick = (): void => {
+      if (this.handle) {
+        this.handle.focus();
+        return;
+      }
+      // Tapped while xterm is still behind the font gate: focus once it
+      // opens, unless a remount or dispose replaced this attach first.
+      void this.readyPromise.then(() => {
+        if (this.generation === generation) {
+          this.handle?.focus();
+        }
+      });
+    };
+    parent.addEventListener("click", onPaneClick);
+    this.paneClick = { parent, handler: onPaneClick };
     fit.addEventListener("touchstart", (ev) => this.onTouchStart(ev), { passive: true });
     fit.addEventListener("touchmove", (ev) => this.onTouchMove(ev), { passive: true });
     fit.addEventListener("touchend", () => {
@@ -403,6 +422,10 @@ export class TerminalView {
     this.settleReady();
     this.stopObserving?.();
     this.stopObserving = null;
+    if (this.paneClick) {
+      this.paneClick.parent.removeEventListener("click", this.paneClick.handler);
+      this.paneClick = null;
+    }
     this.handle?.dispose();
     this.handle = null;
     this.fit?.remove();

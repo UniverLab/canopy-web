@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // Frame routing between the data channel and the session shell: joined
 // snapshots mount and feed the terminal, every other protocol frame goes
-// to the session store, the open session, the catalog cache, a sheet, or
-// the composer. Extracted from the entry point so tests pin the exact
-// wiring the app uses; main.ts and the fake host both route through here.
+// to the session store, the open session, the catalog cache, or a sheet.
+// Extracted from the entry point so tests pin the exact wiring the app
+// uses; main.ts and the fake host both route through here.
 
 import type { CatalogStore } from "./catalog.js";
 import type { JoinedSnapshot } from "./channel.js";
@@ -43,12 +43,10 @@ export interface FrameRouter {
 
 /**
  * The slice of the shell the router paints: the full Shell satisfies it,
- * and so does the guest view's stub, which owns no composer or sheets.
+ * and so does the guest view's stub, which owns no sheets.
  */
 export interface RouterShell {
   ensureTerminal: (id: string, cols: number, rows: number) => void;
-  composerOk: (req: string) => void;
-  composerError: (message: string, req: string | null) => void;
   sheetSpawned: (req: string, id: string) => void;
   sheetComposed: (req: string, text: string) => void;
   sheetOk: (req: string) => void;
@@ -178,16 +176,15 @@ export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
     }
     const ok = parseOk(frame);
     if (ok !== null) {
-      shell.composerOk(ok);
       shell.sheetOk(ok);
       return;
     }
     const forbidden = parseForbidden(frame);
     if (forbidden) {
-      // A denied guest attach never touches the composer or a sheet: the
-      // guest view paints its own unauthorized state. Without a guest
-      // handler (the owner flow, which the hub never forbids) the frame
-      // falls through to the generic error below.
+      // A denied guest attach never touches a sheet: the guest view
+      // paints its own unauthorized state. Without a guest handler (the
+      // owner flow, which the hub never forbids) the frame falls through
+      // to the generic error below.
       if (onForbidden) {
         onForbidden(forbidden.id);
         return;
@@ -196,14 +193,13 @@ export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
     const error = parseError(frame);
     if (error) {
       // The crossing point to the client: host paths die here, so every
-      // present and future caller — composer, sheets, guests — is covered.
+      // present and future caller — sheets, guests — is covered.
       const clean = { ...error, message: sanitizeRemoteError(error.code, error.message) };
       // A shelf transfer answers its own req (busy, not_found, …) and
-      // must never surface as a composer or dialog error.
+      // must never surface as a dialog error.
       if (shelf?.handleError(clean)) {
         return;
       }
-      shell.composerError(clean.message, clean.req);
       shell.sheetError(clean.message, clean.req, clean.code);
     }
   }

@@ -69,7 +69,6 @@ describe("shell titles", () => {
         onKeyPress: () => {},
         onTerminalInput: () => {},
         onControlSize: () => {},
-        onComposerSend: () => {},
         onSpawn: () => true,
         onCompose: () => true,
         onSendDraft: () => true,
@@ -148,7 +147,6 @@ describe("guest titles", () => {
       onSignOut: () => {},
       onForgetDevice: () => {},
       onInput: () => {},
-      onComposerSend: () => {},
     });
     view.showSignIn();
     expect(document.title).toBe("Sign in · Canopy remote");
