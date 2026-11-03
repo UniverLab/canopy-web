@@ -73,7 +73,7 @@ describe("the CI workflow", () => {
   });
 
   it("runs on pull requests only", () => {
-    expect(Object.keys(triggers(parseWorkflow()))).toEqual(["pull_request"]);
+    expect(Object.keys(triggers(parseWorkflow()))).toEqual(["pull_request", "workflow_call"]);
     expect(readFileSync(WORKFLOW, "utf8")).not.toMatch(/^\s*push:/m);
   });
 

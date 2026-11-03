@@ -6,6 +6,8 @@ name: deploy-remote
 # secret is the API token.
 on:
   workflow_dispatch: {}
+  # release.yml calls this after CI passes on main.
+  workflow_call: {}
 
 concurrency:
   group: deploy-remote-worker
@@ -35,5 +37,6 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          wranglerVersion: 4.153.0
           workingDirectory: apps/remote/worker
           command: deploy

@@ -274,14 +274,16 @@ key from `wrangler secret put META_API_KEY`, never from this file.
 
 ## Deploy
 
-`.github/workflows/deploy.yml`, **manual only** (`workflow_dispatch`): in the
-trunk-based flow nothing deploys on merge. To deploy by hand:
+`.github/workflows/release.yml`, run by hand on `main`: in the trunk-based flow
+nothing deploys on merge. It runs CI again, deploys this Worker and the remote
+Worker together, then creates the tag and the GitHub release from the version
+in the root `package.json`. To release, bump that version by PR, then:
 
 ```sh
-cd worker
-npx wrangler deploy --dry-run    # check the bundle and the binding
-npx wrangler deploy
+gh workflow run release.yml --ref main
 ```
+
+`.github/workflows/deploy.yml` deploys this Worker alone (`workflow_dispatch`).
 
 Reading the counts is deliberately not in this repo: Analytics Engine has no
 dashboard, only the SQL API, and that needs a long-lived read token — which

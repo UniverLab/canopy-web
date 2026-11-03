@@ -103,12 +103,13 @@ in sync by running `npm run build:remote-web` before `wrangler deploy`.
 
 ## Deploy
 
-`.github/workflows/deploy-remote.yml`, **manual only**
-(`workflow_dispatch`): in the trunk-based flow nothing deploys on merge.
-To deploy by hand:
+`.github/workflows/release.yml`, run by hand on `main`: in the trunk-based flow
+nothing deploys on merge. It runs CI again, deploys this Worker and the graphs
+Worker together, then creates the tag and the GitHub release from the version
+in the root `package.json`. To release, bump that version by PR, then:
 
 ```sh
-cd apps/remote/worker
-npx wrangler deploy --dry-run    # check the bundle and the binding
-npx wrangler deploy
+gh workflow run release.yml --ref main
 ```
+
+`.github/workflows/deploy-remote.yml` deploys this Worker alone (`workflow_dispatch`).

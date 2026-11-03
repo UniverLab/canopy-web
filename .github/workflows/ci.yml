@@ -2,6 +2,8 @@ name: ci
 
 on:
   pull_request:
+  # release.yml runs CI again on main before it deploys.
+  workflow_call:
 
 jobs:
   install:

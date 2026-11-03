@@ -5,6 +5,8 @@ name: deploy
 # inlined in apps/graphs/wrangler.toml, so the only secret is the API token.
 on:
   workflow_dispatch: {}
+  # release.yml calls this after CI passes on main.
+  workflow_call: {}
 
 concurrency:
   group: deploy-worker
@@ -33,5 +35,6 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          wranglerVersion: 4.153.0
           workingDirectory: apps/graphs
           command: deploy
