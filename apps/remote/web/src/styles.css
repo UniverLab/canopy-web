@@ -1112,17 +1112,6 @@ label > textarea {
   display: none;
 }
 
-/* The folder-and-count a row carries when its shelf holds files. */
-.session-files {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  color: var(--muted);
-  flex-shrink: 0;
-}
-
 /* The Files sheet: a thumbnail grid, two columns on a phone and four
  * from 900 px. */
 .shelf-empty {
@@ -1190,7 +1179,8 @@ label > textarea {
   -webkit-box-orient: vertical;
 }
 
-.shelf-meta {
+.shelf-meta,
+.viewer-meta {
   font-family: var(--font-mono);
   font-size: 0.7rem;
   color: var(--muted);
@@ -1418,8 +1408,15 @@ label > textarea {
   padding: 0.4rem 0.6rem;
 }
 
-.viewer-caption {
+.viewer-caption-block {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.viewer-caption {
   min-width: 0;
   font-family: var(--font-mono);
   font-size: 0.8rem;

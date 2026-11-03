@@ -533,7 +533,7 @@ for (const viewport of [
     await page.locator("#session-back").click();
     // The host pushes a fourth shelf file 2 s after attach and the list
     // repaints around it, recreating New mid-click; wait it out first.
-    await expect(page.locator('[data-session="smoke"] .session-files-count')).toHaveText("4");
+    await expect(page.locator("#shelf-row-badge")).toHaveText("1");
     // The session row says what it is, and New wears its plus.
     await expect(page.locator('[data-session="smoke"] .session-kind')).toHaveAttribute("data-kind", "bot");
     await expect(page.locator("#session-new svg.icon")).toBeVisible();
@@ -573,7 +573,7 @@ test("latches Ctrl so the keyboard's c sends 0x03", async ({ page }) => {
 test("spawns a terminal from the New dialog", async ({ page }) => {
   await page.locator("#session-back").click();
   // Same 2 s shelf push as the icons test: the repaint recreates New.
-  await expect(page.locator('[data-session="smoke"] .session-files-count')).toHaveText("4");
+  await expect(page.locator("#shelf-row-badge")).toHaveText("1");
   await page.locator("#session-new").click();
   await expect(page.locator("#new-form")).toBeVisible();
   await page.locator("#new-kind-terminal").check();
@@ -713,7 +713,7 @@ test("shelf badge, sheet and viewer at 390x844", async ({ page }, testInfo) => {
 
   await expect(page.locator("#session-files-icon")).toHaveAttribute("data-icon", "folder");
   await page.locator("#session-files").click();
-  await expect(page.locator(".shelf-cell")).toHaveCount(4);
+  await expect(page.locator(".shelf-cell")).toHaveCount(5);
   // The folder opens with the sheet.
   await expect(page.locator("#session-files-icon")).toHaveAttribute("data-icon", "folderOpen");
   // The shelf was looked at, so the badge clears as the sheet opens.
@@ -740,7 +740,7 @@ test("shelf badge, sheet and viewer at 390x844", async ({ page }, testInfo) => {
   await page.locator('.shelf-cell[title="layout.svg"]').click();
   await expect(page.locator("#shelf-viewer")).toBeVisible();
   await expect(page.locator("#shelf-viewer-img")).toBeVisible();
-  await expect(page.locator("#shelf-count")).toHaveText("3 / 4");
+  await expect(page.locator("#shelf-count")).toHaveText("3 / 5");
   const viewerShot = await page.screenshot({
     path: testInfo.outputPath("shelf-viewer-390x844.png"),
   });
@@ -748,7 +748,7 @@ test("shelf badge, sheet and viewer at 390x844", async ({ page }, testInfo) => {
   expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
   await page.keyboard.press("Escape");
   await expect(page.locator("#shelf-viewer")).toBeHidden();
-  await expect(page.locator(".shelf-cell")).toHaveCount(4);
+  await expect(page.locator(".shelf-cell")).toHaveCount(5);
   await page.keyboard.press("Escape");
   await expect(page.locator('[data-sheet="shelf"]')).toBeHidden();
 });
@@ -760,7 +760,7 @@ test("shelf grid, arrow steps and list counts at 1280x900", async ({ page }, tes
   await expect(badge).toHaveText("1");
 
   await page.locator("#session-files").click();
-  await expect(page.locator(".shelf-cell")).toHaveCount(4);
+  await expect(page.locator(".shelf-cell")).toHaveCount(5);
   // Four columns from 900 px up.
   expect(await gridColumns(page)).toBe(4);
   await expect(page.locator('.shelf-cell[title="gradient.png"] img')).toBeVisible();
@@ -770,10 +770,10 @@ test("shelf grid, arrow steps and list counts at 1280x900", async ({ page }, tes
   // The viewer steps with the arrow keys and downloads the blob URL.
   await page.locator(".shelf-cell").first().click();
   await expect(page.locator("#shelf-viewer")).toBeVisible();
-  await expect(page.locator("#shelf-count")).toHaveText("1 / 4");
+  await expect(page.locator("#shelf-count")).toHaveText("1 / 5");
   await expect(page.locator("#shelf-download")).toHaveAttribute("href", /^blob:/);
   await page.keyboard.press("ArrowRight");
-  await expect(page.locator("#shelf-count")).toHaveText("2 / 4");
+  await expect(page.locator("#shelf-count")).toHaveText("2 / 5");
   const viewerShot = await page.screenshot({
     path: testInfo.outputPath("shelf-viewer-1280x900.png"),
   });
@@ -783,23 +783,34 @@ test("shelf grid, arrow steps and list counts at 1280x900", async ({ page }, tes
   await page.keyboard.press("Escape");
   await expect(page.locator('[data-sheet="shelf"]')).toBeHidden();
 
-  // The session list carries the counts: one 📎 per row plus the host's own.
+  // The home carries one union Shelf row and no per-row counts.
   await page.locator("#session-back").click();
   await expect(page.locator("#host-shelf-row")).toBeVisible();
-  await expect(page.locator("#host-shelf-row .session-files-count")).toHaveText("1");
-  await expect(page.locator('[data-session="smoke"] .session-files-count')).toHaveText("4");
-  // The count's folder is an icon, not a glyph in the text.
-  await expect(page.locator("#host-shelf-row .session-files svg.icon")).toBeVisible();
+  await expect(page.locator("#host-shelf-row .session-sub")).toHaveText(
+    "Files from the host and its sessions",
+  );
+  await expect(page.locator(".session-files-count")).toHaveCount(0);
+  // The row's folder is an icon, not a glyph in the text.
+  await expect(page.locator("#host-shelf-row .session-kind svg.icon")).toBeVisible();
   const listShot = await page.screenshot({
     path: testInfo.outputPath("shelf-list-1280x900.png"),
   });
   await testInfo.attach("shelf-list-1280x900", { body: listShot, contentType: "image/png" });
   expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
 
-  // The Shelf row opens the same sheet over the host's own files.
+  // The Shelf row opens the union sheet: the host file beside the
+  // session's, under the one Shelf title — and never the terminal's.
   await page.locator("#host-shelf-row").click();
-  await expect(page.locator(".shelf-cell")).toHaveCount(1);
+  await expect(page.locator('[data-sheet="shelf"] .sheet-head h2')).toHaveText("Shelf");
+  await expect(page.locator(".shelf-cell")).toHaveCount(5);
   await expect(page.locator('.shelf-cell[title="host-mark.png"] img')).toBeVisible();
+  await expect(page.locator('.shelf-cell[title="terminal-note.txt"]')).toHaveCount(0);
+  // The viewer carries the same from · age line as the grid cell.
+  await page.locator('.shelf-cell[title="layout.svg"]').click();
+  await expect(page.locator("#shelf-viewer")).toBeVisible();
+  await expect(page.locator("#shelf-meta")).toContainText("muse · ");
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#shelf-viewer")).toBeHidden();
   await page.keyboard.press("Escape");
   await expect(page.locator('[data-sheet="shelf"]')).toBeHidden();
 });

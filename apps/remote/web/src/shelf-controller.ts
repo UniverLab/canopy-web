@@ -3,8 +3,8 @@
 // entry points share. It owns the item lists, the transfer queue and the
 // blob URL cache (shelf-store.ts) plus the sheet (shelf.ts), and it
 // stays completely silent until hello.features carries "shelf" — no
-// request out, no surface up. Session-row counts are prefetched from the
-// session store, once per connection.
+// request out, no surface up. Every shelf is prefetched from the
+// session store, once per connection, and shown as one union sheet.
 
 import { newReqId } from "./protocol.js";
 import type { FilePart, ReplyError, ShelfItem, ShelfList } from "./protocol.js";
@@ -14,6 +14,7 @@ import {
   ShelfFetcher,
   ShelfStore,
   shelfListRequest,
+  shelfMarker,
 } from "./shelf-store.js";
 import type { ShelfKey } from "./shelf-store.js";
 import { ShelfSheet } from "./shelf.js";
@@ -21,15 +22,15 @@ import type { SessionStore } from "./sessions.js";
 import { UploadQueue } from "./upload.js";
 import type { ShelfPutAck, ShelfPutReady, UploadAttachment, UploadTaskView } from "./upload.js";
 
-/** What the shell needs to render counts and open the sheet. */
+/** What the shell needs to render the badge and open the union sheet. */
 export interface ShelfHandle {
   subscribe: (listener: () => void) => () => void;
   enabled: () => boolean;
-  count: (key: ShelfKey) => number;
-  unseen: (sessionId: string) => number;
+  /** The unseen files on every shelf together. */
+  unseenTotal: () => number;
   /** True while the Files sheet is up (the Files button's folder opens). */
   isOpen: () => boolean;
-  open: (parent: HTMLElement, key: ShelfKey) => void;
+  open: (parent: HTMLElement) => void;
   close: () => void;
   /** hello.features carried shelf_upload: the attach UI may exist. */
   uploadEnabled: () => boolean;
@@ -97,7 +98,7 @@ export class ShelfController implements ShelfHandle, ShelfFrames {
       }
       const sheet = this.sheet;
       if (sheet?.isOpen) {
-        sheet.refresh(this.store.items(sheet.key));
+        sheet.refresh(this.store.unionItems());
       }
     });
     this.stopSessions = deps.sessions?.subscribe(() => this.sync()) ?? null;
@@ -126,12 +127,8 @@ export class ShelfController implements ShelfHandle, ShelfFrames {
     return this.sheet?.isOpen ?? false;
   }
 
-  count(key: ShelfKey): number {
-    return this.store.enabled ? this.store.count(key) : 0;
-  }
-
-  unseen(sessionId: string): number {
-    return this.store.enabled ? this.store.unseen(sessionId) : 0;
+  unseenTotal(): number {
+    return this.store.enabled ? this.store.unseenTotal() : 0;
   }
 
   uploadEnabled(): boolean {
@@ -156,16 +153,16 @@ export class ShelfController implements ShelfHandle, ShelfFrames {
     return this.queue.takeAttachment(id);
   }
 
-  open(parent: HTMLElement, key: ShelfKey): void {
+  open(parent: HTMLElement): void {
     if (!this.store.enabled) {
       return;
     }
     this.close();
     const sheet = new ShelfSheet({
-      items: (shelfKey) => this.store.items(shelfKey),
+      items: () => this.store.unionItems(),
       ensure: (item) => this.fetcher.ensure(item),
-      requestList: (shelfKey) => this.requestList(shelfKey, false),
-      markSeen: (shelfKey) => this.store.markSeen(shelfKey),
+      requestAll: () => this.requestShelves(false),
+      markSeen: () => this.store.markSeen(),
       blobUrl: (fileId) => this.lru.get(fileId),
       blob: (fileId) => this.lru.blob(fileId),
       isYours: (item) =>
@@ -178,7 +175,7 @@ export class ShelfController implements ShelfHandle, ShelfFrames {
       },
     });
     this.sheet = sheet;
-    sheet.open(parent, key, key === null ? "Host shelf" : "Files");
+    sheet.open(parent);
     this.notifyUi();
   }
 
@@ -221,7 +218,9 @@ export class ShelfController implements ShelfHandle, ShelfFrames {
     if (!this.store.enabled) {
       return;
     }
-    const viewing = this.sheet?.isOpen === true && this.sheet.key === item.session_id;
+    // The union sheet shows every shelf, so any arrival while it is up
+    // is already on screen.
+    const viewing = this.sheet?.isOpen === true;
     if (this.queue.confirmAdded(item) || item.origin === "device" || item.origin === "upload") {
       this.uploaded.add(item.file_id);
     }
@@ -281,19 +280,23 @@ export class ShelfController implements ShelfHandle, ShelfFrames {
 
   // --- outbound -------------------------------------------------------
 
-  /** Ask for every shelf the row counts need, once per connection. */
+  /** Ask for every shelf the union needs, once per connection. */
   private sync(): void {
     if (!this.store.enabled) {
       return;
     }
-    this.requestList(null, true);
+    this.requestShelves(true);
+  }
+
+  private requestShelves(once: boolean): void {
+    this.requestList(null, once);
     for (const session of this.sessions?.list() ?? []) {
-      this.requestList(session.id, true);
+      this.requestList(session.id, once);
     }
   }
 
   private requestList(key: ShelfKey, once: boolean): void {
-    const marker = key === null ? "\u0000host" : key;
+    const marker = shelfMarker(key);
     if (once && this.requested.has(marker)) {
       return;
     }

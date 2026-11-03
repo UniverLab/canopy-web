@@ -234,12 +234,71 @@ describe("renderSessions", () => {
       ],
       NOW,
       { onOpen: () => {}, onNew: () => {} },
-      { enabled: true, hostCount: 2, count: () => 0, onOpenShelf: () => {} },
+      { enabled: true, unseen: 2, onOpenShelf: () => {} },
     );
     const order = [...root.querySelectorAll("#host-shelf-row, .session-group")].map((el) =>
       el.id === "host-shelf-row" ? "shelf" : el.textContent,
     );
     expect(order).toEqual(["shelf", "Agents", "Terminals"]);
+  });
+
+  it("sessions-union-row: one Shelf row at zero files, no per-row counts", () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    let opened = 0;
+    renderSessions(root, [item()], NOW, { onOpen: () => {}, onNew: () => {} }, {
+      enabled: true,
+      unseen: 0,
+      onOpenShelf: () => {
+        opened += 1;
+      },
+    });
+    const row = root.querySelector("#host-shelf-row");
+    expect(row?.querySelector(".session-name")?.textContent).toBe("Shelf");
+    expect(row?.querySelector(".session-sub")?.textContent).toBe(
+      "Files from the host and its sessions",
+    );
+    expect(root.querySelector<HTMLElement>("#shelf-row-badge")?.hidden).toBe(true);
+    expect(root.querySelector(".session-files")).toBeNull();
+    expect(root.querySelector(".session-files-count")).toBeNull();
+    root.querySelector<HTMLButtonElement>("#host-shelf-row")?.click();
+    expect(opened).toBe(1);
+  });
+
+  it("sessions-union-badge: the row badges the total unseen", () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    renderSessions(root, [item()], NOW, { onOpen: () => {}, onNew: () => {} }, {
+      enabled: true,
+      unseen: 3,
+      onOpenShelf: () => {},
+    });
+    const badge = root.querySelector<HTMLElement>("#shelf-row-badge");
+    expect(badge?.hidden).toBe(false);
+    expect(badge?.textContent).toBe("3");
+  });
+
+  it("sessions-union-empty: zero sessions keeps the row and the empty note", () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    renderSessions(root, [], NOW, { onOpen: () => {}, onNew: () => {} }, {
+      enabled: true,
+      unseen: 0,
+      onOpenShelf: () => {},
+    });
+    expect(root.querySelector("#host-shelf-row")).not.toBeNull();
+    expect(root.querySelector("p.empty")?.textContent).toBe("No sessions on this host.");
+  });
+
+  it("sessions-union-off: no row without the feature", () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    renderSessions(root, [item()], NOW, { onOpen: () => {}, onNew: () => {} }, {
+      enabled: false,
+      unseen: 0,
+      onOpenShelf: () => {},
+    });
+    expect(root.querySelector("#host-shelf-row")).toBeNull();
   });
 
   it("tells a guest what an empty grant means", () => {

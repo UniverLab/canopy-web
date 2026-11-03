@@ -252,7 +252,7 @@ export function createShell(
     if (!badge) {
       return;
     }
-    const unseen = !enabled || sessionId === null ? 0 : shelf?.unseen(sessionId) ?? 0;
+    const unseen = !enabled ? 0 : shelf?.unseenTotal() ?? 0;
     badge.hidden = unseen === 0;
     badge.textContent = unseen === 0 ? "" : String(unseen);
   };
@@ -333,9 +333,7 @@ export function createShell(
     // The Files sheet only exists behind hello.features "shelf"; the
     // button itself is rendered hidden and syncFilesBadge reveals it.
     root.querySelector("#session-files")?.addEventListener("click", () => {
-      if (sessionId !== null) {
-        shelf?.open(root, sessionId);
-      }
+      shelf?.open(root);
     });
     syncFilesBadge();
     latestButton = wireTermControls({

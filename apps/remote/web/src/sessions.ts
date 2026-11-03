@@ -119,11 +119,11 @@ export interface SessionListCallbacks {
   onNew: () => void;
 }
 
-/** The shelf's share of the list: counts and the host's own row. */
+/** The shelf's share of the list: the one union row and its badge. */
 export interface SessionListShelf {
   enabled: boolean;
-  hostCount: number;
-  count: (id: string) => number;
+  /** The unseen files on every shelf together. */
+  unseen: number;
   onOpenShelf: () => void;
 }
 
@@ -148,15 +148,6 @@ export function renderSessions(
   loaded = true,
   guest = false,
 ): void {
-  const files = (id: string): string => {
-    if (!shelf?.enabled) {
-      return "";
-    }
-    const count = shelf.count(id);
-    return count === 0
-      ? ""
-      : `<span class="session-files">${icon("folder")}<span class="session-files-count">${count}</span></span>`;
-  };
   const row = (item: SessionItem): string => {
     const cliModel = [item.cli, item.model].filter((part) => part !== "").join(" · ");
     const base = workdirBasename(item.workdir);
@@ -173,7 +164,7 @@ export function renderSessions(
       `<span class="dot dot-${esc(statusDot(item.status))}" title="${esc(item.status)}" aria-hidden="true"></span>` +
       `<span class="session-main"><span class="session-name">${esc(item.name || item.id)}</span>` +
       (sub === "" ? "" : `<span class="session-sub">${esc(sub)}</span>`) +
-      `</span>${files(item.id)}` +
+      `</span>` +
       `<span class="session-age">${esc(formatLastOutput(nowMs, item.lastOutputAt))}</span>` +
       `</button></li>`
     );
@@ -188,19 +179,18 @@ export function renderSessions(
       ? ""
       : `<h3 class="session-group">${title}</h3>` +
         `<ul class="session-list">${rows.map(row).join("")}</ul>`;
-  // The host's own shelf rides above the sessions, but only while it
-  // holds files and only behind the feature flag.
-  const shelfOn = shelf?.enabled === true && shelf.hostCount > 0;
+  // The union shelf rides above the sessions, always while the feature
+  // flag is on — even at zero files, so the entry point never disappears.
+  const shelfOn = shelf?.enabled === true;
   const shelfRow = shelfOn && shelf
     ? `<li><button type="button" class="session-row shelf-row" id="host-shelf-row">` +
       `<span class="session-kind" data-kind="folderOpen" aria-hidden="true">${icon("folderOpen")}</span>` +
       `<span class="session-main"><span class="session-name">Shelf</span>` +
-      `<span class="session-sub">Files the host sent</span></span>` +
-      `<span class="session-files">${icon("folderOpen")}` +
-      `<span class="session-files-count">${shelf.hostCount}</span></span></button></li>`
+      `<span class="session-sub">Files from the host and its sessions</span></span>` +
+      `<span class="files-badge" id="shelf-row-badge"${shelf.unseen === 0 ? " hidden" : ""}>` +
+      `${shelf.unseen === 0 ? "" : shelf.unseen}</span></button></li>`
     : "";
   const shelfList = shelfRow === "" ? "" : `<ul class="session-list">${shelfRow}</ul>`;
-  const list = items.length === 0 && shelfRow === "";
   const heading = guest ? "Shared sessions" : "Sessions";
   const empty = loaded
     ? guest
@@ -212,8 +202,8 @@ export function renderSessions(
     : `<button type="button" id="session-new">${icon("plus")}<span>New session</span></button>`;
   root.innerHTML =
     `<div class="sessions-head"><h2>${heading}</h2>${newButton}</div>` +
-    (list
-      ? `<p class="empty">${empty}</p>`
+    (items.length === 0
+      ? `${shelfList}<p class="empty">${empty}</p>`
       : `${shelfList}${group("Agents", agents)}${group("Terminals", terminals)}`);
   root.querySelector("#session-new")?.addEventListener("click", () => callbacks.onNew());
   if (shelfOn) {

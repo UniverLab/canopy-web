@@ -12,7 +12,6 @@
 // to the protocol lives in shelf-controller.ts.
 
 import type { ShelfItem } from "./protocol.js";
-import type { ShelfKey } from "./shelf-store.js";
 import { Sheet } from "./sheet.js";
 import { icon } from "./icons-dom.js";
 import { extensionLabel, formatBytes, previewKind } from "./preview.js";
@@ -22,7 +21,14 @@ const MIN_ZOOM = 1;
 const MAX_ZOOM = 6;
 const SWIPE_PX = 60;
 
-/** A short relative age for the cell's meta line. */
+/** The `from · age` line under a file's name, in the grid and the viewer. */
+export function metaLine(item: ShelfItem): string {
+  return [item.from, formatAge(Date.now(), item.created_at)]
+    .filter((part) => part !== "")
+    .join(" · ");
+}
+
+/** A short relative age for the meta line. */
 export function formatAge(nowMs: number, thenMs: number): string {
   const seconds = Math.max(0, Math.floor((nowMs - thenMs) / 1000));
   if (seconds < 60) {
@@ -61,6 +67,7 @@ class ShelfViewer {
   private kind: PreviewKind = "image";
   private shownFileId = "";
   private caption: HTMLElement | null = null;
+  private meta: HTMLElement | null = null;
   private counter: HTMLElement | null = null;
   private link: HTMLAnchorElement | null = null;
   private prev: HTMLButtonElement | null = null;
@@ -122,9 +129,15 @@ class ShelfViewer {
     prev.id = "shelf-prev";
     prev.setAttribute("aria-label", "Previous file");
     prev.innerHTML = icon("chevronLeft");
+    const captionBlock = document.createElement("div");
+    captionBlock.className = "viewer-caption-block";
     const caption = document.createElement("span");
     caption.className = "viewer-caption";
     caption.id = "shelf-caption";
+    const meta = document.createElement("span");
+    meta.className = "viewer-meta";
+    meta.id = "shelf-meta";
+    captionBlock.append(caption, meta);
     const counter = document.createElement("span");
     counter.className = "viewer-count";
     counter.id = "shelf-count";
@@ -143,7 +156,7 @@ class ShelfViewer {
     close.id = "shelf-viewer-close";
     close.setAttribute("aria-label", "Close");
     close.innerHTML = icon("x");
-    bar.append(prev, caption, counter, next, link, close);
+    bar.append(prev, captionBlock, counter, next, link, close);
 
     overlay.append(stage, bar);
     parent.append(overlay);
@@ -155,6 +168,7 @@ class ShelfViewer {
     this.card = card;
     this.note = note;
     this.caption = caption;
+    this.meta = meta;
     this.counter = counter;
     this.link = link;
     this.prev = prev;
@@ -184,6 +198,7 @@ class ShelfViewer {
     this.note = null;
     this.shownFileId = "";
     this.caption = null;
+    this.meta = null;
     this.counter = null;
     this.link = null;
     this.prev = null;
@@ -270,6 +285,9 @@ class ShelfViewer {
     }
     if (this.caption) {
       this.caption.textContent = item.caption ?? item.name;
+    }
+    if (this.meta) {
+      this.meta.textContent = metaLine(item);
     }
     if (this.counter) {
       this.counter.textContent = `${this.index + 1} / ${this.items.length}`;
@@ -454,10 +472,10 @@ class ShelfViewer {
 }
 
 interface SheetOwner {
-  items: (key: ShelfKey) => ShelfItem[];
+  items: () => ShelfItem[];
   ensure: (item: ShelfItem) => void;
-  requestList: (key: ShelfKey) => void;
-  markSeen: (key: ShelfKey) => void;
+  requestAll: () => void;
+  markSeen: () => void;
   blobUrl: (fileId: string) => string | null;
   blob: (fileId: string) => Blob | null;
   /** True for a file this device uploaded on this connection. */
@@ -465,7 +483,7 @@ interface SheetOwner {
   onClosed: () => void;
 }
 
-/** The Files sheet: a thumbnail grid over one shelf, viewer behind it. */
+/** The Files sheet: a thumbnail grid over the union shelf, viewer behind it. */
 export class ShelfSheet {
   private readonly owner: SheetOwner;
   private sheet: Sheet | null = null;
@@ -478,8 +496,6 @@ export class ShelfSheet {
   private sheetFocus: Element | null = null;
   private cellFocus: Element | null = null;
   private readonly pending = new Set<string>();
-  /** The shelf this sheet shows; null is the host shelf. */
-  key: ShelfKey = null;
 
   constructor(owner: SheetOwner) {
     this.owner = owner;
@@ -489,11 +505,10 @@ export class ShelfSheet {
     return this.sheet?.isOpen ?? false;
   }
 
-  open(parent: HTMLElement, key: ShelfKey, title: string): void {
+  open(parent: HTMLElement): void {
     this.closeSheet();
-    this.key = key;
     this.sheetFocus = document.activeElement;
-    const sheet = new Sheet({ kind: "shelf", title }, () => this.onSheetClose());
+    const sheet = new Sheet({ kind: "shelf", title: "Shelf" }, () => this.onSheetClose());
     const body = sheet.mount(parent);
     const empty = document.createElement("p");
     empty.className = "empty shelf-empty";
@@ -504,12 +519,12 @@ export class ShelfSheet {
     this.sheet = sheet;
     this.empty = empty;
     this.grid = grid;
-    this.items = this.owner.items(key);
+    this.items = this.owner.items();
     this.render();
     document.addEventListener("keydown", this.onKeydown);
     this.ticker = globalThis.setInterval(() => this.render(), 15000);
-    this.owner.markSeen(key);
-    this.owner.requestList(key);
+    this.owner.markSeen();
+    this.owner.requestAll();
   }
 
   close(): void {
@@ -694,9 +709,7 @@ export class ShelfSheet {
 
     const meta = document.createElement("span");
     meta.className = "shelf-meta";
-    meta.textContent = [item.from, formatAge(Date.now(), item.created_at)]
-      .filter((part) => part !== "")
-      .join(" · ");
+    meta.textContent = metaLine(item);
 
     cell.append(thumb, caption, meta);
     cell.addEventListener("click", () => this.openViewer(item));

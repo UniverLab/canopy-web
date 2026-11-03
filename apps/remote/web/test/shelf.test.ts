@@ -274,7 +274,7 @@ describe("preview by sniffed mime", () => {
     bytes: Uint8Array,
   ): void {
     harness.shelf.handleHello(["shelf"]);
-    harness.shelf.open(harness.root, "s1");
+    harness.shelf.open(harness.root);
     harness.shelf.handleList({ req: null, id: "s1", items: [item] });
     harness.root.querySelector<HTMLButtonElement>(".shelf-cell")?.click();
     const get = harness.sent
@@ -390,7 +390,7 @@ describe("shelf surfaces", () => {
       });
     try {
       shelf.handleHello(["shelf"]);
-      shelf.open(root, "s1");
+      shelf.open(root);
       shelf.handleList({ req: null, id: "s1", items: [shelfItem({ file_id: "f1" })] });
       // The cell is on screen; tapping it asks for the bytes.
       root.querySelector<HTMLButtonElement>(".shelf-cell")?.click();
@@ -423,7 +423,7 @@ describe("shelf surfaces", () => {
   it("renders a caption carrying markup as plain text", () => {
     const { root, shelf } = shellHarness();
     shelf.handleHello(["shelf"]);
-    shelf.open(root, "s1");
+    shelf.open(root);
     const caption = `<script>alert("pwn")</script> & friends`;
     shelf.handleList({
       req: null,
@@ -461,7 +461,7 @@ describe("shelf surfaces", () => {
     expect(folder()).toBe("folder");
   });
 
-  it("lists the host shelf row and per-session counts", () => {
+  it("opens one union sheet from the home row and the session bar", () => {
     const { root, sessions, shelf, shell, sent } = shellHarness();
     sessions.replace([session("s1", "build")]);
     shelf.handleHello(["shelf"]);
@@ -470,7 +470,8 @@ describe("shelf surfaces", () => {
       "shelf_list",
     ]);
     shell.showSessions();
-    expect(root.querySelector("#host-shelf-row")).toBeNull();
+    // The row is up before any reply lands.
+    expect(root.querySelector("#host-shelf-row")).not.toBeNull();
 
     shelf.handleList({
       req: null,
@@ -482,13 +483,172 @@ describe("shelf surfaces", () => {
       id: "s1",
       items: [shelfItem({ file_id: "f1" }), shelfItem({ file_id: "f2" })],
     });
-    // The count rides beside the folder icon, with no glyph in the text.
-    expect(root.querySelector("#host-shelf-row .session-files-count")?.textContent).toBe("1");
-    expect(root.querySelector('[data-session="s1"] .session-files-count')?.textContent).toBe("2");
-    expect(root.querySelector('[data-session="s1"] .session-files svg')).not.toBeNull();
+    // No per-row counts under a union.
+    expect(root.querySelector(".session-files")).toBeNull();
+    expect(root.querySelector(".session-files-count")).toBeNull();
+
+    // The home row opens the union: the host file beside the session's.
+    root.querySelector<HTMLButtonElement>("#host-shelf-row")?.click();
+    expect(root.querySelector('[data-sheet="shelf"]')).not.toBeNull();
+    expect(root.querySelector('[data-sheet="shelf"] h2')?.textContent).toBe("Shelf");
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(3);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+
+    // The session bar opens the same union sheet.
+    shell.showSession("s1", "build");
+    root.querySelector<HTMLButtonElement>("#session-files")?.click();
+    expect(root.querySelector('[data-sheet="shelf"] h2')?.textContent).toBe("Shelf");
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(3);
+  });
+});
+
+describe("union shelf", () => {
+  /** The union never deletes: no shelf_delete frame leaves the browser. */
+  const noDeleteTraffic = (sent: string[]): void => {
+    for (const line of sent) {
+      expect((JSON.parse(line) as { t: string }).t).not.toBe("shelf_delete");
+    }
+  };
+
+  it("merges host and session shelves newest first, deduped by file_id", () => {
+    const { root, sessions, shelf, sent } = shellHarness();
+    sessions.replace([session("s1", "build"), session("s2", "docs")]);
+    shelf.handleHello(["shelf"]);
+    shelf.handleList({
+      req: null,
+      id: null,
+      items: [shelfItem({ file_id: "h1", session_id: null, name: "host.png", created_at: 1793100000_000 })],
+    });
+    shelf.handleList({
+      req: null,
+      id: "s1",
+      items: [
+        shelfItem({ file_id: "dup", name: "dup-s1.png", created_at: 1793100060_000 }),
+        shelfItem({ file_id: "s1-old", name: "s1-old.png", created_at: 1793099940_000 }),
+      ],
+    });
+    shelf.handleList({
+      req: null,
+      id: "s2",
+      items: [
+        shelfItem({ file_id: "dup", session_id: "s2", name: "dup-s2.png", created_at: 1793100120_000 }),
+        shelfItem({ file_id: "s2-new", session_id: "s2", name: "s2-new.png", created_at: 1793100180_000 }),
+      ],
+    });
+    shelf.open(root);
+    const titles = [...root.querySelectorAll(".shelf-cell")].map((cell) =>
+      cell.getAttribute("title"),
+    );
+    // One row per file_id — the first shelf's copy wins — newest first.
+    expect(titles).toEqual(["s2-new.png", "dup-s1.png", "host.png", "s1-old.png"]);
+    noDeleteTraffic(sent);
+  });
+
+  it("shows nothing from a terminal shelf the bridge never sends", () => {
+    const { root, sessions, shelf, sent } = shellHarness();
+    sessions.replace([
+      session("s1", "build"),
+      { ...session("t1", "shell"), kind: "terminal", cli: "", model: "" },
+    ]);
+    shelf.handleHello(["shelf"]);
+    // The prefetch still asks every shelf, terminals included.
+    expect(
+      sent.map((frame) => (JSON.parse(frame) as { t: string; id?: string }).id ?? null),
+    ).toEqual([null, "s1", "t1"]);
+    // The bridge answers the terminal's shelf_list with no items.
+    shelf.handleList({ req: null, id: "t1", items: [] });
+    shelf.handleList({ req: null, id: "s1", items: [shelfItem({ file_id: "f1" })] });
+    shelf.handleList({
+      req: null,
+      id: null,
+      items: [shelfItem({ file_id: "h1", session_id: null, name: "host.png" })],
+    });
+    shelf.open(root);
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(2);
+    expect(root.querySelector('.shelf-cell[title="terminal-note.txt"]')).toBeNull();
+    noDeleteTraffic(sent);
+  });
+
+  it("badges the total unseen on the home row and the session bar", () => {
+    const { root, sessions, shelf, shell, sent } = shellHarness();
+    sessions.replace([session("s1", "build")]);
+    shelf.handleHello(["shelf"]);
+    shelf.handleAdded(shelfItem({ file_id: "h1", session_id: null }));
+    shelf.handleAdded(shelfItem({ file_id: "f1" }));
+    shelf.handleAdded(shelfItem({ file_id: "f2", session_id: "s2" }));
+    expect(shelf.unseenTotal()).toBe(3);
+
+    shell.showSessions();
+    const homeBadge = root.querySelector<HTMLElement>("#shelf-row-badge");
+    expect(homeBadge?.hidden).toBe(false);
+    expect(homeBadge?.textContent).toBe("3");
+
+    shell.showSession("s1", "build");
+    const barBadge = root.querySelector<HTMLElement>("#session-files-badge");
+    expect(barBadge?.hidden).toBe(false);
+    expect(barBadge?.textContent).toBe("3");
+    noDeleteTraffic(sent);
+  });
+
+  it("marks every shelf seen when the union sheet opens", () => {
+    const { root, sessions, shelf, shell, sent } = shellHarness();
+    sessions.replace([session("s1", "build")]);
+    shelf.handleHello(["shelf"]);
+    shelf.handleAdded(shelfItem({ file_id: "h1", session_id: null }));
+    shelf.handleAdded(shelfItem({ file_id: "f1" }));
+    shell.showSessions();
+    expect(root.querySelector<HTMLElement>("#shelf-row-badge")?.hidden).toBe(false);
 
     root.querySelector<HTMLButtonElement>("#host-shelf-row")?.click();
     expect(root.querySelector('[data-sheet="shelf"]')).not.toBeNull();
-    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(1);
+    expect(shelf.unseenTotal()).toBe(0);
+    expect(root.querySelector<HTMLElement>("#shelf-row-badge")?.hidden).toBe(true);
+
+    shell.showSession("s1", "build");
+    expect(root.querySelector<HTMLElement>("#session-files-badge")?.hidden).toBe(true);
+    noDeleteTraffic(sent);
+  });
+
+  it("keeps the Shelf row up at zero files, beside the empty note", () => {
+    const { root, sessions, shelf, shell, sent } = shellHarness();
+    sessions.replace([]);
+    shelf.handleHello(["shelf"]);
+    shell.showSessions();
+    // Zero sessions and zero files: the entry row and the empty note.
+    const row = root.querySelector("#host-shelf-row");
+    expect(row).not.toBeNull();
+    expect(row?.querySelector(".session-sub")?.textContent).toBe(
+      "Files from the host and its sessions",
+    );
+    expect(root.querySelector<HTMLElement>("#shelf-row-badge")?.hidden).toBe(true);
+    expect(root.querySelector("p.empty")?.textContent).toBe("No sessions on this host.");
+
+    sessions.replace([session("s1", "build")]);
+    expect(root.querySelector("#host-shelf-row")).not.toBeNull();
+    expect(root.querySelector("p.empty")).toBeNull();
+
+    root.querySelector<HTMLButtonElement>("#host-shelf-row")?.click();
+    expect(root.querySelector('[data-sheet="shelf"] h2')?.textContent).toBe("Shelf");
+    expect(root.querySelectorAll(".shelf-cell")).toHaveLength(0);
+    expect(root.querySelector(".shelf-empty")?.textContent).toBe("No files on this shelf yet.");
+    noDeleteTraffic(sent);
+  });
+
+  it("shows from · age under the viewer caption, like the grid cell", () => {
+    const { root, shelf, sent } = shellHarness();
+    shelf.handleHello(["shelf"]);
+    shelf.open(root);
+    shelf.handleList({
+      req: null,
+      id: "s1",
+      items: [shelfItem({ from: "muse", created_at: Date.now() - 90_000 })],
+    });
+    root.querySelector<HTMLButtonElement>(".shelf-cell")?.click();
+    expect(document.querySelector("#shelf-viewer")).not.toBeNull();
+    expect(document.querySelector<HTMLElement>("#shelf-meta")?.textContent).toBe("muse · 1m ago");
+    expect(document.querySelector<HTMLElement>("#shelf-meta")?.textContent).toBe(
+      root.querySelector<HTMLElement>(".shelf-meta")?.textContent,
+    );
+    noDeleteTraffic(sent);
   });
 });

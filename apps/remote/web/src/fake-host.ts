@@ -155,7 +155,8 @@ function main(): void {
   };
 
   // The shelf: three images for the smoke session, one on the host's
-  // own shelf, and one more the host pushes 2 s after attach.
+  // own shelf, one on the terminal's shelf the bridge never sends, and
+  // one more the host pushes 2 s after attach.
   interface FakeShelfFile {
     item: ShelfItem;
     bytes: Uint8Array;
@@ -190,12 +191,30 @@ function main(): void {
     putShelfFile(image, "smoke", "muse", (index + 1) * 60_000);
   }
   putShelfFile(hostShelfImage(), null, "canopy", 5 * 60_000);
+  // A file on the terminal's own shelf that the bridge never sends:
+  // shelf_list for a terminal session answers empty, so it never
+  // surfaces in the union.
+  putShelfFile(
+    {
+      name: "terminal-note.txt",
+      mime: "text/plain",
+      caption: "a terminal's note",
+      bytes: new TextEncoder().encode("the bridge never sends terminal shelves\n"),
+    },
+    "shell",
+    "shell",
+    30_000,
+  );
 
-  const shelfItemsFor = (sessionId: string | null): ShelfItem[] =>
-    shelfFiles
+  const shelfItemsFor = (sessionId: string | null): ShelfItem[] => {
+    if (sessionId !== null && sessions.find((item) => item.id === sessionId)?.kind === "terminal") {
+      return [];
+    }
+    return shelfFiles
       .filter((file) => file.item.session_id === sessionId)
       .map((file) => file.item)
       .sort((a, b) => b.created_at - a.created_at);
+  };
 
   // The upload half of the shelf: ?upload=off advertises no shelf_upload,
   // ?upload=denied advertises it but refuses every begin with forbidden
