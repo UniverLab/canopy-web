@@ -28,8 +28,9 @@ CF_ACCOUNT_ID = "d7b81bdd721f503968523dd903d967be"
 # no default anywhere; add it here for meta) and REVIEW_MODEL set verbatim, plus
 # its key as a secret (META_API_KEY). Local values live in `.dev.vars`
 # (see `.dev.vars.example`); production keys via `wrangler secret put`.
-REVIEW_PROVIDER = "off"
-REVIEW_MODEL = "claude-haiku-4-5-20251001"
+REVIEW_PROVIDER = "meta"
+REVIEW_MODEL = "muse-spark-1.3-contributor"
+META_API_BASE_URL = "https://api.meta.ai/v1/chat/completions"
 REVIEW_SCAN_CAP = "5"
 # The meta reasoning effort (minimal|low|medium|high); the Muse provider
 # ignores it. Minimal stays until verdict-quality evidence says otherwise.
