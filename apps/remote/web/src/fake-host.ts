@@ -13,6 +13,7 @@ import { createFakeShelfDeleter } from "./fake-delete.js";
 import { createFakeGraphs } from "./fake-graphs.js";
 import { GraphStore } from "./graph-store.js";
 import { createGuestSession } from "./guest.js";
+import { INVITE_REFUSED_MESSAGE } from "./guest-invite.js";
 import { MetricsStore } from "./metrics-store.js";
 import { buildCatalog, buildList, buildSpawn, newReqId } from "./protocol.js";
 import type { PromptDraft, SessionItem, ShelfItem } from "./protocol.js";
@@ -568,15 +569,35 @@ function main(): void {
 
   // Guest mode: the /g/ session wiring against the fake host — no relay,
   // no peer, the same guest views, store, controller and router that
-  // production mounts, already connected.
+  // production mounts, already connected. `&invite=ask` starts on the
+  // invite form instead (a link without #invite=), and `&invite=refuse`
+  // also refuses the first code the way the relay's 403 bad_invite lands.
   if (fakeParams.get("screen") === "guest") {
     const guestOutput: Uint8Array[] = [];
+    const inviteMode = fakeParams.get("invite");
+    const invites: string[] = [];
+    let refuseNext = inviteMode === "refuse";
+    const admit = (): void => {
+      session.view.setConnectionState("connected");
+      session.view.showList();
+      send(buildList(newReqId()));
+    };
     const session = createGuestSession(root, {
       login: "guest-user",
       send,
       onRetry: () => {},
       onSignOut: () => {},
       onForgetDevice: () => {},
+      onInviteSubmit: (code) => {
+        invites.push(code);
+        if (refuseNext) {
+          refuseNext = false;
+          session.view.setConnectionState("failed: invite not accepted");
+          session.view.showInvite(INVITE_REFUSED_MESSAGE, code);
+          return;
+        }
+        admit();
+      },
       onTerminalBytes: (bytes) => {
         guestOutput.push(bytes);
       },
@@ -585,9 +606,12 @@ function main(): void {
       },
     });
     deliverInto = (raw: string) => session.push(raw);
-    session.view.setConnectionState("connected");
-    session.view.showList();
-    send(buildList(newReqId()));
+    if (inviteMode === null) {
+      admit();
+    } else {
+      session.view.setConnectionState("connecting");
+      session.view.showInvite(null, "");
+    }
     window.__fake = {
       sent: () => [...sent],
       clearSent: () => {
@@ -615,6 +639,7 @@ function main(): void {
         deliver(metricsFrame(patch ?? {}));
       },
       guestOpen: (id: string) => session.open(id),
+      guestInvites: () => [...invites],
     };
     return;
   }
@@ -820,6 +845,8 @@ declare global {
       pushMetrics: (patch?: Record<string, unknown>) => void;
       /** Guest mode only: open one session by id, listed or not. */
       guestOpen?: (id: string) => void;
+      /** Guest mode only: the canonical codes the invite form submitted. */
+      guestInvites?: () => string[];
       /** Another device (or the host's TUI) resizes a session's PTY. */
       resizeFromElsewhere?: (cols: number, rows: number, id?: string) => void;
     };

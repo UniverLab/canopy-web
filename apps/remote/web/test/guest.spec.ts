@@ -106,3 +106,49 @@ test("screenshots a guest inside a granted session", async ({ page }, testInfo) 
   await expect.poll(() => terminalText(page)).toContain("hello from the host");
   await page.screenshot({ path: testInfo.outputPath("guest-session.png") });
 });
+
+// A guest link without #invite= (or a code the relay refused) lands on
+// the invite form: one labelled field tied to its hint and its error,
+// checked against the code format, sent in the canonical form.
+test("a guest without a code types it into the invite form", async ({ page }) => {
+  await page.goto("/fake.html?screen=guest&invite=ask");
+  const field = page.getByLabel("Invite code");
+  await expect(field).toBeVisible();
+  await expect(field).toHaveAttribute("aria-describedby", "guest-invite-hint guest-invite-error");
+  // Not a code: the error shows, the field is marked invalid and keeps focus.
+  await field.fill("CNR-7K3Q");
+  await page.getByRole("button", { name: "Join" }).click();
+  await expect(page.locator("#guest-invite-error")).toContainText("not an invite code");
+  await expect(field).toHaveAttribute("aria-invalid", "true");
+  await expect(field).toBeFocused();
+  expect(await page.evaluate(() => window.__fake.guestInvites?.() ?? [])).toEqual([]);
+  // Lowercase with spaces is fine: the host's canonical form is sent.
+  await field.fill("7k3q hm9p 2xab cdef");
+  await field.press("Enter");
+  await expect(page.locator('[data-session="smoke"]')).toBeVisible();
+  expect(await page.evaluate(() => window.__fake.guestInvites?.() ?? [])).toEqual(["CNR-7K3Q-HM9P-2XAB-CDEF"]);
+});
+
+test("a refused invite asks again with the reason, never the pairing message", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await page.goto("/fake.html?screen=guest&invite=refuse");
+  await page.getByLabel("Invite code").fill("CNR-7K3Q-HM9P-2XAB-CDEF");
+  await page.getByRole("button", { name: "Join" }).click();
+  const notice = page.locator("#guest-invite-notice");
+  await expect(notice).toContainText("did not accept this invite code");
+  await expect(notice).toHaveAttribute("role", "alert");
+  await expect(page.locator("body")).not.toContainText("no longer paired");
+  // Prefilled, so a retry with a fresh code is one edit away.
+  await expect(page.getByLabel("Invite code")).toHaveValue("CNR-7K3Q-HM9P-2XAB-CDEF");
+  const overflow = await page.evaluate(() => {
+    const doc = document.scrollingElement ?? document.documentElement;
+    return doc.scrollWidth - doc.clientWidth;
+  });
+  expect(overflow).toBeLessThanOrEqual(1);
+  const join = await page.getByRole("button", { name: "Join" }).boundingBox();
+  expect(join?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await page.screenshot({ path: testInfo.outputPath("guest-invite-refused.png") });
+  await page.getByLabel("Invite code").fill("CNR-1111-0000-1111-0000");
+  await page.getByRole("button", { name: "Join" }).click();
+  await expect(page.locator('[data-session="smoke"]')).toBeVisible();
+});

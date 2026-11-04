@@ -464,6 +464,34 @@ label > textarea {
   white-space: nowrap;
 }
 
+/* The guest's invite form sits in the sign-in card: the field and its
+ * hint read left to right like the pairing form; the relay's refusal is
+ * the error tint above it, with the same "Error:" label. */
+.invite-form {
+  text-align: left;
+}
+
+.invite-hint {
+  margin: -0.25rem 0 0.75rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.invite-notice {
+  color: var(--ink);
+  background: var(--tint-error);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.invite-notice::before {
+  content: "Error: ";
+  color: var(--err-label);
+}
+
 #pair-error:empty {
   display: none;
 }

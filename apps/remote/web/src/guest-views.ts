@@ -8,6 +8,7 @@
 // bundle's chunk. No pairing, no picker, no hub-level control of any kind.
 
 import { armSessionHint } from "./auth.js";
+import { canonicalInviteCode, inviteFormError } from "./guest-invite.js";
 import { renderTopbar, wireAccount } from "./chrome.js";
 import { syncHeaderFondo } from "./fondo.js";
 import { REMOTE_FOOTER } from "./footer.js";
@@ -27,11 +28,18 @@ export interface GuestViewCallbacks {
   onForgetDevice: () => void;
   /** Terminal and key-bar bytes with the latches applied. */
   onInput: (bytes: Uint8Array) => void;
+  /** A valid invite code was submitted, already in its canonical form. */
+  onInviteSubmit?: (code: string) => void;
 }
 
 export interface GuestView {
   showSignIn: () => void;
   showInvalidLink: () => void;
+  /**
+   * Ask for the invite code: `notice` says why (a refused or malformed
+   * code), `code` prefills the field so a retry is one tap.
+   */
+  showInvite: (notice: string | null, code: string) => void;
   showConnecting: () => void;
   showForbidden: (message: string) => void;
   showList: (notice?: string | null) => void;
@@ -51,7 +59,7 @@ export interface GuestViewDeps {
   terminalFactory?: TerminalFactory;
 }
 
-type GuestRoute = "signin" | "invalid" | "connecting" | "forbidden" | "list" | "session";
+type GuestRoute = "signin" | "invalid" | "invite" | "connecting" | "forbidden" | "list" | "session";
 
 function esc(text: string): string {
   return text
@@ -74,6 +82,8 @@ export function createGuestView(
   let signOutError: string | null = null;
   let accountOpen = false;
   let forbiddenMessage = "";
+  let inviteNotice: string | null = null;
+  let inviteDraft = "";
   let listNotice: string | null = null;
   let sessionId = "";
   let sessionName = "";
@@ -143,6 +153,67 @@ export function createGuestView(
       // 401 clears the hint again.
       armSessionHint();
       globalThis.location.href = "/auth/login";
+    });
+  }
+
+  // The invite form: one field, checked against the code format on
+  // submit. The hint and the error are tied to the field (aria-describedby,
+  // aria-invalid), so a screen reader hears why it was refused; a refused
+  // code from the relay arrives as the notice above the form.
+  function paintInvite(): void {
+    route = "invite";
+    document.title = remoteTitle("Invite code");
+    teardownSessionWidgets();
+    root.innerHTML = `
+    ${header()}
+    <main class="signin">
+      <h1>Canopy remote</h1>
+      <p>Enter the invite code the host sent you to see the sessions shared with you.</p>
+      ${
+        inviteNotice === null
+          ? ""
+          : `<p class="invite-notice" id="guest-invite-notice" role="alert">${esc(inviteNotice)}</p>`
+      }
+      <form id="guest-invite-form" class="invite-form" novalidate>
+        <label>Invite code
+          <input id="guest-invite-code" name="invite" autocomplete="off" autocapitalize="characters"
+            spellcheck="false" placeholder="CNR-XXXX-XXXX-XXXX-XXXX" maxlength="64"
+            aria-describedby="guest-invite-hint guest-invite-error" aria-invalid="false"
+            value="${esc(inviteDraft)}">
+        </label>
+        <p class="invite-hint" id="guest-invite-hint">Case, spaces and dashes do not matter.</p>
+        <p class="field-error" id="guest-invite-error" role="alert" hidden></p>
+        <button type="submit" class="primary">Join</button>
+      </form>
+    </main>
+    ${REMOTE_FOOTER}`;
+    wireChrome();
+    const form = root.querySelector<HTMLFormElement>("#guest-invite-form");
+    const input = root.querySelector<HTMLInputElement>("#guest-invite-code");
+    const error = root.querySelector<HTMLElement>("#guest-invite-error");
+    // A header repaint (the login, the connection state) must not drop
+    // what was typed so far.
+    input?.addEventListener("input", () => {
+      inviteDraft = input.value;
+    });
+    form?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      if (!input || !error) {
+        return;
+      }
+      inviteDraft = input.value;
+      const canonical = canonicalInviteCode(input.value);
+      if (canonical === null) {
+        error.textContent = inviteFormError(input.value);
+        error.hidden = false;
+        input.setAttribute("aria-invalid", "true");
+        input.focus();
+        return;
+      }
+      error.textContent = "";
+      error.hidden = true;
+      input.setAttribute("aria-invalid", "false");
+      callbacks.onInviteSubmit?.(canonical);
     });
   }
 
@@ -255,6 +326,8 @@ export function createGuestView(
   function repaint(): void {
     if (route === "signin" || route === "invalid") {
       paintSignIn(route === "invalid");
+    } else if (route === "invite") {
+      paintInvite();
     } else if (route === "connecting") {
       paintConnecting();
     } else if (route === "forbidden") {
@@ -292,6 +365,11 @@ export function createGuestView(
   return {
     showSignIn: () => paintSignIn(false),
     showInvalidLink: () => paintSignIn(true),
+    showInvite: (notice: string | null, code: string) => {
+      inviteNotice = notice;
+      inviteDraft = code;
+      paintInvite();
+    },
     showConnecting: () => paintConnecting(),
     showForbidden: (message: string) => {
       forbiddenMessage = message;

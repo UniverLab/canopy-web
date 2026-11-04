@@ -148,6 +148,14 @@ const CONTROL_SIZE_BUDGET = 1_024;
 const RESIZED_BUDGET = 512;
 /** The budget the lazy guest chunk is allowed, gzip bytes of JS. */
 const GUEST_BUDGET = 6_144;
+/**
+ * Allowance for the guest invite (the #invite= fragment, the tab-only
+ * code, canonicalisation, the invite form and the refused-door path):
+ * measured +1 390 B gzip over the pre-change guest chunk. Added in the fix
+ * commit like RESIZED_BUDGET: the guest chunk sat 941 bytes under its
+ * budget, and the relay's door cannot be opened without the code.
+ */
+const GUEST_INVITE_BUDGET = 1_536;
 /** The budget the lazy editor chunk is allowed, gzip bytes of JS. */
 const EDITOR_BUDGET = 30_000;
 /** The budget the editor's own stylesheet is allowed, gzip bytes of CSS. */
@@ -258,7 +266,7 @@ describe("the remote's bundle", () => {
         CONTROL_SIZE_BUDGET +
         RESIZED_BUDGET,
     );
-    expect(guestJs, JSON.stringify(report)).toBeLessThanOrEqual(GUEST_BUDGET);
+    expect(guestJs, JSON.stringify(report)).toBeLessThanOrEqual(GUEST_BUDGET + GUEST_INVITE_BUDGET);
     expect(editorJs, JSON.stringify(report)).toBeLessThanOrEqual(EDITOR_BUDGET);
     expect(editorCss, JSON.stringify(report)).toBeLessThanOrEqual(EDITOR_CSS_BUDGET);
     // The app still ships the icons inline: no sprite chunk, no font request.
