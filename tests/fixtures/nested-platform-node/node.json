@@ -1,0 +1,20 @@
+{
+  "format_version": 1,
+  "name": "nested-platform-node",
+  "kind": "agent",
+  "description": "Example catalogue node: drafts an implementation plan.",
+  "config": {
+    "prompt_template": "hi",
+    "steps": [
+      {
+        "platform": "claude"
+      }
+    ]
+  },
+  "preset": {
+    "name": "quick",
+    "content": {
+      "timeout_minutes": 5
+    }
+  }
+}

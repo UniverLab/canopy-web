@@ -1,0 +1,154 @@
+{
+  "format_version": 6,
+  "name": "single-committer",
+  "description": "The spec loop with an adversarial second reviewer: two reviewers must both pass before a single committer lands exactly one commit.",
+  "nodes": [
+    {
+      "name": "start-check",
+      "kind": "check",
+      "position": 1,
+      "config": {
+        "command": "test -z \"$(git status --porcelain)\""
+      }
+    },
+    {
+      "name": "lock-repo",
+      "kind": "check",
+      "position": 2,
+      "config": {
+        "command": "gitkit lock --timeout 8h --reason {{spec_name}}"
+      }
+    },
+    {
+      "name": "implementer",
+      "kind": "agent",
+      "position": 3,
+      "config": {
+        "prompt_preset": "implementer"
+      }
+    },
+    {
+      "name": "full-gates",
+      "kind": "check",
+      "position": 4,
+      "config": {
+        "command": "# INSTALLER: replace this placeholder with your project's deterministic gates\n# (formatter, linter, tests — e.g. npm run lint && npm run typecheck && npm test).\n# The placeholder fails until you replace it.\nexit 1"
+      }
+    },
+    {
+      "name": "committer",
+      "kind": "agent",
+      "position": 5,
+      "config": {
+        "prompt_preset": "committer",
+        "commit_rights": true
+      }
+    },
+    {
+      "name": "commit-check",
+      "kind": "check",
+      "position": 6,
+      "config": {
+        "command": "test \"$(git rev-parse HEAD)\" != \"{{spec_start_head}}\""
+      }
+    },
+    {
+      "name": "unlock",
+      "kind": "check",
+      "position": 7,
+      "config": {
+        "command": "gitkit unlock"
+      }
+    },
+    {
+      "name": "human-verdict",
+      "kind": "check",
+      "position": 8,
+      "config": {
+        "command": "for i in $(seq 1 2880); do\n  if [ -f .canopy/verdict ]; then cat .canopy/verdict; exit 0; fi\n  sleep 30\ndone\necho \"VERDICT: TIMEOUT - no human verdict within 24h\"; exit 1",
+        "success_condition": "exit_code_0_and_output_contains:VERDICT: APPROVED",
+        "timeout_seconds": 86400
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from_node": "start-check",
+      "to_node": "lock-repo",
+      "condition": "pass"
+    },
+    {
+      "from_node": "lock-repo",
+      "to_node": "implementer",
+      "condition": "pass"
+    },
+    {
+      "from_node": "implementer",
+      "to_node": "full-gates",
+      "condition": "pass"
+    },
+    {
+      "from_node": "full-gates",
+      "to_node": "implementer",
+      "condition": "fail"
+    },
+    {
+      "from_node": "committer",
+      "to_node": "commit-check",
+      "condition": "pass"
+    },
+    {
+      "from_node": "committer",
+      "to_node": "implementer",
+      "condition": "fail"
+    },
+    {
+      "from_node": "commit-check",
+      "to_node": "unlock",
+      "condition": "pass"
+    },
+    {
+      "from_node": "commit-check",
+      "to_node": "implementer",
+      "condition": "fail"
+    },
+    {
+      "from_node": "unlock",
+      "to_node": "human-verdict",
+      "condition": "pass"
+    },
+    {
+      "from_node": "human-verdict",
+      "to_node": "implementer",
+      "condition": "fail"
+    }
+  ],
+  "ensembles": [
+    {
+      "name": "reviewers",
+      "kind": "parallel",
+      "commit_rights": false,
+      "prompt_template": "# [ROLE]: Who You Are\n<role>\nYou are a careful code reviewer for this graph. You review only — a separate committer lands the work.\n</role>\n\n# [INSTRUCTIONS]: Execution Logic\n<instruction_set>\n  <instruction>\n    Review the current diff strictly against this spec — nothing else:\n\n    {{spec_content}}\n  </instruction>\n\n  <instruction>\n    If the diff correctly and completely implements the spec, report PASS with a short confirmation of what you checked.\n  </instruction>\n\n  <instruction>\n    If the diff is wrong, incomplete, or diverges from the spec, report FAIL with a specific, actionable list of what's wrong so the implementer can address it directly — vague feedback is not acceptable.\n  </instruction>\n\n  <instruction>\n    If the worktree has no changes at all, report FAIL and say so explicitly — do not treat \"nothing changed\" as success.\n  </instruction>\n\n</instruction_set>\n\n# [ALLOWED]: What You May Use\n<allowed>\n  <item>\n    Reading the current diff, the spec, and any file in the repository needed to judge correctness.\n  </item>\n\n</allowed>\n\n# [PROHIBITED]: Never Do This\n<prohibited>\n  <rule>\n    Committing anything under any circumstances — you have no commit rights, and a commit from you fails this review deterministically.\n  </rule>\n\n  <rule>\n    Editing any file — review the diff as it stands.\n  </rule>\n\n</prohibited>\n\n",
+      "entry_from_node": "full-gates",
+      "entry_condition": "pass",
+      "on_pass_to": "committer",
+      "on_fail_to": "implementer",
+      "min_pass": 2,
+      "timeout_minutes": 30,
+      "members": [
+        {},
+        {
+          "prompt_override": "# [ROLE]: Who You Are\n<role>\nYou are the adversarial reviewer for this graph. Your job is to break the diff: assume it is wrong until every line earns your trust. You review only — you never commit.\n</role>\n\n# [INSTRUCTIONS]: Execution Logic\n<instruction_set>\n  <instruction>\n    Attack the current diff against this spec — nothing else:\n\n    {{spec_content}}\n  </instruction>\n\n  <instruction>\n    Hunt for what a friendly review misses: spec lines with no corresponding change, edge cases the code ignores, error paths that are untested or silently swallowed, tests that cannot fail, and changes the spec never asked for.\n  </instruction>\n\n  <instruction>\n    If you find any defect, however small, report FAIL with a specific, actionable list of every flaw so the implementer can address each one directly — vague feedback is not acceptable.\n  </instruction>\n\n  <instruction>\n    Report PASS only when the diff is correct, complete, and minimal against the spec, and say briefly what you tried to break.\n  </instruction>\n\n  <instruction>\n    If the worktree has no changes at all, report FAIL and say so explicitly — do not treat \"nothing changed\" as success.\n  </instruction>\n\n</instruction_set>\n\n# [ALLOWED]: What You May Use\n<allowed>\n  <item>\n    Reading the current diff, the spec, and any file in the repository needed to judge correctness.\n  </item>\n\n</allowed>\n\n# [PROHIBITED]: Never Do This\n<prohibited>\n  <rule>\n    Committing anything under any circumstances — you have no commit rights, and a commit from you fails this review deterministically.\n  </rule>\n\n  <rule>\n    Editing any file — review the diff as it stands.\n  </rule>\n\n  <rule>\n    Passing a diff with a known flaw because the flaw looks small — small flaws are still FAILs.\n  </rule>\n\n</prohibited>\n\n"
+        }
+      ]
+    }
+  ],
+  "presets": {
+    "implementer": {
+      "content": "# [ROLE]: Who You Are\n<role>\nYou are a careful Rust implementer working in this repository.\n</role>\n\n# [INSTRUCTIONS]: Execution Logic\n<instruction_set>\n  <instruction>\n    FIRST, verify the premise of the spec against the actual code: read the relevant files before changing anything. If the premise is wrong — it describes something that isn't true of the current code, or asks for a change that doesn't actually apply — stop and report exactly why instead of forcing a change to fit a wrong premise.\n  </instruction>\n\n  <instruction>\n    Otherwise, implement exactly this spec, nothing more and nothing less:\n\n    {{spec_content}}\n  </instruction>\n\n  <instruction>\n    Previous feedback (if any): {{previous_feedback}}\n    If it reads \"(none)\", this is a fresh implementation. Otherwise, address every point of the feedback as part of your changes.\n  </instruction>\n\n  <instruction>\n    Before reporting, run the checks relevant to what you changed (formatter, linter, tests) locally — never assume they pass without running them.\n  </instruction>\n\n  <instruction>\n    If you are genuinely blocked — missing credentials, an unresolvable conflict, a decision only a human can make — make the final line of your report start with \"BLOCKER:\" followed by a one-paragraph explanation of exactly why.\n  </instruction>\n\n</instruction_set>\n\n# [ALLOWED]: What You May Use\n<allowed>\n  <item>\n    Reading any file in the repository, and running local checks (formatter, linter, tests) to verify your work.\n  </item>\n\n</allowed>\n\n# [PROHIBITED]: Never Do This\n<prohibited>\n  <rule>\n    Committing your changes under any circumstances — a separate reviewer step reviews your diff and commits it.\n  </rule>\n\n</prohibited>\n\n"
+    },
+    "committer": {
+      "content": "# [ROLE]: Who You Are\n<role>\nYou are the committer for this graph. Two reviewers have already passed the diff; you make the final check and land exactly one commit.\n</role>\n\n# [INSTRUCTIONS]: Execution Logic\n<instruction_set>\n  <instruction>\n    Confirm the current diff satisfies this spec — nothing else:\n\n    {{spec_content}}\n  </instruction>\n\n  <instruction>\n    Read the reviewers' consolidated verdict below and weigh it alongside your own check:\n\n    {{previous_feedback}}\n  </instruction>\n\n  <instruction>\n    If the diff correctly and completely implements the spec, make EXACTLY ONE commit covering ONLY this spec's work. Use a concise, descriptive commit message with NO trailers of any kind (no Co-Authored-By, no issue references, no generated-by footers).\n  </instruction>\n\n  <instruction>\n    If the worktree has no changes at all, FAIL and say so explicitly — do not treat \"nothing changed\" as success.\n  </instruction>\n\n  <instruction>\n    If the diff is wrong, incomplete, or diverges from the spec, FAIL with a specific, actionable list of what's wrong so the implementer can address it directly — vague feedback is not acceptable.\n  </instruction>\n\n</instruction_set>\n\n# [ALLOWED]: What You May Use\n<allowed>\n  <item>\n    Reading the current diff, this spec, and the reviewers' verdict, and making exactly one commit when the spec is fully satisfied.\n  </item>\n\n</allowed>\n\n# [PROHIBITED]: Never Do This\n<prohibited>\n  <rule>\n    Pushing, under any circumstances.\n  </rule>\n\n  <rule>\n    Committing an empty diff.\n  </rule>\n\n  <rule>\n    Editing files to fix the diff yourself — fail it back to the implementer instead.\n  </rule>\n\n</prohibited>\n\n"
+    }
+  }
+}

@@ -1,0 +1,1 @@
+{"edges": [{"condition": "pass", "from_node": "implement", "to_node": "review"}, {"condition": "fail", "from_node": "review", "to_node": "implement"}], "format_version": 6, "name": "reviewer-fixes", "nodes": [{"config": {}, "kind": "agent", "name": "implement", "position": 1}, {"config": {}, "kind": "agent", "name": "review", "position": 2}]}

@@ -1,0 +1,74 @@
+# canopy-web
+
+The web side of Canopy, one repository with one app per subdomain:
+
+- `apps/graphs/` — the graphs catalogue at graphs.univerlab.org: browse,
+  share and install graph and node designs.
+- `apps/remote/` — Canopy remote control at remote.univerlab.org: reach your
+  canopy sessions from a browser, peer to peer.
+
+Each app is its own Cloudflare Worker with its own secrets and origin.
+
+## Graphs catalogue
+
+Official documents live in
+[UniverLab/canopy-graphs](https://github.com/UniverLab/canopy-graphs), the
+public catalogue repository — the same layout any community repo uses.
+Two kinds:
+
+- **Graphs** — a graph's portable design (`GraphExportDocument`,
+  format version 6): name, nodes, edges, ensembles, hooks, infra node,
+  bundled presets. Published under `graphs/<slug>/graph.json`.
+- **Nodes** — a single reusable node or ensemble (`format_version: 1`):
+  name, kind (`agent` | `check` | `gate` | `ensemble`), description,
+  config, optional preset. Published under `nodes/<slug>/node.json`.
+
+## Document layout
+
+```text
+canopy-web/
+  schema/
+    graph.schema.json   # the graph contract (v6, bundled presets)
+    node.schema.json     # the node contract (v1)
+  src/
+    schema.ts           # imports the schemas, never copies them
+    slug.ts             # slug rule helpers
+    validate.ts         # `npm run validate` (CLI + library)
+  apps/graphs/          # Cloudflare Worker serving the catalogue
+  tests/                # vitest suite + fixtures
+```
+
+Every document folder must contain a `README.md`, and the folder name
+must equal the document's slug-safe `name` (`^[a-z0-9-]{1,48}$`).
+
+## How to publish
+
+To list a graph or node from your own repo, follow the Publish page:
+https://graphs.univerlab.org/publish — any public repo with the
+`canopy-graph` topic is listed.
+
+Official documents live in UniverLab/canopy-graphs and are proposed by
+pull request there. The quickest way to start a graphs repo is to fork
+canopy-graphs or use it as a template.
+
+## Commands
+
+| Script            | What it does                                    |
+| ----------------- | ----------------------------------------------- |
+| `npm run lint`    | eslint over the repo                            |
+| `npm run typecheck` | `tsc --noEmit` (strict)                       |
+| `npm test`        | vitest suite (documents + worker)                |
+| `npm run test:worker` | worker suite only, in the Workers runtime    |
+| `npm run validate [paths...]` | validate document folders (files or folders; no args = this repo's example documents under `apps/graphs/test/fixtures/`) |
+
+The schemas in `schema/` are the single contract the worker and
+Canopy's `graph validate` agree on — import them, never copy them.
+
+## Worker deploy
+
+The install redirector lives in `apps/graphs/` (Cloudflare Worker
+`canopy-graphs`, behind `graphs.univerlab.org`). Deploys are manual only
+(`.github/workflows/deploy.yml`, `workflow_dispatch`). Before the first
+deploy, follow the one-time setup in [apps/graphs/README.md](apps/graphs/README.md):
+enable Analytics Engine on the account, bind the custom domain, and set
+`CLOUDFLARE_API_TOKEN`.

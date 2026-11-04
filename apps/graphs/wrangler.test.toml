@@ -1,0 +1,37 @@
+# graphs.univerlab.org — the Worker as the unit tests load it.
+#
+# Identical to wrangler.toml except for the static-assets block: the vitest
+# workers pool imports the Worker module directly and serves no static
+# directory, so the generated look kit (public/look) is not part of the test
+# runtime. The bindings and vars stay, so tests speak to the same code and
+# bindings the deploy ships.
+name = "canopy-graphs-test"
+main = "src/index.ts"
+compatibility_date = "2026-10-26"
+
+account_id = "d7b81bdd721f503968523dd903d967be"
+
+[vars]
+CF_ACCOUNT_ID = "d7b81bdd721f503968523dd903d967be"
+REVIEW_PROVIDER = "off"
+REVIEW_MODEL = "claude-haiku-4-5-20251001"
+REVIEW_SCAN_CAP = "5"
+REVIEW_EFFORT = "minimal"
+REVIEW_MAX_TOKENS = "4096"
+
+[[analytics_engine_datasets]]
+binding = "INSTALLS"
+dataset = "canopy_graph_installs"
+
+# The index binding the tests seed: the workers pool serves it from
+# memory, so no test touches the real namespace.
+[[kv_namespaces]]
+binding = "INDEX"
+id = "test-index"
+
+# The draft namespace, in memory like the index. No [[ratelimits]] here:
+# the tests run unlimited drafts by design, and cover the limiter with an
+# injected fake instead.
+[[kv_namespaces]]
+binding = "DRAFTS"
+id = "test-drafts"

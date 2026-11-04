@@ -1,0 +1,233 @@
+// SPDX-License-Identifier: Apache-2.0
+/**
+ * Bundle the pattern pages into the Worker.
+ *
+ * The pages are authored as `apps/graphs/patterns/<slug>.md` plus each
+ * page's `<slug>.figure.json`; this script validates every page with the
+ * same rules the site parses with (`patternFromTexts` in
+ * `apps/graphs/src/patterns.ts`) and writes the committed
+ * `apps/graphs/src/patterns-data.generated.ts` the pages render from.
+ * A malformed page, a missing figure, a figure that fails the graph
+ * schema, or a file no page references fails the build with the file
+ * and the reason — nothing malformed is ever bundled.
+ *
+ * `PATTERNS_BUILT_AT` marks when the bundled payload last changed: it is
+ * carried over from the previous generated file while the payload is
+ * byte-identical, and stamped with the run's clock otherwise.
+ *
+ * Run with tsx (`npm run build:patterns`), so the TypeScript parsing rules
+ * can be imported directly. `--check` validates and compares without
+ * writing: it exits nonzero when the generated module is stale, which is
+ * how the test suite pins the committed file to these sources. `--dir`
+ * and `--out` override the sources and the destination for tests.
+ */
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
+import { SLUG_RE } from "../apps/graphs/src/lib.js";
+import { parsePatternFile, patternFromTexts } from "../apps/graphs/src/patterns.js";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const PATTERNS_DIR = path.join(ROOT, "apps", "graphs", "patterns");
+const GENERATED = path.join(ROOT, "apps", "graphs", "src", "patterns-data.generated.ts");
+
+/** The one file in the patterns directory that is not a page. */
+const IGNORED = new Set(["README.md"]);
+
+/**
+ * Read one file, naming it when the read fails.
+ *
+ * @param {string} file - the absolute path to read
+ * @param {string} dir - the patterns directory, for the error's relative name
+ * @returns {string} the file's UTF-8 text
+ */
+function readNamed(file, dir) {
+  try {
+    return readFileSync(file, "utf8");
+  } catch {
+    throw new Error(`patterns: cannot read ${path.relative(dir, file)}`);
+  }
+}
+
+/**
+ * Collect and validate every page in the directory: each `<slug>.md`
+ * parses with the site's own rules, names a figure that exists, and
+ * every figure file is named by some page.
+ *
+ * @param {string} dir - the patterns directory
+ * @returns {Promise<Array<{ slug: string, page: string, figureName: string, figure: string }>>}
+ *   the raw texts, in slug order
+ */
+export async function collectPatterns(dir) {
+  const names = readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name)
+    .filter((name) => !IGNORED.has(name))
+    .sort();
+  const pages = names.filter((name) => name.endsWith(".md"));
+  const figures = new Map();
+  for (const name of names) {
+    if (name.endsWith(".md")) {
+      continue;
+    }
+    if (!name.endsWith(".json")) {
+      throw new Error(`patterns: unexpected file ${name}`);
+    }
+    figures.set(name, readNamed(path.join(dir, name), dir));
+  }
+  const collected = [];
+  const referenced = new Set();
+  for (const name of pages) {
+    const slug = name.slice(0, -".md".length);
+    if (!SLUG_RE.test(slug)) {
+      throw new Error(`patterns: ${name} is not a slug-shaped page name`);
+    }
+    const page = readNamed(path.join(dir, name), dir);
+    const loaded = await patternFromTexts(
+      slug,
+      page,
+      (figureName) => {
+        const text = figures.get(figureName);
+        return Promise.resolve(
+          text === undefined ? { kind: "absent" } : { kind: "text", text },
+        );
+      },
+      () => undefined,
+    );
+    if (loaded.kind === "invalid") {
+      throw new Error(`patterns: ${name}: ${loaded.reason}`);
+    }
+    // Validated above, so the front matter parses and its figure was read.
+    const figureName = (parsePatternFile(page)?.meta.figure) ?? "";
+    referenced.add(figureName);
+    collected.push({ slug, page, figureName, figure: figures.get(figureName) ?? "" });
+  }
+  for (const name of figures.keys()) {
+    if (!referenced.has(name)) {
+      throw new Error(`patterns: ${name} is named by no page`);
+    }
+  }
+  return collected;
+}
+
+/**
+ * Render the generated module: the raw texts as one JSON payload plus the
+ * timestamp. The payload stays one line, so the generated file stays small.
+ *
+ * @param {Array<{ slug: string, page: string, figureName: string, figure: string }>} patterns
+ * @param {string} builtAt - the ISO-8601 stamp for this payload
+ * @returns {string} the module text
+ */
+export function renderModule(patterns, builtAt) {
+  const payload = JSON.stringify(JSON.stringify(patterns));
+  return (
+    `// SPDX-License-Identifier: Apache-2.0\n` +
+    `/**\n` +
+    ` * The bundled pattern pages. Generated by \`npm run build:patterns\`\n` +
+    ` * from \`apps/graphs/patterns/\` — committed, do not edit. The build\n` +
+    ` * validated every page with the site's own parsing rules, so the\n` +
+    ` * request path parses these raw texts without a failure mode.\n` +
+    ` */\n` +
+    `/** One bundled page: its slug and the raw texts the build validated. */\n` +
+    `export interface BundledPattern {\n` +
+    `  slug: string;\n` +
+    `  page: string;\n` +
+    `  figureName: string;\n` +
+    `  figure: string;\n` +
+    `}\n` +
+    `\n` +
+    `/** When the bundled payload last changed, ISO-8601. */\n` +
+    `export const PATTERNS_BUILT_AT = ${JSON.stringify(builtAt)};\n` +
+    `\n` +
+    `/** Every bundled page, in slug order. */\n` +
+    `export const BUNDLED_PATTERNS: BundledPattern[] = JSON.parse(${payload}) as BundledPattern[];\n`
+  );
+}
+
+/**
+ * The previous generation: its stamp and payload, or null when the file
+ * is missing or unreadable (a first generation).
+ *
+ * @param {string} out - the generated file's path
+ * @returns {{ builtAt: string, payload: string } | null}
+ */
+export function previousBuild(out) {
+  let text;
+  try {
+    text = readFileSync(out, "utf8");
+  } catch {
+    return null;
+  }
+  const builtAt = /^export const PATTERNS_BUILT_AT = ("(?:[^"\\]|\\.)*");$/m.exec(text);
+  const payload = /^export const BUNDLED_PATTERNS: BundledPattern\[\] = JSON\.parse\((.*)\) as BundledPattern\[];$/m.exec(text);
+  if (builtAt === null || payload === null) {
+    return null;
+  }
+  try {
+    return { builtAt: JSON.parse(builtAt[1]), payload: JSON.parse(payload[1]) };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Validate the directory and write (or check) the generated module.
+ *
+ * @param {{ dir?: string, out?: string, check?: boolean, now?: () => string }} options
+ * @returns {Promise<{ changed: boolean }>} whether the destination differs
+ */
+export async function buildPatterns(options = {}) {
+  const dir = options.dir ?? PATTERNS_DIR;
+  const out = options.out ?? GENERATED;
+  const now = options.now ?? (() => new Date().toISOString());
+  const patterns = await collectPatterns(dir);
+  const payload = JSON.stringify(patterns);
+  const previous = previousBuild(out);
+  const builtAt = previous !== null && previous.payload === payload ? previous.builtAt : now();
+  const text = renderModule(patterns, builtAt);
+  const changed = previous === null || previous.payload !== payload;
+  if (options.check === true) {
+    return { changed };
+  }
+  writeFileSync(out, text);
+  return { changed };
+}
+
+/** The CLI: `build-patterns [--check] [--dir <dir> --out <file>]`. */
+async function main(argv) {
+  let check = false;
+  let dir = PATTERNS_DIR;
+  let out = GENERATED;
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === "--check") {
+      check = true;
+    } else if (arg === "--dir" && argv[index + 1] !== undefined) {
+      dir = path.resolve(argv[index + 1]);
+      index += 1;
+    } else if (arg === "--out" && argv[index + 1] !== undefined) {
+      out = path.resolve(argv[index + 1]);
+      index += 1;
+    } else {
+      throw new Error(`patterns: unknown argument ${arg}`);
+    }
+  }
+  const { changed } = await buildPatterns({ dir, out, check });
+  if (check && changed) {
+    throw new Error(
+      `patterns: ${path.relative(ROOT, out)} is stale; run npm run build:patterns`,
+    );
+  }
+}
+
+const invoked =
+  process.argv[1] !== undefined && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (invoked) {
+  try {
+    await main(process.argv.slice(2));
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    process.exitCode = 1;
+  }
+}

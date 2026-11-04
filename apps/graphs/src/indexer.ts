@@ -1,0 +1,730 @@
+// SPDX-License-Identifier: Apache-2.0
+/**
+ * The scheduled catalogue index.
+ *
+ * A Cron Trigger runs this every 15 minutes: it reads the community
+ * removal list (`blocked.json` in the official repository) first,
+ * discovers every repository tagged `topic:canopy-graph`, and reads each
+ * repository's document folders — one GraphQL answer per repository when it
+ * has a token, folder by folder over REST when it does not — validating
+ * every document and indexing the official repository in the same run. It
+ * writes the catalogue into KV — `index:v1` (entries, no full documents),
+ * one `doc:v1:*` key per document plus its README, one `blocked:v1:*` key
+ * per blocked entry, and `index:meta` with the run's accounting. (The
+ * pattern pages are bundled with the Worker, not indexed; the write phase
+ * only sweeps the `patterns:v1` keys runs before the move left behind.)
+ * A blocked document or repository is never written to `doc:v1:*`, and a
+ * stale `doc:v1:*` key is deleted. The request path then serves everything
+ * from KV and never spends GitHub quota on traffic.
+ *
+ * The run is budgeted: 45 outbound subrequests, which is the Workers Free
+ * plan's 50 minus a margin. An authenticated run reads each repository's
+ * whole catalogue — every document and README — in one GitHub GraphQL
+ * request, so the official repository costs one subrequest and the
+ * machine-generated discovery search the rest; without a token it
+ * falls back to the REST path. When the budget, a rate limit or a failed
+ * discovery page stops the run early, the previous entries of the
+ * repositories it could not visit are carried over, so a short run never
+ * shrinks the catalogue; only documents in visited repositories that are
+ * truly gone — and repositories absent from a completed discovery — have
+ * their keys deleted. A run visits only the repositories that changed or
+ * were never read (`index:repos:v1` in repo-state.ts remembers each
+ * repository's last visit), oldest visit first, so successive runs cover any
+ * number of repositories while an unchanged catalogue costs the official
+ * read plus discovery. The meta records how many subrequests the run spent
+ * and why it stopped, so a truncated run is visible from outside.
+ *
+ * Writes are budgeted too, and tighter: the Free plan allows 1,000 KV writes
+ * a day while the cron wakes 96 times. Each content key's SHA-256 digest
+ * lives in `index:hashes:v1` (hashes.ts), so a run puts a key only when its
+ * value differs — an unchanged catalogue costs one write, `index:meta` — and
+ * `index:v1` is fingerprinted without `built_at`, which therefore marks
+ * when its content last changed.
+ */
+import type { DocumentKind, JsonValue } from "../../../src/schema.js";
+import {
+  BLOCKED_PREFIX,
+  blockedDocument,
+  blockedKey,
+  blockedRepository,
+  type BlockedEntry,
+} from "./blocked.js";
+import type { ApiError, GitHub, Log } from "./github.js";
+import { isApiError } from "./github.js";
+import { isArray, isRecord, readJson, stringField } from "./json.js";
+import { HASHES_KEY, KvWriter, parseHashes } from "./hashes.js";
+import { buildIndexValue } from "./index-payload.js";
+import { CATALOGUE_TOPIC, discoverSources } from "./discovery.js";
+import {
+  type CatalogEntry,
+  type DocumentLoad,
+  type DocumentSource,
+  loadDocumentWithReason,
+} from "./documents.js";
+import { OFFICIAL_OWNER, OFFICIAL_REPO } from "./lib.js";
+import {
+  REPOS_KEY,
+  hitOf,
+  parseRepoState,
+  planVisits,
+  pruneRepoState,
+  repoKey,
+  serializeRepoState,
+  type RepoHit,
+  type VisitPlan,
+} from "./repo-state.js";
+import { officialSources, readBlocked } from "./rest.js";
+import {
+  documentOfSnapshot,
+  fetchSnapshot,
+  officialCatalogueOf,
+  snapshotSources,
+} from "./snapshot.js";
+import {
+  DOC_PREFIX,
+  INDEX_KEY,
+  META_KEY,
+  PATTERN_PREFIX,
+  PATTERNS_KEY,
+  docKey,
+  readIndex,
+  type IndexEntry,
+  type IndexInvalid,
+  type IndexMeta,
+  type KV,
+  type StoredDoc,
+} from "./store.js";
+
+/**
+ * The cron schedule, mirrored in `wrangler.toml` `[triggers]`. The two
+ * must change together: the config sets when the Worker wakes, this
+ * constant tells the pages what to promise.
+ */
+export const INDEX_CRON = "*/15 * * * *";
+
+/** Minutes between index builds; the Publish page renders this number. */
+export const INDEX_CRON_MINUTES = 15;
+
+/** Discovery reads GitHub's maximum page: 100 repositories per call. */
+export const DISCOVERY_PAGE_SIZE = 100;
+
+/**
+ * GitHub caps search at 1,000 results: 10 pages of 100, then the run stops
+ * paging with `truncated` set. Discovery stays incomplete — repositories
+ * beyond the cap were not proven gone, so their previous entries carry
+ * over instead of being deleted.
+ */
+export const DISCOVERY_MAX_PAGES = 10;
+
+/**
+ * Outbound subrequests one run may spend, at most: GitHub REST, GraphQL and
+ * the discovery search alike, with Cache API operations counting too (which
+ * is why the cron path builds its transport with `cache: null`). The plan
+ * allows 50 per invocation; 45 leaves room for the KV writes and the answer.
+ */
+export const SUBREQUEST_BUDGET = 45;
+
+/**
+ * The visit ledger's version, stored beside it in `index:repos:v1`. A run
+ * whose stored version differs rereads every repository over the next runs,
+ * so bump this when parsing or validation changes what a visit means.
+ */
+export const INDEXER_VERSION = 1;
+
+// `index:v1`'s byte cap and trim live with the payload builder, and stay
+// exported here for the readers that already import them.
+export {
+  DESCRIPTION_TRIM,
+  INDEX_MAX_BYTES,
+  buildIndexPayload,
+  type IndexPayload,
+} from "./index-payload.js";
+
+/** The discovery query: the catalogue topic, best starred first. */
+export function discoveryUrl(page: number): string {
+  const params = new URLSearchParams({
+    q: `topic:${CATALOGUE_TOPIC}`,
+    sort: "stars",
+    order: "desc",
+    per_page: String(DISCOVERY_PAGE_SIZE),
+    page: String(page),
+  });
+  return `https://api.github.com/search/repositories?${params.toString()}`;
+}
+
+export interface IndexerOptions {
+  /** The GitHub transport, already wired with the token when there is one. */
+  github: GitHub;
+  /** The index namespace the catalogue reads. */
+  index: KV;
+  /**
+   * True when the run authenticates. GitHub's GraphQL API needs a token, so
+   * this picks the transport as well as the account: authenticated runs take
+   * each repository in one GraphQL request, unauthenticated runs use REST.
+   */
+  authenticated: boolean;
+  /** Budget override. Production never sets it; the tests force cut-offs. */
+  budget?: number;
+  /** Clock override; production reads the time. */
+  now?: () => number;
+  /** Where dropped or skipped things are noted; defaults to no-op. */
+  log?: Log;
+}
+
+/** Thrown past the budget or a rate limit: stop the run, keep the rest. */
+class StopRun {
+  readonly reason: string;
+  constructor(reason: string) {
+    this.reason = reason;
+  }
+}
+
+/** The distinct node kinds of a graph document, sorted; empty otherwise. */
+function nodeKinds(kind: DocumentKind, document: JsonValue): string[] {
+  if (kind !== "graph" || !isRecord(document) || !isArray(document["nodes"])) {
+    return [];
+  }
+  const kinds = new Set<string>();
+  for (const node of document["nodes"]) {
+    if (isRecord(node)) {
+      const kindName = stringField(node, "kind");
+      if (kindName !== "") {
+        kinds.add(kindName);
+      }
+    }
+  }
+  return [...kinds].sort();
+}
+
+/** One index entry from a loaded document and what the listing knew. */
+function entryFromLoaded(
+  source: DocumentSource,
+  loaded: CatalogEntry,
+  official: boolean,
+): IndexEntry {
+  const doc = loaded.doc;
+  return {
+    kind: source.kind,
+    owner: source.owner,
+    repo: source.repo,
+    slug: source.slug,
+    name: doc.name,
+    description: doc.description,
+    official,
+    stars: doc.stars,
+    updated: doc.updated,
+    ref: source.ref ?? "",
+    node_count: doc.nodeCount,
+    kinds: nodeKinds(source.kind, loaded.document),
+    harness_hint: doc.harnesses,
+  };
+}
+
+interface RunState {
+  github: GitHub;
+  log: Log;
+  /** True when each repository arrives as one GraphQL snapshot. */
+  graphql: boolean;
+  entries: IndexEntry[];
+  documents: Map<string, StoredDoc>;
+  invalid: IndexInvalid[];
+  /** The entries `blocked.json` held at the start of this run. */
+  blocked: BlockedEntry[];
+  /** Repositories fully processed: their previous entries are replaced. */
+  visited: Set<string>;
+  /** Repositories the discovery search returned, visited or not. */
+  discovered: Set<string>;
+  truncated: boolean;
+}
+
+/** How one document folder is read, whatever the transport. */
+type DocumentLoader = (source: DocumentSource) => Promise<DocumentLoad | ApiError>;
+
+/** Load one source into the run, recording drops in the invalid list. */
+async function indexSource(
+  state: RunState,
+  source: DocumentSource,
+  official: boolean,
+  load: DocumentLoader,
+): Promise<void> {
+  const block = blockedDocument(
+    state.blocked,
+    source.kind,
+    source.owner,
+    source.repo,
+    source.slug,
+  );
+  if (block !== null) {
+    state.log(
+      `indexer: blocked ${source.kind} ${source.owner}/${source.repo}/${source.slug}: ${block.reason}`,
+    );
+    return;
+  }
+  const loaded = await load(source);
+  if (loaded.kind === "doc") {
+    state.entries.push(entryFromLoaded(source, loaded.entry, official));
+    state.documents.set(
+      docKey(source.kind, source.owner, source.repo, source.slug),
+      { document: loaded.entry.document, readme: loaded.entry.doc.readme },
+    );
+    return;
+  }
+  if (loaded.kind !== "absent") {
+    const error = loaded as ApiError;
+    if (error.kind === "rate-limit") {
+      throw new StopRun(`rate-limited loading ${source.owner}/${source.repo} ${source.slug}`);
+    }
+    state.log(`indexer: ${source.owner}/${source.repo} ${source.slug} failed: ${error.kind}`);
+    state.invalid.push({
+      repo: `${source.owner}/${source.repo}`,
+      slug: source.slug,
+      reason: `github ${error.kind}`,
+    });
+    return;
+  }
+  if (loaded.reason !== null) {
+    state.invalid.push({
+      repo: `${source.owner}/${source.repo}`,
+      slug: source.slug,
+      reason: loaded.reason,
+    });
+  }
+}
+
+/**
+ * Index the official repository over REST, without a token: both `graphs/`
+ * and `nodes/` directories, every folder through validation. A missing
+ * directory is an empty kind, not an outage; anything else unreadable logs
+ * and contributes nothing.
+ */
+async function indexOfficialRest(state: RunState): Promise<void> {
+  const repoBlock = blockedRepository(state.blocked, OFFICIAL_OWNER, OFFICIAL_REPO);
+  if (repoBlock !== null) {
+    state.log(`indexer: blocked the official repository: ${repoBlock.reason}`);
+    return;
+  }
+  const read = await officialSources(state.github, state.log);
+  if (read.kind === "halt") {
+    throw new StopRun(read.reason);
+  }
+  for (const source of read.sources) {
+    await indexSource(
+      state,
+      source,
+      true,
+      (one) => loadDocumentWithReason(state.github, one, state.log),
+    );
+  }
+}
+
+/**
+ * Index the official repository from one GraphQL answer: the removal list
+ * and every document and README, all in the run's second subrequest.
+ * Returns whether the removal list was readable, so the caller keeps the
+ * previous blocks when it was not.
+ */
+async function indexOfficialSnapshot(state: RunState): Promise<boolean> {
+  const snapshot = await fetchSnapshot(state.github, OFFICIAL_OWNER, OFFICIAL_REPO, state.log);
+  if (isApiError(snapshot)) {
+    throw new StopRun(
+      snapshot.kind === "rate-limit"
+        ? "rate-limited reading the official repository"
+        : `official repository ${snapshot.kind}`,
+    );
+  }
+  if (snapshot.tree === null) {
+    // No tree is a repository the answer could not read: stopping here keeps
+    // the previous entries instead of replacing them with nothing.
+    throw new StopRun("official repository unavailable");
+  }
+  const catalogue = await officialCatalogueOf(snapshot, state.log);
+  if (catalogue.blocked !== null) {
+    state.blocked = catalogue.blocked;
+  }
+  for (const item of catalogue.documents) {
+    await indexSource(state, item.source, true, () => documentOfSnapshot(item, state.log));
+  }
+  return catalogue.blocked !== null;
+}
+
+/** Index one community repository over REST: a tree, then two calls per folder. */
+async function indexRepoRest(state: RunState, hit: RepoHit): Promise<void> {
+  const sources = await discoverSources(state.github, hit.owner, hit.repo, hit.branch, state.log);
+  if (isApiError(sources)) {
+    throw new StopRun(`rate-limited discovering ${hit.owner}/${hit.repo}`);
+  }
+  for (const source of sources) {
+    source.stars = hit.stars;
+    source.updated = hit.updated;
+    source.ref = hit.branch;
+    await indexSource(
+      state,
+      source,
+      false,
+      (one) => loadDocumentWithReason(state.github, one, state.log),
+    );
+  }
+}
+
+/**
+ * Index one community repository discovered by the topic search. The
+ * authenticated run takes its whole catalogue in one GraphQL request; the
+ * REST path discovers the folders first. Returns false when the repository
+ * could not be read, so its previous entries carry over.
+ */
+async function indexRepo(state: RunState, hit: RepoHit): Promise<boolean> {
+  const repoBlock = blockedRepository(state.blocked, hit.owner, hit.repo);
+  if (repoBlock !== null) {
+    // Skip before the snapshot call: a blocked repository costs one discovery
+    // hit and no contents call, and still counts as visited so its previous
+    // entries are dropped.
+    state.log(`indexer: blocked repository ${hit.owner}/${hit.repo}: ${repoBlock.reason}`);
+    return true;
+  }
+  if (!state.graphql) {
+    await indexRepoRest(state, hit);
+    return true;
+  }
+  const snapshot = await fetchSnapshot(state.github, hit.owner, hit.repo, state.log);
+  if (isApiError(snapshot)) {
+    if (snapshot.kind === "rate-limit") {
+      throw new StopRun(`rate-limited reading ${hit.owner}/${hit.repo}`);
+    }
+    state.log(`indexer: ${hit.owner}/${hit.repo} unavailable: ${snapshot.kind}`);
+    return false;
+  }
+  if (snapshot.tree === null) {
+    state.log(`indexer: ${hit.owner}/${hit.repo} answered no tree; keeping its previous entries`);
+    return false;
+  }
+  for (const item of snapshotSources(snapshot, hit.owner, hit.repo)) {
+    await indexSource(state, item.source, false, () => documentOfSnapshot(item, state.log));
+  }
+  return true;
+}
+
+/** What one community repository's visit proved. */
+type RepoOutcome =
+  | { status: "indexed" }
+  | { status: "unavailable" }
+  | { status: "stopped"; reason: string };
+
+/** Run one repository with rollback: a stop discards its partial entries. */
+async function indexRepoAtomic(state: RunState, hit: RepoHit): Promise<RepoOutcome> {
+  const entriesBefore = state.entries.length;
+  const documentsBefore = new Map(state.documents);
+  const invalidBefore = state.invalid.length;
+  try {
+    return { status: (await indexRepo(state, hit)) ? "indexed" : "unavailable" };
+  } catch (error) {
+    state.entries.length = entriesBefore;
+    state.documents = documentsBefore;
+    state.invalid.length = invalidBefore;
+    if (error instanceof StopRun) {
+      state.log(`indexer: stopped at ${hit.owner}/${hit.repo}: ${error.reason}`);
+      return { status: "stopped", reason: error.reason };
+    }
+    throw error;
+  }
+}
+
+/**
+ * Build the index. Discovery pages the topic search to GitHub's 1,000
+ * cap; every repository is indexed atomically, and a stop — budget,
+ * rate limit, unreadable page — ends the run with carry-over rather
+ * than a shrunken catalogue.
+ */
+export async function runIndexer(options: IndexerOptions): Promise<IndexMeta> {
+  const now = options.now ?? Date.now;
+  const started = now();
+  const log = options.log ?? (() => undefined);
+  const budget = options.budget ?? SUBREQUEST_BUDGET;
+  let calls = 0;
+  /** Spend one subrequest, or stop the run when the budget is gone. */
+  const spend = (): void => {
+    if (calls >= budget) {
+      throw new StopRun(`budget of ${budget} subrequests reached`);
+    }
+    calls += 1;
+  };
+  const guarded: GitHub = {
+    get: async (url, cacheClass) => {
+      spend();
+      return options.github.get(url, cacheClass);
+    },
+    graphql: async (query, variables) => {
+      spend();
+      return options.github.graphql(query, variables);
+    },
+  };
+  const state: RunState = {
+    github: guarded,
+    log,
+    graphql: options.authenticated,
+    entries: [],
+    documents: new Map(),
+    invalid: [],
+    blocked: [],
+    visited: new Set(),
+    discovered: new Set(),
+    truncated: false,
+  };
+  const officialKey = repoKey(OFFICIAL_OWNER, OFFICIAL_REPO);
+  const previous = await readIndex(options.index).catch(() => null);
+  const previousEntries = previous?.entries ?? [];
+  const builtAt = new Date(started).toISOString();
+  // The visit ledger: what each repository's code looked like when a run
+  // last read it. A missing or unreadable ledger reads as empty, so every
+  // repository counts as never visited.
+  const reposText = await options.index.get(REPOS_KEY).catch(() => null);
+  const repoState = parseRepoState(reposText, INDEXER_VERSION);
+
+  let blocksLoaded = false;
+  let discoveryComplete = false;
+  let stopped: string | null = null;
+  let plan: VisitPlan = { pending: [], unchanged: new Map() };
+  let reposVisited = 0;
+  try {
+    // The removal list and the official catalogue in one request when the run
+    // authenticates: nothing is indexed before the run knows what must not be,
+    // and the whole repository costs a single subrequest. Without a token the
+    // list is the run's first REST call, so the same order holds.
+    const officialEntries = state.entries.length;
+    const officialDocuments = new Map(state.documents);
+    const officialInvalid = state.invalid.length;
+    try {
+      if (options.authenticated) {
+        blocksLoaded = await indexOfficialSnapshot(state);
+      } else {
+        const read = await readBlocked(guarded, log);
+        if (read.kind === "halt") {
+          throw new StopRun(read.reason);
+        }
+        if (read.kind === "read") {
+          state.blocked = read.entries;
+          blocksLoaded = true;
+        }
+        await indexOfficialRest(state);
+      }
+    } catch (error) {
+      state.entries.length = officialEntries;
+      state.documents = officialDocuments;
+      state.invalid.length = officialInvalid;
+      throw error;
+    }
+    state.visited.add(officialKey);
+
+    let page = 1;
+    const queue: RepoHit[] = [];
+    const queued = new Set<string>([officialKey]);
+    let paging = true;
+    while (paging && page <= DISCOVERY_MAX_PAGES) {
+      const response = await guarded.get(discoveryUrl(page), "search");
+      if (isApiError(response)) {
+        if (response.kind === "rate-limit") {
+          throw new StopRun("rate-limited discovering repositories");
+        }
+        log(`indexer: discovery page ${page} failed: ${response.kind}`);
+        paging = false;
+        break;
+      }
+      const body = await readJson(response);
+      if (!body.ok || !isRecord(body.value) || !isArray(body.value["items"])) {
+        log(`indexer: discovery page ${page} did not parse as JSON`);
+        paging = false;
+        break;
+      }
+      const items = body.value["items"];
+      for (const item of items) {
+        const hit = hitOf(item);
+        if (hit === null) {
+          continue;
+        }
+        const key = repoKey(hit.owner, hit.repo);
+        state.discovered.add(key);
+        if (!queued.has(key)) {
+          queued.add(key);
+          queue.push(hit);
+        }
+      }
+      if (items.length < DISCOVERY_PAGE_SIZE) {
+        discoveryComplete = true;
+        paging = false;
+      } else if (page >= DISCOVERY_MAX_PAGES) {
+        state.truncated = true;
+        paging = false;
+      } else {
+        page += 1;
+      }
+    }
+
+    // The incremental visit: only the repositories that changed or were
+    // never read, oldest visit first, so a run cut short by the budget is
+    // resumed by the next one. A visit is recorded only after it succeeds;
+    // an unavailable repository keeps its previous state and stays pending.
+    plan = planVisits(queue, repoState);
+    for (const hit of plan.pending) {
+      const outcome = await indexRepoAtomic(state, hit);
+      if (outcome.status === "stopped") {
+        stopped = outcome.reason;
+        state.truncated = true;
+        break;
+      }
+      if (outcome.status === "unavailable") {
+        // Unread, not empty: its previous entries carry over.
+        state.truncated = true;
+        continue;
+      }
+      const key = repoKey(hit.owner, hit.repo);
+      state.visited.add(key);
+      repoState[key] = { pushed_at: hit.pushedAt, visited_at: builtAt };
+      reposVisited += 1;
+    }
+  } catch (error) {
+    if (!(error instanceof StopRun)) {
+      throw error;
+    }
+    log(`indexer: ${error.reason}`);
+    stopped = error.reason;
+    state.truncated = true;
+  }
+
+  // Carry-over: the previous entries of repositories this run could not
+  // visit stay, in their previous order, unless a completed discovery
+  // proves the repository unlisted the topic and is truly gone — or the
+  // removal list now blocks them, which a short run must not resurrect.
+  for (const entry of previousEntries) {
+    const key = repoKey(entry.owner, entry.repo);
+    if (state.visited.has(key)) {
+      continue;
+    }
+    if (discoveryComplete && !entry.official && !state.discovered.has(key)) {
+      continue;
+    }
+    if (
+      blockedDocument(state.blocked, entry.kind, entry.owner, entry.repo, entry.slug) !== null
+    ) {
+      continue;
+    }
+    // An unchanged repository is never visited, but its star count still
+    // follows the search hit — fresh data at no subrequest cost.
+    const fresh = plan.unchanged.get(key);
+    if (fresh !== undefined && fresh.stars !== null) {
+      entry.stars = fresh.stars;
+    }
+    state.entries.push(entry);
+  }
+
+  // The write phase is fingerprinted: one digest per content key, read once,
+  // so a run whose catalogue did not move costs a single put, `index:meta`,
+  // and stays far under the free plan's 1,000 writes a day (README, "the
+  // write budget"). A missing or unreadable map reads as empty: every key is
+  // written, exactly as a run without a fingerprint always did.
+  const hashesText = await options.index.get(HASHES_KEY).catch(() => null);
+  const writer = new KvWriter(options.index, parseHashes(hashesText));
+
+  for (const [key, stored] of state.documents) {
+    await writer.put(key, JSON.stringify(stored));
+  }
+  const index = buildIndexValue(state.entries, builtAt);
+  await writer.putByContent(INDEX_KEY, index.content, index.value);
+
+  // The visit ledger, pruned by a completed discovery and fingerprinted like
+  // every content key: an unchanged run rewrites nothing here.
+  if (discoveryComplete) {
+    pruneRepoState(repoState, state.discovered);
+  }
+  await writer.put(REPOS_KEY, serializeRepoState(INDEXER_VERSION, repoState));
+
+  // The retired patterns keys, swept once: runs before the pages moved
+  // into the Worker left `patterns:v1` plus one `pattern:v1:*` key per
+  // page. The per-page keys are listed on every run — a run that wrote
+  // them but stopped before the index key would otherwise orphan them
+  // behind a missing `patterns:v1` — and the index key goes when it is
+  // there. Deletes never count as writes, like the vanished-document
+  // sweep below.
+  const stalePatterns = await options.index.get(PATTERNS_KEY).catch(() => null);
+  if (stalePatterns !== null) {
+    await writer.remove(PATTERNS_KEY);
+  }
+  let patternCursor: string | undefined;
+  do {
+    const listed = await options.index.list({ prefix: PATTERN_PREFIX, cursor: patternCursor });
+    for (const key of listed.keys) {
+      await writer.remove(key.name);
+    }
+    patternCursor = listed.list_complete ? undefined : listed.cursor;
+  } while (patternCursor !== undefined);
+
+  // The removal list, one key per entry, so the request path can answer a
+  // block without reading the whole file. Only a list that was actually
+  // read replaces the keys: a failure keeps the previous blocks in force.
+  const liveBlocks = new Set<string>();
+  for (const entry of state.blocked) {
+    const key = blockedKey(entry);
+    if (key === null) {
+      continue;
+    }
+    liveBlocks.add(key);
+    await writer.put(key, JSON.stringify(entry));
+  }
+  if (blocksLoaded) {
+    let blocksCursor: string | undefined;
+    do {
+      const listed = await options.index.list({ prefix: BLOCKED_PREFIX, cursor: blocksCursor });
+      for (const key of listed.keys) {
+        if (!liveBlocks.has(key.name)) {
+          await writer.remove(key.name);
+        }
+      }
+      blocksCursor = listed.list_complete ? undefined : listed.cursor;
+    } while (blocksCursor !== undefined);
+  }
+
+  const stats = writer.stats;
+  const reposPending = plan.pending.length - reposVisited;
+  const meta: IndexMeta = {
+    built_at: builtAt,
+    duration_ms: Math.max(0, now() - started),
+    calls,
+    subrequests: calls,
+    repos_seen: state.visited.size,
+    documents: state.entries.length,
+    blocked: state.blocked.length,
+    invalid: state.invalid,
+    truncated: state.truncated || reposPending > 0,
+    repos_pending: reposPending,
+    repos_unchanged: plan.unchanged.size,
+    repos_visited: reposVisited,
+    stopped,
+    authenticated: options.authenticated,
+    // What the write phase actually cost: the content puts above plus this
+    // meta, which is the one key written on every run.
+    kv_writes: stats.writes + 1,
+    kv_skipped: stats.skipped,
+  };
+  await options.index.put(META_KEY, JSON.stringify(meta));
+
+  // Vanished documents: keys no live entry points at anymore. Carried
+  // entries keep their keys by construction.
+  const live = new Set<string>([
+    ...state.documents.keys(),
+    ...state.entries.map((entry) => docKey(entry.kind, entry.owner, entry.repo, entry.slug)),
+  ]);
+  let cursor: string | undefined;
+  do {
+    const listed = await options.index.list({ prefix: DOC_PREFIX, cursor });
+    for (const key of listed.keys) {
+      if (!live.has(key.name)) {
+        await writer.remove(key.name);
+      }
+    }
+    cursor = listed.list_complete ? undefined : listed.cursor;
+  } while (cursor !== undefined);
+
+  // The map goes last, and only when this run changed it: an unchanged run
+  // then spends exactly the meta put and nothing else.
+  await writer.flush();
+
+  return meta;
+}

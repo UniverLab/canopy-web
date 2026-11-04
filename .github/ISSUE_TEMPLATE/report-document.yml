@@ -1,0 +1,47 @@
+name: Report a graph or node
+description: Report a harmful, misleading or broken graph or node in the catalogue.
+labels: ["report"]
+body:
+  - type: input
+    id: document
+    attributes:
+      label: Catalogue URL
+      description: The page URL of the graph or node you are reporting.
+      placeholder: https://graphs.univerlab.org/g/acme/things/flow
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      description: Whether the document is a graph or a node.
+      options:
+        - graph
+        - node
+  - type: input
+    id: source
+    attributes:
+      label: Source repository
+      description: The owner/repo that holds the document.
+      placeholder: acme/things
+  - type: dropdown
+    id: reason
+    attributes:
+      label: Reason
+      description: Why the catalogue should remove it.
+      options:
+        - Malicious or dangerous command
+        - Misleading description
+        - Prompt that steers the agent to do harm
+        - Broken or invalid
+        - Copyright or licence
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: What is wrong, where it appears, and what should happen instead.
+    validations:
+      required: true

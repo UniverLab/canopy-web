@@ -1,0 +1,27 @@
+# graphs.univerlab.org — the visual e2e fixture Worker.
+#
+# `wrangler dev --config wrangler.e2e.toml` serves this module instead of
+# src/index.ts: the production Worker built with createWorker over the page
+# tests' stub table (test/stubs.ts), so the browser sees the real pages and
+# the real look kit with no live GitHub. No vars are needed; analytics
+# stays off (its env values are absent). The index binding is served from
+# memory and seeded by the fixture Worker through the indexer.
+name = "canopy-graphs-e2e"
+main = "test/e2e/worker.ts"
+compatibility_date = "2026-10-26"
+
+[[kv_namespaces]]
+binding = "INDEX"
+id = "e2e-index"
+
+# The draft namespace, in memory: the e2e fixture serves drafts created
+# during the run and loses them with the process.
+[[kv_namespaces]]
+binding = "DRAFTS"
+id = "e2e-drafts"
+
+# The generated look kit, exactly as the deploy serves it. The pages are
+# rendered, so an asset miss must fall through to this fixture Worker.
+[assets]
+directory = "public"
+run_worker_first = ["/api/*", "/i/*"]

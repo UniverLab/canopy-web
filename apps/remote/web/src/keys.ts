@@ -1,0 +1,96 @@
+// SPDX-License-Identifier: Apache-2.0
+// The key bar under the terminal: the ten keys a phone keyboard lacks.
+// Esc, Tab, the arrows, Backspace and Enter send their bytes; Ctrl and
+// Shift are one-shot latching modifiers (see modifiers.ts) with no bytes
+// of their own. Esc, Ctrl and Shift stay words — a phone reader knows
+// them — while Tab, the arrows, Backspace and Enter wear their Lucide
+// icon. An armed latch is a
+// filled teal button: no indicator, icon or text marks it. Rendering is
+// plain buttons; the bytes table is exported so the session layer and the
+// tests share one definition.
+
+import { icon, type RemoteIconName } from "./icons-dom.js";
+import type { ModifierState } from "./modifiers.js";
+
+export interface KeyDef {
+  /** Stable id used in tests and selectors. */
+  id: string;
+  label: string;
+  ariaLabel: string;
+  bytes: readonly number[];
+  /** The key drawn as an icon instead of the word in `label`. */
+  icon?: RemoteIconName;
+}
+
+export const KEY_DEFS: readonly KeyDef[] = [
+  { id: "esc", label: "Esc", ariaLabel: "Escape", bytes: [0x1b] },
+  { id: "ctrl", label: "Ctrl", ariaLabel: "Control", bytes: [] },
+  { id: "shift", label: "Shift", ariaLabel: "Shift", bytes: [] },
+  { id: "tab", label: "", ariaLabel: "Tab", bytes: [0x09], icon: "arrowRightToLine" },
+  { id: "left", label: "", ariaLabel: "Arrow left", bytes: [0x1b, 0x5b, 0x44], icon: "arrowLeft" },
+  { id: "up", label: "", ariaLabel: "Arrow up", bytes: [0x1b, 0x5b, 0x41], icon: "arrowUp" },
+  { id: "down", label: "", ariaLabel: "Arrow down", bytes: [0x1b, 0x5b, 0x42], icon: "arrowDown" },
+  { id: "right", label: "", ariaLabel: "Arrow right", bytes: [0x1b, 0x5b, 0x43], icon: "arrowRight" },
+  { id: "backspace", label: "", ariaLabel: "Backspace", bytes: [0x7f], icon: "deleteLeft" },
+  { id: "enter", label: "", ariaLabel: "Enter", bytes: [0x0d], icon: "cornerDownLeft" },
+];
+
+export function isLatchKey(id: string): boolean {
+  return id === "ctrl" || id === "shift";
+}
+
+export function keyBytes(def: KeyDef): Uint8Array {
+  return new Uint8Array(def.bytes);
+}
+
+export function keyById(id: string): KeyDef | null {
+  return KEY_DEFS.find((def) => def.id === id) ?? null;
+}
+
+/** One icon in a key: hidden from readers, the button carries the name. */
+function iconSlot(name: RemoteIconName): HTMLElement {
+  const slot = document.createElement("span");
+  slot.className = "icon-slot";
+  slot.setAttribute("aria-hidden", "true");
+  slot.innerHTML = icon(name);
+  return slot;
+}
+
+export function renderKeyBar(bar: HTMLElement, onKey: (def: KeyDef) => void): void {
+  bar.replaceChildren();
+  bar.setAttribute("role", "toolbar");
+  bar.setAttribute("aria-label", "Terminal keys");
+  for (const def of KEY_DEFS) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = def.icon === undefined ? "key" : "key key-icon";
+    button.dataset.key = def.id;
+    button.setAttribute("aria-label", def.ariaLabel);
+    if (def.icon !== undefined) {
+      button.append(iconSlot(def.icon));
+    }
+    if (def.label !== "") {
+      button.append(document.createTextNode(def.label));
+    }
+    if (isLatchKey(def.id)) {
+      button.setAttribute("aria-pressed", "false");
+    }
+    button.addEventListener("click", () => onKey(def));
+    bar.appendChild(button);
+  }
+}
+
+// A latched modifier shows pressed until the next key (or a second tap)
+// releases it. The shell owns the latches and calls this after each
+// toggle and each consumed key; the pressed state is the whole signal.
+export function updateKeyBarLatches(bar: HTMLElement, mods: ModifierState): void {
+  for (const [id, latched] of [
+    ["ctrl", mods.ctrl],
+    ["shift", mods.shift],
+  ] as const) {
+    const button = bar.querySelector<HTMLButtonElement>(`button.key[data-key="${id}"]`);
+    if (button) {
+      button.setAttribute("aria-pressed", latched ? "true" : "false");
+    }
+  }
+}

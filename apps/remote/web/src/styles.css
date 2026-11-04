@@ -1,0 +1,2015 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Canopy remote: the Canopy page look. The shared kit (packages/look,
+ * copied to public/look by `npm run build:look`) owns the tokens and the
+ * three typefaces; this file maps the app's semantic variables onto them
+ * and dresses every widget. Always the dark Liquid Abyss surface — a
+ * remote session is read in a terminal, and the OS preference no longer
+ * flips the palette. */
+
+@import url("./terminal-font.css");
+
+:root {
+  /* Intentional: the app is dark-only by design, there is no light
+   * theme to offer — dark widgets, scrollbars and form controls. */
+  color-scheme: dark;
+  --bg: var(--surface-bg);
+  --ink: var(--surface-ink);
+  --muted: var(--surface-ink-dim);
+  --line: var(--surface-line);
+  --accent: var(--teal);
+  --accent-ink: #011d1c;
+  --danger: #e08086;
+  --dot-run: #3fd07a;
+  --dot-idle: #e09a2b;
+  --dot-dead: #6f6a60;
+  --dot-unknown: #57534b;
+  --term-bg: var(--stage-bg);
+  --key-bg: var(--tint-info);
+  --key-ink: var(--surface-ink);
+  --radius: var(--radius-ctl);
+  --gap: 0.5rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+html {
+  background: var(--bg-deep);
+}
+
+body {
+  background: var(--bg-deep);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 1.0625rem;
+  line-height: 1.5;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* The live honeycomb: confined to the header band, like the graphs
+ * header — the page body is the flat deep surface. The host is the
+ * topbar's first child; the topbar itself must not clip (the account
+ * menu floats over the page below), so the host clips its own canvas. */
+.fondo {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: 0;
+  pointer-events: none;
+}
+
+#app {
+  position: relative;
+  z-index: 1;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The app is full width so the colophon band runs edge to edge; only the
+ * header's inner row and the mains keep the 48 rem measure. The main
+ * grows, so the colophon sits at the page bottom on short screens. */
+main {
+  width: 100%;
+  max-width: 48rem;
+  margin: 0 auto;
+  flex: 1 0 auto;
+  padding: 0 1rem 1rem;
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+
+#app > .look-colophon {
+  width: 100%;
+}
+
+/* The footer link row carries no middot separators: the links are plain
+ * anchors and the space between them does the separating, so a wrapped
+ * line can never start or end with a dangling glyph. The column gap is
+ * the old whitespace rhythm around the middot (0.75em on each side of
+ * the 1.15rem link face, 2 × 0.75 × 1.15rem = 1.725rem); the kit's
+ * a + a::before would draw a middot again now that the anchors are
+ * adjacent, so this app turns that generated content off — the shared
+ * kit file itself stays untouched. */
+#app > .look-colophon .colophon-col {
+  column-gap: 1.725rem;
+}
+
+#app > .look-colophon .colophon-col a + a::before {
+  content: none;
+}
+
+/* The one link color: the palette teal, on the landing note and in the
+ * footer. Teal on the page (#011d1c) is 7.28:1, on the footer black
+ * 8.69:1 — both clear the 4.5:1 floor. */
+main a,
+#app > .look-colophon .colophon-col a,
+#app > .look-colophon .colophon-credits a {
+  color: var(--teal);
+}
+
+/* Audit E4: every colophon link meets the 44x44 touch floor. The kit
+ * gives the column links 32 px and the credits link none; the extra
+ * reach is hit area only, the faces stay the kit's. The credits link
+ * is inline in the kit, so it becomes inline-flex for the height to
+ * land. */
+#app > .look-colophon .colophon-col a,
+#app > .look-colophon .colophon-credits a {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+#app > .look-colophon .colophon-credits a {
+  display: inline-flex;
+  align-items: center;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  line-height: 1.2;
+  color: var(--ink-hi);
+}
+
+h1 {
+  margin: 0 0 0.75rem;
+}
+
+h2 {
+  margin: 1.25rem 0 0.5rem;
+  font-size: 1.45rem;
+}
+
+:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
+button {
+  font: inherit;
+  color: var(--ink);
+  background: var(--key-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.9rem;
+  min-height: 2.75rem;
+  cursor: pointer;
+}
+
+button:active {
+  filter: brightness(0.94);
+}
+
+button.primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: transparent;
+}
+
+button.secondary {
+  background: var(--tint-info);
+  color: var(--ink);
+}
+
+/* Every icon is Lucide data drawn inline (packages/look/icon-svg.ts), in
+ * currentColor. A slot keeps its box while the path inside morphs, so an
+ * icon that changes meaning never moves the layout. */
+.icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  vertical-align: -0.15em;
+}
+
+.icon-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.icon-slot svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+button:has(.icon-slot) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  color: var(--ink);
+  background: var(--bg-deep);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+label {
+  display: block;
+  margin: 0.75rem 0;
+}
+
+/* Every field sits below its label and spans the card's content width. */
+label > input,
+label > select,
+label > textarea {
+  display: block;
+  width: 100%;
+  margin-top: 0.25rem;
+  padding: 0.5rem 0.6rem;
+  min-height: 2.75rem;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg-deep);
+  border-bottom: 1px solid var(--line);
+}
+
+/* The header's centred row; the bar itself stays full width. No overflow
+ * clip here: the account menu floats over the page below the header. The
+ * row rides above the honeycomb host, the band's first child. */
+.topbar-inner {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 48rem;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  row-gap: 0.4rem;
+  padding: 0.6rem 1rem;
+  padding-top: max(0.6rem, env(safe-area-inset-top));
+  white-space: nowrap;
+}
+
+/* The header banner home control: the remote art at the header's scale.
+ * A button, not a link — the app has no URL routing, so it goes home in
+ * place through the session-leave path. */
+.topbar .brand-home {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+}
+
+.topbar .brand-home:hover {
+  filter: brightness(1.12);
+}
+
+/* The login and host read as mono chips. */
+.topbar .chip {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.topbar .login,
+.topbar .host {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The banner takes about half of a phone's header, so the login gives up
+ * its width first (an ellipsis, never a push). */
+.topbar .login {
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.topbar .host {
+  min-width: 0;
+  flex-shrink: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+/* The host chip turns ok-green only while connected. */
+.topbar[data-conn="connected"] .host {
+  background: var(--tint-ok);
+  border-color: var(--tint-line);
+}
+
+/* The signed-in account: the login chip opens a menu with Sign out and
+ * Forget this device. A details disclosure, so it toggles and focuses
+ * without script; the summary keeps the chip look, without a marker. */
+.account {
+  position: relative;
+  min-width: 0;
+  flex-shrink: 1;
+  margin: 0;
+}
+
+.account > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.account > summary::-webkit-details-marker {
+  display: none;
+}
+
+.account-menu {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 12rem;
+  max-width: calc(100vw - 2rem);
+  padding: 0.75rem;
+  background: var(--surface-bg-raise);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  white-space: normal;
+}
+
+.account-name {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.4rem;
+  width: 100%;
+  text-align: left;
+}
+
+/* The header stacks at every width (banner.css): the banner centred on
+ * its own row, the chips in one centred row below — so the account chip
+ * rides the centred row with the rest, never pushed to the right edge.
+ * The open menu still anchors to the chip's right edge so it never clips
+ * past the bar. */
+@media (min-width: 640px) {
+  .topbar .account-menu {
+    left: auto;
+    right: 0;
+  }
+}
+
+/* The header Disconnect: an icon button beside the host chip, dressed as
+ * a chip so the 390 px header keeps banner, chips and menu on two rows
+ * at most; it wraps with the row rather than pushing it sideways. */
+.topbar #conn-disconnect {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--muted);
+  background: transparent;
+  /* Audit E4: the 44x44 touch floor; the chip face stays compact. */
+  min-height: 44px;
+  min-width: 44px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.topbar #conn-disconnect:hover {
+  color: var(--ink);
+  border-color: var(--muted);
+}
+
+.signout-error {
+  color: var(--ink);
+  background: var(--tint-error);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.signout-error:empty {
+  display: none;
+}
+
+.signout-error:not(:empty)::before {
+  content: "Error: ";
+  color: var(--err-label);
+}
+
+.conn-banner {
+  background: var(--key-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.conn-banner button {
+  min-height: 2.25rem;
+  padding: 0.25rem 0.75rem;
+}
+
+/* The sign-in hero, in the page's display face and one line wide. */
+.signin {
+  margin: auto;
+  text-align: center;
+  max-width: 24rem;
+  padding: 1rem;
+}
+
+.signin h1 {
+  font-size: clamp(2rem, 9vw, 2.8rem);
+  white-space: nowrap;
+}
+
+#pair-error:empty {
+  display: none;
+}
+
+#pair-error {
+  color: var(--ink);
+  background: var(--tint-error);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+}
+
+#pair-error:not(:empty)::before {
+  content: "Error: ";
+  color: var(--err-label);
+}
+
+.sessions-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.sessions-head h2 {
+  margin: 0.75rem 0;
+}
+
+/* The Agents / Terminals group headings: the h3 scale, one step down
+ * from the Sessions title, spacing only. */
+.session-group {
+  margin: 0.75rem 0 0.5rem;
+}
+
+.session-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.session-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  text-align: left;
+  background: var(--surface-bg-raise);
+  min-height: 3.5rem;
+}
+
+.session-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.session-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-sub {
+  font-size: 0.85rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-age {
+  font-size: 0.8rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+/* What the session is: bot, shell or the square a kill leaves. The dot
+ * beside it keeps saying whether it runs. */
+.session-kind {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--dot-unknown);
+}
+
+.dot-run {
+  background: var(--dot-run);
+}
+
+.dot-idle {
+  background: var(--dot-idle);
+}
+
+.dot-dead {
+  background: var(--dot-dead);
+}
+
+.empty {
+  color: var(--muted);
+}
+
+.session-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  flex: 1;
+  min-height: 0;
+}
+
+.session-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.session-bar #session-back {
+  min-width: 2.75rem;
+}
+
+.session-title {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-exit {
+  font-size: 0.8rem;
+  color: var(--danger);
+  flex-shrink: 0;
+}
+
+.session-exit[hidden] {
+  display: none;
+}
+
+/* The terminal card follows the fitted terminal's height (refit writes
+ * --term-visual-h), capped at 60vh; before the snapshot arrives the
+ * placeholder holds the pane open. The pane is the scroller: a zoomed
+ * session pans inside the card (never the page), and the 8 px inset keeps
+ * text off the border. */
+.term-pane {
+  background: var(--term-bg);
+  border: 1px solid var(--stage-line);
+  border-radius: var(--radius-card);
+  padding: 8px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  /* The browser only ever pans sideways here: a vertical drag is the
+   * terminal's one-finger history scroll (see terminal.ts). */
+  touch-action: pan-x;
+}
+
+.term-placeholder {
+  color: var(--muted);
+  padding: 1rem;
+  min-height: 46dvh;
+}
+
+/* Width 100 % of the pane's content box: the fit scale is measured from
+ * this width, and because .term-fit itself never scrolls (the pane does)
+ * its clientWidth cannot feed back into the scale. The floor keeps the
+ * pane taller than the fitted 24 rows at 360x640: the pane grows past
+ * the visual box while the key bar and the size row stay in view. */
+.term-fit {
+  width: 100%;
+  height: min(var(--term-visual-h, 46dvh), 60vh);
+  min-height: 34vh;
+  overflow: visible;
+  /* Same as the pane: vertical drags belong to the terminal. */
+  touch-action: pan-x;
+}
+
+/* The visual box: natural size × the scale refit wrote, clipping the
+ * transformed host so the terminal scales exactly once. At zoom 1 it
+ * matches the fit exactly; zoomed wider, the pane scrolls it. */
+.term-scale {
+  overflow: hidden;
+}
+
+.term-host {
+  transform-origin: top left;
+}
+
+.term-controls {
+  display: flex;
+  gap: var(--gap);
+}
+
+/* Every control beside the terminal keeps the 44x44 touch floor: the base
+ * button height is 2.75rem and this widens the short icon buttons. */
+.term-controls button {
+  min-width: 2.75rem;
+}
+
+#term-latest {
+  margin-left: auto;
+}
+
+#term-latest[hidden] {
+  display: none;
+}
+
+/* The per-session size control: the toggle and its one-line explainer sit
+ * side by side and wrap on narrow phones. */
+.term-size {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap);
+  flex-wrap: wrap;
+}
+
+.term-size-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+/* The toggle's checkbox keeps its own box: without this the global
+ * label > input rule stretches it into a full-width 44 px control and
+ * the size row doubles in height. */
+.term-size-toggle input {
+  display: inline-block;
+  width: auto;
+  min-height: 0;
+  margin: 0;
+}
+
+.term-size-note {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* Ten keys, all visible: two rows of five equal-width touch targets.
+ * The bar is one info block; the keys inside stay flat so the tint
+ * reads once. */
+.keybar {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--gap);
+  background: var(--tint-info);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius-card);
+  padding: 0.5rem;
+}
+
+.keybar .key {
+  min-height: 2.75rem;
+  padding: 0.5rem 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  background: transparent;
+  border-color: var(--tint-line);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+}
+
+/* The Keys switch hides the bar without touching the zoom or the builder. */
+.keybar[hidden] {
+  display: none;
+}
+
+/* A latched Ctrl or Shift fills teal with a thicker border until the next
+ * key releases it: the fill is the whole signal, no icon or text. */
+.keybar .key[aria-pressed="true"] {
+  background: var(--accent);
+  border: 2px solid var(--accent);
+  color: var(--accent-ink);
+}
+
+/* A 360x640 phone: the 96 px banner leaves no slack in the session column,
+ * and the ten keys plus the size row must sit inside the viewport without
+ * scrolling. The terminal keeps its 24 rows, so the chrome around it
+ * tightens instead: topbar padding and row gap, the column gaps, the
+ * keybar padding and gap. The size row holds two short lines, and the
+ * terminal floor above leaves the second key row ending near 586 px. */
+@media (max-width: 639px) {
+  .topbar-inner {
+    padding-top: max(0.5rem, env(safe-area-inset-top));
+    padding-bottom: 0.5rem;
+    row-gap: 0.3rem;
+  }
+
+  .session-view {
+    gap: 0.25rem;
+  }
+
+  /* Seven controls share 328 px once the paperclip and the shelf button
+   * are up: the tight gap keeps all seven 44 px targets on one row, and
+   * the Builder word steps aside so the blocks icon names it alone. */
+  .term-controls {
+    gap: 0.15rem;
+  }
+
+  #term-builder span {
+    display: none;
+  }
+
+  .keybar {
+    padding: 0.4rem;
+    gap: 0.4rem;
+  }
+}
+
+/* The one-line success confirmation after a spawn. The "Session started"
+ * words carry a check, so the ok tint is never the only signal. */
+.flash-ok {
+  background: var(--tint-ok);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  margin: 0;
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.flash-ok[hidden] {
+  display: none;
+}
+
+/* The yolo checkbox row in the New dialog: calm until checked,
+ * warn-tinted after. The label carries `.yolo-row`. */
+.yolo-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  /* Audit E4: the whole label is the target — hit padding around the
+   * wrapped checkbox, like the kind options below. */
+  padding: 0.5rem 0.6rem;
+  min-height: 44px;
+  min-width: 44px;
+  cursor: pointer;
+}
+
+.yolo-row input {
+  display: inline-block;
+  width: auto;
+  min-height: 0;
+  margin: 0;
+}
+
+.yolo-row:has(input:checked) {
+  background: var(--tint-warn);
+  border-color: var(--tint-line);
+}
+
+.yolo-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0.25rem 0 0.75rem;
+}
+
+.yolo-hint[hidden] {
+  display: none;
+}
+
+.pair-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0.25rem 0 0.75rem;
+}
+
+/* The New dialog's Agent/Terminal segmented control. */
+.kind-segment {
+  display: flex;
+  gap: var(--gap);
+  margin: 0.75rem 0;
+}
+
+.kind-option {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  /* Audit E4: the 44 px floor holds whatever the root size is. */
+  min-height: max(2.75rem, 44px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.kind-option:has(input:checked) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.kind-option input {
+  display: inline-block;
+  width: auto;
+  min-height: 0;
+  margin: 0;
+}
+
+/* Shared modal sheet: New dialog and Prompt Builder. */
+.sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.sheet {
+  background: var(--tint-info);
+  color: var(--ink);
+  width: 100%;
+  max-width: 48rem;
+  max-height: 92dvh;
+  overflow-y: auto;
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
+  padding: 0 1rem calc(1rem + env(safe-area-inset-bottom));
+}
+
+.sheet-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: var(--tint-info);
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--tint-line);
+}
+
+.sheet-head h2 {
+  margin: 0;
+  font-size: 1.3rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheet-close {
+  min-width: 2.75rem;
+  padding: 0.25rem 0.6rem;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.sheet-actions {
+  display: flex;
+  gap: var(--gap);
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+.sheet-error {
+  color: var(--ink);
+  background: var(--tint-error);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  margin: 0.5rem 0;
+  overflow-wrap: anywhere;
+}
+
+.sheet-error[hidden] {
+  display: none;
+}
+
+.sheet-error:empty {
+  display: none;
+}
+
+.sheet-error:not(:empty)::before {
+  content: "Error: ";
+  color: var(--err-label);
+}
+
+.field-error {
+  color: var(--ink);
+  background: var(--tint-error);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  margin: -0.5rem 0 0.5rem;
+  overflow-wrap: anywhere;
+}
+
+.field-error[hidden] {
+  display: none;
+}
+
+.field-error::before {
+  content: "Error: ";
+  color: var(--err-label);
+}
+
+.preset-preview {
+  color: var(--muted);
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  margin: 0.25rem 0 0.75rem;
+}
+
+.preset-preview:empty {
+  display: none;
+}
+
+.builder-form h3 {
+  margin: 1rem 0 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--surface-ink-dim);
+}
+
+.builder-section-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Each section is a raised card; the fields inside span its content
+ * width (label > input/select/textarea above). */
+.builder-section {
+  background: var(--surface-bg-raise);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 0.6rem 0.85rem;
+  margin-bottom: var(--gap);
+}
+
+.section-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+}
+
+.section-actions button {
+  min-height: 2.25rem;
+  padding: 0.25rem 0.6rem;
+}
+
+.builder-skills {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  margin: 0.75rem 0;
+}
+
+.skill-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
+.skill {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.skill input {
+  display: inline-block;
+  width: auto;
+  min-height: 0;
+  margin: 0;
+}
+
+.builder-preview {
+  background: var(--bg-deep);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.75rem;
+  margin: 0.75rem 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+.builder-preview[hidden] {
+  display: none;
+}
+
+/* The Files button in the session bar: hidden until hello.features
+ * carries "shelf", its badge counting files nobody has looked at. */
+#session-files {
+  margin-left: auto;
+  flex-shrink: 0;
+  min-height: 2.75rem;
+  padding: 0.25rem 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+}
+
+#session-files[hidden] {
+  display: none;
+}
+
+.files-badge {
+  min-width: 1.2rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.72rem;
+  line-height: 1.3rem;
+  text-align: center;
+}
+
+.files-badge[hidden] {
+  display: none;
+}
+
+/* The Files sheet: a thumbnail grid, two columns on a phone and four
+ * from 900 px. */
+.shelf-empty {
+  margin: 0.5rem 0;
+}
+
+.shelf-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  padding: 0.75rem 0;
+}
+
+.shelf-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.45rem;
+  text-align: left;
+  background: var(--surface-bg-raise);
+  min-height: 0;
+}
+
+.shelf-thumb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: calc(var(--radius) / 2);
+  background: var(--bg-deep);
+}
+
+.shelf-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.shelf-thumb img[hidden] {
+  display: none;
+}
+
+/* The extension chip shown while the file is still in transit. */
+.shelf-mark {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.shelf-cell.loaded .shelf-mark {
+  display: none;
+}
+
+.shelf-caption {
+  font-size: 0.85rem;
+  line-height: 1.3;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.shelf-meta,
+.viewer-meta {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The upload tray above the key bar: one progress row per file, the
+ * inline refusal naming the file, and the Attach chip a finished upload
+ * leaves. */
+.upload-tray {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.upload-tray[hidden] {
+  display: none;
+}
+
+.upload-item,
+.upload-error {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  background: var(--tint-info);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.upload-error {
+  background: var(--tint-danger, var(--tint-warn));
+  color: var(--danger);
+}
+
+.upload-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-bar {
+  flex: 1;
+  min-width: 3rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--bg-deep);
+  overflow: hidden;
+}
+
+.upload-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.upload-pct {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.upload-cancel {
+  min-width: 2rem;
+  min-height: 2rem;
+  padding: 0 0.4rem;
+  line-height: 1;
+}
+
+.upload-attach {
+  align-self: flex-start;
+  min-height: 2.75rem;
+  padding: 0.35rem 0.7rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  background: var(--tint-ok);
+  border-color: var(--tint-line);
+}
+
+/* The Files sheet's two directions: From agent and Yours. A picker shows
+ * the same grid flat, in union order, where a tap attaches. */
+.shelf-sections {
+  padding: 0.25rem 0 0.75rem;
+}
+
+.shelf-pick .shelf-grid {
+  padding-top: 0.25rem;
+}
+
+.shelf-section-title {
+  margin: 0.5rem 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.shelf-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+/* The grid cell's × : a small corner control, danger-tinted on hover. */
+.shelf-delete {
+  position: absolute;
+  top: 0.15rem;
+  right: 0.15rem;
+  min-width: 2rem;
+  min-height: 2rem;
+  padding: 0 0.4rem;
+  line-height: 1;
+  font-size: 1rem;
+  color: var(--muted);
+}
+
+.shelf-delete:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.shelf-delete:disabled,
+.viewer-delete:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* The one inline line a failed delete leaves on the sheet. */
+.shelf-delete-error {
+  margin: 0.5rem 0 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  background: var(--tint-danger, var(--tint-warn));
+  color: var(--danger);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.shelf-delete-error[hidden] {
+  display: none;
+}
+
+.shelf-download {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  background: var(--tint-info);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  text-decoration: none;
+}
+
+/* Text and code in the viewer: a plain-text page, scrollable, never a
+ * markup parse. */
+.viewer-stage[data-kind="text"] {
+  display: block;
+  overflow: auto;
+  touch-action: pan-y;
+}
+
+.viewer-text {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.viewer-text[hidden],
+.viewer-card[hidden] {
+  display: none;
+}
+
+.viewer-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1.25rem;
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius-card);
+  background: var(--surface-bg-raise);
+  text-align: center;
+}
+
+.viewer-card-name {
+  margin: 0;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.viewer-card-meta {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+/* The full-screen viewer, above every sheet. */
+.shelf-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  background: var(--stage-bg);
+}
+
+.viewer-stage {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  padding: 0.75rem;
+  touch-action: none;
+}
+
+.viewer-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  transform-origin: center;
+  will-change: transform;
+}
+
+.viewer-img[hidden] {
+  display: none;
+}
+
+.viewer-note {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.viewer-note[hidden] {
+  display: none;
+}
+
+.viewer-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  padding-bottom: max(0.6rem, env(safe-area-inset-bottom));
+  background: var(--tint-info);
+  border-top: 1px solid var(--tint-line);
+}
+
+.viewer-bar button {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0.4rem 0.6rem;
+}
+
+.viewer-caption-block {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.viewer-caption {
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.viewer-count {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.viewer-download {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--radius);
+  background: var(--tint-info);
+  color: var(--ink);
+  border: 1px solid var(--tint-line);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  text-decoration: none;
+}
+
+.viewer-download[hidden] {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .shelf-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 48rem) {
+  .sheet-overlay {
+    align-items: center;
+    padding: 1rem;
+  }
+
+  .sheet {
+    border-radius: var(--radius-card);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
+
+/* --- The Graphs tab and the graph view ------------------------------- */
+
+/* The home screen's two-way switch: the selected tab carries the accent
+ * border, never a teal fill. */
+.tab-switch {
+  display: flex;
+  gap: var(--gap);
+  margin: 0.75rem 0 0.5rem;
+}
+
+.tab-switch button {
+  flex: 1;
+  min-height: 2.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tab-switch button[aria-selected="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--tint-info);
+}
+
+/* One graph row: name, current spec and workdir on the left, the status
+ * chip and the done/total fraction with its thin bar on the right. */
+.graph-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.graph-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  text-align: left;
+  background: var(--surface-bg-raise);
+  min-height: 3.5rem;
+  padding: 0.55rem 0.75rem;
+  flex-wrap: wrap;
+}
+
+.graph-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.graph-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.graph-spec {
+  font-size: 0.85rem;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.graph-workdir {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.graph-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+
+/* The status chip: icon plus word, tinted by meaning — the word is the
+ * signal, the colour only repeats it. */
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  padding: 0.12rem 0.45rem;
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  background: var(--tint-info);
+  color: var(--ink);
+  flex-shrink: 0;
+}
+
+.status-chip[data-status="running"] {
+  color: var(--accent);
+}
+
+.status-chip[data-status="completed"] {
+  color: var(--dot-run);
+}
+
+.status-chip[data-status="failed"],
+.status-chip[data-status="blocked"] {
+  color: var(--err-label);
+}
+
+.status-chip[data-status="paused"] {
+  color: var(--dot-idle);
+}
+
+.status-chip .icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* The running chip's loader spins; reduced motion leaves it static. */
+.status-chip.chip-spin .icon {
+  animation: chip-spin 1.1s linear infinite;
+}
+
+@keyframes chip-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.graph-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.2rem;
+}
+
+.graph-count {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.progress {
+  display: block;
+  width: 6.5rem;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--bg-deep);
+  border: 1px solid var(--tint-line);
+  overflow: hidden;
+}
+
+.progress-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+/* The graph view: bar, blocker, disconnect note, the black stage with
+ * the full-width plate, then the checklist. */
+.graph-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.graph-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.graph-bar #graph-back {
+  min-width: 2.75rem;
+}
+
+.graph-title {
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+#graph-chip {
+  flex-shrink: 0;
+}
+
+#graph-count {
+  margin-left: auto;
+}
+
+#graph-count[hidden] {
+  display: none;
+}
+
+.graph-blocker {
+  margin: 0;
+  background: var(--tint-warn);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+
+.graph-blocker[hidden] {
+  display: none;
+}
+
+.graph-note {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.graph-note[hidden] {
+  display: none;
+}
+
+/* The stage: black like the terminal's, the drawing full width inside. */
+.graph-stage {
+  background: var(--stage-bg);
+  border: 1px solid var(--stage-line);
+  border-radius: var(--radius-card);
+  padding: 0.75rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-x pan-y;
+}
+
+.graph-stage .plate-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.graph-wait {
+  margin: 1.5rem 0;
+  text-align: center;
+  color: var(--muted);
+}
+
+/* The checklist: queue order, the running row highlighted, its dot
+ * pulsing (static under reduced motion). */
+.spec-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.spec-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.65rem;
+  min-height: 2.75rem;
+  background: var(--surface-bg-raise);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+}
+
+.spec-row[data-status="running"] {
+  border-color: var(--accent);
+  background: var(--tint-info);
+}
+
+.spec-mark {
+  display: inline-flex;
+  flex: none;
+  color: var(--muted);
+}
+
+.spec-row[data-status="completed"] .spec-mark {
+  color: var(--dot-run);
+}
+
+.spec-row[data-status="failed"] .spec-mark {
+  color: var(--err-label);
+}
+
+.spec-row[data-status="running"] .spec-mark {
+  color: var(--accent);
+  animation: spec-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes spec-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.spec-code {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  border: 1px solid var(--tint-line);
+  border-radius: calc(var(--radius) / 2);
+  padding: 0 0.3rem;
+  flex-shrink: 0;
+}
+
+.spec-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.95rem;
+}
+
+.spec-attempts {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--dot-idle);
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-chip.chip-spin .icon,
+  .spec-row[data-status="running"] .spec-mark {
+    animation: none;
+  }
+}
+
+/* --- The host-metrics strip and the SysInfo view ---------------------- */
+
+/* The strip reads as a chip and taps like a button; it wraps onto its
+ * own header row on a 360 px phone rather than squeezing the host chip. */
+.topbar .metrics-strip {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--muted);
+  background: transparent;
+  /* Audit E4: the 44x44 touch floor; the strip face stays compact. */
+  min-height: 44px;
+  min-width: 44px;
+  flex-shrink: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.topbar .metrics-strip b {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.metrics-strip .m-sep,
+.metric-value .m-sep {
+  color: var(--muted);
+  padding: 0 0.3rem;
+}
+
+/* The TUI's alert ink: amber at warn, red at crit, dim for n/a. */
+#metrics-strip [data-level="warn"],
+.metrics-view [data-level="warn"] {
+  color: var(--attention);
+}
+
+#metrics-strip [data-level="crit"],
+.metrics-view [data-level="crit"] {
+  color: var(--err-label);
+}
+
+#metrics-strip [data-level="na"],
+.metrics-view [data-level="na"] {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/* A stale strip dims until the link is back. */
+.topbar:not([data-conn="connected"]) .metrics-strip {
+  opacity: 0.6;
+}
+
+.metrics-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.metrics-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.metrics-bar #metrics-back {
+  min-width: 2.75rem;
+}
+
+.metrics-title {
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.metrics-age {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.metrics-age[hidden] {
+  display: none;
+}
+
+.metrics-note {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.metrics-note[hidden] {
+  display: none;
+}
+
+.metrics-wait {
+  color: var(--muted);
+}
+
+.metric-section h2 {
+  margin: 0.75rem 0 0.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--surface-ink-dim);
+}
+
+.metric-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--tint-line);
+}
+
+.metric-label {
+  min-width: 3.2rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.metric-value {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.metric-value b {
+  font-weight: 600;
+}
+
+/* One history line: fixed box, currentColor stroke from the markup. */
+.spark {
+  width: 7.5rem;
+  height: 1.75rem;
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.metrics-hint {
+  margin: 0.4rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}

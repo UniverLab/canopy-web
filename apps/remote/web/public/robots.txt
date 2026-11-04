@@ -1,0 +1,5 @@
+# remote.univerlab.org is a private remote for signed-in Canopy users: nothing here is
+# meant to be crawled, indexed, or trained on.
+User-agent: *
+Disallow: /
+Content-Signal: search=no, ai-input=no, ai-train=no

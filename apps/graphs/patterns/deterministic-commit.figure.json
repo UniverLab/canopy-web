@@ -1,0 +1,1 @@
+{"edges": [{"condition": "pass", "from_node": "commit", "to_node": "proof"}], "format_version": 6, "name": "deterministic-commit", "nodes": [{"config": {}, "kind": "check", "name": "commit", "position": 1}, {"config": {}, "kind": "check", "name": "proof", "position": 2}]}

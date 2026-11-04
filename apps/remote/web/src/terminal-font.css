@@ -1,0 +1,21 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* JetBrains Mono 2.304 (OFL-1.1) for the terminal only. Unsubset woff2
+ * from the official JetBrains/JetBrainsMono release, so box drawing
+ * (U+2500–257F), block elements (U+2580–259F) and arrows (U+2190–21FF)
+ * are the face's own glyphs instead of a fallback that misaligns. The
+ * rest of the app keeps the look kit's faces. */
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/JetBrainsMono-Regular.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/JetBrainsMono-Bold.woff2") format("woff2");
+}

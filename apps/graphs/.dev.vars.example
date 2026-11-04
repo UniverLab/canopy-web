@@ -1,0 +1,32 @@
+# Local review config for the graphs Worker. Copy to `.dev.vars` (gitignored,
+# read by `wrangler dev` and by `npm run review:local`), then fill the secret.
+# Nothing here is ever committed with a real value: `.dev.vars` stays local,
+# the keys below stay empty, and production takes its keys from
+# `wrangler secret put` instead.
+#
+# The provider: "Muse" or "meta" enables the index-time review pass, "off"
+# (the default) disables it entirely with indexing unaffected. Anything else
+# fails closed: no scan, one log line.
+REVIEW_PROVIDER=off
+# The model id the verdict badge names ("Verdict of <model>"). Used verbatim.
+# Optional for Muse (it has a default), required for meta: meta without it
+# refuses and skips the scan.
+REVIEW_MODEL=
+# Documents scanned per review run; the runner default is 5 when absent.
+REVIEW_SCAN_CAP=5
+# The meta reasoning effort: minimal|low|medium|high, passed through to the
+# call. Minimal when absent. Stays minimal until verdict-quality evidence
+# says otherwise. The Muse provider ignores it.
+REVIEW_EFFORT=minimal
+# The review completion budget. Clamped to a floor that survives reasoning
+# and a ceiling that keeps it bounded; the default when absent.
+REVIEW_MAX_TOKENS=4096
+# The Muse API key. Secret: `wrangler secret put CLAUDE_API_KEY` in prod,
+# this file locally. Never committed, never logged.
+CLAUDE_API_KEY=
+# The Meta API key. Secret: `wrangler secret put META_API_KEY` in prod,
+# this file locally. Never committed, never logged.
+META_API_KEY=
+# The Meta chat-completions-style endpoint, used verbatim. Required for meta;
+# no default exists anywhere. Verified 2026-10-31:
+META_API_BASE_URL=https://api.meta.ai/v1/chat/completions

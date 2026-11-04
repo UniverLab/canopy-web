@@ -1,0 +1,34 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": false,
+    "declaration": false,
+    "sourceMap": false,
+    "outDir": "dist",
+    "types": ["node", "@cloudflare/vitest-pool-workers"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"]
+  },
+  "include": [
+    "src/**/*.ts",
+    "tests/**/*.ts",
+    "packages/look/**/*.ts",
+    "packages/plate/**/*.ts",
+    "vitest.config.ts",
+    "apps/*/src/**/*.ts",
+    "apps/*/test/**/*.ts",
+    "apps/*/vitest.config.ts",
+    "apps/*/worker/src/**/*.ts",
+    "apps/*/worker/test/**/*.ts",
+    "apps/*/worker/vitest.config.ts",
+    "apps/*/vite.config.ts",
+    "apps/*/web/src/**/*.ts",
+    "apps/*/web/test/**/*.ts",
+    "apps/*/web/vitest.config.ts",
+    "apps/*/web/vite.config.ts"
+  ]
+}

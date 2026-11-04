@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://graphs.univerlab.org/schema/node.schema.json",
+  "title": "Canopy shareable node document",
+  "description": "One reusable node or ensemble for the catalogue (format_version 1). The platform/model/cli binding ban is enforced by the validator at any config depth, not by this schema.",
+  "type": "object",
+  "required": ["format_version", "name", "kind", "description", "config"],
+  "properties": {
+    "format_version": { "const": 1 },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]{1,48}$"
+    },
+    "kind": { "enum": ["agent", "check", "gate", "ensemble"] },
+    "description": { "type": "string" },
+    "config": { "type": "object" },
+    "preset": {
+      "type": "object",
+      "required": ["name", "content"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "content": true
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
