@@ -86,11 +86,40 @@ export function keyBytesWithModifiers(id: string, mods: ModifierState): Uint8Arr
   return new Uint8Array([]);
 }
 
+// The bytes xterm generates by itself, through the same onData as typed
+// text: focus reports, cursor position replies, device attribute replies
+// and mouse reports. These are never the user typing, so they must never
+// apply or consume a latch. A lone ESC, arrows and other keys are input,
+// not reports.
+export function isTerminalReport(text: string): boolean {
+  if (text === "\x1b[I" || text === "\x1b[O") {
+    return true;
+  }
+  // X10 mouse: ESC[M followed by three bytes (button, x, y).
+  if (text.length === 6 && text.startsWith("\x1b[M")) {
+    return true;
+  }
+  if (!text.startsWith("\x1b[")) {
+    return false;
+  }
+  // Past the ESC[ prefix the body is plain ASCII: cursor position
+  // replies, device attribute replies and SGR mouse reports.
+  const body = text.slice(2);
+  return (
+    /^\d+;\d+R$/.test(body) ||
+    /^\?[0-9;]*c$/.test(body) ||
+    /^>[0-9;]*c$/.test(body) ||
+    /^<[0-9;]+[Mm]$/.test(body)
+  );
+}
+
 // Phone-keyboard text with the latch applied. A latched Ctrl turns a
-// single letter into its control byte (a→0x01 … z→0x1a, either case) and
-// "[" into ESC; anything else goes out unchanged. Shift never alters
-// typed text (the keyboard already shifted it). The caller releases the
-// latch after any input, modified or not.
+// single letter into its control byte (a→0x01 … z→0x1a, either case,
+// so an autocapitalized letter still works) and "[" into ESC; anything
+// else goes out unchanged. With Shift latched and Ctrl not, a single
+// lowercase letter goes out uppercase — the phone keyboard knows nothing
+// of our latch. Ctrl keeps precedence. The caller releases the latch
+// after any input, modified or not.
 export function textBytesWithModifiers(text: string, mods: ModifierState): Uint8Array {
   if (mods.ctrl && text.length === 1) {
     const ch = text[0] as string;
@@ -100,6 +129,12 @@ export function textBytesWithModifiers(text: string, mods: ModifierState): Uint8
     const lower = ch.toLowerCase();
     if (lower >= "a" && lower <= "z") {
       return new Uint8Array([lower.charCodeAt(0) - 0x60]);
+    }
+  }
+  if (!mods.ctrl && mods.shift && text.length === 1) {
+    const ch = text[0] as string;
+    if (ch >= "a" && ch <= "z") {
+      return new Uint8Array([ch.charCodeAt(0) - 0x20]);
     }
   }
   return new TextEncoder().encode(text);

@@ -14,7 +14,12 @@ import { rememberGuestReturn } from "./entry-path.js";
 import { syncHeaderFondo } from "./fondo.js";
 import { REMOTE_FOOTER } from "./footer.js";
 import { renderKeyBar, updateKeyBarLatches } from "./keys.js";
-import { keyBytesWithModifiers, ModifierLatches, textBytesWithModifiers } from "./modifiers.js";
+import {
+  isTerminalReport,
+  keyBytesWithModifiers,
+  ModifierLatches,
+  textBytesWithModifiers,
+} from "./modifiers.js";
 import { SessionStore, renderSessions } from "./sessions.js";
 import { TerminalView, createXtermHandle } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
@@ -285,6 +290,25 @@ export function createGuestView(
     }
   }
 
+  // As the owner's: arming a latch focuses the terminal in the same
+  // tap so the phone keyboard opens; a terminal still behind the font
+  // gate focuses once it opens, and releasing never touches focus.
+  function focusTerminalForLatch(): void {
+    const view = terminalView;
+    if (!view) {
+      return;
+    }
+    if (view.fitted) {
+      view.focus();
+      return;
+    }
+    void view.ready().then(() => {
+      if (terminalView === view) {
+        view.focus();
+      }
+    });
+  }
+
   function paintSession(): void {
     route = "session";
     document.title = sessionTitle(sessionName === "" ? sessionId : sessionName);
@@ -310,13 +334,19 @@ export function createGuestView(
     if (bar) {
       renderKeyBar(bar, (def) => {
         if (def.id === "ctrl") {
-          latches.toggleCtrl();
+          const armed = latches.toggleCtrl();
           updateKeyBarLatches(bar, latches.snapshot());
+          if (armed) {
+            focusTerminalForLatch();
+          }
           return;
         }
         if (def.id === "shift") {
-          latches.toggleShift();
+          const armed = latches.toggleShift();
           updateKeyBarLatches(bar, latches.snapshot());
+          if (armed) {
+            focusTerminalForLatch();
+          }
           return;
         }
         const bytes = keyBytesWithModifiers(def.id, latches.snapshot());
@@ -418,7 +448,13 @@ export function createGuestView(
       }
       pane.replaceChildren();
       terminalView = new TerminalView(terminalFactory, {
+        // As the owner's: xterm's own reports go out unchanged, leaving
+        // the latch armed and the bar untouched — they are not typing.
         onUserInput: (text) => {
+          if (isTerminalReport(text)) {
+            callbacks.onInput(new TextEncoder().encode(text));
+            return;
+          }
           const bytes = textBytesWithModifiers(text, latches.snapshot());
           if (latches.hasLatch) {
             latches.release();

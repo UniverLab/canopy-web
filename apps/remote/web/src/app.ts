@@ -18,7 +18,12 @@ import { icon, mountMorphSlot, type RemoteIconName, type MorphSlot } from "./ico
 import { renderKeyBar, updateKeyBarLatches } from "./keys.js";
 import { MetricsRoute } from "./metrics-route.js";
 import type { MetricsStore } from "./metrics-store.js";
-import { keyBytesWithModifiers, ModifierLatches, textBytesWithModifiers } from "./modifiers.js";
+import {
+  isTerminalReport,
+  keyBytesWithModifiers,
+  ModifierLatches,
+  textBytesWithModifiers,
+} from "./modifiers.js";
 import { NewDialog } from "./new-dialog.js";
 import { defaultDeviceLabel } from "./pairing.js";
 import type { PromptDraft, ScheduledItem, SpawnRequest } from "./protocol.js";
@@ -329,6 +334,26 @@ export function createShell(
     sessionRows = 0;
   };
 
+  // Arming a latch focuses the terminal in the same tap: a phone only
+  // opens its keyboard inside the user gesture. A terminal still behind
+  // the font gate focuses once it opens, as a pane tap does; releasing a
+  // latch never touches focus. Harmless with a mouse too.
+  const focusTerminalForLatch = (): void => {
+    const view = terminalView;
+    if (!view) {
+      return;
+    }
+    if (view.fitted) {
+      view.focus();
+      return;
+    }
+    void view.ready().then(() => {
+      if (terminalView === view) {
+        view.focus();
+      }
+    });
+  };
+
   const renderSession = () => {
     teardownSessionWidgets();
     latches.release();
@@ -396,16 +421,23 @@ export function createShell(
     if (bar) {
       renderKeyBar(bar, (def) => {
         // A latch toggles and shows pressed; a second tap releases it
-        // without sending. Any other key goes out with the latch applied,
-        // then the latch releases.
+        // without sending. Arming also focuses the terminal, in the same
+        // tap, so the phone keyboard opens. Any other key goes out with
+        // the latch applied, then the latch releases.
         if (def.id === "ctrl") {
-          latches.toggleCtrl();
+          const armed = latches.toggleCtrl();
           updateKeyBarLatches(bar, latches.snapshot());
+          if (armed) {
+            focusTerminalForLatch();
+          }
           return;
         }
         if (def.id === "shift") {
-          latches.toggleShift();
+          const armed = latches.toggleShift();
           updateKeyBarLatches(bar, latches.snapshot());
+          if (armed) {
+            focusTerminalForLatch();
+          }
           return;
         }
         const bytes = keyBytesWithModifiers(def.id, latches.snapshot());
@@ -732,8 +764,16 @@ export function createShell(
         terminalFactory,
         {
           // Phone-keyboard keys honour the latches too: Ctrl+c sends 0x03,
-          // then the latch releases and the bar shows it.
+          // then the latch releases and the bar shows it. xterm's own
+          // reports (focus, cursor position, device attributes, mouse)
+          // are not typing: they go out unchanged, leaving the latch
+          // armed and the bar untouched — otherwise the focus-in report
+          // from tapping the terminal would spend the latch first.
           onUserInput: (text) => {
+            if (isTerminalReport(text)) {
+              callbacks.onTerminalInput(new TextEncoder().encode(text));
+              return;
+            }
             const bytes = textBytesWithModifiers(text, latches.snapshot());
             if (latches.hasLatch) {
               latches.release();

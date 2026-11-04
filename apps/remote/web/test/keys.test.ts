@@ -101,6 +101,20 @@ describe("renderKeyBar", () => {
     }
   });
 
+  it("keeps mousedown from stealing xterm's focus, without touching the click", () => {
+    const bar = document.createElement("div");
+    document.body.appendChild(bar);
+    const pressed: KeyDef[] = [];
+    renderKeyBar(bar, (def) => pressed.push(def));
+    const tab = bar.querySelector<HTMLButtonElement>('button.key[data-key="tab"]');
+    const mousedown = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+    tab?.dispatchEvent(mousedown);
+    expect(mousedown.defaultPrevented).toBe(true);
+    // The click still lands: touchstart and pointerdown are untouched.
+    tab?.click();
+    expect(pressed.map((def) => def.id)).toEqual(["tab"]);
+  });
+
   it("marks the latches unpressed until the shell updates them", () => {
     const bar = document.createElement("div");
     document.body.appendChild(bar);

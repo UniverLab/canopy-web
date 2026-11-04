@@ -300,6 +300,46 @@ describe("guest session view", () => {
     );
   });
 
+  it("forwards a focus report unchanged, leaving the latch armed", () => {
+    const { root, view, handles, inputs } = setup();
+    view.showSession("s1", "build");
+    view.ensureTerminal("s1", 80, 24);
+    root.querySelector<HTMLButtonElement>('#keybar button[data-key="ctrl"]')?.click();
+    handles[0]?.emitInput("\x1b[I");
+    expect(Array.from(inputs, (bytes) => Array.from(bytes))).toEqual([[0x1b, 0x5b, 0x49]]);
+    expect(root.querySelector('#keybar button[data-key="ctrl"]')?.getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    handles[0]?.emitInput("c");
+    expect(Array.from(inputs, (bytes) => Array.from(bytes))).toEqual([
+      [0x1b, 0x5b, 0x49],
+      [0x03],
+    ]);
+  });
+
+  it("sends typed a as A with Shift latched, then releases", () => {
+    const { root, view, handles, inputs } = setup();
+    view.showSession("s1", "build");
+    view.ensureTerminal("s1", 80, 24);
+    root.querySelector<HTMLButtonElement>('#keybar button[data-key="shift"]')?.click();
+    handles[0]?.emitInput("a");
+    expect(Array.from(inputs, (bytes) => Array.from(bytes))).toEqual([[0x41]]);
+    expect(root.querySelector('#keybar button[data-key="shift"]')?.getAttribute("aria-pressed")).toBe(
+      "false",
+    );
+  });
+
+  it("focuses the terminal when arming a latch, never when releasing", () => {
+    const { root, view, handles } = setup();
+    view.showSession("s1", "build");
+    view.ensureTerminal("s1", 80, 24);
+    const ctrl = root.querySelector<HTMLButtonElement>('#keybar button[data-key="ctrl"]');
+    ctrl?.click();
+    expect(handles[0]?.focuses).toBe(1);
+    ctrl?.click();
+    expect(handles[0]?.focuses).toBe(1);
+  });
+
   it("focuses the terminal once on attach under a fine pointer", async () => {
     const { view, handles } = setup();
     const realMatchMedia = globalThis.matchMedia;

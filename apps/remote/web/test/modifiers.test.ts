@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, expect, it } from "vitest";
-import { keyBytesWithModifiers, ModifierLatches, textBytesWithModifiers } from "../src/modifiers.js";
+import {
+  isTerminalReport,
+  keyBytesWithModifiers,
+  ModifierLatches,
+  textBytesWithModifiers,
+} from "../src/modifiers.js";
 
 const CTRL = { ctrl: true, shift: false };
 const SHIFT = { ctrl: false, shift: true };
@@ -103,9 +108,62 @@ describe("textBytesWithModifiers", () => {
     expect([...textBytesWithModifiers("[", BOTH)]).toEqual([0x1b]);
   });
 
+  it("uppercases a single lowercase letter with Shift latched", () => {
+    expect([...textBytesWithModifiers("a", SHIFT)]).toEqual([0x41]);
+    expect([...textBytesWithModifiers("z", SHIFT)]).toEqual([0x5a]);
+    // Already shifted, longer text and non-letters go out unchanged.
+    expect([...textBytesWithModifiers("A", SHIFT)]).toEqual([0x41]);
+    expect([...textBytesWithModifiers("hi", SHIFT)]).toEqual([0x68, 0x69]);
+    expect([...textBytesWithModifiers("5", SHIFT)]).toEqual([0x35]);
+  });
+
+  it("keeps Ctrl's precedence over Shift for typed text", () => {
+    expect([...textBytesWithModifiers("c", BOTH)]).toEqual([0x03]);
+    expect([...textBytesWithModifiers("[", SHIFT)]).toEqual([0x5b]);
+  });
+
   it("leaves other latched input unchanged for the caller to release", () => {
     expect([...textBytesWithModifiers("5", CTRL)]).toEqual([0x35]);
-    expect([...textBytesWithModifiers("c", SHIFT)]).toEqual([0x63]);
     expect([...textBytesWithModifiers("hi", CTRL)]).toEqual([0x68, 0x69]);
+  });
+});
+
+describe("isTerminalReport", () => {
+  it("matches the focus reports", () => {
+    expect(isTerminalReport("\x1b[I")).toBe(true);
+    expect(isTerminalReport("\x1b[O")).toBe(true);
+  });
+
+  it("matches cursor position replies", () => {
+    expect(isTerminalReport("\x1b[24;80R")).toBe(true);
+    expect(isTerminalReport("\x1b[1;1R")).toBe(true);
+  });
+
+  it("matches device attribute replies", () => {
+    expect(isTerminalReport("\x1b[?1;2c")).toBe(true);
+    expect(isTerminalReport("\x1b[?62c")).toBe(true);
+    expect(isTerminalReport("\x1b[>0;95;0c")).toBe(true);
+  });
+
+  it("matches SGR mouse reports, press and release", () => {
+    expect(isTerminalReport("\x1b[<0;10;20M")).toBe(true);
+    expect(isTerminalReport("\x1b[<0;10;20m")).toBe(true);
+    expect(isTerminalReport("\x1b[<64;5;7M")).toBe(true);
+  });
+
+  it("matches X10 mouse reports, three bytes after ESC[M", () => {
+    expect(isTerminalReport("\x1b[M !\"")).toBe(true);
+    expect(isTerminalReport("\x1b[M#(+")).toBe(true);
+  });
+
+  it("rejects typed input: a lone ESC, arrows and plain text", () => {
+    expect(isTerminalReport("\x1b")).toBe(false);
+    expect(isTerminalReport("\x1b[A")).toBe(false);
+    expect(isTerminalReport("\x1b[1;5A")).toBe(false);
+    expect(isTerminalReport("\x1b[Z")).toBe(false);
+    expect(isTerminalReport("c")).toBe(false);
+    expect(isTerminalReport("hello")).toBe(false);
+    expect(isTerminalReport("")).toBe(false);
+    expect(isTerminalReport("\x1b[M !")).toBe(false);
   });
 });
