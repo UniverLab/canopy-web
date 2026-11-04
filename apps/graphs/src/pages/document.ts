@@ -97,10 +97,10 @@ function plateFigure(document: JsonValue, kind: PageRef["kind"]): string {
   const seed = Date.now() >>> 0;
   // The marker ids ride the same seed as a tag, so this figure never
   // shares an id with another plate on the page.
-  const markerSeed = seed.toString(36);
+  const markerSeed = `plate-${seed.toString(36)}`;
   const horizontal = kind === "graph"
-    ? renderPlate(document as unknown as GraphDocument, "horizontal", undefined, mulberry32(seed), markerSeed)
-    : renderNodePlate(document as unknown as NodeDocument, "horizontal", markerSeed);
+    ? renderPlate(document as unknown as GraphDocument, undefined, mulberry32(seed), markerSeed)
+    : renderNodePlate(document as unknown as NodeDocument, markerSeed);
   return horizontal === ""
     ? ""
     : `<figure class="plate" tabindex="0" data-plate>${horizontal}</figure>`;

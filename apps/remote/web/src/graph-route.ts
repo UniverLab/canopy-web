@@ -3,16 +3,15 @@
 // sessions route that carries them (either list painted into its slot),
 // the graph route's view args, and the watch lifecycle — ask `graphs`
 // when the tab shows and every 10 s while it is visible, watch on open,
-// unwatch on back or hide, rewatch on show, and repaint the plate when
-// the window crosses the 720 px orientation line. The shell owns
-// render() and the route; this module owns everything else the home
-// screen needs, through hooks the shell provides. Read-only: nothing
-// here pauses, continues or resets.
+// unwatch on back or hide, and rewatch on show. The shell owns render()
+// and the route; this module owns everything else the home screen needs,
+// through hooks the shell provides. Read-only: nothing here pauses,
+// continues or resets.
 
 import type { GraphStore } from "./graph-store.js";
 import { REMOTE_FOOTER } from "./footer.js";
 import { graphTitle } from "./titles.js";
-import { renderGraphView, updateGraphView } from "./graph-view.js";
+import { disposeGraphView, renderGraphView, updateGraphView } from "./graph-view.js";
 import type { GraphViewArgs } from "./graph-view.js";
 import { renderGraphsList } from "./graphs-list.js";
 import type { SessionItem } from "./protocol.js";
@@ -183,6 +182,7 @@ export class GraphRoute {
 
   /** Leaving the graph for anywhere else: drop the watch, forget the ids. */
   leave(): void {
+    disposeGraphView();
     if (this.graphId === null) {
       return;
     }
@@ -209,7 +209,6 @@ export class GraphRoute {
       receivedAt: this.graphs?.lastReceivedAt() ?? null,
       watchError: this.graphs?.watchError() ?? null,
       connected: this.hooks.connectionState() === "connected",
-      orientation: (globalThis.innerWidth ?? 0) < 720 ? "vertical" : "horizontal",
       onBack: () => this.back(),
     };
   }
@@ -225,10 +224,10 @@ export class GraphRoute {
     }
   }
 
-  /** The store subscription, the 10 s poll, and the hide/resize hooks. */
+  /** The store subscription, the 10 s poll, and the hide hook. */
   start(): void {
     // The graph store feeds both the tab's list and the open graph view;
-    // the view repaints in place, so pushes never disturb its scroll.
+    // the view repaints in place, so pushes never disturb the view.
     this.stopStore = this.graphs?.subscribe(() => {
       if (this.hooks.route() === "sessions") {
         if (this.homeTab === "graphs") {
@@ -253,7 +252,6 @@ export class GraphRoute {
       }
     }, 10000);
     globalThis.document.addEventListener("visibilitychange", this.onVisibility);
-    globalThis.addEventListener("resize", this.onResize);
   }
 
   // Hiding the page drops the watch; showing it again (still on the graph)
@@ -269,20 +267,12 @@ export class GraphRoute {
     }
   };
 
-  // Crossing the 720 px line flips the plate's orientation.
-  private readonly onResize = (): void => {
-    if (this.hooks.route() === "graph") {
-      updateGraphView(this.root, this.args());
-    }
-  };
-
   dispose(): void {
     if (this.ticker !== null) {
       globalThis.clearInterval(this.ticker);
       this.ticker = null;
     }
     globalThis.document.removeEventListener("visibilitychange", this.onVisibility);
-    globalThis.removeEventListener("resize", this.onResize);
     this.stopStore?.();
     this.stopStore = null;
   }

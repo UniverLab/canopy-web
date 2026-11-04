@@ -62,7 +62,7 @@ function thumbFigure(figure: JsonValue, label: string, markerSeed: string): stri
   // The marker ids take the caller's slug instead: every figure on the
   // page renders within one clock tick, and the ids must not collide.
   const seed = Date.now() >>> 0;
-  const horizontal = renderPlate(figure as unknown as GraphDocument, "horizontal", undefined, mulberry32(seed), markerSeed);
+  const horizontal = renderPlate(figure as unknown as GraphDocument, undefined, mulberry32(seed), markerSeed);
   return horizontal === ""
     ? ""
     : `<figure class="plate thumb" aria-hidden="true">${horizontal}<figcaption class="sr-only">${escapeHtml(label)}</figcaption></figure>`;
@@ -190,7 +190,7 @@ export function patternPage(
   // One seed for the figure, like the thumbnails'; the marker ids take
   // the pattern's slug, which is unique among the page's figures.
   const seed = Date.now() >>> 0;
-  const horizontal = renderPlate(pattern.figure as unknown as GraphDocument, "horizontal", undefined, mulberry32(seed), slug);
+  const horizontal = renderPlate(pattern.figure as unknown as GraphDocument, undefined, mulberry32(seed), slug);
   const plate = horizontal === ""
     ? ""
     : `<figure class="plate">${horizontal}</figure>`;

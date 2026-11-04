@@ -81,7 +81,6 @@ function viewArgs(overrides: Partial<GraphViewArgs> = {}): GraphViewArgs {
     state: graphState(),
     receivedAt: 1793100000_000,
     connected: true,
-    orientation: "horizontal",
     onBack: () => {},
     ...overrides,
   };
@@ -395,23 +394,31 @@ describe("the graph view", () => {
     expect(plateStateOf(null)).toBeUndefined();
   });
 
-  it("draws vertical below 720 px and horizontal above", () => {
-    const root = document.createElement("div");
-    renderGraphView(root, viewArgs({ orientation: "vertical" }));
-    expect(root.querySelector("#graph-stage .plate-svg")?.classList.contains("plate-v")).toBe(true);
-    updateGraphView(root, viewArgs({ orientation: "horizontal" }));
-    expect(root.querySelector("#graph-stage .plate-svg")?.classList.contains("plate-h")).toBe(true);
-  });
-
-  it("keeps the stage scroll across a state push", () => {
+  it("mounts one viewer with the three overlaid controls", () => {
     const root = document.createElement("div");
     renderGraphView(root, viewArgs());
-    const stage = root.querySelector("#graph-stage") as HTMLElement;
-    stage.scrollTop = 42;
-    stage.scrollLeft = 7;
+    const plate = root.querySelector<HTMLElement>("#graph-stage figure.plate");
+    expect(plate?.classList.contains("is-live")).toBe(true);
+    const controls = [...root.querySelectorAll<HTMLButtonElement>(".plate-controls button")];
+    expect(controls.map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Zoom out",
+      "Zoom in",
+      "Fit the graph",
+    ]);
+    expect(plate?.style.getPropertyValue("--plate-ratio")).not.toBe("");
+  });
+
+  it("keeps the viewer's transform across a state push", () => {
+    const root = document.createElement("div");
+    renderGraphView(root, viewArgs());
+    const zoomIn = root.querySelector<HTMLButtonElement>('.plate-controls button[aria-label="Zoom in"]');
+    zoomIn?.click();
+    const zoomed = root.querySelector<SVGSVGElement>("#graph-stage .plate-svg")?.style.transform ?? "";
+    expect(zoomed).toContain("scale(1.25)");
     updateGraphView(root, viewArgs({ state: graphState({ current_node: "first" }) }));
-    expect(stage.scrollTop).toBe(42);
-    expect(stage.scrollLeft).toBe(7);
+    // The push swapped the drawing but painted the same view on it.
+    const after = root.querySelector<SVGSVGElement>("#graph-stage .plate-svg");
+    expect(after?.style.transform).toBe(zoomed);
   });
 
   it("holds the stage until the drawing arrives, and past an unreadable one", () => {

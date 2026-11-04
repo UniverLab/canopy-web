@@ -21,8 +21,7 @@ import {
   type NodeDocument,
 } from "../../../packages/plate/document.js";
 import { renderNodePlate, renderPlate } from "../../../packages/plate/render.js";
-import { PLATE_SCALE, layoutPlate } from "../../../packages/plate/layout.js";
-import { layoutPlateVertical } from "../../../packages/plate/vertical.js";
+import { layoutPlate } from "../../../packages/plate/layout.js";
 import { mulberry32 } from "../../../packages/plate/walk.js";
 import { cubicExtent } from "../../../packages/plate/vocabulary.js";
 import { BUNDLED_PATTERNS } from "../src/patterns-data.generated.js";
@@ -318,9 +317,9 @@ describe("plate invariants", () => {
   it("paints the error arrowhead amber over the flow's teal", () => {
     const svg = renderPlate(TUI_POLISH_GRAPH);
     expect(svg).toContain(
-      `.plate-svg #horizontal-plate-arrow-error path{fill:var(--attention,#ffb454);fill-opacity:.7}`,
+      `.plate-svg #plate-arrow-error path{fill:var(--attention,#ffb454);fill-opacity:.7}`,
     );
-    expect(svg).not.toContain(`#horizontal-plate-arrow-error path{fill:#e8f6f1`);
+    expect(svg).not.toContain(`#plate-arrow-error path{fill:#e8f6f1`);
   });
 
   it("draws a round-robin group's third subtitle shape", () => {
@@ -474,31 +473,27 @@ describe("plate bounds", () => {
     expect(cubicExtent(0, 1, 2, 3)).toEqual({ min: 0, max: 3 });
   });
 
-  for (const orientation of ["horizontal", "vertical"] as const) {
-    it(`keeps every edge and the walk inside the ${orientation} viewBox, fail arcs included`, () => {
-      for (const [name, document] of documents) {
-        const layout = orientation === "horizontal"
-          ? layoutPlate(document, mulberry32(7))
-          : layoutPlateVertical(document, mulberry32(7));
-        expect(layout, name).not.toBeNull();
-        if (layout === null) {
-          continue;
-        }
-        const paths = [
-          ...layout.edges.map((edge) => [`${edge.from}→${edge.to}`, edge.d] as const),
-          ...(layout.walk === null ? [] : [["walk", layout.walk] as const]),
-        ];
-        for (const [label, d] of paths) {
-          const reach = pathExtent(d);
-          const where = `${name} ${orientation} ${label}: ${d}`;
-          expect(reach.minX, where).toBeGreaterThanOrEqual(0);
-          expect(reach.minY, where).toBeGreaterThanOrEqual(0);
-          expect(reach.maxX, where).toBeLessThanOrEqual(layout.width);
-          expect(reach.maxY, where).toBeLessThanOrEqual(layout.height);
-        }
+  it("keeps every edge and the walk inside the viewBox, fail arcs included", () => {
+    for (const [name, document] of documents) {
+      const layout = layoutPlate(document, mulberry32(7));
+      expect(layout, name).not.toBeNull();
+      if (layout === null) {
+        continue;
       }
-    });
-  }
+      const paths = [
+        ...layout.edges.map((edge) => [`${edge.from}→${edge.to}`, edge.d] as const),
+        ...(layout.walk === null ? [] : [["walk", layout.walk] as const]),
+      ];
+      for (const [label, d] of paths) {
+        const reach = pathExtent(d);
+        const where = `${name} ${label}: ${d}`;
+        expect(reach.minX, where).toBeGreaterThanOrEqual(0);
+        expect(reach.minY, where).toBeGreaterThanOrEqual(0);
+        expect(reach.maxX, where).toBeLessThanOrEqual(layout.width);
+        expect(reach.maxY, where).toBeLessThanOrEqual(layout.height);
+      }
+    }
+  });
 
   it("canopy-builder: the highest fail arc tops out one padding below the viewBox top", () => {
     const layout = layoutPlate(canopyBuilder);
@@ -506,50 +501,6 @@ describe("plate bounds", () => {
       ...(layout?.edges ?? []).filter((edge) => edge.cls === "fail").map((edge) => pathExtent(edge.d).minY),
     );
     expect(top).toBeCloseTo(10, 0);
-  });
-});
-
-describe("the vertical orientation", () => {
-  it("runs ranks top to bottom with labels right of nodes", () => {
-    const document: GraphDocument = {
-      name: "chain",
-      nodes: [
-        { name: "first", kind: "agent", position: 1, config: {} },
-        { name: "second", kind: "agent", position: 2, config: {} },
-        { name: "third", kind: "agent", position: 3, config: {} },
-      ],
-      edges: [
-        { from_node: "first", to_node: "second", condition: "pass" },
-        { from_node: "second", to_node: "third", condition: "pass" },
-      ],
-    };
-    const layout = layoutPlateVertical(document);
-    expect(layout).not.toBeNull();
-    const byName = new Map((layout?.nodes ?? []).map((node) => [node.name, node]));
-    expect(byName.get("first")?.y).toBeLessThan(byName.get("second")?.y ?? 0);
-    expect(byName.get("second")?.y).toBeLessThan(byName.get("third")?.y ?? 0);
-    const svg = renderPlate(document, "vertical");
-    expect(svg).toContain(`<svg class="plate-svg plate-v"`);
-    expect(svg).toContain(`text-anchor="start"`);
-    expect(svg).not.toContain(`text-anchor="middle">first</text>`);
-  });
-
-  it("fits every plate inside 360 px wide", () => {
-    const documents: Array<[string, GraphDocument]> = [
-      ...GRAPHS,
-      ["round-robin", ROUND_ROBIN_GRAPH],
-      ["sixty", sixtyNodeGraph()],
-    ];
-    for (const [name, document] of documents) {
-      const layout = layoutPlateVertical(document);
-      expect(layout).not.toBeNull();
-      expect(Math.round((layout?.width ?? 0) * PLATE_SCALE), name).toBeLessThanOrEqual(360);
-    }
-  });
-
-  it("draws nothing readable from an unreadable document", () => {
-    expect(renderPlate("nope" as unknown as GraphDocument, "vertical")).toBe("");
-    expect(renderNodePlate({} as unknown as NodeDocument, "vertical")).toBe("");
   });
 });
 
@@ -576,15 +527,13 @@ describe("harness colours", () => {
     expect(svg).toContain(`>codex</text>`);
   });
 
-  it("fills nothing white, in either orientation", () => {
+  it("fills nothing white", () => {
     for (const [name, document] of GRAPHS) {
-      for (const orientation of ["horizontal", "vertical"] as const) {
-        const svg = renderPlate(document, orientation);
-        expect(svg, `${name} ${orientation}`).not.toContain("#fff");
-        expect(svg, `${name} ${orientation}`).not.toContain("#FFF");
-        expect(svg, `${name} ${orientation}`).not.toContain("var(--bg");
-        expect(svg, `${name} ${orientation}`).not.toContain('fill="#fff"');
-      }
+      const svg = renderPlate(document);
+      expect(svg, name).not.toContain("#fff");
+      expect(svg, name).not.toContain("#FFF");
+      expect(svg, name).not.toContain("var(--bg");
+      expect(svg, name).not.toContain('fill="#fff"');
     }
   });
 });
@@ -626,13 +575,13 @@ describe("plate arrowheads", () => {
   for (const [name, document] of GRAPHS) {
     const svg = renderPlate(document);
     it(`${name}: every flow edge carries its class marker, order edges none`, () => {
-      expect(svg).toContain(`<marker id="horizontal-plate-arrow"`);
-      expect(svg).toContain(`<marker id="horizontal-plate-arrow-fail"`);
-      expect(svg).toContain(`<marker id="horizontal-plate-arrow-error"`);
+      expect(svg).toContain(`<marker id="plate-arrow"`);
+      expect(svg).toContain(`<marker id="plate-arrow-fail"`);
+      expect(svg).toContain(`<marker id="plate-arrow-error"`);
       const paths = drawnPaths(svg);
       expect(paths.length).toBeGreaterThan(0);
       for (const path of paths) {
-        expect(path.marker, `${path.cls} marker`).toBe(markerOf("horizontal-plate", path.cls));
+        expect(path.marker, `${path.cls} marker`).toBe(markerOf("plate", path.cls));
       }
     });
 
@@ -653,75 +602,29 @@ describe("plate arrowheads", () => {
         expect(inside(box, x, y), `${path.to} tip at ${x},${y}`).toBe(false);
       }
     });
-
-    it(`${name}: the vertical plate carries arrowheads too`, () => {
-      const vertical = renderPlate(document, "vertical");
-      expect(vertical).toContain(`<marker id="vertical-plate-arrow"`);
-      const paths = drawnPaths(vertical);
-      expect(paths.length).toBeGreaterThan(0);
-      for (const path of paths) {
-        expect(path.marker, `${path.cls} marker`).toBe(markerOf("vertical-plate", path.cls));
-      }
-    });
   }
 });
 
 describe("marker scoping", () => {
-  // documentPage's figure: both orientations of one figure under one
-  // seed. The horizontal twin is display:none under 640 px (the vertical
-  // one above it), and Chrome paints no marker from a hidden subtree —
-  // while url(#…) resolves to the FIRST marker in the document. So the
-  // visible plate's ids must not be defined by its hidden twin.
-  const figureOf = (seed: string): { figure: string; horizontal: string; vertical: string } => {
-    const horizontal = renderPlate(helloGraph as unknown as GraphDocument, "horizontal", undefined, mulberry32(7), seed);
-    const vertical = renderPlate(helloGraph as unknown as GraphDocument, "vertical", undefined, mulberry32(7), seed);
-    return { figure: `<figure class="plate">${horizontal}${vertical}</figure>`, horizontal, vertical };
-  };
-
-  it("every flow edge of the visible plate resolves to a marker inside its own svg", () => {
-    const { figure, horizontal, vertical } = figureOf("9f3");
-    expect(horizontal).not.toBe("");
-    expect(vertical).not.toBe("");
-    // Both views: the phone hides the horizontal twin, the desktop the
-    // vertical one — in each, the first definition of every marker an
-    // edge points at lies inside the visible plate, never the hidden one.
-    for (const [visible, hidden] of [[vertical, horizontal], [horizontal, vertical]] as const) {
-      const start = figure.indexOf(visible);
-      const end = start + visible.length;
-      expect(start).toBeGreaterThanOrEqual(0);
-      let flow = 0;
-      for (const path of drawnPaths(visible)) {
-        if (path.marker === null) {
-          continue;
-        }
-        flow += 1;
-        const first = figure.indexOf(`<marker id="${path.marker}"`);
-        expect(first, `${path.cls} → ${path.marker}`).toBeGreaterThanOrEqual(start);
-        expect(first, `${path.cls} → ${path.marker}`).toBeLessThan(end);
-        expect(hidden, `${path.cls} → ${path.marker}`).not.toContain(`<marker id="${path.marker}"`);
-      }
-      expect(flow).toBeGreaterThan(0);
-    }
-  });
+  const ids = (svg: string): string[] =>
+    [...svg.matchAll(/<marker id="([^"]+)"/g)].map((match) => match[1] ?? "");
 
   it("scopes distinct marker ids to two renders with different seeds", () => {
-    const one = renderPlate(helloGraph as unknown as GraphDocument, "horizontal", undefined, mulberry32(7), "seed-one");
-    const two = renderPlate(helloGraph as unknown as GraphDocument, "horizontal", undefined, mulberry32(7), "seed-two");
-    const ids = (svg: string): string[] =>
-      [...svg.matchAll(/<marker id="([^"]+)"/g)].map((match) => match[1] ?? "");
+    const one = renderPlate(helloGraph as unknown as GraphDocument, undefined, mulberry32(7), "seed-one");
+    const two = renderPlate(helloGraph as unknown as GraphDocument, undefined, mulberry32(7), "seed-two");
     expect(ids(one)).toEqual([
-      "horizontal-seed-one-arrow",
-      "horizontal-seed-one-arrow-fail",
-      "horizontal-seed-one-arrow-error",
+      "seed-one-arrow",
+      "seed-one-arrow-fail",
+      "seed-one-arrow-error",
     ]);
     expect(ids(two)).toEqual([
-      "horizontal-seed-two-arrow",
-      "horizontal-seed-two-arrow-fail",
-      "horizontal-seed-two-arrow-error",
+      "seed-two-arrow",
+      "seed-two-arrow-fail",
+      "seed-two-arrow-error",
     ]);
     expect(ids(one).some((id) => ids(two).includes(id))).toBe(false);
     // The stylesheet follows the ids into the plate's own style block.
-    expect(one).toContain(`.plate-svg #horizontal-seed-one-arrow path{`);
+    expect(one).toContain(`.plate-svg #seed-one-arrow path{`);
     expect(one).not.toContain(`#plate-arrow`);
   });
 });
@@ -747,21 +650,6 @@ describe("the pattern figures", () => {
       ...(layout?.nodes ?? []).filter((node) => node.lane === "main").map((node) => node.y - node.h / 2),
     );
     expect(c1y ?? Number.POSITIVE_INFINITY).toBeLessThan(rowTop);
-  });
-
-  it("review-panel: the panel fail edge arcs left of the column when vertical", () => {
-    const layout = layoutPlateVertical(reviewPanel as unknown as GraphDocument);
-    expect(layout).not.toBeNull();
-    const fail = layout?.edges.find((edge) => edge.from === "review-panel" && edge.to === "implement");
-    expect(fail?.cls).toBe("fail");
-    const [, ay, c1x, c1y, c2x, c2y, , by] = cubic(fail?.d ?? "");
-    expect(c1y).toBe(ay);
-    expect(c2y).toBe(by);
-    expect(c1x).toBe(c2x);
-    const columnLeft = Math.min(
-      ...(layout?.nodes ?? []).filter((node) => node.lane === "main").map((node) => node.x - node.w / 2),
-    );
-    expect(c1x ?? Number.POSITIVE_INFINITY).toBeLessThan(columnLeft);
   });
 
   it("resilient-members: resilience ranks after start, the fail arcs parted", () => {
@@ -800,14 +688,13 @@ describe("the pattern figures", () => {
         { from_node: "sink-right", to_node: "start", condition: "pass" },
       ],
     } as unknown as GraphDocument;
-    for (const layout of [layoutPlate(twoSinks), layoutPlateVertical(twoSinks)]) {
-      expect(layout).not.toBeNull();
-      const rank = new Map((layout?.nodes ?? []).map((node) => [node.name, node.rank]));
-      expect(rank.get("left")).toBe(1);
-      expect(rank.get("sink-left")).toBe(2);
-      expect(rank.get("sink-right")).toBe(2);
-      const order = layout?.order ?? [];
-      expect(order.indexOf("sink-left")).toBeLessThan(order.indexOf("sink-right"));
-    }
+    const layout = layoutPlate(twoSinks);
+    expect(layout).not.toBeNull();
+    const rank = new Map((layout?.nodes ?? []).map((node) => [node.name, node.rank]));
+    expect(rank.get("left")).toBe(1);
+    expect(rank.get("sink-left")).toBe(2);
+    expect(rank.get("sink-right")).toBe(2);
+    const order = layout?.order ?? [];
+    expect(order.indexOf("sink-left")).toBeLessThan(order.indexOf("sink-right"));
   });
 });

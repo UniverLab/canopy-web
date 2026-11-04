@@ -247,7 +247,7 @@ export interface WalkFail {
 
 /**
  * The token's path over the walk's steps: one leg per step through the
- * orientation's own edge curve, at STEP_SECONDS a leg — fail legs alike,
+ * edge curve, at STEP_SECONDS a leg — fail legs alike,
  * at the same speed as pass ones. Each ridden fail edge is reported back
  * with the legs it carried, so the renderer can light it. Null when the
  * walk has no legs.

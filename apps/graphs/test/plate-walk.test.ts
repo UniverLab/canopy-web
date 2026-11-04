@@ -194,18 +194,12 @@ describe("the walk generator", () => {
     expect(steps.some((step) => step.fail)).toBe(false);
   });
 
-  it("walks both orientations the same fail edges from one shared seed", () => {
-    // The pages replay one seed per orientation's own generator, so the
-    // H/V pair carries the same walk — same length, same lit windows.
-    const horizontal = renderPlate(LOOP, "horizontal", undefined, mulberry32(7));
-    const vertical = renderPlate(LOOP, "vertical", undefined, mulberry32(7));
-    const duration = (svg: string): string | undefined =>
-      /<animateMotion[^>]*dur="([^"]+)"/.exec(svg)?.[1];
-    const lit = (svg: string): string | undefined => /values="([^"]+)"/.exec(svg)?.[1];
-    expect(duration(horizontal)).toBe("5.4s");
-    expect(duration(vertical)).toBe(duration(horizontal));
-    expect(lit(horizontal)).toBeDefined();
-    expect(lit(vertical)).toBe(lit(horizontal));
+  it("walks the same fail edges from one seeded generator", () => {
+    const svg = renderPlate(LOOP, undefined, mulberry32(7));
+    const duration = (source: string): string | undefined =>
+      /<animateMotion[^>]*dur="([^"]+)"/.exec(source)?.[1];
+    expect(duration(svg)).toBe("5.4s");
+    expect(/values="([^"]+)"/.exec(svg)?.[1]).toBeDefined();
   });
 
   it("replays the same walk from the same seed, in [0, 1)", () => {
@@ -229,7 +223,7 @@ describe("the walk generator", () => {
 
 describe("the lit fail edges", () => {
   it("lights one window per leg the walk rode, and hides the light under reduced motion", () => {
-    const svg = renderPlate(LOOP, "horizontal", undefined, () => 0);
+    const svg = renderPlate(LOOP, undefined, () => 0);
     expect(svg).toContain(`<path class="edge-lit" `);
     expect(svg).toContain(` data-lit>`);
     expect(svg).toContain(`<animate attributeName="opacity" calcMode="discrete"`);

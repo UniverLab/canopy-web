@@ -2,10 +2,10 @@
 /**
  * The plate renderer: a laid-out graph becomes one self-contained `<svg>`
  * in the Canopy vocabulary — node kinds as shapes, pass edges as teal
- * S-curves, fail edges as red dashed arcs above the row (left of the column
- * in the vertical orientation), ensembles as dashed group outlines, the
- * infra node in a lower lane, and a walking token along the main pass
- * chain that may ride a red fail edge back before getting through.
+ * S-curves, fail edges as red dashed arcs above the row, ensembles as
+ * dashed group outlines, the infra node in a lower lane, and a walking
+ * token along the main pass chain that may ride a red fail edge back
+ * before getting through.
  *
  * Node colours follow univerlab's GraphMorph: the shape fills with its
  * harness colour at 22% over the deep (`--nc`, the Canopy teal when the
@@ -29,13 +29,11 @@ import {
   PLATE_SCALE,
   layoutPlate,
   plateLabel,
-  type Orientation,
   type PlacedEdge,
   type PlacedMember,
   type PlacedNode,
   type PlateLayout,
 } from "./layout.js";
-import { V_HARNESS_DY, V_LABEL_DX, V_LABEL_DY, layoutPlateVertical } from "./vertical.js";
 import { GEOM, TYPE, harnessColor } from "./vocabulary.js";
 import { happyRandom, STEP_SECONDS } from "./walk.js";
 import { isArray, isNumber, isRecord, isString } from "./guards.js";
@@ -356,22 +354,14 @@ function renderGroups(layout: PlateLayout, state: PlateState | undefined): strin
     .join("");
 }
 
-function renderNode(node: PlacedNode, orientation: Orientation, mark: Mark | null): string {
+function renderNode(node: PlacedNode, mark: Mark | null): string {
   const geom = GEOM[node.shape];
   const rotate = geom.rot === 0 ? "" : ` transform="rotate(${geom.rot} ${node.x} ${node.y})"`;
   const dataHarness = node.harness === null ? "" : ` data-harness="${escape(node.harness)}"`;
-  // The lane's units label beneath their shapes in both orientations: the
-  // column already keeps its labels to the right, and the channel beside
-  // the lane has to stay clear for the routes and the bus.
-  const labelsRight = orientation === "vertical" && node.lane !== "handler";
-  const label = labelsRight
-    ? `<text class="label" x="${num2(node.x + node.w / 2 + V_LABEL_DX)}" y="${node.y}" dy="${V_LABEL_DY}" text-anchor="start">${escape(plateLabel(node.name))}</text>`
-    : `<text class="label" x="${node.x}" y="${node.y}" dy="${TYPE.labelDy}" text-anchor="middle">${escape(plateLabel(node.name))}</text>`;
+  const label = `<text class="label" x="${node.x}" y="${node.y}" dy="${TYPE.labelDy}" text-anchor="middle">${escape(plateLabel(node.name))}</text>`;
   const harness = node.harness === null
     ? ""
-    : labelsRight
-      ? `<text class="harness" x="${num2(node.x + node.w / 2 + V_LABEL_DX)}" y="${node.y}" dy="${V_HARNESS_DY}" text-anchor="start">${escape(node.harness)}</text>`
-      : `<text class="harness" x="${node.x}" y="${node.y}" dy="${TYPE.harnessDy}" text-anchor="middle">${escape(node.harness)}</text>`;
+    : `<text class="harness" x="${node.x}" y="${node.y}" dy="${TYPE.harnessDy}" text-anchor="middle">${escape(node.harness)}</text>`;
   // With a state the title names the state — the palette alone cannot tell
   // passed from failed — without one it keeps reading like the catalogue's.
   const title = mark === null
@@ -407,7 +397,7 @@ function num2(value: number): number {
 
 function renderNodes(layout: PlateLayout, state: PlateState | undefined): string {
   return layout.nodes
-    .map((node) => renderNode(node, layout.orientation, markOf(state, [node.name])))
+    .map((node) => renderNode(node, markOf(state, [node.name])))
     .join("");
 }
 
@@ -464,7 +454,7 @@ function renderLayout(layout: PlateLayout, state: PlateState | undefined, prefix
     ensembles.length === 0 ? null : `Ensembles: ${ensembles.join(", ")}.`,
   ].filter((part) => part !== null);
   const desc = parts.join(" ");
-  const cls = layout.orientation === "vertical" ? "plate-svg plate-v" : "plate-svg plate-h";
+  const cls = "plate-svg plate-h";
   // The overlays' CSS rides only on a stateful or a fail-lit render: a
   // plain plate stays byte-identical to the catalogue's own drawing.
   const style =
@@ -490,9 +480,9 @@ function renderLayout(layout: PlateLayout, state: PlateState | undefined, prefix
 }
 
 /**
- * Render a graph document as a self-contained Canopy plate, horizontal
- * (ranks left to right) or vertical (ranks top to bottom). An unreadable
- * document draws nothing: the pages only ever pass validated graphs.
+ * Render a graph document as a self-contained Canopy plate: ranks left to
+ * right, the horizontal layout. An unreadable document draws nothing: the
+ * pages only ever pass validated graphs.
  *
  * The optional state overlays a live run on the same drawing: running and
  * current units get a pulsing teal ring (static under reduced motion) with
@@ -507,24 +497,18 @@ function renderLayout(layout: PlateLayout, state: PlateState | undefined, prefix
  * draw never fails a unit — the pure happy path — so a caller that passes
  * none keeps the old walk, byte for byte.
  *
- * The optional `markerSeed` scopes the arrowhead marker ids with the
- * orientation — `{orientation}-{seed}-arrow` — so two plates in one page
- * (one of them `display:none` at the current width) each resolve their
- * markers inside their own svg. The default keeps single-plate pages
- * working unchanged.
+ * The optional `markerSeed` scopes the arrowhead marker ids — `{seed}-arrow`
+ * — so two plates in one page each resolve their markers inside their own
+ * svg. The default keeps single-plate pages working unchanged.
  */
 export function renderPlate(
   document: GraphDocument,
-  orientation: Orientation = "horizontal",
   state?: PlateState,
   random: () => number = happyRandom,
   markerSeed = "plate",
 ): string {
-  const layout =
-    orientation === "vertical"
-      ? layoutPlateVertical(document, random)
-      : layoutPlate(document, random);
-  return layout === null ? "" : renderLayout(layout, state, `${orientation}-${markerSeed}`);
+  const layout = layoutPlate(document, random);
+  return layout === null ? "" : renderLayout(layout, state, markerSeed);
 }
 
 /**
@@ -535,7 +519,6 @@ export function renderPlate(
  */
 export function renderNodePlate(
   document: NodeDocument,
-  orientation: Orientation = "horizontal",
   markerSeed = "plate",
 ): string {
   if (!isRecord(document) || !isString(document["name"]) || !isString(document["kind"])) {
@@ -563,12 +546,12 @@ export function renderNodePlate(
         },
       ],
     };
-    return renderPlate(graph, orientation, undefined, undefined, markerSeed);
+    return renderPlate(graph, undefined, undefined, markerSeed);
   }
   const graph: GraphDocument = {
     name,
     nodes: [{ name, kind, position: 1, config }],
     edges: [],
   };
-  return renderPlate(graph, orientation, undefined, undefined, markerSeed);
+  return renderPlate(graph, undefined, undefined, markerSeed);
 }

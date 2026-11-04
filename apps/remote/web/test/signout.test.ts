@@ -269,7 +269,6 @@ describe("sign out on the graph view", () => {
       state: null,
       receivedAt: null,
       connected: true,
-      orientation: "horizontal",
       onBack: () => {},
       ...overrides,
     };

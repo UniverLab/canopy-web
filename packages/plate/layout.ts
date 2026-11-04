@@ -29,14 +29,12 @@ import {
   DONE_HALF,
   MARK_HALF,
   bandRoute,
-  laneGroups,
   lanePath,
   shiftedBand,
   shiftedLane,
   type BandBounds,
   type BandBusSpot,
   type BandSpan,
-  type BusSpot,
   type Extent,
   type DoneSpot,
   type MarkSpot,
@@ -80,26 +78,23 @@ export {
   type PlacedNode,
 } from "./units.js";
 
-/** The plate's two orientations: ranks left to right, or top to bottom. */
-export type Orientation = "horizontal" | "vertical";
-
 /** Constant horizontal step between ranks (viewBox units). */
 export const RANK_DX = 26;
 /** Vertical slot one main-lane node occupies. */
 const NODE_SLOT = 16;
-/** Gap between the main lane and the infra lane. Shared with vertical.ts. */
+/** Gap between the main lane and the infra lane. */
 export const LANE_GAP = 20;
-/** ViewBox padding. Shared with vertical.ts. */
+/** ViewBox padding. */
 export const PAD_X = 10;
 export const PAD_TOP = 10;
 export const PAD_BOTTOM = 10;
-/** Extra arc height per same-row fail edge into one target. Shared with vertical.ts. */
+/** Extra arc height per same-row fail edge into one target. */
 export const LIFT_STEP = 4;
 /** Node labels longer than this are truncated; the shape keeps the full name. */
 export const LABEL_MAX = 16;
 /** Pixels per viewBox unit for the svg width/height attributes. */
 export const PLATE_SCALE = 5;
-/** Mono advance at the node-label type size, in viewBox units. Shared with vertical.ts. */
+/** Mono advance at the node-label type size, in viewBox units. */
 export const LABEL_CHAR = 2.3 * 0.6;
 export interface PlacedEdge {
   from: string;
@@ -110,7 +105,6 @@ export interface PlacedEdge {
 
 export interface PlateLayout {
   name: string;
-  orientation: Orientation;
   nodes: PlacedNode[];
   groups: PlacedGroup[];
   edges: PlacedEdge[];
@@ -144,8 +138,7 @@ export function labelHalfOf(name: string, harness: string | null): number {
 
 /**
  * Whether an edge arcs whatever the gap: a fail or error edge leaving or
- * entering an ensemble group. Both orientations read this one predicate —
- * such an edge never S-curves through the row or column.
+ * entering an ensemble group — such an edge never S-curves through the row.
  */
 export function forceArcOf(cls: EdgeClass, fromId: string, toId: string): boolean {
   return (
@@ -323,15 +316,10 @@ export function layoutPlate(document: unknown, random: () => number = happyRando
   // class, measured in design coordinates and shifted with the drawing.
   // Without handlers the plate keeps its old drawing, byte for byte.
   let markSpots: MarkSpot[] = [];
-  let busSpots: BusSpot[] = [];
-  let bandBusSpots: BandBusSpot[] = [];
-  if (band === null) {
-    const grouped = laneGroups(handlers, extent, 0);
-    markSpots = grouped.marks;
-    busSpots = grouped.buses;
-  } else {
+  let busSpots: BandBusSpot[] = [];
+  if (band !== null) {
     markSpots = [...band.marks];
-    bandBusSpots = band.buses;
+    busSpots = band.buses;
     markBandInfraSources({ units: laneItems, extent, mainExtent, band, marks: markSpots });
   }
   const doneSpots: DoneSpot[] = doneUnits.flatMap((done) => {
@@ -549,9 +537,6 @@ export function layoutPlate(document: unknown, random: () => number = happyRando
     span(spot.x - MARK_HALF, spot.x + MARK_HALF, spot.y - MARK_HALF, spot.y + MARK_HALF);
   }
   for (const spot of busSpots) {
-    span(spot.x, spot.hx, spot.top, spot.hy);
-  }
-  for (const spot of bandBusSpots) {
     for (const drop of spot.drops) {
       span(drop.x, drop.x, Math.min(drop.y, spot.rail), Math.max(drop.y, spot.rail));
     }
@@ -631,8 +616,8 @@ export function layoutPlate(document: unknown, random: () => number = happyRando
         };
   const { marks, buses, dones } =
     band === null
-      ? shiftedLane({ marks: markSpots, buses: busSpots, dones: doneSpots }, dx, dy)
-      : shiftedBand({ marks: markSpots, buses: bandBusSpots, dones: doneSpots }, dx, dy);
+      ? { ...shiftedLane({ dones: doneSpots }, dx, dy), marks: [] as PlacedMark[], buses: [] as PlacedBus[] }
+      : shiftedBand({ marks: markSpots, buses: busSpots, dones: doneSpots }, dx, dy);
   const laneEdges: PlacedEdge[] = [];
   if (shiftedSpan !== null) {
     for (const route of laneRoutes) {
@@ -672,8 +657,8 @@ export function layoutPlate(document: unknown, random: () => number = happyRando
   ];
 
   // The token walks the walk — the pass chain with its fail detours —
-  // through this orientation's curves. A fail leg rides the arc of the
-  // drawn fail edge it took, at the same curve lift, centre to centre.
+  // through the drawn curves. A fail leg rides the arc of the drawn fail
+  // edge it took, at the same curve lift, centre to centre.
   const centres = new Map<string, Pt>();
   for (const node of nodes) {
     centres.set(node.name, { x: node.x, y: node.y });
@@ -708,7 +693,6 @@ export function layoutPlate(document: unknown, random: () => number = happyRando
 
   return {
     name: parsed.name,
-    orientation: "horizontal",
     nodes,
     groups,
     edges,

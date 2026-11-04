@@ -27,21 +27,21 @@ import {
 } from "./lane.js";
 import { GEOM, TYPE, nodeBox, num, type Kind } from "./vocabulary.js";
 
-/** Vertical step between member chips inside a group. Shared with vertical.ts. */
+/** Vertical step between member chips inside a group. */
 export const MEMBER_DY = 7;
 /** Member chip size. */
 const MEMBER_W = 14;
 const MEMBER_H = 4;
 /** The member chip geometry, shared with the renderer. */
 export const MEMBER_GEOM = { w: MEMBER_W, h: MEMBER_H } as const;
-/** Head room (two label lines) and foot room inside a group outline. Shared with vertical.ts. */
+/** Head room (two label lines) and foot room inside a group outline. */
 export const GROUP_HEAD = 9;
 export const GROUP_FOOT = 4;
 /** Widest a group outline may grow: it must clear the neighbouring ranks. */
 const GROUP_W_MAX = 38;
 /** Ensemble names longer than this are truncated in the group label. */
 const GROUP_NAME_MAX = 20;
-/** Mono advance at the group/member type size, in viewBox units. Shared with vertical.ts. */
+/** Mono advance at the group/member type size, in viewBox units. */
 export const GROUP_CHAR = TYPE.harness * 0.6;
 
 export interface PlacedNode {

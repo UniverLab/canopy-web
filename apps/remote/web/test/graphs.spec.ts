@@ -77,8 +77,8 @@ test("watches the running graph live on its plate and checklist", async ({ page 
   );
   await expect(page.locator("#graph-count")).toHaveText("1/4");
 
-  // The plate with exactly one lit node (vertical below 720 px).
-  await expect(page.locator("#graph-stage .plate-svg")).toHaveClass(/plate-v/);
+  // The plate with exactly one lit node, horizontal at every size.
+  await expect(page.locator("#graph-stage .plate-svg")).toHaveClass(/plate-h/);
   await expect(page.locator("#graph-stage .state-ring")).toHaveCount(1);
   const lit = page.locator('#graph-stage [data-state="running"]');
   await expect(lit).toHaveCount(1);
@@ -119,23 +119,63 @@ test("unwatches when leaving the graph view", async ({ page }) => {
   expect(sent).toContainEqual({ t: "graph_unwatch", id: "g-loop" });
 });
 
-test("draws the plate vertical on a phone, horizontal past 720 px", async ({ page }) => {
-  await page.locator('[data-graph="g-loop"]').click();
-  const plate = page.locator("#graph-stage .plate-svg");
-  await expect(plate).toHaveClass(/plate-v/);
-  await page.setViewportSize({ width: 800, height: 600 });
-  await expect(plate).toHaveClass(/plate-h/);
-});
+for (const size of [
+  { width: 360, height: 640 },
+  { width: 1280, height: 900 },
+]) {
+  test(`draws a pan and zoom plate at ${size.width}×${size.height}`, async ({ page }) => {
+    await page.setViewportSize(size);
+    await page.locator('[data-graph="g-loop"]').click();
+    await expect(page.locator("main.graph-view")).toBeVisible();
 
-test("draws the builder plate with its handlers in the side lane at 390 px", async ({ page }, testInfo) => {
+    const plate = page.locator("#graph-stage .plate-svg");
+    await expect(plate).toHaveClass(/plate-h/);
+    await expect(page.locator("#graph-stage figure.plate.is-live")).toHaveCount(1);
+
+    // The three overlaid controls, each a 44 px target.
+    const controls = page.locator(".plate-controls button");
+    await expect(controls).toHaveCount(3);
+    await expect(controls.nth(0)).toHaveAttribute("aria-label", "Zoom out");
+    await expect(controls.nth(1)).toHaveAttribute("aria-label", "Zoom in");
+    await expect(controls.nth(2)).toHaveAttribute("aria-label", "Fit the graph");
+    for (let index = 0; index < 3; index += 1) {
+      const box = await controls.nth(index).boundingBox();
+      expect(box?.width).toBe(44);
+      expect(box?.height).toBe(44);
+    }
+
+    const transform = (): Promise<string> =>
+      page.locator("#graph-stage .plate-svg").evaluate((svg) => (svg as SVGSVGElement).style.transform);
+
+    const fitted = await transform();
+    expect(fitted).toContain("scale(");
+
+    // Zoom in moves the drawing off the fitted view.
+    await controls.nth(1).click();
+    await expect.poll(transform).not.toBe(fitted);
+    const zoomed = await transform();
+
+    // A push swaps the drawing but keeps the view; the lit node moves.
+    const first = await litNodeKey(page);
+    await page.evaluate(() => window.__fake.graphTick());
+    await expect.poll(() => litNodeKey(page)).not.toBe(first);
+    await expect.poll(transform).toBe(zoomed);
+
+    // Fit returns to the fitted view.
+    await controls.nth(2).click();
+    await expect.poll(transform).toBe(fitted);
+  });
+}
+
+test("draws the builder plate horizontal at 390 px, handlers below the flow", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('[data-graph="g-builder"]').click();
   await expect(page.locator("main.graph-view")).toBeVisible();
   const plate = page.locator("#graph-stage .plate-svg");
-  await expect(plate).toHaveClass(/plate-v/);
+  await expect(plate).toHaveClass(/plate-h/);
 
-  // The failure terminals sit in a lane left of the column, the flow's end
-  // under Relock repo, and one amber bus enters Resilience.
+  // The failure terminals sit in a band below the flow, at or right of
+  // Start, and one amber bus enters Resilience.
   const measured = await page.evaluate(() => {
     const svg = document.querySelector("#graph-stage .plate-svg");
     if (svg === null) {
@@ -145,23 +185,24 @@ test("draws the builder plate with its handlers in the side lane at 390 px", asy
       name: node.getAttribute("data-name") ?? "",
       lane: node.getAttribute("data-lane") ?? "",
       cx: Number(node.getAttribute("data-cx")),
-      hw: Number(node.getAttribute("data-w")) / 2,
+      cy: Number(node.getAttribute("data-cy")),
+      hh: Number(node.getAttribute("data-h")) / 2,
     }));
     const main = nodes.filter((node) => node.lane === "main");
     return {
-      mainLeft: Math.min(...main.map((node) => node.cx - node.hw)),
-      handlers: nodes
-        .filter((node) => node.lane === "handler")
-        .map((node) => `${node.name}:${(node.cx + node.hw).toFixed(2)}`),
+      start: nodes.find((node) => node.name === "Start") ?? null,
+      mainBottom: Math.max(...main.map((node) => node.cy)),
+      handlers: nodes.filter((node) => node.lane === "handler"),
     };
   });
   expect(measured).not.toBeNull();
-  expect(measured?.handlers.map((handler) => handler.split(":")[0]).sort()).toEqual([
+  expect(measured?.handlers.map((handler) => handler.name).sort()).toEqual([
     "Human verdict",
     "Resilience",
   ]);
   for (const handler of measured?.handlers ?? []) {
-    expect(Number(handler.split(":")[1])).toBeLessThan(measured?.mainLeft ?? 0);
+    expect(handler.cy).toBeGreaterThan(measured?.mainBottom ?? 0);
+    expect(handler.cx).toBeGreaterThanOrEqual(measured?.start?.cx ?? 0);
   }
 
   await expect(plate.locator(".done")).toHaveText("✓ done");
@@ -176,7 +217,7 @@ test("draws the builder plate with its handlers in the side lane at 390 px", asy
   );
   expect(missing).toBe(0);
 
-  // The capture: the whole drawing at phone width, lane and done terminal
+  // The capture: the whole drawing at phone width, band and done terminal
   // included — the acceptance surface for this geometry.
   await plate.evaluate((svg) => svg.scrollIntoView({ block: "start" }));
   const shot = await plate.screenshot({ path: testInfo.outputPath("canopy-builder-390x844.png") });
