@@ -8,9 +8,11 @@ import { createShell } from "./app.js";
 import { signOut } from "./auth.js";
 import { CatalogStore } from "./catalog.js";
 import { createChannelHandler } from "./channel.js";
-import { b64decode, b64encode, sha256Hex } from "./crypto.js";
+import { b64encode } from "./crypto.js";
 import { createFakeShelfDeleter } from "./fake-delete.js";
 import { createFakeGraphs } from "./fake-graphs.js";
+import { createFakeMetrics } from "./fake-metrics.js";
+import { createFakeUploads } from "./fake-upload.js";
 import { GraphStore } from "./graph-store.js";
 import { createGuestSession } from "./guest.js";
 import { INVITE_REFUSED_MESSAGE } from "./guest-invite.js";
@@ -21,7 +23,6 @@ import { createFrameRouter } from "./router.js";
 import { SessionController } from "./session.js";
 import { ShelfController } from "./shelf-controller.js";
 import { openSessionName, SessionStore } from "./sessions.js";
-import { MAX_UPLOAD_BYTES } from "./upload.js";
 import { hostShelfImage, pushedShelfImage, smokeShelfImages } from "../test/fixtures/shelf-images.js";
 import type { ShelfImage } from "../test/fixtures/shelf-images.js";
 import "./styles.css";
@@ -237,78 +238,7 @@ function main(): void {
       .sort((a, b) => b.created_at - a.created_at);
   };
 
-  // The upload half of the shelf: ?upload=off advertises no shelf_upload,
-  // ?upload=denied advertises it but refuses every begin with forbidden
-  // (a guest whose grant lacks upload), and otherwise a begun file is
-  // stored on the target shelf with the mime the host sniffs.
-  const uploadMode = new URLSearchParams(globalThis.location.search).get("upload");
-
-  interface FakeUpload {
-    fileId: string;
-    sessionId: string | null;
-    name: string;
-    size: number;
-    mime: string;
-    sha256: string;
-    parts: Map<number, Uint8Array>;
-  }
-
-  const uploads = new Map<string, FakeUpload>();
-  let uploadCounter = 0;
-  const MIME_BY_EXT: Record<string, string> = {
-    txt: "text/plain",
-    md: "text/markdown",
-    csv: "text/csv",
-    json: "application/json",
-    html: "text/html",
-    htm: "text/html",
-    svg: "image/svg+xml",
-    png: "image/png",
-    jpg: "image/jpeg",
-    jpeg: "image/jpeg",
-    gif: "image/gif",
-    webp: "image/webp",
-    pdf: "application/pdf",
-    zip: "application/zip",
-  };
-
-  const sniffMime = (name: string, provided: string | undefined): string => {
-    const dot = name.lastIndexOf(".");
-    const ext = dot >= 0 ? name.slice(dot + 1).toLowerCase() : "";
-    return MIME_BY_EXT[ext] ?? (provided !== undefined && provided !== "" ? provided : "application/octet-stream");
-  };
-
-  const finishUpload = async (upload: FakeUpload): Promise<void> => {
-    const ordered = [...upload.parts.entries()].sort((a, b) => a[0] - b[0]);
-    const total = ordered.reduce((sum, [, bytes]) => sum + bytes.length, 0);
-    const bytes = new Uint8Array(total);
-    let offset = 0;
-    for (const [, part] of ordered) {
-      bytes.set(part, offset);
-      offset += part.length;
-    }
-    if ((await sha256Hex(bytes)) !== upload.sha256) {
-      uploads.delete(upload.fileId);
-      deliver({ t: "error", code: "checksum_mismatch", message: "checksum mismatch", file_id: upload.fileId });
-      return;
-    }
-    uploads.delete(upload.fileId);
-    const workdir = sessions.find((item) => item.id === upload.sessionId)?.workdir ?? "/home/u/demo";
-    const item: ShelfItem = {
-      file_id: upload.fileId,
-      session_id: upload.sessionId,
-      name: upload.name,
-      mime: upload.mime,
-      size: bytes.length,
-      caption: null,
-      from: "you",
-      created_at: Date.now(),
-      path: `${workdir}/${upload.name}`,
-      origin: "device",
-    };
-    shelfFiles.push({ item, bytes });
-    deliver({ t: "shelf_added", item });
-  };
+  const fakeUploads = createFakeUploads({ deliver, files: shelfFiles, sessions });
 
   const sessionItems = () =>
     sessions.map((item) => ({
@@ -324,58 +254,7 @@ function main(): void {
 
   const fakeGraphs = createFakeGraphs(deliver);
 
-  // --- The host metrics fixture ---------------------------------------
-  // A watch is answered with a frame at once and then every interval,
-  // until unwatch. ?metrics=silent never answers, so the strip-hiding
-  // path has a host of its own.
-  const metricsSilent = new URLSearchParams(globalThis.location.search).get("metrics") === "silent";
-  let metricsCount = 0;
-  let metricsTimer: ReturnType<typeof globalThis.setInterval> | null = null;
-
-  const metricsFrame = (patch: Record<string, unknown> = {}): unknown => {
-    metricsCount += 1;
-    return {
-      t: "host.metrics",
-      sampled_at: Date.now(),
-      metrics: {
-        cpu_usage: 10 + ((metricsCount * 7) % 60),
-        cpu_temperature_c: 54,
-        cpu_temp_source: "coretemp",
-        memory_used_mb: 3200,
-        memory_total_mb: 8192,
-        gpu: {
-          usage: 40,
-          temperature_c: 62,
-          name: "GeForce GTX",
-          vram_used_mb: 1024,
-          vram_total_mb: 8192,
-        },
-        power: { watts: 65, limit_watts: 120, source: "gpu" },
-        ...patch,
-      },
-    };
-  };
-
-  const stopMetrics = (): void => {
-    if (metricsTimer !== null) {
-      globalThis.clearInterval(metricsTimer);
-      metricsTimer = null;
-    }
-  };
-
-  const startMetrics = (intervalSec: number): void => {
-    // A watch while already pushing changes nothing: the subscription is
-    // idempotent, so a duplicate watch never resets the pushed samples.
-    if (metricsTimer !== null) {
-      return;
-    }
-    if (metricsSilent) {
-      return;
-    }
-    deliver(metricsFrame());
-    const interval = Math.min(60, Math.max(5, Math.floor(intervalSec)));
-    metricsTimer = globalThis.setInterval(() => deliver(metricsFrame()), interval * 1000);
-  };
+  const fakeMetrics = createFakeMetrics({ deliver });
 
   // Guest mode (?screen=guest): the hub's grant over the sessions the
   // owner holds, enforced the way the hub enforces it — the list carries
@@ -435,10 +314,8 @@ function main(): void {
       deliver({ t: "catalog", req: frame.req, ...CATALOG });
     } else if (fakeGraphs.handle(frame)) {
       // graphs, graph_watch and graph_unwatch: answered by the fixtures.
-    } else if (frame.t === "host.metrics.watch") {
-      startMetrics(typeof frame.interval === "number" ? frame.interval : 10);
-    } else if (frame.t === "host.metrics.unwatch") {
-      stopMetrics();
+    } else if (fakeMetrics.handle(frame)) {
+      // host.metrics.watch/unwatch: a frame at once, then every interval.
     } else if (frame.t === "attach" && typeof frame.id === "string") {
       if (guestGrant !== null && !guestGrant.includes(frame.id)) {
         deliver({ t: "error", code: "forbidden", id: frame.id });
@@ -463,51 +340,8 @@ function main(): void {
       typeof frame.rows === "number"
     ) {
       setPtySize(frame.id, frame.cols, frame.rows);
-    } else if (frame.t === "shelf_put_begin" && typeof frame.req === "string") {
-      if (uploadMode === "denied") {
-        deliver({ t: "error", req: frame.req, code: "forbidden", message: "upload not allowed" });
-      } else if (
-        typeof frame.name !== "string" ||
-        frame.name === "" ||
-        typeof frame.size !== "number" ||
-        typeof frame.sha256 !== "string"
-      ) {
-        deliver({ t: "error", req: frame.req, code: "bad_request", message: "bad upload" });
-      } else if (frame.size > MAX_UPLOAD_BYTES) {
-        deliver({ t: "error", req: frame.req, code: "too_large", message: "file is larger than 20 MiB" });
-      } else {
-        uploadCounter += 1;
-        const fileId = `u${uploadCounter}`;
-        uploads.set(fileId, {
-          fileId,
-          sessionId: typeof frame.id === "string" && frame.id !== "" ? frame.id : null,
-          name: frame.name,
-          size: frame.size,
-          mime: sniffMime(frame.name, frame.mime),
-          sha256: frame.sha256,
-          parts: new Map(),
-        });
-        deliver({ t: "shelf_put_ready", req: frame.req, file_id: fileId });
-      }
-    } else if (frame.t === "shelf_put_part" && typeof frame.file_id === "string") {
-      const upload = uploads.get(frame.file_id);
-      if (!upload || typeof frame.part !== "number" || typeof frame.data !== "string") {
-        deliver({ t: "error", code: "bad_request", message: "bad part", file_id: frame.file_id });
-      } else {
-        upload.parts.set(frame.part, b64decode(frame.data));
-        if ((frame.part + 1) % 8 === 0) {
-          deliver({ t: "shelf_put_ack", file_id: frame.file_id, part: frame.part });
-        }
-      }
-    } else if (frame.t === "shelf_put_end" && typeof frame.file_id === "string") {
-      const upload = uploads.get(frame.file_id);
-      if (upload) {
-        void finishUpload(upload);
-      } else {
-        deliver({ t: "error", code: "not_found", message: "no such upload", file_id: frame.file_id });
-      }
-    } else if (frame.t === "shelf_put_abort" && typeof frame.file_id === "string") {
-      uploads.delete(frame.file_id);
+    } else if (fakeUploads.handle(frame)) {
+      // shelf_put_begin/part/end/abort: stored on the target shelf.
     } else if (frame.t === "shelf_list") {
       const id = typeof frame.id === "string" && frame.id !== "" ? frame.id : null;
       const reply: Record<string, unknown> = {
@@ -677,7 +511,7 @@ function main(): void {
         fakeGraphs.tick();
       },
       pushMetrics: (patch?: Record<string, unknown>) => {
-        deliver(metricsFrame(patch ?? {}));
+        fakeMetrics.pushMetrics(patch ?? {});
       },
       guestOpen: (id: string) => session.open(id),
       guestInvites: () => [...invites],
@@ -786,6 +620,7 @@ function main(): void {
 
   // The host greets first: hello.features is what turns the shelf UI on,
   // and hello.harnesses is what the New dialog may offer (both installed).
+  const uploadMode = new URLSearchParams(globalThis.location.search).get("upload");
   deliver({
     t: "hello",
     features: uploadMode === "off" ? ["shelf"] : ["shelf", "shelf_upload"],
@@ -859,7 +694,7 @@ function main(): void {
       fakeGraphs.tick();
     },
     pushMetrics: (patch?: Record<string, unknown>) => {
-      deliver(metricsFrame(patch ?? {}));
+      fakeMetrics.pushMetrics(patch ?? {});
     },
     resizeFromElsewhere: (cols: number, rows: number, id = "smoke") => {
       setPtySize(id, cols, rows);

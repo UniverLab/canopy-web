@@ -27,355 +27,73 @@
 // local terminal is resized to it, so it renders at its base scale (the
 // face at 14 CSS px) times the zoom instead of being fitted to the width.
 
-import "@xterm/xterm/css/xterm.css";
-import { Terminal } from "@xterm/xterm";
-import { handleCopyKeydown } from "./term-copy.js";
+import { terminalFontGate } from "./terminal-font.js";
+import type { TerminalFactory, TerminalHandle } from "./terminal-handle.js";
 import {
-  TERMINAL_FONT_FAMILY,
-  TERMINAL_FONT_SIZE,
-  terminalFontSizeForDpr,
-  terminalFontGate,
-} from "./terminal-font.js";
-import { THEME } from "./terminal-theme.js";
-import { attachWebgl } from "./terminal-webgl.js";
+  classifyTouchGesture,
+  clampZoom,
+  computeFitScale,
+  computeOwnedSize,
+  decayFlingVelocity,
+  flingVelocity,
+  shouldContinueFling,
+  shouldStartFling,
+  splitTouchScroll,
+  touchWheelDelta,
+  zoomFromPinch,
+} from "./terminal-geometry.js";
+import type { FlingSample, TermSize, TouchGestureKind } from "./terminal-geometry.js";
+
+// Re-exported from the split modules so the terminal keeps one import.
+export {
+  FLING_DECAY,
+  FLING_START_PX_PER_MS,
+  FLING_STOP_PX_PER_MS,
+  FLING_WINDOW_MS,
+  MAX_ZOOM,
+  MIN_GLYPH_PX,
+  MIN_ZOOM,
+  OWNED_MAX_COLS,
+  OWNED_MAX_ROWS,
+  OWNED_MIN_COLS,
+  OWNED_MIN_ROWS,
+  TOUCH_GESTURE_PX,
+  classifyTouchGesture,
+  clampZoom,
+  computeFitScale,
+  computeMinScale,
+  computeOwnedSize,
+  computeScale,
+  decayFlingVelocity,
+  flingVelocity,
+  shouldContinueFling,
+  shouldStartFling,
+  splitTouchScroll,
+  touchWheelDelta,
+  zoomFromPinch,
+} from "./terminal-geometry.js";
+export type {
+  FlingSample,
+  TermSize,
+  TouchGestureKind,
+  TouchScrollSplit,
+} from "./terminal-geometry.js";
+export { bufferLinesToText } from "./term-copy.js";
+export type { BufferLike, BufferLineLike } from "./term-copy.js";
+export { createXtermHandle } from "./terminal-handle.js";
+export type { TerminalFactory, TerminalHandle } from "./terminal-handle.js";
 
 export interface FollowState {
   following: boolean;
 }
 
-export interface TerminalHandle {
-  write: (data: Uint8Array) => void;
-  clear: () => void;
-  focus: () => void;
-  scrollToBottom: () => void;
-  isAtBottom: () => boolean;
-  /** True while xterm's alternate (fullscreen) buffer is active. Absent means always normal. */
-  isAlternateBuffer?: () => boolean;
-  /** Fires when the active buffer changes between normal and alternate. */
-  onBufferChange?: (callback: () => void) => () => void;
-  onUserInput: (callback: (text: string) => void) => () => void;
-  onScroll: (callback: () => void) => () => void;
-  /** Fires once the terminal is open (and the WebGL attempt settled). */
-  onReady: (callback: () => void) => () => void;
-  /** The current drag selection, or "" when there is none. */
-  getSelection: () => string;
-  /** Fires when the drag selection changes. */
-  onSelectionChange: (callback: () => void) => () => void;
-  /** The last maxLines logical lines of the active buffer as plain text. */
-  bufferText: (maxLines: number) => string;
-  /** Resize the local terminal to cols × rows. Absent means a fixed size. */
-  resize?: (cols: number, rows: number) => void;
-  /**
-   * The scale that shows the opened face at TERMINAL_FONT_SIZE CSS px: the
-   * DPR-1 double-size face renders at 0.5. Absent means 1.
-   */
-  baseScale?: number;
-  dispose: () => void;
-}
-
-export type TerminalFactory = (host: HTMLElement, cols: number, rows: number) => TerminalHandle;
-
-export const MIN_ZOOM = 0.4;
-export const MAX_ZOOM = 3;
+// The zoom buttons multiply and divide by this.
 const ZOOM_STEP = 1.25;
-// The smallest glyph height a session may render at, in CSS px.
-export const MIN_GLYPH_PX = 11;
 // Used only when xterm has not been measured yet (no layout at all).
 const FALLBACK_ROW_HEIGHT = 17;
 
-export function clampZoom(zoom: number): number {
-  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
-}
-
-export interface TermSize {
-  cols: number;
-  rows: number;
-}
-
-// The bounds of a size this device asserts: below them a session is
-// unusable, above them the panel measurement is surely wrong.
-export const OWNED_MIN_COLS = 20;
-export const OWNED_MAX_COLS = 500;
-export const OWNED_MIN_ROWS = 5;
-export const OWNED_MAX_ROWS = 200;
-
-function clampInt(value: number, low: number, high: number): number {
-  return Math.min(high, Math.max(low, value));
-}
-
-// The cols × rows that fit a panel of panelWidth × panelHeight CSS px with
-// cells of cellWidth × cellHeight CSS px (as they render on screen), within
-// the owned bounds. Null when either box is not measured yet.
-export function computeOwnedSize(
-  panelWidth: number,
-  panelHeight: number,
-  cellWidth: number,
-  cellHeight: number,
-): TermSize | null {
-  if (!(panelWidth > 0 && panelHeight > 0 && cellWidth > 0 && cellHeight > 0)) {
-    return null;
-  }
-  // The epsilon keeps an exact fit (336 / 8.4) from flooring one short.
-  const cols = Math.floor(panelWidth / cellWidth + 1e-6);
-  const rows = Math.floor(panelHeight / cellHeight + 1e-6);
-  return {
-    cols: clampInt(cols, OWNED_MIN_COLS, OWNED_MAX_COLS),
-    rows: clampInt(rows, OWNED_MIN_ROWS, OWNED_MAX_ROWS),
-  };
-}
-
-// 11 CSS px of glyph at the terminal's natural row height.
-export function computeMinScale(rowHeight: number): number {
-  if (!(rowHeight > 0)) {
-    return 1;
-  }
-  return MIN_GLYPH_PX / rowHeight;
-}
-
-// Base scale: the larger of fit-to-width and minScale, times the zoom. The
-// view always passes a minScale of 0 (pure fit-to-width); the parameter
-// stays for the scale-math unit tests.
-export function computeScale(
-  paneWidth: number,
-  contentWidth: number,
-  zoom: number,
-  minScale = 0,
-): number {
-  if (paneWidth <= 0 || contentWidth <= 0) {
-    return 1;
-  }
-  return Math.max(paneWidth / contentWidth, minScale) * clampZoom(zoom);
-}
-
-// The fitted scale for the active buffer: the normal buffer keeps the
-// width fit, while the alternate (fullscreen) buffer fits the whole frame
-// — every row and column — with min(panelW/naturalW, panelH/naturalH).
-// Zoom multiplies on top in both modes.
-export function computeFitScale(
-  paneWidth: number,
-  paneHeight: number,
-  contentWidth: number,
-  contentHeight: number,
-  zoom: number,
-  alternate: boolean,
-): number {
-  if (!alternate) {
-    return computeScale(paneWidth, contentWidth, zoom, 0);
-  }
-  if (paneWidth <= 0 || paneHeight <= 0 || contentWidth <= 0 || contentHeight <= 0) {
-    return 1;
-  }
-  return Math.min(paneWidth / contentWidth, paneHeight / contentHeight) * clampZoom(zoom);
-}
-
-export function zoomFromPinch(startDistance: number, currentDistance: number, startZoom: number): number {
-  if (startDistance <= 0) {
-    return startZoom;
-  }
-  return clampZoom(startZoom * (currentDistance / startDistance));
-}
-
 function touchDistance(a: Touch, b: Touch): number {
   return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-}
-
-// One-finger scroll: the first 8 px decide vertical (the terminal scrolls
-// its history) or horizontal (left to the browser, which pans the pane).
-export const TOUCH_GESTURE_PX = 8;
-
-export type TouchGestureKind = "undecided" | "vertical" | "horizontal";
-
-export function classifyTouchGesture(dx: number, dy: number): TouchGestureKind {
-  if (Math.max(Math.abs(dx), Math.abs(dy)) < TOUCH_GESTURE_PX) {
-    return "undecided";
-  }
-  // A tie at 45 degrees scrolls the terminal.
-  return Math.abs(dy) >= Math.abs(dx) ? "vertical" : "horizontal";
-}
-
-export interface TouchScrollSplit {
-  pane: number; // CSS px the pane absorbs by moving its own scrollTop.
-  terminal: number; // CSS px left for the terminal (the scroll remainder).
-}
-
-// Scroll chaining for one step: the zoomed pane moves first while it can
-// still go in the drag's direction, the rest goes to the terminal.
-// scrollDelta is positive downwards, like scrollTop and deltaY.
-export function splitTouchScroll(
-  scrollDelta: number,
-  scrollTop: number,
-  scrollHeight: number,
-  clientHeight: number,
-): TouchScrollSplit {
-  if (scrollDelta === 0) {
-    return { pane: 0, terminal: 0 };
-  }
-  const maxScroll = Math.max(0, scrollHeight - clientHeight);
-  const pane = Math.min(Math.max(scrollDelta, -scrollTop), maxScroll - scrollTop);
-  const terminal = scrollDelta - pane;
-  // Math.min/max can hand back -0 at a clamped edge; the contract is +0.
-  return { pane: pane === 0 ? 0 : pane, terminal: terminal === 0 ? 0 : terminal };
-}
-
-// The terminal half of a chained scroll as xterm's deltaY: finger-space CSS px back into unscaled px.
-export function touchWheelDelta(terminalPx: number, scale: number): number {
-  if (!(scale > 0)) {
-    return terminalPx;
-  }
-  return terminalPx / scale;
-}
-
-// Fling: lifting a vertical drag faster than 0.3 px/ms (over its last 100 ms)
-// keeps scrolling with a 0.95 decay per frame until under 0.05 px/ms.
-export const FLING_WINDOW_MS = 100;
-export const FLING_START_PX_PER_MS = 0.3;
-export const FLING_DECAY = 0.95;
-export const FLING_STOP_PX_PER_MS = 0.05;
-
-export interface FlingSample {
-  y: number; // Finger clientY in CSS px.
-  t: number; // Event timeStamp in ms.
-}
-
-// Finger velocity over the samples' last 100 ms, in px/ms (positive down).
-// Fewer than two samples in the window, or no time elapsed, means no fling.
-export function flingVelocity(samples: readonly FlingSample[]): number {
-  const end = samples[samples.length - 1];
-  if (!end || samples.length < 2) {
-    return 0;
-  }
-  const cutoff = end.t - FLING_WINDOW_MS;
-  const start = samples.find((sample) => sample.t >= cutoff) ?? end;
-  const dt = end.t - start.t;
-  if (!(dt > 0)) {
-    return 0;
-  }
-  return (end.y - start.y) / dt;
-}
-
-export function decayFlingVelocity(velocity: number): number {
-  return velocity * FLING_DECAY;
-}
-
-export function shouldStartFling(velocity: number): boolean {
-  return Math.abs(velocity) > FLING_START_PX_PER_MS;
-}
-
-export function shouldContinueFling(velocity: number): boolean {
-  return Math.abs(velocity) >= FLING_STOP_PX_PER_MS;
-}
-
-// The slice of xterm's buffer bufferText reads: structural, so the real
-// IBuffer and the unit-test fakes both fit.
-export interface BufferLineLike {
-  readonly isWrapped: boolean;
-  translateToString(trimRight?: boolean): string;
-}
-
-export interface BufferLike {
-  readonly length: number;
-  getLine(y: number): BufferLineLike | undefined;
-}
-
-// The buffer as copyable text: a line whose isWrapped is true continues
-// the logical line above it (a wrapped line copies as one line), each row
-// is right-trimmed, trailing blank lines are dropped, and only the last
-// maxLines logical lines are kept. "" when maxLines is not positive.
-export function bufferLinesToText(buffer: BufferLike, maxLines: number): string {
-  if (!(maxLines > 0)) {
-    return "";
-  }
-  const logical: string[] = [];
-  for (let y = 0; y < buffer.length; y += 1) {
-    const line = buffer.getLine(y);
-    if (!line) {
-      continue;
-    }
-    const text = line.translateToString(true);
-    if (line.isWrapped && logical.length > 0) {
-      logical[logical.length - 1] += text;
-    } else {
-      logical.push(text);
-    }
-  }
-  let end = logical.length;
-  while (end > 0 && logical[end - 1] === "") {
-    end -= 1;
-  }
-  return logical.slice(0, end).slice(-maxLines).join("\n");
-}
-
-export function createXtermHandle(
-  host: HTMLElement,
-  cols: number,
-  rows: number,
-): TerminalHandle {
-  // DPR-gated size: at DPR 1 the WebGL backing store is the CSS size and
-  // 14 px glyphs rasterise a hyphen into a single ~1 px row that reads
-  // away; double the source size and let the fit scale bring it back
-  // (see terminal-font.ts). The size is fixed at open — a later browser
-  // zoom lands as layout and the fit scale absorbs it, no re-open.
-  const dpr = typeof devicePixelRatio === "number" ? devicePixelRatio : undefined;
-  const fontSize = terminalFontSizeForDpr(dpr);
-  const terminal = new Terminal({
-    cols,
-    rows,
-    scrollback: 2000,
-    fontSize,
-    fontFamily: TERMINAL_FONT_FAMILY,
-    fontWeight: 400,
-    fontWeightBold: 700,
-    // Box drawing and block elements are drawn by the renderer, so a
-    // canopy TUI's frames never depend on a font's glyph metrics.
-    customGlyphs: true,
-    theme: { ...THEME },
-  });
-  terminal.open(host);
-  // After open(): the addon needs the screen's canvas. A failure or a
-  // context loss leaves xterm's DOM renderer running.
-  attachWebgl(terminal);
-  // Ctrl+Shift+C with a selection copies instead of reaching the session;
-  // every other key (plain Ctrl+C included) still goes through.
-  terminal.attachCustomKeyEventHandler((ev) => handleCopyKeydown(ev, () => terminal.getSelection()));
-  // Test hook: the fake host's e2e reads the active buffer through it —
-  // buffer reads work under WebGL too, where the DOM carries no row text.
-  (host as unknown as { __xterm?: Terminal }).__xterm = terminal;
-  return {
-    write: (data) => terminal.write(data),
-    clear: () => terminal.clear(),
-    focus: () => terminal.focus(),
-    scrollToBottom: () => terminal.scrollToBottom(),
-    isAtBottom: () => {
-      const buffer = terminal.buffer.active;
-      return buffer.viewportY >= buffer.baseY;
-    },
-    isAlternateBuffer: () => terminal.buffer.active.type === "alternate",
-    onBufferChange: (callback) => {
-      const sub = terminal.buffer.onBufferChange(() => callback());
-      return () => sub.dispose();
-    },
-    onUserInput: (callback) => {
-      const sub = terminal.onData(callback);
-      return () => sub.dispose();
-    },
-    onScroll: (callback) => {
-      const sub = terminal.onScroll(() => callback());
-      return () => sub.dispose();
-    },
-    onReady: (callback) => {
-      callback();
-      return () => {};
-    },
-    getSelection: () => terminal.getSelection(),
-    onSelectionChange: (callback) => {
-      const sub = terminal.onSelectionChange(() => callback());
-      return () => sub.dispose();
-    },
-    bufferText: (maxLines) => bufferLinesToText(terminal.buffer.active, maxLines),
-    resize: (nextCols, nextRows) => terminal.resize(nextCols, nextRows),
-    baseScale: TERMINAL_FONT_SIZE / fontSize,
-    dispose: () => terminal.dispose(),
-  };
 }
 
 export interface TerminalViewCallbacks {

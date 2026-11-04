@@ -11,40 +11,22 @@ import { renderConnBanner, renderTopbar, wireAccount, wireConnActions } from "./
 import { syncHeaderFondo } from "./fondo.js";
 import { renderHosts, renderPair, renderSignIn } from "./entry-views.js";
 import type { EntryViewHooks, PairDraft } from "./entry-views.js";
-import { REMOTE_FOOTER } from "./footer.js";
 import { GraphRoute } from "./graph-route.js";
 import type { GraphStore } from "./graph-store.js";
-import { icon, mountMorphSlot, type RemoteIconName, type MorphSlot } from "./icons-dom.js";
-import { renderKeyBar, updateKeyBarLatches } from "./keys.js";
+import { mountMorphSlot, type RemoteIconName, type MorphSlot } from "./icons-dom.js";
 import { MetricsRoute } from "./metrics-route.js";
 import type { MetricsStore } from "./metrics-store.js";
-import {
-  isTerminalReport,
-  keyBytesWithModifiers,
-  ModifierLatches,
-  textBytesWithModifiers,
-} from "./modifiers.js";
 import { NewDialog } from "./new-dialog.js";
 import { defaultDeviceLabel } from "./pairing.js";
 import type { PromptDraft, ScheduledItem, SpawnRequest } from "./protocol.js";
 import type { OnlineHost } from "./relay.js";
 import type { ShelfHandle } from "./shelf-controller.js";
-import { convergeOpenSessionName, type SessionStore } from "./sessions.js";
-import { createXtermHandle, TerminalView } from "./terminal.js";
+import type { SessionStore } from "./sessions.js";
+import { SessionRoute } from "./session-route.js";
+import { createXtermHandle } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
-import { TermCopySheet, termCopyFloatHtml, wireCopyFloat } from "./term-copy.js";
-import {
-  latestHidden,
-  termControlsHtml,
-  termLatestHtml,
-  termSizeHtml,
-  wireTermControls,
-} from "./term-controls.js";
-import type { TermControls } from "./term-controls.js";
-import { pointerIsFine } from "./terminal-prefs.js";
+import { TermCopySheet } from "./term-copy.js";
 import { shellTitle } from "./titles.js";
-import { mountUploads } from "./upload-view.js";
-import type { UploadView } from "./upload-view.js";
 import type { PairSubmit } from "./ui.js";
 
 export interface ShellCallbacks {
@@ -59,7 +41,7 @@ export interface ShellCallbacks {
   onSignOut: () => void;
   /** Forget this device (pairing keys go too) after the shell's confirm. */
   onForgetDevice: () => void;
-  /** Key-bar bytes with the latches applied; the shell owns the latches. */
+  /** Key-bar bytes with the latches applied; the session route owns them. */
   onKeyPress: (bytes: Uint8Array) => void;
   /** Phone-keyboard bytes with the latches applied. */
   onTerminalInput: (bytes: Uint8Array) => void;
@@ -134,14 +116,6 @@ export interface ShellDeps {
 
 type Route = "signin" | "pair" | "hosts" | "sessions" | "session" | "graph" | "metrics";
 
-function esc(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
 export function createShell(
   root: HTMLElement,
   store: SessionStore,
@@ -154,9 +128,6 @@ export function createShell(
   let login: string | null = null;
   let hostLabel = "";
   let hostId = "";
-  // The one-shot Ctrl/Shift latches for the open session, released on
-  // every consumed key and every session render.
-  const latches = new ModifierLatches();
   let connectionState = "connecting";
   let online: OnlineHost[] = [];
   let paired: { host_id: string; label: string }[] = [];
@@ -165,22 +136,8 @@ export function createShell(
   let pairBusy = false;
   let signOutError: string | null = null;
   let accountOpen = false;
-  let sessionId: string | null = null;
-  let sessionName = "";
-  let sessionCols = 0;
-  let sessionRows = 0;
-  let terminalView: TerminalView | null = null;
-  let latestButton: HTMLButtonElement | null = null;
-  let copyFloatDispose: (() => void) | null = null;
-  let termControls: TermControls | null = null;
-  let uploadView: UploadView | null = null;
-  // The two state-telling slots: the host chip's link icon and the Files
-  // button's folder.
+  // The host chip's link icon slot; the Files button's lives in the session route.
   let hostIcon: MorphSlot | null = null;
-  let shelfIcon: MorphSlot | null = null;
-  // The one-shot spawn confirmation: set by sheetSpawned, consumed by the
-  // session view's first render, so it shows exactly once.
-  let spawnFlash: string | null = null;
 
   // The catalog the host sent and the two sheets that consume it. The
   // dialogs subscribe to the store themselves while they are open.
@@ -260,31 +217,6 @@ export function createShell(
     onPairAgain: () => callbacks.onPairAgain(),
   };
 
-  // The Files badge lives in the session bar; every shelf change either
-  // patches it (session route) or repaints the list (sessions route). The
-  // folder icon opens while the sheet is up and closes when it goes.
-  const syncFilesBadge = () => {
-    const button = root.querySelector<HTMLElement>("#session-files");
-    if (!button) {
-      return;
-    }
-    const enabled = shelf?.enabled() ?? false;
-    button.hidden = !enabled;
-    // A morph says the meaning changed; a repaint that leaves the sheet as
-    // it was must not restart it.
-    const next: RemoteIconName = (shelf?.isOpen() ?? false) ? "folderOpen" : "folder";
-    if (shelfIcon !== null && shelfIcon.name !== next) {
-      shelfIcon.to(next);
-    }
-    const badge = button.querySelector<HTMLElement>("#session-files-badge");
-    if (!badge) {
-      return;
-    }
-    const unseen = !enabled ? 0 : shelf?.unseenTotal() ?? 0;
-    badge.hidden = unseen === 0;
-    badge.textContent = unseen === 0 ? "" : String(unseen);
-  };
-
   const openNew = () => {
     if (route !== "sessions") {
       return;
@@ -304,167 +236,6 @@ export function createShell(
     }
   };
 
-  const openBuilder = () => {
-    if (route !== "session") {
-      return;
-    }
-    newDialog.close();
-    termCopy.close();
-    builder.open(root);
-  };
-
-  const openCopy = () => {
-    if (route !== "session") {
-      return;
-    }
-    newDialog.close();
-    builder.close();
-    termCopy.open(root, { bufferText: (maxLines) => terminalView?.bufferText(maxLines) ?? "" });
-  };
-
-  // The local terminal takes a new grid in place (no remount, the
-  // scrollback stays), and the shell remembers it so a snapshot at that
-  // size later does not remount either.
-  const resizeLocalTerminal = (cols: number, rows: number): void => {
-    if (!terminalView) {
-      return;
-    }
-    if (terminalView.resize(cols, rows)) {
-      sessionCols = cols;
-      sessionRows = rows;
-    }
-  };
-
-  const teardownSessionWidgets = () => {
-    termControls?.dispose();
-    termControls = null;
-    copyFloatDispose?.();
-    copyFloatDispose = null;
-    terminalView?.dispose();
-    terminalView = null;
-    latestButton = null;
-    uploadView = null;
-    shelfIcon?.destroy();
-    shelfIcon = null;
-    sessionCols = 0;
-    sessionRows = 0;
-  };
-
-  // Arming a latch focuses the terminal in the same tap: a phone only
-  // opens its keyboard inside the user gesture. A terminal still behind
-  // the font gate focuses once it opens, as a pane tap does; releasing a
-  // latch never touches focus. Harmless with a mouse too.
-  const focusTerminalForLatch = (): void => {
-    const view = terminalView;
-    if (!view) {
-      return;
-    }
-    if (view.fitted) {
-      view.focus();
-      return;
-    }
-    void view.ready().then(() => {
-      if (terminalView === view) {
-        view.focus();
-      }
-    });
-  };
-
-  const renderSession = () => {
-    teardownSessionWidgets();
-    latches.release();
-    const flash = spawnFlash;
-    spawnFlash = null;
-    root.innerHTML = `
-    ${header()}
-    <main class="session-view">
-      ${flash === null ? "" : `<p class="flash-ok" role="status">${icon("check")}<span>${esc(flash)}</span></p>`}
-      ${connBanner()}
-      <div class="session-bar">
-        <button type="button" id="session-back" aria-label="Back to sessions">${icon("chevronLeft")}</button>
-        <span class="session-title">${esc(sessionName)}</span>
-        <span class="session-exit" id="session-exit" hidden></span>
-        <button type="button" id="session-files" hidden>
-          <span class="icon-slot" id="session-files-icon" data-morph="shelf" aria-hidden="true">${icon("folder")}</span>
-          <span>Files</span><span
-          class="files-badge" id="session-files-badge" hidden
-        ></span></button>
-      </div>
-      <div class="term-stage">
-        <div class="term-pane" id="term-pane">
-          <p class="term-placeholder">Attaching…</p>
-        </div>${termLatestHtml()}${termCopyFloatHtml()}
-      </div>
-      ${termControlsHtml()}
-      <div class="upload-tray" id="upload-tray" hidden></div>
-      <div class="keybar" id="keybar"></div>
-      ${termSizeHtml(sessionId)}
-    </main>
-    ${REMOTE_FOOTER}`;
-    wireConnBanner();
-    const filesIcon = root.querySelector<HTMLElement>("#session-files-icon");
-    if (filesIcon) {
-      shelfIcon = mountMorphSlot(filesIcon, "folder");
-    }
-    root.querySelector("#session-back")?.addEventListener("click", () => callbacks.onLeaveSession());
-    // The Files sheet only exists behind hello.features "shelf"; the
-    // button itself is rendered hidden and syncFilesBadge reveals it.
-    root.querySelector("#session-files")?.addEventListener("click", () => {
-      shelf?.open(root);
-    });
-    syncFilesBadge();
-    termControls = wireTermControls({
-      root,
-      sessionId: () => sessionId,
-      terminalView: () => terminalView,
-      onControlSize: (cols, rows) => callbacks.onControlSize(cols, rows),
-      onLocalSize: (cols, rows) => resizeLocalTerminal(cols, rows),
-      onBuilder: () => openBuilder(),
-      onCopy: () => openCopy(),
-    });
-    latestButton = termControls.latestButton;
-    // In fullscreen the latest button follows the pane's own scroll (see
-    // latestHidden); the pane outlives terminal remounts on this route.
-    root.querySelector("#term-pane")?.addEventListener("scroll", syncLatest, { passive: true });
-    uploadView = shelf
-      ? mountUploads({
-          root,
-          shelf,
-          sessionId: () => sessionId,
-          typeText: (text) => callbacks.onKeyPress(new TextEncoder().encode(text)),
-        })
-      : null;
-    const bar = root.querySelector<HTMLElement>("#keybar");
-    if (bar) {
-      renderKeyBar(bar, (def) => {
-        // A latch toggles and shows pressed; a second tap releases it
-        // without sending. Arming also focuses the terminal, in the same
-        // tap, so the phone keyboard opens. Any other key goes out with
-        // the latch applied, then the latch releases.
-        if (def.id === "ctrl") {
-          const armed = latches.toggleCtrl();
-          updateKeyBarLatches(bar, latches.snapshot());
-          if (armed) {
-            focusTerminalForLatch();
-          }
-          return;
-        }
-        if (def.id === "shift") {
-          const armed = latches.toggleShift();
-          updateKeyBarLatches(bar, latches.snapshot());
-          if (armed) {
-            focusTerminalForLatch();
-          }
-          return;
-        }
-        const bytes = keyBytesWithModifiers(def.id, latches.snapshot());
-        latches.release();
-        updateKeyBarLatches(bar, latches.snapshot());
-        callbacks.onKeyPress(bytes);
-      });
-    }
-  };
-
   // A fresh screen starts clean: the last sign-out failure and the open
   // account menu belong to the screen that showed them, and a menu that
   // auto-opened over a failure must not follow the user onto the terminal.
@@ -475,8 +246,7 @@ export function createShell(
 
   const openGraph = (id: string, name: string) => {
     closeSheets();
-    teardownSessionWidgets();
-    sessionId = null;
+    sessionRoute.leave();
     route = "graph";
     beginRoute();
     graphRoute.open(id, name);
@@ -499,7 +269,7 @@ export function createShell(
     document.title = shellTitle(route, {
       homeTab: graphRoute.homeTab,
       graphName: graphRoute.displayName(),
-      sessionName,
+      sessionName: sessionRoute.openName,
     });
     if (route === "signin") {
       renderSignIn(root, entryViews);
@@ -514,7 +284,7 @@ export function createShell(
     } else if (route === "metrics") {
       metricsRoute.mount();
     } else {
-      renderSession();
+      sessionRoute.render();
     }
     mountHeaderIcon();
     // Every route above repainted the header with innerHTML, detaching the
@@ -570,12 +340,12 @@ export function createShell(
     {
       onWatchMetrics: () => callbacks.onWatchMetrics?.(),
       onUnwatchMetrics: () => callbacks.onUnwatchMetrics?.(),
-      onOpenMetrics: () => metricsRoute.openCurrent(route, sessionId),
+      onOpenMetrics: () => metricsRoute.openCurrent(route, sessionRoute.openId),
     },
     {
       openSession: (id) => callbacks.onOpenSession(id),
       showReturn: (ret) => { route = ret; beginRoute(); render(); },
-      teardownSession: () => teardownSessionWidgets(),
+      teardownSession: () => sessionRoute.teardown(),
       showMetrics: () => { closeSheets(); route = "metrics"; beginRoute(); render(); },
       chrome: () => ({
         header: header(), banner: connBanner(),
@@ -584,14 +354,40 @@ export function createShell(
       route: () => route,
     },
   );
+  const sessionRoute = new SessionRoute(
+    root,
+    { terminalFactory, shelf },
+    {
+      onKeyPress: (bytes) => callbacks.onKeyPress(bytes),
+      onTerminalInput: (bytes) => callbacks.onTerminalInput(bytes),
+      onControlSize: (cols, rows) => callbacks.onControlSize(cols, rows),
+      onLeaveSession: () => callbacks.onLeaveSession(),
+    },
+    {
+      header: () => header(),
+      banner: () => connBanner(),
+      wireBanner: () => wireConnBanner(),
+      route: () => route,
+      openBuilder: () => {
+        newDialog.close();
+        termCopy.close();
+        builder.open(root);
+      },
+      openCopy: (bufferText) => {
+        newDialog.close();
+        builder.close();
+        termCopy.open(root, { bufferText });
+      },
+    },
+  );
   graphRoute.start();
   metricsRoute.start();
 
   const stopStore = store.subscribe(() => {
     if (route === "sessions") {
       graphRoute.paintHome();
-    } else if (route === "session" && sessionId !== null) {
-      sessionName = convergeOpenSessionName(root, store, sessionId, sessionName);
+    } else if (route === "session") {
+      sessionRoute.storeUpdated(store);
     }
   });
 
@@ -599,8 +395,7 @@ export function createShell(
     if (route === "sessions") {
       graphRoute.paintHome();
     } else if (route === "session") {
-      syncFilesBadge();
-      uploadView?.render();
+      sessionRoute.shelfUpdated();
     }
   });
 
@@ -615,8 +410,7 @@ export function createShell(
   // widgets go, and an open graph watch drops with the view.
   const leaveRoute = () => {
     closeSheets();
-    teardownSessionWidgets();
-    sessionId = null;
+    sessionRoute.leave();
     graphRoute.leave();
   };
 
@@ -655,8 +449,7 @@ export function createShell(
     showSession(id: string, name: string): void {
       closeSheets();
       graphRoute.leave();
-      sessionId = id;
-      sessionName = name;
+      sessionRoute.open(id, name);
       route = "session";
       beginRoute();
       render();
@@ -665,7 +458,7 @@ export function createShell(
       openNew();
     },
     showBuilder(): void {
-      openBuilder();
+      sessionRoute.openBuilder();
     },
     setLogin(next: string | null): void {
       login = next;
@@ -763,97 +556,19 @@ export function createShell(
       }
     },
     ensureTerminal(id: string, cols: number, rows: number): void {
-      if (route !== "session" || id !== sessionId) {
-        return;
-      }
-      if (terminalView && cols === sessionCols && rows === sessionRows) {
-        return;
-      }
-      teardownTerminal();
-      const pane = root.querySelector<HTMLElement>("#term-pane");
-      if (!pane) {
-        return;
-      }
-      pane.replaceChildren();
-      sessionCols = cols;
-      sessionRows = rows;
-      terminalView = new TerminalView(
-        terminalFactory,
-        {
-          // Phone-keyboard keys honour the latches too: Ctrl+c sends 0x03,
-          // then the latch releases and the bar shows it. xterm's own
-          // reports (focus, cursor position, device attributes, mouse)
-          // are not typing: they go out unchanged, leaving the latch
-          // armed and the bar untouched — otherwise the focus-in report
-          // from tapping the terminal would spend the latch first.
-          onUserInput: (text) => {
-            if (isTerminalReport(text)) {
-              callbacks.onTerminalInput(new TextEncoder().encode(text));
-              return;
-            }
-            const bytes = textBytesWithModifiers(text, latches.snapshot());
-            if (latches.hasLatch) {
-              latches.release();
-              const bar = root.querySelector<HTMLElement>("#keybar");
-              if (bar) {
-                updateKeyBarLatches(bar, latches.snapshot());
-              }
-            }
-            callbacks.onTerminalInput(bytes);
-          },
-          onFollowChange: () => syncLatest(),
-          // A zoom changes how many cells fit: the size owner re-asserts.
-          onZoomChange: () => termControls?.schedule(),
-        },
-      );
-      terminalView.mount(pane, cols, rows);
-      // The selection float follows this mount: a remount rewires it.
-      copyFloatDispose?.();
-      copyFloatDispose = null;
-      const floatButton = root.querySelector<HTMLButtonElement>("#term-copy-float");
-      if (floatButton) {
-        copyFloatDispose = wireCopyFloat(floatButton, terminalView);
-      }
-      // A fine pointer types straight into the session: focus once on
-      // attach, after xterm is open. A touch device never auto-opens its
-      // keyboard — the first tap on the pane focuses instead.
-      if (pointerIsFine()) {
-        const attached = terminalView;
-        void attached.ready().then(() => {
-          if (terminalView === attached) {
-            attached.focus();
-          }
-        });
-      }
-      // A remembered control-size toggle re-asserts on every (re)mount —
-      // the size that fits this panel, never the snapshot's — so a
-      // reconnected session keeps the size this device asked for.
-      termControls?.reassert();
+      sessionRoute.ensureTerminal(id, cols, rows);
     },
     sessionResized(id: string, cols: number, rows: number): void {
-      if (route !== "session" || id !== sessionId) {
-        return;
-      }
-      // The controls decide: a follower resizes in place and refits, an
-      // owner that was overridden lets go first.
-      if (termControls) {
-        termControls.handleResized(cols, rows);
-      } else {
-        resizeLocalTerminal(cols, rows);
-      }
+      sessionRoute.sessionResized(id, cols, rows);
     },
     writeTerminal(data: Uint8Array): void {
-      terminalView?.write(data);
+      sessionRoute.writeTerminal(data);
     },
     clearTerminal(): void {
-      terminalView?.clear();
+      sessionRoute.clearTerminal();
     },
     showSessionExited(code: number): void {
-      const badge = root.querySelector<HTMLElement>("#session-exit");
-      if (badge) {
-        badge.textContent = `exited (${code})`;
-        badge.hidden = false;
-      }
+      sessionRoute.showSessionExited(code);
     },
     sheetSpawned(req: string, id: string): void {
       const spawnName = newDialog.handleSpawned(req);
@@ -861,7 +576,7 @@ export function createShell(
         return;
       }
       closeSheets();
-      spawnFlash = "Session started";
+      sessionRoute.setSpawnFlash("Session started");
       callbacks.onOpenSession(id, spawnName);
     },
     sheetComposed(req: string, text: string): void {
@@ -888,33 +603,10 @@ export function createShell(
       stopStore();
       stopShelf?.();
       closeSheets();
-      teardownSessionWidgets();
+      sessionRoute.dispose();
       hostIcon?.destroy();
       hostIcon = null;
     },
   };
 
-  function syncLatest(): void {
-    if (!latestButton) {
-      return;
-    }
-    const pane = root.querySelector<HTMLElement>("#term-pane");
-    latestButton.hidden = latestHidden(
-      terminalView?.isFollowing ?? true,
-      terminalView?.isAlternate ?? false,
-      pane?.scrollTop ?? 0,
-    );
-  }
-
-  // Remounting the terminal (a changed host size) drops the view only;
-  // the rest of the session route stays painted around it.
-  function teardownTerminal(): void {
-    terminalView?.dispose();
-    terminalView = null;
-    sessionCols = 0;
-    sessionRows = 0;
-    if (latestButton) {
-      latestButton.hidden = true;
-    }
-  }
 }
