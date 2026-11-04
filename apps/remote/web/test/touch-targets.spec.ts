@@ -118,16 +118,17 @@ test("touch_targets_meet_44px", async ({ page }) => {
   }
 });
 
-// Audit (2026-11-04): the terminal toolbar at phone widths. Keys and
-// latest go icon-only under 640 px (aria-label and title name them), so
-// no label runs past its button; with the latest button up, eight 44 px
-// targets wrap rather than run past the viewport; and the size switch's
-// label is a 44 px target.
+// Audit (2026-11-04): the terminal toolbar at phone widths. Keys goes
+// icon-only under 640 px (aria-label and title name it), so no label runs
+// past its button; the latest button floats over the terminal card's
+// bottom-right corner instead of wrapping onto a second toolbar row (which
+// cost the terminal a row), so the toolbar stays one 44 px row; and the
+// size switch's label is a 44 px target.
 for (const viewport of [
   { width: 360, height: 640 },
   { width: 390, height: 844 },
 ] as const) {
-  test(`terminal toolbar fits without clipping at ${viewport.width}px`, async ({ page }) => {
+  test(`terminal toolbar fits without clipping at ${viewport.width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize(viewport);
     await page.goto("/fake.html");
     await page.locator('[data-session="smoke"]').click();
@@ -151,22 +152,55 @@ for (const viewport of [
             width: box.width,
             height: box.height,
             left: box.left,
+            top: box.top,
             right: box.right,
             clipped: el.scrollWidth > el.clientWidth + 1,
           };
         });
       const toggle = document.querySelector(".term-size-toggle")?.getBoundingClientRect();
+      const latestEl = document.querySelector<HTMLElement>("#term-latest");
+      const latest = latestEl?.getBoundingClientRect();
+      const pane = document.querySelector("#term-pane")?.getBoundingClientRect();
+      const rowBox = controls.getBoundingClientRect();
       return {
         pageOverflow: doc.scrollWidth - doc.clientWidth,
         rowOverflow: controls.scrollWidth - controls.clientWidth,
+        rowHeight: rowBox.height,
         buttons,
         toggle: toggle ? { width: toggle.width, height: toggle.height } : null,
+        latestInToolbar: latestEl?.closest(".term-controls") !== null,
+        latestLabel: latestEl?.getAttribute("aria-label") ?? null,
+        latest: latest
+          ? { width: latest.width, height: latest.height, right: latest.right, bottom: latest.bottom, left: latest.left, top: latest.top }
+          : null,
+        pane: pane ? { right: pane.right, bottom: pane.bottom, left: pane.left, top: pane.top } : null,
       };
     });
     process.stdout.write(`toolbar at ${viewport.width}px: ${JSON.stringify(report)}\n`);
+    await page.screenshot({ path: testInfo.outputPath(`toolbar-${viewport.width}.png`) });
     expect(report.pageOverflow).toBeLessThanOrEqual(1);
     expect(report.rowOverflow).toBeLessThanOrEqual(1);
-    expect(report.buttons.map((button) => button.id)).toContain("term-latest");
+    // One toolbar row: every control at the 44 px floor, none wrapped.
+    expect(report.rowHeight).toBeLessThan(2 * 44);
+    expect(new Set(report.buttons.map((button) => Math.round(button.top))).size).toBe(1);
+    // latest floats over the card's bottom-right corner: a 44 px named
+    // target inside the pane, never in the toolbar.
+    expect(report.latestInToolbar).toBe(false);
+    expect(report.latestLabel).toBe("Scroll to the latest output");
+    const latest = report.latest;
+    const pane = report.pane;
+    expect(latest).not.toBeNull();
+    expect(pane).not.toBeNull();
+    if (latest && pane) {
+      expect(latest.width).toBeGreaterThanOrEqual(44);
+      expect(latest.height).toBeGreaterThanOrEqual(44);
+      expect(latest.right).toBeLessThanOrEqual(pane.right);
+      expect(latest.bottom).toBeLessThanOrEqual(pane.bottom);
+      expect(pane.right - latest.right).toBeLessThanOrEqual(16);
+      expect(pane.bottom - latest.bottom).toBeLessThanOrEqual(16);
+      expect(latest.left).toBeGreaterThanOrEqual(pane.left);
+      expect(latest.top).toBeGreaterThanOrEqual(pane.top);
+    }
     for (const button of report.buttons) {
       expect(button.clipped, `${button.id} clips its label`).toBe(false);
       expect(button.width, `${button.id} width`).toBeGreaterThanOrEqual(44);

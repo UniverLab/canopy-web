@@ -2,7 +2,8 @@
 // The session view's terminal controls: zoom, the key-bar switch, the
 // Prompt Builder button, the fullscreen button, the latest button, and
 // the per-session control-size toggle with its explainer. Rendered as
-// HTML beside the terminal pane and wired to the open TerminalView plus
+// HTML beside the terminal pane (the latest button floats over the
+// pane's bottom-right corner) and wired to the open TerminalView plus
 // the shell's live session state.
 //
 // The control-size toggle makes this device the size owner: it computes
@@ -57,14 +58,36 @@ export function termControlsHtml(): string {
           title="Show or hide the terminal keys"
         >${icon("keyboard")}<span>Keys</span></button>
         <button type="button" id="term-builder" aria-label="Builder">${icon("blocks")}<span>Builder</span></button>${fullscreen}
+      </div>`;
+}
+
+/**
+ * The latest button, floating over the terminal card's bottom-right
+ * corner rather than in the toolbar row, where an eighth 44 px target
+ * wrapped onto a row of its own on a phone and cost the terminal a row.
+ * Icon-only at every width: the aria-label and the title name it. The
+ * shell renders it inside the `.term-stage` beside `#term-pane`.
+ */
+export function termLatestHtml(): string {
+  return `
         <button
           type="button"
           id="term-latest"
           hidden
           aria-label="Scroll to the latest output"
           title="Scroll to the latest output"
-        >${icon("arrowDown")}<span>latest</span></button>
-      </div>`;
+        >${icon("arrowDown")}</button>`;
+}
+
+/**
+ * Whether the latest button stays hidden. On the shell's buffer it shows
+ * while the view no longer follows the bottom. A fullscreen app has no
+ * tail to follow (follow stays off) and the button floats over the frame,
+ * often over the app's own input line, so there it shows only while the
+ * pane is scrolled away from the frame's top, which a tap brings back.
+ */
+export function latestHidden(following: boolean, alternate: boolean, paneScrollTop: number): boolean {
+  return alternate ? paneScrollTop <= 0 : following;
 }
 
 const SIZE_NOTE = "Only one client should control the size.";
@@ -194,11 +217,10 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
   }
   const latestButton = root.querySelector<HTMLButtonElement>("#term-latest");
   latestButton?.addEventListener("click", () => {
-    const view = deps.terminalView();
-    view?.scrollToLatest();
-    // In fullscreen follow stays off, so the button stays visible; anywhere
-    // else the tap means "follow now" and hides it.
-    if (latestButton && !view?.isAlternate) {
+    deps.terminalView()?.scrollToLatest();
+    // The tap means "follow now", or in fullscreen "back to the frame's
+    // top": either way there is nothing left to jump to.
+    if (latestButton) {
       latestButton.hidden = true;
     }
   });

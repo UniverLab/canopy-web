@@ -697,10 +697,10 @@ label > textarea {
   transform-origin: top left;
 }
 
-/* The row wraps rather than clips: with fullscreen, both attach buttons
- * and the latest button up, eight 44 px targets need more than a phone's
- * 328-358 px, so the latest button drops to a second row instead of
- * running past the viewport. */
+/* The row wraps rather than clips as a last resort: the latest button
+ * floats over the terminal (below), so with fullscreen and both attach
+ * buttons up the row holds seven 44 px targets and stays one row tall on
+ * a phone. */
 .term-controls {
   display: flex;
   flex-wrap: wrap;
@@ -722,8 +722,36 @@ label > textarea {
   white-space: nowrap;
 }
 
+/* The terminal card plus the latest button floating over its
+ * bottom-right corner: the stage is the positioning box, so the button
+ * stays put while the pane scrolls beneath it. It only shows once the view
+ * left the bottom (or, in fullscreen, the frame's top), when the cursor
+ * line is off screen; a 44 px round target in the key look, inset by the
+ * pane's padding, and slightly see-through until pointed at or focused. */
+.term-stage {
+  position: relative;
+  min-height: 0;
+}
+
 #term-latest {
-  margin-left: auto;
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  min-width: 2.75rem;
+  padding: 0;
+  border-radius: 50%;
+  opacity: 0.85;
+}
+
+#term-latest:hover,
+#term-latest:focus-visible {
+  opacity: 1;
 }
 
 #term-latest[hidden] {
@@ -882,11 +910,10 @@ label > textarea {
   }
 
   /* The labelled controls go icon-only on a phone: the aria-label (and
-   * the title tooltip) names them, and eight 44 px targets stay inside
+   * the title tooltip) names them, and seven 44 px targets stay inside
    * 360 px without a word overflowing its button. */
   #term-builder span,
-  #term-keys span,
-  #term-latest span {
+  #term-keys span {
     display: none;
   }
 

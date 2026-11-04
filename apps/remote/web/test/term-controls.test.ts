@@ -10,7 +10,9 @@ import { icon } from "../src/icons-dom.js";
 import {
   SIZE_DEBOUNCE_MS,
   SIZE_TAKEN_NOTE,
+  latestHidden,
   termControlsHtml,
+  termLatestHtml,
   termSizeHtml,
   wireTermControls,
 } from "../src/term-controls.js";
@@ -408,5 +410,27 @@ describe("control-size toggle", () => {
     controls.handleResized(120, 40);
     expect(toggle().checked).toBe(true);
     expect(local).toEqual([{ cols: 120, rows: 40 }]);
+  });
+});
+
+describe("the latest button", () => {
+  it("renders outside the toolbar, icon-only and named", () => {
+    const root = document.createElement("div");
+    root.innerHTML = termControlsHtml();
+    expect(root.querySelector("#term-latest")).toBeNull();
+    root.innerHTML = termLatestHtml();
+    const latest = root.querySelector<HTMLButtonElement>("#term-latest");
+    expect(latest?.hidden).toBe(true);
+    expect(latest?.getAttribute("aria-label")).toBe("Scroll to the latest output");
+    expect(latest?.getAttribute("title")).toBe("Scroll to the latest output");
+    expect(latest?.textContent?.trim()).toBe("");
+  });
+
+  it("shows on the shell while not following, in fullscreen while scrolled down", () => {
+    expect(latestHidden(true, false, 0)).toBe(true);
+    expect(latestHidden(false, false, 0)).toBe(false);
+    expect(latestHidden(false, false, 300)).toBe(false);
+    expect(latestHidden(false, true, 0)).toBe(true);
+    expect(latestHidden(false, true, 1)).toBe(false);
   });
 });

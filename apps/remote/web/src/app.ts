@@ -27,7 +27,13 @@ import type { ShelfHandle } from "./shelf-controller.js";
 import { convergeOpenSessionName, type SessionStore } from "./sessions.js";
 import { createXtermHandle, TerminalView } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
-import { termControlsHtml, termSizeHtml, wireTermControls } from "./term-controls.js";
+import {
+  latestHidden,
+  termControlsHtml,
+  termLatestHtml,
+  termSizeHtml,
+  wireTermControls,
+} from "./term-controls.js";
 import type { TermControls } from "./term-controls.js";
 import { pointerIsFine } from "./terminal-prefs.js";
 import { shellTitle } from "./titles.js";
@@ -335,8 +341,10 @@ export function createShell(
           class="files-badge" id="session-files-badge" hidden
         ></span></button>
       </div>
-      <div class="term-pane" id="term-pane">
-        <p class="term-placeholder">Attaching…</p>
+      <div class="term-stage">
+        <div class="term-pane" id="term-pane">
+          <p class="term-placeholder">Attaching…</p>
+        </div>${termLatestHtml()}
       </div>
       ${termControlsHtml()}
       <div class="upload-tray" id="upload-tray" hidden></div>
@@ -365,6 +373,9 @@ export function createShell(
       onBuilder: () => openBuilder(),
     });
     latestButton = termControls.latestButton;
+    // In fullscreen the latest button follows the pane's own scroll (see
+    // latestHidden); the pane outlives terminal remounts on this route.
+    root.querySelector("#term-pane")?.addEventListener("scroll", syncLatest, { passive: true });
     uploadView = shelf
       ? mountUploads({
           root,
@@ -725,11 +736,7 @@ export function createShell(
             }
             callbacks.onTerminalInput(bytes);
           },
-          onFollowChange: ({ following }) => {
-            if (latestButton) {
-              latestButton.hidden = following;
-            }
-          },
+          onFollowChange: () => syncLatest(),
           // A zoom changes how many cells fit: the size owner re-asserts.
           onZoomChange: () => termControls?.schedule(),
         },
@@ -808,6 +815,18 @@ export function createShell(
       hostIcon = null;
     },
   };
+
+  function syncLatest(): void {
+    if (!latestButton) {
+      return;
+    }
+    const pane = root.querySelector<HTMLElement>("#term-pane");
+    latestButton.hidden = latestHidden(
+      terminalView?.isFollowing ?? true,
+      terminalView?.isAlternate ?? false,
+      pane?.scrollTop ?? 0,
+    );
+  }
 
   // Remounting the terminal (a changed host size) drops the view only;
   // the rest of the session route stays painted around it.

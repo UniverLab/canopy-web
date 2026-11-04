@@ -765,15 +765,35 @@ describe("createShell", () => {
     expect(latest.hidden).toBe(true);
   });
 
-  it("keeps the latest button visible when tapped in fullscreen", () => {
+  it("floats the latest button over the terminal card, not in the toolbar", () => {
+    shell.showSession("s1", "build");
+    const latest = query<HTMLButtonElement>("#term-latest");
+    expect(latest.closest(".term-controls")).toBeNull();
+    expect(latest.parentElement?.classList.contains("term-stage")).toBe(true);
+    expect(latest.parentElement?.querySelector(":scope > #term-pane")).not.toBeNull();
+    // Icon-only everywhere: the aria-label names it.
+    expect(latest.textContent?.trim()).toBe("");
+    expect(latest.querySelector("svg")).not.toBeNull();
+  });
+
+  it("in fullscreen shows latest only while the pane is scrolled off the frame top", () => {
     shell.showSession("s1", "build");
     shell.ensureTerminal("s1", 80, 24);
     const latest = query<HTMLButtonElement>("#term-latest");
+    const pane = query<HTMLElement>("#term-pane");
     expect(latest.hidden).toBe(true);
+    // A fullscreen app paints from the frame's top: nothing to jump to,
+    // and the floating button would sit over the app's input line.
     handles[0]?.emitBufferChange(true);
+    expect(latest.hidden).toBe(true);
+    pane.scrollTop = 120;
+    pane.dispatchEvent(new Event("scroll"));
     expect(latest.hidden).toBe(false);
-    // Follow stays off in fullscreen, so the tap must not hide the button.
+    // The tap brings the frame's top back and the button goes.
     latest.click();
+    expect(latest.hidden).toBe(true);
+    pane.scrollTop = 120;
+    pane.dispatchEvent(new Event("scroll"));
     expect(latest.hidden).toBe(false);
     // Back to the shell: follow resumes and the button hides again.
     handles[0]?.emitBufferChange(false);
