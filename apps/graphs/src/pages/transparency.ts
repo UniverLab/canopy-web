@@ -1,18 +1,19 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
  * The transparency page: how the catalogue is built, how the model review
- * works, the exact prompt it runs, and every verdict it gave.
+ * works, the exact prompt it runs, a summary of its verdicts and the latest
+ * few, pointing at each document's own page for its own verdict.
  *
  * A pure `Page` over prose from copy.ts and the bundled review assets:
  * the indexing story (cron, discovery, per-repo fetch, validation, KV
  * writes, serve paths, where the review hooks in) with the mermaid
  * `sequenceDiagram` pre-rendered at build time to a wide SVG and a phone
  * timeline behind one CSS switch (no runtime mermaid.js), the review
- * rules, the versioned prompt verbatim, and the
- * stored verdicts with hash and date. Advisory only, said twice: once in
+ * rules, the versioned prompt verbatim, the verdict summary and the 10
+ * newest verdicts with hash and date. Advisory only, said twice: once in
  * the review rules, once beside the verdicts.
  */
-import { VERDICT_LABELS, type ReviewEntry } from "../review.js";
+import { VERDICT_LABELS, type ReviewEntry, type Verdict } from "../review.js";
 import {
   TRANSPARENCY_CRON_BODY,
   TRANSPARENCY_DESCRIPTION,
@@ -32,11 +33,14 @@ import {
   TRANSPARENCY_SERVE_BODY,
   TRANSPARENCY_TITLE,
   TRANSPARENCY_VALIDATE_BODY,
+  TRANSPARENCY_VERDICTS_CATALOGUE_LABEL,
   TRANSPARENCY_VERDICTS_HEADING,
+  TRANSPARENCY_VERDICTS_OWN_PAGE,
   TRANSPARENCY_WRITES_BODY,
   VERDICT_DATE_LABEL,
   VERDICT_HASH_LABEL,
   transparencyPromptLine,
+  transparencyVerdictsSummary,
   verdictOf,
 } from "./copy.js";
 import { fencedBlock } from "./document.js";
@@ -105,6 +109,34 @@ function reviewPath(entry: ReviewEntry): string {
     : `/${verb}/${encodeURIComponent(entry.owner)}/${encodeURIComponent(entry.repo)}/${slug}`;
 }
 
+/** How many recent verdicts the transparency page lists. */
+const TRANSPARENCY_VERDICT_ROWS = 10;
+
+/** The verdicts in display order: the good news first, the flags last. */
+const VERDICT_ORDER: Verdict[] = ["looks-safe", "needs-look", "flagged"];
+
+/** The count per verdict over every stored verdict. */
+function verdictCounts(rows: ReviewEntry[]): Record<Verdict, number> {
+  const counts: Record<Verdict, number> = { "looks-safe": 0, "needs-look": 0, flagged: 0 };
+  for (const row of rows) {
+    counts[row.verdict] += 1;
+  }
+  return counts;
+}
+
+/** The summary's per-verdict parts, in display order. */
+function verdictSummaryParts(rows: ReviewEntry[]): string[] {
+  const counts = verdictCounts(rows);
+  return VERDICT_ORDER.map((verdict) => `${VERDICT_LABELS[verdict]} ${counts[verdict]}`);
+}
+
+/** The newest reviews first, capped at the list length; equal dates keep order. */
+function recentReviews(rows: ReviewEntry[]): ReviewEntry[] {
+  return [...rows]
+    .sort((a, b) => b.reviewed_at.localeCompare(a.reviewed_at))
+    .slice(0, TRANSPARENCY_VERDICT_ROWS);
+}
+
 /** One verdict row: the document linked, the badge line, hash and date. */
 function verdictItem(entry: ReviewEntry): string {
   const label = VERDICT_LABELS[entry.verdict];
@@ -169,9 +201,14 @@ export function transparencyPage(input: TransparencyInput): Page {
     para(transparencyPromptLine(input.promptVersion)),
     `<pre class="prompt"><code>${escapeHtml(input.prompt)}</code></pre>`,
     heading(TRANSPARENCY_VERDICTS_HEADING),
-    input.reviews.length === 0
-      ? para(TRANSPARENCY_NO_VERDICTS)
-      : `<ol class="verdict-list">${input.reviews.map(verdictItem).join("")}</ol>`,
+    ...(input.reviews.length === 0
+      ? [para(TRANSPARENCY_NO_VERDICTS)]
+      : [
+        para(transparencyVerdictsSummary(input.reviews.length, verdictSummaryParts(input.reviews))),
+        `<ol class="verdict-list">${recentReviews(input.reviews).map(verdictItem).join("")}</ol>`,
+        `<p>${escapeHtml(TRANSPARENCY_VERDICTS_OWN_PAGE)}: ` +
+          `<a href="/">${escapeHtml(TRANSPARENCY_VERDICTS_CATALOGUE_LABEL)}</a>.</p>`,
+      ]),
   ].join("\n");
 
   const markdown = [
@@ -197,7 +234,14 @@ export function transparencyPage(input: TransparencyInput): Page {
     ``,
     ...(input.reviews.length === 0
       ? [TRANSPARENCY_NO_VERDICTS, ``]
-      : [...input.reviews.map(verdictMarkdown), ``]),
+      : [
+        transparencyVerdictsSummary(input.reviews.length, verdictSummaryParts(input.reviews)),
+        ``,
+        ...recentReviews(input.reviews).map(verdictMarkdown),
+        ``,
+        `${TRANSPARENCY_VERDICTS_OWN_PAGE}: [${TRANSPARENCY_VERDICTS_CATALOGUE_LABEL}](/)`,
+        ``,
+      ]),
   ].join("\n");
 
   return { title: TRANSPARENCY_TITLE, description: TRANSPARENCY_DESCRIPTION, html, markdown };

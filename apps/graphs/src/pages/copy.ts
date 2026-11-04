@@ -663,17 +663,17 @@ export const TRANSPARENCY_HREF = "/transparency";
 export const TRANSPARENCY_LABEL = "Transparency";
 export const TRANSPARENCY_TITLE = "Transparency";
 export const TRANSPARENCY_DESCRIPTION =
-  "How the catalogue is indexed, how the model review works, and every verdict it gave.";
+  "How the catalogue is indexed, how the model review works, a summary of its verdicts and the latest few.";
 
 /** The transparency lede: what the page promises. */
 export const TRANSPARENCY_LEDE =
-  "How this catalogue is built, what the model review is and is not, the exact prompt it runs, and every verdict it gave.";
+  "How this catalogue is built, what the model review is and is not, the exact prompt it runs, a summary of its verdicts and the latest few.";
 
 /** The transparency sections, in page order. */
 export const TRANSPARENCY_INDEX_HEADING = "How the catalogue is built";
 export const TRANSPARENCY_REVIEW_HEADING = "How the review works";
 export const TRANSPARENCY_PROMPT_HEADING = "The review prompt";
-export const TRANSPARENCY_VERDICTS_HEADING = "Verdicts";
+export const TRANSPARENCY_VERDICTS_HEADING = "The latest verdicts";
 export const TRANSPARENCY_DIAGRAM_HEADING = "Indexing diagram";
 
 /** The indexing story, one paragraph per step, in run order. */
@@ -719,6 +719,18 @@ export function verdictOf(model: string): string {
 
 /** Shown when no document has been reviewed yet. */
 export const TRANSPARENCY_NO_VERDICTS = "No documents reviewed yet.";
+
+/** The line under the verdict list pointing each document at its own page. */
+export const TRANSPARENCY_VERDICTS_OWN_PAGE =
+  "Every document's own page carries its verdict, with its hash and date";
+
+/** The link label after that line: back to the catalogue index. */
+export const TRANSPARENCY_VERDICTS_CATALOGUE_LABEL = "browse the catalogue";
+
+/** The summary over the verdict list: totals first, then one count per verdict. */
+export function transparencyVerdictsSummary(total: number, parts: string[]): string {
+  return `${total} documents reviewed — ${parts.join(", ")}.`;
+}
 
 /** One verdict row's hash and date labels. */
 export const VERDICT_HASH_LABEL = "hash";
