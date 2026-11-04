@@ -53,10 +53,10 @@ the graph should publish the branch.
 
 In `adversarial-developer` the documenter leaves its docs uncommitted, so
 `Commit` lands the code and the docs together under the one subject.
-`canopy-builder` commits twice the same way: `Commit spec` lands the
-spec's own message after the completeness review, and `Commit auditor
-fixes` lands `fix(<scope>): audit fixes for <name>` after the auditor's
-repairs, and both push the branch when they succeed.
+`canopy-builder` commits once per spec the same way: `Commit spec` lands
+the spec's own message after the auditor's repairs pass the gates again,
+and pushes the branch when it succeeds. Its documenter commits the docs
+separately.
 
 A second check can prove the commit landed — that HEAD moved since the
 spec started — but neither loop needs one: the gates and the review
