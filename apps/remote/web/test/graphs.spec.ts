@@ -61,7 +61,13 @@ test("watches the running graph live on its plate and checklist", async ({ page 
   await page.locator('[data-graph="g-loop"]').click();
   await expect(page.locator("main.graph-view")).toBeVisible();
   const sent = await page.evaluate(() => window.__fake.sent());
-  expect(sent).toContainEqual({ t: "graph_watch", id: "g-loop" });
+  // The watch carries a non-empty req, or the host refuses the frame.
+  const watch = sent.find((frame) => (frame as { t: unknown }).t === "graph_watch") as
+    | { req: unknown }
+    | undefined;
+  expect(sent).toContainEqual(expect.objectContaining({ t: "graph_watch", id: "g-loop" }));
+  expect(typeof watch?.req).toBe("string");
+  expect(watch?.req).not.toBe("");
 
   // The header: name, chip and count.
   await expect(page.locator(".graph-title")).toHaveText("palette-loop");

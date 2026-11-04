@@ -265,8 +265,8 @@ export function buildGraphs(req: string): string {
   return JSON.stringify({ t: "graphs", req });
 }
 
-export function buildGraphWatch(id: string): string {
-  return JSON.stringify({ t: "graph_watch", id });
+export function buildGraphWatch(req: string, id: string): string {
+  return JSON.stringify({ t: "graph_watch", req, id });
 }
 
 export function buildGraphUnwatch(id: string): string {

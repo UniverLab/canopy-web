@@ -240,6 +240,10 @@ export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
       if (shelf?.handleError(clean)) {
         return;
       }
+      // A failed graph watch paints in the graph view, never as a dialog.
+      if (graphs?.handleWatchError(clean.message, clean.req)) {
+        return;
+      }
       shell.sheetError(clean.message, clean.req, clean.code);
     }
   }

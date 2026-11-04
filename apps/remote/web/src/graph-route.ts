@@ -207,6 +207,7 @@ export class GraphRoute {
       doc: this.graphs?.currentDoc() ?? null,
       state: this.graphs?.currentState() ?? null,
       receivedAt: this.graphs?.lastReceivedAt() ?? null,
+      watchError: this.graphs?.watchError() ?? null,
       connected: this.hooks.connectionState() === "connected",
       orientation: (globalThis.innerWidth ?? 0) < 720 ? "vertical" : "horizontal",
       onBack: () => this.back(),

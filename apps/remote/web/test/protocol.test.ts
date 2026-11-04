@@ -647,7 +647,7 @@ describe("graph frames", () => {
 
   it("builds the exact graph requests", () => {
     expect(JSON.parse(buildGraphs("r1"))).toEqual({ t: "graphs", req: "r1" });
-    expect(JSON.parse(buildGraphWatch("g1"))).toEqual({ t: "graph_watch", id: "g1" });
+    expect(JSON.parse(buildGraphWatch("r1", "g1"))).toEqual({ t: "graph_watch", req: "r1", id: "g1" });
     expect(JSON.parse(buildGraphUnwatch("g1"))).toEqual({ t: "graph_unwatch", id: "g1" });
   });
 

@@ -28,6 +28,8 @@ export interface GraphViewArgs {
   state: GraphState | null;
   /** When the last state arrived locally (epoch ms), or null. */
   receivedAt: number | null;
+  /** The failed watch's message, shown until the drawing arrives. */
+  watchError?: string | null;
   connected: boolean;
   orientation: "vertical" | "horizontal";
   onBack: () => void;
@@ -62,6 +64,9 @@ export function plateStateOf(state: GraphState | null): PlateState | undefined {
 /** The plate with the live overlay; a missing drawing holds the stage. */
 function stageHtml(args: GraphViewArgs): string {
   if (args.doc === null || args.doc === undefined) {
+    if (args.watchError !== null && args.watchError !== undefined) {
+      return `<p class="graph-wait">Could not open this graph: ${esc(args.watchError)}</p>`;
+    }
     return `<p class="graph-wait">Waiting for the drawing…</p>`;
   }
   const html = renderPlate(args.doc as GraphDocument, args.orientation, plateStateOf(args.state));
@@ -88,7 +93,7 @@ function specRow(spec: GraphSpecRow): string {
 
 function checklistHtml(state: GraphState | null): string {
   if (state === null) {
-    return `<p class="empty">No state yet.</p>`;
+    return `<p class="empty">Waiting for the specs…</p>`;
   }
   if (state.specs.length === 0) {
     return `<p class="empty">No specs in the queue.</p>`;
@@ -191,7 +196,7 @@ function viewHtml(args: GraphViewArgs): string {
     `<p class="graph-blocker" id="graph-blocker" hidden></p>` +
     `<p class="graph-note" id="graph-note" hidden></p>` +
     `<div class="graph-stage" id="graph-stage"></div>` +
-    `<h2>Checklist</h2>` +
+    `<h2>Specs</h2>` +
     `<ol class="spec-list" id="spec-list"></ol>` +
     `</main>` +
     REMOTE_FOOTER

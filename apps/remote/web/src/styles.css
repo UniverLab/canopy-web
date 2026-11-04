@@ -520,6 +520,12 @@ label > textarea {
   margin: 0.75rem 0;
 }
 
+/* The owner's head holds only the New button: space-between with one
+ * child left-aligns, so the button pushes itself right. */
+.sessions-head #session-new {
+  margin-left: auto;
+}
+
 /* The Agents / Terminals group headings: the h3 scale, one step down
  * from the Sessions title, spacing only. */
 .session-group {

@@ -106,6 +106,25 @@ describe("renderSessions", () => {
     expect(empty.news()).toBe(1);
   });
 
+  it("heads the owner list with no Sessions title, the guest list with Shared sessions", () => {
+    const { root } = render([item()]);
+    // The tab above already says Sessions: the head holds only the button.
+    expect(root.querySelector(".sessions-head h2")).toBeNull();
+    expect(root.querySelector(".sessions-head #session-new")).not.toBeNull();
+    const guest = document.createElement("div");
+    document.body.appendChild(guest);
+    renderSessions(
+      guest,
+      [item()],
+      NOW,
+      { onOpen: () => {}, onNew: () => {} },
+      undefined,
+      true,
+      true,
+    );
+    expect(guest.querySelector(".sessions-head h2")?.textContent).toBe("Shared sessions");
+  });
+
   it("escapes session names", () => {
     const { root } = render([item({ name: "<img src=x>" })]);
     expect(root.querySelector(".session-name")?.innerHTML).toBe("&lt;img src=x&gt;");
