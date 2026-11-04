@@ -18,15 +18,21 @@ import { icon, mountMorphSlot, type RemoteIconName, type MorphSlot } from "./ico
 import { renderKeyBar, updateKeyBarLatches } from "./keys.js";
 import { MetricsRoute } from "./metrics-route.js";
 import type { MetricsStore } from "./metrics-store.js";
-import { keyBytesWithModifiers, ModifierLatches, textBytesWithModifiers } from "./modifiers.js";
+import {
+  isTerminalReport,
+  keyBytesWithModifiers,
+  ModifierLatches,
+  textBytesWithModifiers,
+} from "./modifiers.js";
 import { NewDialog } from "./new-dialog.js";
 import { defaultDeviceLabel } from "./pairing.js";
-import type { PromptDraft, SpawnRequest } from "./protocol.js";
+import type { PromptDraft, ScheduledItem, SpawnRequest } from "./protocol.js";
 import type { OnlineHost } from "./relay.js";
 import type { ShelfHandle } from "./shelf-controller.js";
 import { convergeOpenSessionName, type SessionStore } from "./sessions.js";
 import { createXtermHandle, TerminalView } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
+import { TermCopySheet, termCopyFloatHtml, wireCopyFloat } from "./term-copy.js";
 import {
   latestHidden,
   termControlsHtml,
@@ -68,6 +74,9 @@ export interface ShellCallbacks {
   onSpawn: (spawn: SpawnRequest, req: string) => boolean;
   onCompose: (draft: PromptDraft, req: string) => boolean;
   onSendDraft: (draft: PromptDraft, req: string) => boolean;
+  onSchedule: (draft: PromptDraft, fireAt: string, req: string) => boolean;
+  onScheduledList: (req: string) => boolean;
+  onScheduledCancel: (scheduleId: string, req: string) => boolean;
   /** Ask the host for the graphs list (the Graphs tab shows and polls it). */
   onGraphsRequest: () => void;
   /** Start watching a graph: the host pushes graph_state until unwatched. */
@@ -105,6 +114,8 @@ export interface Shell {
   showSessionExited: (code: number) => void;
   sheetSpawned: (req: string, id: string) => void;
   sheetComposed: (req: string, text: string) => void;
+  sheetScheduled: (req: string, item: ScheduledItem) => void;
+  sheetScheduledList: (req: string, items: ScheduledItem[]) => void;
   sheetOk: (req: string) => void;
   sheetError: (message: string, req: string | null, code: string) => void;
   dispose: () => void;
@@ -160,6 +171,7 @@ export function createShell(
   let sessionRows = 0;
   let terminalView: TerminalView | null = null;
   let latestButton: HTMLButtonElement | null = null;
+  let copyFloatDispose: (() => void) | null = null;
   let termControls: TermControls | null = null;
   let uploadView: UploadView | null = null;
   // The two state-telling slots: the host chip's link icon and the Files
@@ -183,10 +195,15 @@ export function createShell(
   const builder = new Builder(catalog, {
     onCompose: (draft, req) => callbacks.onCompose(draft, req),
     onSend: (draft, req) => callbacks.onSendDraft(draft, req),
+    onSchedule: (draft, fireAt, req) => callbacks.onSchedule(draft, fireAt, req),
+    onScheduledList: (req) => callbacks.onScheduledList(req),
+    onScheduledCancel: (scheduleId, req) => callbacks.onScheduledCancel(scheduleId, req),
   });
+  const termCopy = new TermCopySheet();
   const closeSheets = () => {
     newDialog.close();
     builder.close();
+    termCopy.close();
     shelf?.close();
   };
 
@@ -292,7 +309,17 @@ export function createShell(
       return;
     }
     newDialog.close();
+    termCopy.close();
     builder.open(root);
+  };
+
+  const openCopy = () => {
+    if (route !== "session") {
+      return;
+    }
+    newDialog.close();
+    builder.close();
+    termCopy.open(root, { bufferText: (maxLines) => terminalView?.bufferText(maxLines) ?? "" });
   };
 
   // The local terminal takes a new grid in place (no remount, the
@@ -311,6 +338,8 @@ export function createShell(
   const teardownSessionWidgets = () => {
     termControls?.dispose();
     termControls = null;
+    copyFloatDispose?.();
+    copyFloatDispose = null;
     terminalView?.dispose();
     terminalView = null;
     latestButton = null;
@@ -319,6 +348,26 @@ export function createShell(
     shelfIcon = null;
     sessionCols = 0;
     sessionRows = 0;
+  };
+
+  // Arming a latch focuses the terminal in the same tap: a phone only
+  // opens its keyboard inside the user gesture. A terminal still behind
+  // the font gate focuses once it opens, as a pane tap does; releasing a
+  // latch never touches focus. Harmless with a mouse too.
+  const focusTerminalForLatch = (): void => {
+    const view = terminalView;
+    if (!view) {
+      return;
+    }
+    if (view.fitted) {
+      view.focus();
+      return;
+    }
+    void view.ready().then(() => {
+      if (terminalView === view) {
+        view.focus();
+      }
+    });
   };
 
   const renderSession = () => {
@@ -344,7 +393,7 @@ export function createShell(
       <div class="term-stage">
         <div class="term-pane" id="term-pane">
           <p class="term-placeholder">Attaching…</p>
-        </div>${termLatestHtml()}
+        </div>${termLatestHtml()}${termCopyFloatHtml()}
       </div>
       ${termControlsHtml()}
       <div class="upload-tray" id="upload-tray" hidden></div>
@@ -371,6 +420,7 @@ export function createShell(
       onControlSize: (cols, rows) => callbacks.onControlSize(cols, rows),
       onLocalSize: (cols, rows) => resizeLocalTerminal(cols, rows),
       onBuilder: () => openBuilder(),
+      onCopy: () => openCopy(),
     });
     latestButton = termControls.latestButton;
     // In fullscreen the latest button follows the pane's own scroll (see
@@ -388,16 +438,23 @@ export function createShell(
     if (bar) {
       renderKeyBar(bar, (def) => {
         // A latch toggles and shows pressed; a second tap releases it
-        // without sending. Any other key goes out with the latch applied,
-        // then the latch releases.
+        // without sending. Arming also focuses the terminal, in the same
+        // tap, so the phone keyboard opens. Any other key goes out with
+        // the latch applied, then the latch releases.
         if (def.id === "ctrl") {
-          latches.toggleCtrl();
+          const armed = latches.toggleCtrl();
           updateKeyBarLatches(bar, latches.snapshot());
+          if (armed) {
+            focusTerminalForLatch();
+          }
           return;
         }
         if (def.id === "shift") {
-          latches.toggleShift();
+          const armed = latches.toggleShift();
           updateKeyBarLatches(bar, latches.snapshot());
+          if (armed) {
+            focusTerminalForLatch();
+          }
           return;
         }
         const bytes = keyBytesWithModifiers(def.id, latches.snapshot());
@@ -724,8 +781,16 @@ export function createShell(
         terminalFactory,
         {
           // Phone-keyboard keys honour the latches too: Ctrl+c sends 0x03,
-          // then the latch releases and the bar shows it.
+          // then the latch releases and the bar shows it. xterm's own
+          // reports (focus, cursor position, device attributes, mouse)
+          // are not typing: they go out unchanged, leaving the latch
+          // armed and the bar untouched — otherwise the focus-in report
+          // from tapping the terminal would spend the latch first.
           onUserInput: (text) => {
+            if (isTerminalReport(text)) {
+              callbacks.onTerminalInput(new TextEncoder().encode(text));
+              return;
+            }
             const bytes = textBytesWithModifiers(text, latches.snapshot());
             if (latches.hasLatch) {
               latches.release();
@@ -742,6 +807,13 @@ export function createShell(
         },
       );
       terminalView.mount(pane, cols, rows);
+      // The selection float follows this mount: a remount rewires it.
+      copyFloatDispose?.();
+      copyFloatDispose = null;
+      const floatButton = root.querySelector<HTMLButtonElement>("#term-copy-float");
+      if (floatButton) {
+        copyFloatDispose = wireCopyFloat(floatButton, terminalView);
+      }
       // A fine pointer types straight into the session: focus once on
       // attach, after xterm is open. A touch device never auto-opens its
       // keyboard — the first tap on the pane focuses instead.
@@ -794,6 +866,12 @@ export function createShell(
     },
     sheetComposed(req: string, text: string): void {
       builder.handleComposed(req, text);
+    },
+    sheetScheduled(req: string, item: ScheduledItem): void {
+      builder.handleScheduled(req, item);
+    },
+    sheetScheduledList(req: string, items: ScheduledItem[]): void {
+      builder.handleScheduledList(req, items);
     },
     sheetOk(req: string): void {
       builder.handleOk(req);

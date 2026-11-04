@@ -408,6 +408,9 @@ class FakeGuestHandle implements TerminalHandle {
     callback();
     return () => {};
   };
+  getSelection = (): string => "";
+  onSelectionChange = (): (() => void) => () => {};
+  bufferText = (): string => "";
   dispose = (): void => {};
 
   emitInput(text: string): void {

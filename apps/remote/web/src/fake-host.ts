@@ -137,6 +137,10 @@ function main(): void {
   };
   let nextSpawn = 0;
   let promptError: { code: string; message: string } | null = null;
+  // The pending schedules per session: the preview is the composed text's
+  // first 120 chars, like the real host's.
+  const scheduled: { id: string; sessionId: string; fire_at: string; preview: string }[] = [];
+  let scheduleCounter = 0;
 
   const sessions: SessionItem[] = [
     {
@@ -402,6 +406,8 @@ function main(): void {
       data?: string;
       cols?: number;
       rows?: number;
+      fire_at?: string;
+      schedule_id?: string;
     };
     sent.push(frame);
     if (frame.t === "list") {
@@ -563,6 +569,41 @@ function main(): void {
       } else {
         deliver({ t: "ok", req: frame.req });
       }
+    } else if (
+      frame.t === "prompt_schedule" &&
+      typeof frame.req === "string" &&
+      typeof frame.id === "string" &&
+      typeof frame.fire_at === "string"
+    ) {
+      scheduleCounter += 1;
+      const item = {
+        id: `ss-${scheduleCounter}`,
+        fire_at: frame.fire_at,
+        preview: composeText(frame.draft ?? { sections: [], skills: [] }).slice(0, 120),
+      };
+      scheduled.push({ ...item, sessionId: frame.id });
+      deliver({ t: "scheduled", req: frame.req, item });
+    } else if (frame.t === "scheduled_list" && typeof frame.req === "string" && typeof frame.id === "string") {
+      const items = scheduled
+        .filter((entry) => entry.sessionId === frame.id)
+        .sort((a, b) => Date.parse(a.fire_at) - Date.parse(b.fire_at))
+        .map((entry) => ({ id: entry.id, fire_at: entry.fire_at, preview: entry.preview }));
+      deliver({ t: "scheduled_list", req: frame.req, id: frame.id, items });
+    } else if (
+      frame.t === "scheduled_cancel" &&
+      typeof frame.req === "string" &&
+      typeof frame.id === "string" &&
+      typeof frame.schedule_id === "string"
+    ) {
+      const index = scheduled.findIndex(
+        (entry) => entry.sessionId === frame.id && entry.id === frame.schedule_id,
+      );
+      if (index < 0) {
+        deliver({ t: "error", req: frame.req, code: "not_found", message: "no such schedule" });
+      } else {
+        scheduled.splice(index, 1);
+        deliver({ t: "ok", req: frame.req });
+      }
     }
     return true;
   };
@@ -681,6 +722,9 @@ function main(): void {
       onSpawn: (spawn, req) => send(buildSpawn(req, spawn)),
       onCompose: (draft, req) => send(JSON.stringify({ t: "compose", req, draft })),
       onSendDraft: (draft, req) => controller.sendPromptDraft(draft, req),
+      onSchedule: (draft, fireAt, req) => controller.sendPromptSchedule(draft, fireAt, req),
+      onScheduledList: (req) => controller.sendScheduledList(req),
+      onScheduledCancel: (scheduleId, req) => controller.sendScheduledCancel(scheduleId, req),
       onGraphsRequest: () => {
         graphs.requestList();
       },

@@ -60,6 +60,11 @@ export function renderKeyBar(bar: HTMLElement, onKey: (def: KeyDef) => void): vo
   bar.replaceChildren();
   bar.setAttribute("role", "toolbar");
   bar.setAttribute("aria-label", "Terminal keys");
+  // The bar must not steal xterm's focus: a mousedown default moves focus
+  // off the hidden textarea and closes the phone keyboard between keys.
+  // touchstart and pointerdown stay untouched — preventing those kills
+  // the tap's click.
+  bar.addEventListener("mousedown", (event) => event.preventDefault());
   for (const def of KEY_DEFS) {
     const button = document.createElement("button");
     button.type = "button";

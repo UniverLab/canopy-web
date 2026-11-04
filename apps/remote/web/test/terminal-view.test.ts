@@ -39,6 +39,7 @@ class FakeHandle implements TerminalHandle {
   private inputListeners: ((text: string) => void)[] = [];
   private scrollListeners: (() => void)[] = [];
   private bufferListeners: (() => void)[] = [];
+  private selectionListeners: (() => void)[] = [];
 
   constructor(cols: number, rows: number) {
     this.cols = cols;
@@ -76,6 +77,14 @@ class FakeHandle implements TerminalHandle {
     callback();
     return () => {};
   };
+  selection = "";
+  bufferLines = "";
+  getSelection = (): string => this.selection;
+  onSelectionChange = (callback: () => void): (() => void) => {
+    this.selectionListeners.push(callback);
+    return () => {};
+  };
+  bufferText = (): string => this.bufferLines;
   resize = (cols: number, rows: number): void => {
     this.cols = cols;
     this.rows = rows;
@@ -88,6 +97,13 @@ class FakeHandle implements TerminalHandle {
   emitInput(text: string): void {
     for (const listener of this.inputListeners) {
       listener(text);
+    }
+  }
+
+  emitSelectionChange(selection: string): void {
+    this.selection = selection;
+    for (const listener of this.selectionListeners) {
+      listener();
     }
   }
 

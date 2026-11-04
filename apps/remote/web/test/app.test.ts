@@ -66,6 +66,9 @@ class FakeHandle implements TerminalHandle {
     callback();
     return () => {};
   };
+  getSelection = (): string => "";
+  onSelectionChange = (): (() => void) => () => {};
+  bufferText = (): string => "";
   dispose = (): void => {
     this.disposed = true;
   };
@@ -198,6 +201,9 @@ describe("createShell", () => {
         draftSends.push({ draft, req });
         return sendable;
       },
+      onSchedule: () => sendable,
+      onScheduledList: () => sendable,
+      onScheduledCancel: () => sendable,
       onGraphsRequest: () => {},
       onWatchGraph: () => {},
       onUnwatchGraph: () => {},
@@ -507,6 +513,63 @@ describe("createShell", () => {
     tab.click();
     expect(calls.keys.map((bytes) => [...bytes])).toEqual([[0x1b, 0x5b, 0x5a]]);
     expect(shift.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("forwards a focus report unchanged, leaving the latch armed", () => {
+    shell.showSession("s1", "build");
+    shell.ensureTerminal("s1", 80, 24);
+    const ctrl = query<HTMLButtonElement>('#keybar .key[data-key="ctrl"]');
+    ctrl.click();
+    expect(ctrl.getAttribute("aria-pressed")).toBe("true");
+    // The focus-in report from tapping the terminal is xterm's own, not
+    // typing: it goes out as-is and spends nothing.
+    handles[0]?.emitInput("\x1b[I");
+    expect(calls.inputs.map((bytes) => [...bytes])).toEqual([[0x1b, 0x5b, 0x49]]);
+    expect(ctrl.getAttribute("aria-pressed")).toBe("true");
+    // The armed latch still applies to the next typed key.
+    handles[0]?.emitInput("c");
+    expect(calls.inputs.map((bytes) => [...bytes])).toEqual([
+      [0x1b, 0x5b, 0x49],
+      [0x03],
+    ]);
+    expect(ctrl.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("sends typed c as 0x03 with Ctrl latched, then releases", () => {
+    shell.showSession("s1", "build");
+    shell.ensureTerminal("s1", 80, 24);
+    const ctrl = query<HTMLButtonElement>('#keybar .key[data-key="ctrl"]');
+    ctrl.click();
+    handles[0]?.emitInput("c");
+    expect(calls.inputs.map((bytes) => [...bytes])).toEqual([[0x03]]);
+    expect(ctrl.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("sends typed a as A with Shift latched, then releases", () => {
+    shell.showSession("s1", "build");
+    shell.ensureTerminal("s1", 80, 24);
+    const shift = query<HTMLButtonElement>('#keybar .key[data-key="shift"]');
+    shift.click();
+    handles[0]?.emitInput("a");
+    expect(calls.inputs.map((bytes) => [...bytes])).toEqual([[0x41]]);
+    expect(shift.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("focuses the terminal when arming a latch, never when releasing", () => {
+    shell.showSession("s1", "build");
+    shell.ensureTerminal("s1", 80, 24);
+    const ctrl = query<HTMLButtonElement>('#keybar .key[data-key="ctrl"]');
+    const shift = query<HTMLButtonElement>('#keybar .key[data-key="shift"]');
+    const focuses = () => handles[0]?.focuses ?? -1;
+    ctrl.click();
+    expect(focuses()).toBe(1);
+    // Releasing the latch touches nothing.
+    ctrl.click();
+    expect(focuses()).toBe(1);
+    shift.click();
+    expect(focuses()).toBe(2);
+    shift.click();
+    expect(focuses()).toBe(2);
   });
 
   it("sends Ctrl+Backspace as BS and releases the latch", () => {

@@ -65,6 +65,47 @@ describe("SessionController.sendPromptDraft", () => {
   });
 });
 
+describe("SessionController scheduled prompts", () => {
+  const open = (): { controller: SessionController; sent: string[] } => {
+    const sent: string[] = [];
+    const controller = new SessionController({
+      send: (data) => {
+        sent.push(data);
+        return true;
+      },
+      terminal: () => null,
+    });
+    controller.open("s1");
+    sent.length = 0;
+    return { controller, sent };
+  };
+
+  it("refuses without an open session", () => {
+    const controller = new SessionController({ send: () => true, terminal: () => null });
+    expect(controller.sendPromptSchedule(DRAFT, "2030-01-01T09:00:00.000Z", "r1")).toBe(false);
+    expect(controller.sendScheduledList("r2")).toBe(false);
+    expect(controller.sendScheduledCancel("ss-1", "r3")).toBe(false);
+  });
+
+  it("sends the exact schedule frames for the open session", () => {
+    const { controller, sent } = open();
+    expect(controller.sendPromptSchedule(DRAFT, "2030-01-01T09:00:00.000Z", "r4")).toBe(true);
+    expect(controller.sendScheduledList("r5")).toBe(true);
+    expect(controller.sendScheduledCancel("ss-1", "r6")).toBe(true);
+    expect(sent.map((raw) => JSON.parse(raw))).toEqual([
+      {
+        t: "prompt_schedule",
+        req: "r4",
+        id: "s1",
+        draft: DRAFT,
+        fire_at: "2030-01-01T09:00:00.000Z",
+      },
+      { t: "scheduled_list", req: "r5", id: "s1" },
+      { t: "scheduled_cancel", req: "r6", id: "s1", schedule_id: "ss-1" },
+    ]);
+  });
+});
+
 describe("Prompt Builder send through the shell", () => {
   let root: HTMLDivElement | null = null;
   let shell: Shell | null = null;
@@ -110,6 +151,9 @@ describe("Prompt Builder send through the shell", () => {
         onSpawn: () => true,
         onCompose: () => true,
         onSendDraft: (draft, req) => controller?.sendPromptDraft(draft, req) ?? false,
+        onSchedule: (draft, fireAt, req) => controller?.sendPromptSchedule(draft, fireAt, req) ?? false,
+        onScheduledList: (req) => controller?.sendScheduledList(req) ?? false,
+        onScheduledCancel: (scheduleId, req) => controller?.sendScheduledCancel(scheduleId, req) ?? false,
         onGraphsRequest: () => {},
         onWatchGraph: () => {},
         onUnwatchGraph: () => {},
@@ -136,9 +180,15 @@ describe("Prompt Builder send through the shell", () => {
 
     shell.showSession("s1", "build");
     controller.open("s1");
-    channel.sent.length = 0;
 
     shell.showBuilder();
+    // Opening the sheet lists the session's schedules; Send is what this
+    // test counts, so drop the list frame before clicking it.
+    expect(channel.sent.map((raw) => (JSON.parse(raw) as { t: string }).t)).toEqual([
+      "attach",
+      "scheduled_list",
+    ]);
+    channel.sent.length = 0;
     const kind = root.querySelector<HTMLSelectElement>(".section-kind");
     if (!kind) {
       throw new Error("missing section kind");

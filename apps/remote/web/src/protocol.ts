@@ -365,6 +365,68 @@ export function parseComposed(frame: unknown): { req: string; text: string } | n
   return { req: frame.req, text: frame.text };
 }
 
+// A prompt scheduled for later delivery to one session: the host fires it
+// at fire_at (RFC 3339 UTC) and the preview is user text, up to 120 chars.
+export interface ScheduledItem {
+  id: string;
+  fireAt: string;
+  preview: string;
+}
+
+function parseScheduledItem(value: unknown): ScheduledItem | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  if (typeof value.id !== "string" || value.id === "") {
+    return null;
+  }
+  if (typeof value.fire_at !== "string" || value.fire_at === "") {
+    return null;
+  }
+  if (typeof value.preview !== "string") {
+    return null;
+  }
+  return { id: value.id, fireAt: value.fire_at, preview: value.preview };
+}
+
+export function parseScheduled(frame: unknown): { req: string; item: ScheduledItem } | null {
+  if (frameType(frame) !== "scheduled" || !isRecord(frame)) {
+    return null;
+  }
+  if (typeof frame.req !== "string") {
+    return null;
+  }
+  const item = parseScheduledItem(frame.item);
+  if (!item) {
+    return null;
+  }
+  return { req: frame.req, item };
+}
+
+// The session's pending schedules, fire_at ascending. Malformed entries
+// are dropped like a catalog frame's, so one bad row never empties the list.
+export function parseScheduledList(
+  frame: unknown,
+): { req: string; id: string; items: ScheduledItem[] } | null {
+  if (frameType(frame) !== "scheduled_list" || !isRecord(frame)) {
+    return null;
+  }
+  if (typeof frame.req !== "string" || typeof frame.id !== "string" || frame.id === "") {
+    return null;
+  }
+  if (!Array.isArray(frame.items)) {
+    return null;
+  }
+  const items: ScheduledItem[] = [];
+  for (const value of frame.items) {
+    const item = parseScheduledItem(value);
+    if (item) {
+      items.push(item);
+    }
+  }
+  return { req: frame.req, id: frame.id, items };
+}
+
 // --- The session shelf (additive to v1) -------------------------------
 // The host advertises the shelf in hello.features; without "shelf" in
 // that list the browser sends no shelf frame and shows no shelf UI.
@@ -544,6 +606,18 @@ export function buildCompose(req: string, draft: PromptDraft): string {
 
 export function buildPromptDraft(req: string, id: string, draft: PromptDraft): string {
   return JSON.stringify({ t: "prompt", req, id, draft });
+}
+
+export function buildPromptSchedule(req: string, id: string, draft: PromptDraft, fireAt: string): string {
+  return JSON.stringify({ t: "prompt_schedule", req, id, draft, fire_at: fireAt });
+}
+
+export function buildScheduledList(req: string, id: string): string {
+  return JSON.stringify({ t: "scheduled_list", req, id });
+}
+
+export function buildScheduledCancel(req: string, id: string, scheduleId: string): string {
+  return JSON.stringify({ t: "scheduled_cancel", req, id, schedule_id: scheduleId });
 }
 
 export function buildAttach(id: string): string {

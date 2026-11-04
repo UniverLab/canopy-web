@@ -537,6 +537,8 @@ export function createGuestSession(root: HTMLElement, deps: GuestSessionDeps): G
     sessionResized: (id, cols, rows) => view.sessionResized(id, cols, rows),
     sheetSpawned: () => {},
     sheetComposed: () => {},
+    sheetScheduled: () => {},
+    sheetScheduledList: () => {},
     sheetOk: () => {},
     sheetError: () => {},
   };

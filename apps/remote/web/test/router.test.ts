@@ -28,6 +28,8 @@ interface Harness {
   exits: number[];
   spawned: { req: string; id: string }[];
   composed: { req: string; text: string }[];
+  scheduled: { req: string; item: unknown }[];
+  scheduledLists: { req: string; items: unknown[] }[];
   sheetOks: string[];
   sheetErrors: { message: string; req: string | null; code: string }[];
   hostSend: (frame: unknown) => void;
@@ -43,6 +45,8 @@ function setup(onForbidden?: (id: string | null) => void, shelf?: ShelfFrames): 
   const exits: number[] = [];
   const spawned: Harness["spawned"] = [];
   const composed: Harness["composed"] = [];
+  const scheduled: Harness["scheduled"] = [];
+  const scheduledLists: Harness["scheduledLists"] = [];
   const sheetOks: string[] = [];
   const sheetErrors: Harness["sheetErrors"] = [];
   // Only the methods the router calls; main.ts wires the real shell.
@@ -61,6 +65,12 @@ function setup(onForbidden?: (id: string | null) => void, shelf?: ShelfFrames): 
     },
     sheetComposed: (req: string, text: string) => {
       composed.push({ req, text });
+    },
+    sheetScheduled: (req: string, item: unknown) => {
+      scheduled.push({ req, item });
+    },
+    sheetScheduledList: (req: string, items: unknown[]) => {
+      scheduledLists.push({ req, items });
     },
     sheetOk: (req: string) => {
       sheetOks.push(req);
@@ -101,6 +111,8 @@ function setup(onForbidden?: (id: string | null) => void, shelf?: ShelfFrames): 
     exits,
     spawned,
     composed,
+    scheduled,
+    scheduledLists,
     sheetOks,
     sheetErrors,
     hostSend: (frame: unknown) => channel.deliver(JSON.stringify(frame)),
@@ -240,6 +252,30 @@ describe("createFrameRouter", () => {
     expect(h.composed).toEqual([{ req: "r3", text: "# Goal" }]);
   });
 
+  it("routes scheduled and scheduled_list to the shell", () => {
+    const h = setup();
+    const item = { id: "ss-1", fire_at: "2030-01-01T09:00:00.000Z", preview: "review it" };
+    h.hostSend({ t: "scheduled", req: "r4", item });
+    expect(h.scheduled).toEqual([
+      {
+        req: "r4",
+        item: { id: "ss-1", fireAt: "2030-01-01T09:00:00.000Z", preview: "review it" },
+      },
+    ]);
+    h.hostSend({ t: "scheduled_list", req: "r5", id: "s1", items: [item] });
+    expect(h.scheduledLists).toEqual([
+      {
+        req: "r5",
+        items: [{ id: "ss-1", fireAt: "2030-01-01T09:00:00.000Z", preview: "review it" }],
+      },
+    ]);
+    // Malformed schedule frames land nowhere, like any unknown frame.
+    h.hostSend({ t: "scheduled", req: "r6" });
+    h.hostSend({ t: "scheduled_list", req: "r7", id: "s1", items: {} });
+    expect(h.scheduled).toHaveLength(1);
+    expect(h.scheduledLists).toHaveLength(1);
+  });
+
   it("routes hello harnesses to the catalog's installed set", () => {
     const h = setup();
     h.hostSend({
@@ -286,6 +322,8 @@ describe("createFrameRouter", () => {
         ensureTerminal: () => {},
         sheetSpawned: () => {},
         sheetComposed: () => {},
+        sheetScheduled: () => {},
+        sheetScheduledList: () => {},
         sheetOk: () => {},
         sheetError: () => {},
       },

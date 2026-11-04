@@ -13,7 +13,10 @@ import {
   buildInputText,
   buildList,
   buildPromptDraft,
+  buildPromptSchedule,
   buildResize,
+  buildScheduledCancel,
+  buildScheduledList,
   buildShelfDelete,
   buildShelfGet,
   buildShelfList,
@@ -34,6 +37,8 @@ import {
   parseOk,
   parseOut,
   parseResized,
+  parseScheduled,
+  parseScheduledList,
   parseSessionAdded,
   parseSessionItem,
   parseSessionRemoved,
@@ -114,6 +119,24 @@ describe("builders", () => {
       req: "r6",
       id: "s1",
       draft,
+    });
+    expect(JSON.parse(buildPromptSchedule("r10", "s1", draft, "2030-01-01T09:00:00.000Z"))).toEqual({
+      t: "prompt_schedule",
+      req: "r10",
+      id: "s1",
+      draft,
+      fire_at: "2030-01-01T09:00:00.000Z",
+    });
+    expect(JSON.parse(buildScheduledList("r11", "s1"))).toEqual({
+      t: "scheduled_list",
+      req: "r11",
+      id: "s1",
+    });
+    expect(JSON.parse(buildScheduledCancel("r12", "s1", "ss-3"))).toEqual({
+      t: "scheduled_cancel",
+      req: "r12",
+      id: "s1",
+      schedule_id: "ss-3",
     });
   });
 
@@ -294,6 +317,37 @@ describe("frame parsers", () => {
     });
     expect(parseComposed({ t: "composed", req: "r2" })).toBeNull();
     expect(parseComposed({ t: "ok", req: "r2" })).toBeNull();
+  });
+
+  it("parses scheduled and scheduled_list", () => {
+    const item = { id: "ss-1", fire_at: "2030-01-01T09:00:00.000Z", preview: "review it" };
+    expect(parseScheduled({ t: "scheduled", req: "r1", item })).toEqual({
+      req: "r1",
+      item: { id: "ss-1", fireAt: "2030-01-01T09:00:00.000Z", preview: "review it" },
+    });
+    expect(parseScheduled({ t: "scheduled", req: "r1" })).toBeNull();
+    expect(parseScheduled({ t: "scheduled", req: "r1", item: { id: "", fire_at: "", preview: 7 } })).toBeNull();
+    expect(parseScheduled({ t: "ok", req: "r1" })).toBeNull();
+    expect(
+      parseScheduledList({ t: "scheduled_list", req: "r2", id: "s1", items: [item] }),
+    ).toEqual({
+      req: "r2",
+      id: "s1",
+      items: [{ id: "ss-1", fireAt: "2030-01-01T09:00:00.000Z", preview: "review it" }],
+    });
+    // Malformed entries are dropped, like a catalog frame's.
+    expect(
+      parseScheduledList({
+        t: "scheduled_list",
+        req: "r2",
+        id: "s1",
+        items: [item, { id: "", fire_at: "x", preview: "bad" }, null],
+      })?.items,
+    ).toHaveLength(1);
+    expect(parseScheduledList({ t: "scheduled_list", req: "r2", id: "s1" })).toBeNull();
+    expect(parseScheduledList({ t: "scheduled_list", req: "r2", id: "", items: [] })).toBeNull();
+    expect(parseScheduledList({ t: "scheduled_list", req: "r2", id: "s1", items: {} })).toBeNull();
+    expect(parseScheduledList({ t: "shelf", req: "r2", items: [] })).toBeNull();
   });
 
   it("reads the harness yolo flag defensively", () => {

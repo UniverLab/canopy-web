@@ -41,6 +41,9 @@ describe("Builder", () => {
   let storage: FakeStorage;
   let composed: { draft: PromptDraft; req: string }[];
   let sends: { draft: PromptDraft; req: string }[];
+  let schedules: { draft: PromptDraft; fireAt: string; req: string }[];
+  let lists: string[];
+  let cancels: { scheduleId: string; req: string }[];
   let connected: boolean;
 
   const query = <T extends Element>(selector: string): T => {
@@ -107,6 +110,9 @@ describe("Builder", () => {
     storage = new FakeStorage();
     composed = [];
     sends = [];
+    schedules = [];
+    lists = [];
+    cancels = [];
     connected = true;
     builder = new Builder(
       catalog,
@@ -117,6 +123,18 @@ describe("Builder", () => {
         },
         onSend: (draft, req) => {
           sends.push({ draft, req });
+          return connected;
+        },
+        onSchedule: (draft, fireAt, req) => {
+          schedules.push({ draft, fireAt, req });
+          return connected;
+        },
+        onScheduledList: (req) => {
+          lists.push(req);
+          return connected;
+        },
+        onScheduledCancel: (scheduleId, req) => {
+          cancels.push({ scheduleId, req });
           return connected;
         },
       },
@@ -439,5 +457,176 @@ describe("Builder", () => {
     expect(query("#builder-preset-preview").textContent).toBe("Review the diff.");
     select("#builder-preset", "");
     expect(query("#builder-preset-preview").textContent).toBe("");
+  });
+
+  const localInputValue = (date: Date): string => {
+    const pad = (n: number): string => String(n).padStart(2, "0");
+    return (
+      `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+      `T${pad(date.getHours())}:${pad(date.getMinutes())}`
+    );
+  };
+
+  const openScheduleRow = (): void => {
+    query<HTMLButtonElement>("#builder-schedule").click();
+  };
+
+  const confirmSchedule = (value: string): void => {
+    query<HTMLInputElement>("#builder-schedule-at").value = value;
+    query<HTMLButtonElement>("#builder-schedule-confirm").click();
+  };
+
+  it("loads the pending schedules when the sheet opens", () => {
+    open();
+    expect(lists).toHaveLength(1);
+    expect(root.querySelector("#builder-scheduled")).toBeNull();
+    expect(builder.handleScheduledList("other", [])).toBe(false);
+    expect(
+      builder.handleScheduledList(lists[0] ?? "", [
+        { id: "ss-1", fireAt: "2030-01-01T09:00:00.000Z", preview: "review the diff" },
+      ]),
+    ).toBe(true);
+    expect(query("#builder-scheduled h3").textContent).toBe("Scheduled for this session");
+    expect(root.querySelectorAll(".scheduled-item")).toHaveLength(1);
+  });
+
+  it("reveals the schedule row preset to one hour from now", () => {
+    open();
+    expect(query<HTMLElement>("#builder-schedule-row").hidden).toBe(true);
+    openScheduleRow();
+    const input = query<HTMLInputElement>("#builder-schedule-at");
+    expect(query<HTMLElement>("#builder-schedule-row").hidden).toBe(false);
+    expect(new Date(input.value).getTime() - Date.now()).toBeGreaterThan(59 * 60 * 1000);
+    expect(new Date(input.value).getTime() - Date.now()).toBeLessThan(61 * 60 * 1000);
+    expect(Date.now() - new Date(input.getAttribute("min") ?? "").getTime()).toBeLessThan(120 * 1000);
+    query<HTMLButtonElement>("#builder-schedule-dismiss").click();
+    expect(query<HTMLElement>("#builder-schedule-row").hidden).toBe(true);
+    expect(schedules).toHaveLength(0);
+  });
+
+  it("schedules the draft, clears it, and refreshes the list on success", () => {
+    open();
+    setKind(0, "goal");
+    setContent(".section-content", "water the plants");
+    toggle("tdd");
+    openScheduleRow();
+    const value = localInputValue(new Date(Date.now() + 2 * 60 * 60 * 1000));
+    confirmSchedule(value);
+    expect(schedules).toHaveLength(1);
+    expect(schedules[0]?.draft).toEqual({
+      sections: [{ title: "goal", content: "water the plants" }],
+      skills: ["tdd"],
+    });
+    expect(schedules[0]?.fireAt).toBe(new Date(value).toISOString());
+    const req = schedules[0]?.req ?? "";
+    expect(builder.handleScheduled("other", { id: "ss-1", fireAt: value, preview: "" })).toBe(false);
+    expect(
+      builder.handleScheduled(req, {
+        id: "ss-1",
+        fireAt: schedules[0]?.fireAt ?? "",
+        preview: "water the plants",
+      }),
+    ).toBe(true);
+    // The sheet stays open with a fresh default section and a status line.
+    expect(builder.isOpen).toBe(true);
+    expect(query<HTMLElement>("#builder-schedule-row").hidden).toBe(true);
+    const status = query("#builder-schedule-status");
+    expect(status.getAttribute("role")).toBe("status");
+    expect(status.textContent).toBe(
+      `Scheduled for ${new Date(schedules[0]?.fireAt ?? "").toLocaleString()}`,
+    );
+    expect(kinds()).toEqual(["instruction"]);
+    expect(contents()).toEqual([""]);
+    expect(storage.getItem(DRAFT_STORAGE_KEY)).toBeNull();
+    expect(lists).toHaveLength(2);
+  });
+
+  it("refuses an empty or past time without sending a frame", () => {
+    open();
+    setContent(".section-content", "keep me");
+    openScheduleRow();
+    confirmSchedule("");
+    expect(schedules).toHaveLength(0);
+    expect(query("#builder-error").textContent).toBe("Choose a date and time first.");
+    confirmSchedule(localInputValue(new Date(Date.now() - 60 * 60 * 1000)));
+    expect(schedules).toHaveLength(0);
+    expect(query("#builder-error").textContent).toBe("Pick a time in the future.");
+    expect(query<HTMLTextAreaElement>(".section-content").value).toBe("keep me");
+  });
+
+  it("keeps the draft when scheduling fails", () => {
+    open();
+    setContent(".section-content", "keep me");
+    openScheduleRow();
+    confirmSchedule(localInputValue(new Date(Date.now() + 60 * 60 * 1000)));
+    expect(schedules).toHaveLength(1);
+    expect(builder.handleError("host is gone", schedules[0]?.req ?? "", "delivery_failed")).toBe(true);
+    expect(query("#builder-error").textContent).toBe("host is gone");
+    expect(builder.isOpen).toBe(true);
+    expect(query<HTMLTextAreaElement>(".section-content").value).toBe("keep me");
+    expect(stored()?.sections).toHaveLength(1);
+  });
+
+  it("shows an old host's list error as the sheet error, never a crash", () => {
+    open();
+    expect(builder.handleError("unknown frame: scheduled_list", lists[0] ?? "", "unknown_frame")).toBe(
+      true,
+    );
+    expect(query("#builder-error").textContent).toBe("unknown frame: scheduled_list");
+    expect(root.querySelector("#builder-scheduled")).toBeNull();
+    expect(builder.handleError("late", "no-such-req", "internal")).toBe(false);
+  });
+
+  it("renders scheduled previews as text, never markup", () => {
+    open();
+    builder.handleScheduledList(lists[0] ?? "", [
+      { id: "ss-9", fireAt: "2030-06-01T12:00:00.000Z", preview: '<img src=x onerror=alert(1)>' },
+    ]);
+    const item = query(".scheduled-item");
+    expect(item.querySelector("img")).toBeNull();
+    expect(item.querySelector(".scheduled-preview")?.textContent).toBe('<img src=x onerror=alert(1)>');
+    expect(item.querySelector(".scheduled-when")?.textContent).toBe(
+      new Date("2030-06-01T12:00:00.000Z").toLocaleString(),
+    );
+    expect(item.querySelector("button")?.dataset.scheduleId).toBe("ss-9");
+  });
+
+  it("cancels a schedule and drops its row on the ok", () => {
+    open();
+    builder.handleScheduledList(lists[0] ?? "", [
+      { id: "ss-1", fireAt: "2030-01-01T09:00:00.000Z", preview: "first" },
+      { id: "ss-2", fireAt: "2030-01-02T09:00:00.000Z", preview: "second" },
+    ]);
+    expect(root.querySelectorAll(".scheduled-item")).toHaveLength(2);
+    query<HTMLButtonElement>('button[data-schedule-id="ss-1"]').click();
+    expect(cancels).toEqual([{ scheduleId: "ss-1", req: cancels[0]?.req ?? "" }]);
+    expect(builder.handleOk("other")).toBe(false);
+    expect(root.querySelectorAll(".scheduled-item")).toHaveLength(2);
+    expect(builder.handleOk(cancels[0]?.req ?? "")).toBe(true);
+    expect(root.querySelectorAll(".scheduled-item")).toHaveLength(1);
+    expect(query(".scheduled-preview").textContent).toBe("second");
+    expect(lists).toHaveLength(2);
+  });
+
+  it("keeps the row when cancelling fails", () => {
+    open();
+    builder.handleScheduledList(lists[0] ?? "", [
+      { id: "ss-1", fireAt: "2030-01-01T09:00:00.000Z", preview: "first" },
+    ]);
+    query<HTMLButtonElement>('button[data-schedule-id="ss-1"]').click();
+    expect(builder.handleError("host is gone", cancels[0]?.req ?? "", "delivery_failed")).toBe(true);
+    expect(query("#builder-error").textContent).toBe("host is gone");
+    expect(root.querySelectorAll(".scheduled-item")).toHaveLength(1);
+  });
+
+  it("says so when scheduling without a connection", () => {
+    connected = false;
+    open();
+    expect(query("#builder-error").textContent).toBe("Not connected");
+    setContent(".section-content", "words");
+    openScheduleRow();
+    confirmSchedule(localInputValue(new Date(Date.now() + 60 * 60 * 1000)));
+    expect(schedules).toHaveLength(1);
+    expect(query("#builder-error").textContent).toBe("Not connected");
   });
 });

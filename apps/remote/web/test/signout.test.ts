@@ -26,6 +26,9 @@ class StubTerminal implements TerminalHandle {
     callback();
     return () => {};
   };
+  getSelection = (): string => "";
+  onSelectionChange = (): (() => void) => () => {};
+  bufferText = (): string => "";
   dispose = (): void => {};
 }
 
@@ -73,6 +76,9 @@ describe("sign out", () => {
       onSpawn: () => true,
       onCompose: () => true,
       onSendDraft: () => true,
+      onSchedule: () => true,
+      onScheduledList: () => true,
+      onScheduledCancel: () => true,
       onGraphsRequest: () => {},
       onWatchGraph: () => {},
       onUnwatchGraph: () => {},

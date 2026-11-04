@@ -698,9 +698,9 @@ label > textarea {
 }
 
 /* The row wraps rather than clips as a last resort: the latest button
- * floats over the terminal (below), so with fullscreen and both attach
- * buttons up the row holds seven 44 px targets and stays one row tall on
- * a phone. */
+ * floats over the terminal (below) instead of taking a toolbar slot. On a
+ * phone the row never wraps (a second row would cost the terminal a row):
+ * it scrolls sideways instead (see the phone breakpoint below). */
 .term-controls {
   display: flex;
   flex-wrap: wrap;
@@ -755,6 +755,36 @@ label > textarea {
 }
 
 #term-latest[hidden] {
+  display: none;
+}
+
+/* The selection Copy button, floating over the terminal card's top-right
+ * corner the way #term-latest floats over the bottom-right: the stage is
+ * the positioning box, so it stays put while the pane scrolls beneath it.
+ * Icon plus the word Copy on a 44 px pill, slightly see-through until
+ * pointed at or focused, shown only while xterm holds a selection. */
+#term-copy-float {
+  position: absolute;
+  right: 0.5rem;
+  top: 0.5rem;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  height: 2.75rem;
+  min-width: 2.75rem;
+  padding: 0 0.75rem;
+  border-radius: 999px;
+  opacity: 0.85;
+}
+
+#term-copy-float:hover,
+#term-copy-float:focus-visible {
+  opacity: 1;
+}
+
+#term-copy-float[hidden] {
   display: none;
 }
 
@@ -902,16 +932,19 @@ label > textarea {
     gap: 0.25rem;
   }
 
-  /* Seven controls share 328 px once the paperclip and the shelf button
-   * are up: the tight gap keeps all seven 44 px targets on one row, and
-   * the Builder word steps aside so the blocks icon names it alone. */
+  /* Eight 44 px controls no longer fit 328 px once the copy button
+   * joins the row beside the fullscreen and both attach buttons, and a
+   * wrapped second row would cost the terminal a row: the row stays one
+   * row tall and scrolls sideways instead, reaching the last button with
+   * a swipe. The tight gap keeps the swipe to a stub. */
   .term-controls {
     gap: 0.15rem;
+    flex-wrap: nowrap;
+    overflow-x: auto;
   }
 
   /* The labelled controls go icon-only on a phone: the aria-label (and
-   * the title tooltip) names them, and seven 44 px targets stay inside
-   * 360 px without a word overflowing its button. */
+   * the title tooltip) names them, so no word overflows its button. */
   #term-builder span,
   #term-keys span {
     display: none;
@@ -1210,6 +1243,106 @@ label > textarea {
 
 .builder-preview[hidden] {
   display: none;
+}
+
+/* The builder's footer holds three buttons on a phone: let them wrap
+ * instead of pushing the sheet sideways. */
+.builder-form .sheet-actions {
+  flex-wrap: wrap;
+}
+
+/* The inline scheduling row: the datetime field spans the width and the
+ * two actions share the row below it, wrapping on the narrowest phones. */
+.builder-schedule-row {
+  margin-top: 0.75rem;
+}
+
+.builder-schedule-row[hidden] {
+  display: none;
+}
+
+.builder-schedule-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+}
+
+.builder-schedule-actions button {
+  flex: 1 1 10rem;
+}
+
+/* The schedule confirmation: plain text, announced through role=status. */
+.builder-status {
+  margin: 0.75rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+.builder-status[hidden] {
+  display: none;
+}
+
+.builder-status:empty {
+  display: none;
+}
+
+/* The session's pending schedules: one stacked card per row — the local
+ * fire time, the preview, and a full-width Cancel — so nothing squeezes
+ * at 360 px. */
+.builder-scheduled-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.scheduled-item {
+  background: var(--surface-bg-raise);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 0.6rem 0.85rem;
+  margin-bottom: var(--gap);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.scheduled-when {
+  font-weight: 600;
+}
+
+.scheduled-preview {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.scheduled-preview:empty::before {
+  content: "(no preview)";
+}
+
+/* The Copy sheet's text: the buffer in a native textarea, where the OS's
+ * own long-press selection works. Monospace, unwrapped (wrap="off" plus
+ * horizontal scroll, like the terminal), 16 px so iOS never zooms on
+ * focus. The status line keeps its row so "Copied" never moves the sheet. */
+#term-copy-text {
+  display: block;
+  width: 100%;
+  min-height: 40vh;
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  white-space: pre;
+  overflow: auto;
+  resize: vertical;
+}
+
+.term-copy-status {
+  min-height: 1.5em;
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+}
+
+.term-copy-status:empty {
+  visibility: hidden;
 }
 
 /* The Files button in the session bar: hidden until hello.features

@@ -133,6 +133,12 @@ const ARC_BOUNDS_BUDGET = 512;
  */
 const MERGE_BUDGET = 512;
 /**
+ * Allowance for scheduling from the Builder, copying terminal text and the
+ * latch fixes: measured +2 657 B gzip over the allowance before them, added
+ * with the features since none of the three fit the headroom left.
+ */
+const SESSION_TOOLS_BUDGET = 3_072;
+/**
  * Allowance for the control-size fix (the panel-fitted size, the owner
  * scale, the in-place local resize and the debounced re-assert while the
  * toggle is on): measured +819 B gzip over the pre-change main. Added in
@@ -272,6 +278,7 @@ describe("the remote's bundle", () => {
         SHELF_DELETE_BUDGET +
         ARC_BOUNDS_BUDGET +
         MERGE_BUDGET +
+        SESSION_TOOLS_BUDGET +
         CONTROL_SIZE_BUDGET +
         RESIZED_BUDGET +
         GUEST_RETURN_BUDGET,

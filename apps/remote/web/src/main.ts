@@ -128,6 +128,9 @@ async function main(): Promise<void> {
       onSpawn: (spawn, req) => manager?.send(buildSpawn(req, spawn)) ?? false,
       onCompose: (draft, req) => manager?.send(buildCompose(req, draft)) ?? false,
       onSendDraft: (draft, req) => controller.sendPromptDraft(draft, req),
+      onSchedule: (draft, fireAt, req) => controller.sendPromptSchedule(draft, fireAt, req),
+      onScheduledList: (req) => controller.sendScheduledList(req),
+      onScheduledCancel: (scheduleId, req) => controller.sendScheduledCancel(scheduleId, req),
       onGraphsRequest: () => {
         graphs.requestList();
       },
