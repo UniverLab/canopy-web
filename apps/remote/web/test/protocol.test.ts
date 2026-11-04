@@ -21,7 +21,6 @@ import {
   buildShelfGet,
   buildShelfList,
   buildSpawn,
-  decodeSnapshotData,
   formatLastOutput,
   newReqId,
   parseCatalog,
@@ -411,13 +410,6 @@ describe("frame parsers", () => {
       skills: [],
     });
     expect(parseCatalog({ t: "sessions", items: [] })).toBeNull();
-  });
-
-  it("decodes snapshot data to the host's bytes", () => {
-    expect(decodeSnapshotData(b64encode(new TextEncoder().encode("héllo")))).toEqual(
-      new TextEncoder().encode("héllo"),
-    );
-    expect(decodeSnapshotData("!!!")).toBeNull();
   });
 });
 

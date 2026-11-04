@@ -143,11 +143,13 @@ describe("createFrameRouter", () => {
   it("mounts the terminal from the snapshot before feeding it", () => {
     const h = setup();
     h.controller.open("s1");
-    const full = b64("hello");
-    h.hostSend({ t: "snapshot", id: "s1", cols: 80, rows: 24, seq: 7, data: full.slice(0, 3) });
+    // The host encodes each part on its own: cut the raw bytes, so part
+    // padding never lands inside a joined stream.
+    const raw = new TextEncoder().encode("hello");
+    h.hostSend({ t: "snapshot", id: "s1", cols: 80, rows: 24, seq: 7, data: b64encode(raw.slice(0, 3)) });
     expect(h.terminals).toEqual([]);
     expect(h.written).toEqual([]);
-    h.hostSend({ t: "snapshot_more", id: "s1", data: full.slice(3), last: true });
+    h.hostSend({ t: "snapshot_more", id: "s1", data: b64encode(raw.slice(3)), last: true });
     expect(h.terminals).toEqual([{ id: "s1", cols: 80, rows: 24 }]);
     expect(textOf(h.written)).toBe("hello");
     h.hostSend({ t: "out", id: "s1", seq: 8, data: b64("!") });

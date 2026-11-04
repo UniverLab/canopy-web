@@ -23,6 +23,7 @@ import { createFrameRouter } from "./router.js";
 import { SessionController } from "./session.js";
 import { ShelfController } from "./shelf-controller.js";
 import { openSessionName, SessionStore } from "./sessions.js";
+import { LONG_OUTPUT, RAW_PART } from "../test/fixtures/long-snapshot.js";
 import { hostShelfImage, pushedShelfImage, smokeShelfImages } from "../test/fixtures/shelf-images.js";
 import type { ShelfImage } from "../test/fixtures/shelf-images.js";
 import "./styles.css";
@@ -320,10 +321,28 @@ function main(): void {
       if (guestGrant !== null && !guestGrant.includes(frame.id)) {
         deliver({ t: "error", code: "forbidden", id: frame.id });
       } else {
-        const full = b64(SMOKE_OUTPUT);
+        // How the real host splits a snapshot: raw parts of RAW_PART
+        // bytes, every part base64 encoded on its own, so each one may
+        // end in `=` padding. ?snapshot=long picks a body over 30 KB
+        // (three parts), the smoke screen fits one part.
+        const text = fakeParams.get("snapshot") === "long" ? LONG_OUTPUT : SMOKE_OUTPUT;
+        const bytes = new TextEncoder().encode(text);
+        const parts: string[] = [];
+        for (let offset = 0; offset < bytes.length; offset += RAW_PART) {
+          const slice = bytes.subarray(offset, Math.min(bytes.length, offset + RAW_PART));
+          parts.push(b64encode(slice));
+        }
         const { cols, rows } = ptySize(frame.id);
-        deliver({ t: "snapshot", id: frame.id, cols, rows, seq, data: full.slice(0, 10) });
-        deliver({ t: "snapshot_more", id: frame.id, data: full.slice(10), last: true });
+        deliver({ t: "snapshot", id: frame.id, cols, rows, seq, data: parts[0]! });
+        const mores = parts.slice(1);
+        // A one-part snapshot still closes its stream, the way the host's
+        // framing always ends with a final part.
+        if (mores.length === 0) {
+          mores.push(b64encode(new Uint8Array(0)));
+        }
+        for (const [index, data] of mores.entries()) {
+          deliver({ t: "snapshot_more", id: frame.id, data, last: index === mores.length - 1 });
+        }
         const attached = frame.id;
         if (pushedFor === null) {
           pushedFor = attached;
@@ -687,6 +706,21 @@ function main(): void {
       }
       return { type: active.type, rows, viewportY: active.viewportY, baseY: active.baseY };
     },
+    bufferLastLine: () => {
+      const host = document.querySelector(".term-host") as (HTMLElement & { __xterm?: Terminal }) | null;
+      const term = host?.__xterm;
+      if (!term) {
+        return null;
+      }
+      const buffer = term.buffer.active;
+      for (let y = buffer.length - 1; y >= 0; y -= 1) {
+        const line = buffer.getLine(y)?.translateToString(true) ?? "";
+        if (line.trim() !== "") {
+          return line;
+        }
+      }
+      return null;
+    },
     failNextPrompt: (code: string, message: string) => {
       promptError = { code, message };
     },
@@ -717,6 +751,8 @@ declare global {
       exitAltScreen?: () => void;
       /** The visible viewport rows plus the active buffer type, or null. */
       bufferState?: () => { type: string; rows: string[]; viewportY: number; baseY: number } | null;
+      /** The bottom-most non-blank line in the active buffer, or null. */
+      bufferLastLine?: () => string | null;
       failNextPrompt: (code: string, message: string) => void;
       /** Advance the running graph fixture one step and push its state. */
       graphTick: () => void;

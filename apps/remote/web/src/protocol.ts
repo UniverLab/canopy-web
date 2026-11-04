@@ -227,10 +227,6 @@ export function parseOut(frame: unknown): OutFrame | null {
   return { id: frame.id, seq: frame.seq, data };
 }
 
-export function decodeSnapshotData(data: string): Uint8Array | null {
-  return b64Bytes(data);
-}
-
 export function parseOk(frame: unknown): string | null {
   if (frameType(frame) !== "ok" || !isRecord(frame)) {
     return null;

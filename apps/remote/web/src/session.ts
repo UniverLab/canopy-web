@@ -16,7 +16,6 @@ import {
   buildResize,
   buildScheduledCancel,
   buildScheduledList,
-  decodeSnapshotData,
 } from "./protocol.js";
 import type { OutFrame, PromptDraft } from "./protocol.js";
 
@@ -140,14 +139,11 @@ export class SessionController {
     if (!terminal) {
       return;
     }
-    const bytes = decodeSnapshotData(snapshot.data);
-    if (!bytes) {
-      return;
-    }
+    // The channel already decoded the parts: bytes written as they came.
     terminal.clear();
     this.lastSeq = snapshot.seq;
     this.snapshotSeen = true;
-    terminal.write(bytes);
+    terminal.write(snapshot.data);
     this.drainPending(terminal);
   }
 
