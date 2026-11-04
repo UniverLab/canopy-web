@@ -49,6 +49,8 @@ import {
   SITE_NAME,
   STARS_LABEL,
   STAR_BUTTON,
+  VERDICT_DATE_LABEL,
+  VERDICT_HASH_LABEL,
   attentionChip,
   builtinPresetLine,
   communityWarningHtml,
@@ -275,9 +277,13 @@ function datasheet(
         (review.verdict === "flagged" || review.verdict === "needs-look")
       ? `<p class="review-reasons">${escapeHtml(review.reasons)}</p>`
       : "";
-    fields.push(sheetField(SHEET_REVIEW, `${reviewPill(review)}${reasons}`));
+    const meta =
+      `<br><span class="verdict-meta">${escapeHtml(VERDICT_HASH_LABEL)}: ` +
+      `${escapeHtml(review.hash)} · ${escapeHtml(VERDICT_DATE_LABEL)}: ${escapeHtml(review.reviewed_at)}</span>`;
+    fields.push(sheetField(SHEET_REVIEW, `${reviewPill(review)}${reasons}${meta}`));
     lines.push(
-      `- ${SHEET_REVIEW}: ${VERDICT_LABELS[review.verdict]} (${reviewerOf(review.model)}, ${review.model})`,
+      `- ${SHEET_REVIEW}: ${VERDICT_LABELS[review.verdict]} (${reviewerOf(review.model)}, ${review.model})` +
+        ` — ${VERDICT_HASH_LABEL}: ${review.hash} · ${VERDICT_DATE_LABEL}: ${review.reviewed_at}`,
     );
     if (reasons !== "") {
       lines.push(`  ${mdText(review.reasons)}`);

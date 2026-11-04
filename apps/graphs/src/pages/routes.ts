@@ -13,7 +13,7 @@
  *   GET /llms.txt                             one line per document: name, description, ref
  *   GET /publish, /publish.md                 how to list a graph or node (page, markdown twin)
  *   GET /editor                               the hand-assembly canvas (server-rendered shell)
- *   GET /transparency                         how the index and the review work, every verdict
+ *   GET /transparency                         how the index and the review work, a summary and the latest verdicts
  *
  * Every route reads the catalogue through the scheduled index (store.ts,
  * catalog.ts) and only renders what comes back: no page reaches GitHub,
@@ -470,8 +470,8 @@ async function patternResponse(
 
 /**
  * The transparency page: the indexing story, the pre-rendered diagram, how
- * the review works, the exact prompt, and every stored verdict. It needs
- * no index, so it answers 200 on a cold KV with an empty verdict list.
+ * the review works, the exact prompt, a summary and the latest verdicts. It
+ * needs no index, so it answers 200 on a cold KV with an empty verdict list.
  */
 async function transparencyResponse(req: Request, env: PageEnv, deps: PageDeps): Promise<Response> {
   void deps;
