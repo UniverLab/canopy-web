@@ -30,7 +30,7 @@ export default defineConfig({
     },
   },
   webServer: {
-    command: `npx wrangler dev --config wrangler.e2e.toml --port ${port}`,
+    command: `npx wrangler dev --config wrangler.e2e.toml --ip 127.0.0.1 --port ${port}`,
     url: `http://127.0.0.1:${port}/`,
     cwd: path.resolve(import.meta.dirname),
     // Always start our own server. A leftover one on the port can be wedged —

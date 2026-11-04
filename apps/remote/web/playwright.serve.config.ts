@@ -41,7 +41,7 @@ export default defineConfig({
     // public/look is gitignored, so without it the serve run would test a
     // bare unstyled build (and still pass).
     command:
-      `npm run build:look && npm run build:remote-web && npx wrangler dev --config ../worker/wrangler.toml --port ${port} --infer-origin-from-routes=false --var SESSION_SECRET:dev-serve-secret --var TURN_KEY_ID:e2e-turn-key --var TURN_KEY_API_TOKEN:e2e-turn-token --var ALLOWED_ORIGINS:http://127.0.0.1:${port}`,
+      `npm run build:look && npm run build:remote-web && npx wrangler dev --config ../worker/wrangler.toml --ip 127.0.0.1 --port ${port} --infer-origin-from-routes=false --var SESSION_SECRET:dev-serve-secret --var TURN_KEY_ID:e2e-turn-key --var TURN_KEY_API_TOKEN:e2e-turn-token --var ALLOWED_ORIGINS:http://127.0.0.1:${port}`,
     url: `http://127.0.0.1:${port}/`,
     // Own server only: see apps/graphs/playwright.config.ts — a reused server
     // can be wedged (the health check never answers) or out of date.

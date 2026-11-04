@@ -76,3 +76,6 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+        env:
+          # A server that never answers shows its own output in the log.
+          DEBUG: pw:webserver
