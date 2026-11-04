@@ -1212,6 +1212,79 @@ label > textarea {
   display: none;
 }
 
+/* The builder's footer holds three buttons on a phone: let them wrap
+ * instead of pushing the sheet sideways. */
+.builder-form .sheet-actions {
+  flex-wrap: wrap;
+}
+
+/* The inline scheduling row: the datetime field spans the width and the
+ * two actions share the row below it, wrapping on the narrowest phones. */
+.builder-schedule-row {
+  margin-top: 0.75rem;
+}
+
+.builder-schedule-row[hidden] {
+  display: none;
+}
+
+.builder-schedule-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+}
+
+.builder-schedule-actions button {
+  flex: 1 1 10rem;
+}
+
+/* The schedule confirmation: plain text, announced through role=status. */
+.builder-status {
+  margin: 0.75rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+.builder-status[hidden] {
+  display: none;
+}
+
+.builder-status:empty {
+  display: none;
+}
+
+/* The session's pending schedules: one stacked card per row — the local
+ * fire time, the preview, and a full-width Cancel — so nothing squeezes
+ * at 360 px. */
+.builder-scheduled-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.scheduled-item {
+  background: var(--surface-bg-raise);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 0.6rem 0.85rem;
+  margin-bottom: var(--gap);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.scheduled-when {
+  font-weight: 600;
+}
+
+.scheduled-preview {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.scheduled-preview:empty::before {
+  content: "(no preview)";
+}
+
 /* The Files button in the session bar: hidden until hello.features
  * carries "shelf", its badge counting files nobody has looked at. */
 #session-files {

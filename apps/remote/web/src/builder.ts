@@ -32,13 +32,18 @@ import {
 } from "./draft.js";
 import type { DraftStorage, SectionKind } from "./draft.js";
 import { newReqId } from "./protocol.js";
-import type { PromptDraft } from "./protocol.js";
+import type { PromptDraft, ScheduledItem } from "./protocol.js";
 import { Sheet, esc } from "./sheet.js";
 
 export interface BuilderCallbacks {
   /** Returns false when the frame could not be sent (no connection). */
   onCompose: (draft: PromptDraft, req: string) => boolean;
   onSend: (draft: PromptDraft, req: string) => boolean;
+  /** Schedule the draft for fireAt (RFC 3339 UTC) on the open session. */
+  onSchedule: (draft: PromptDraft, fireAt: string, req: string) => boolean;
+  /** List the open session's pending schedules; the shell knows the id. */
+  onScheduledList: (req: string) => boolean;
+  onScheduledCancel: (scheduleId: string, req: string) => boolean;
 }
 
 interface BuilderState {
@@ -50,6 +55,13 @@ interface BuilderState {
   projectError: string | null;
   previewReq: string | null;
   sendReq: string | null;
+  scheduleRow: boolean;
+  scheduleReq: string | null;
+  listReq: string | null;
+  cancelReq: { req: string; scheduleId: string } | null;
+  /** The session's pending schedules; null until the first list lands. */
+  scheduled: ScheduledItem[] | null;
+  scheduleStatus: string | null;
 }
 
 function freshState(): BuilderState {
@@ -62,7 +74,26 @@ function freshState(): BuilderState {
     projectError: null,
     previewReq: null,
     sendReq: null,
+    scheduleRow: false,
+    scheduleReq: null,
+    listReq: null,
+    cancelReq: null,
+    scheduled: null,
+    scheduleStatus: null,
   };
+}
+
+// A datetime-local value in the device's own time zone: YYYY-MM-DDTHH:MM.
+function toLocalInputValue(date: Date): string {
+  const pad = (n: number): string => String(n).padStart(2, "0");
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+    `T${pad(date.getHours())}:${pad(date.getMinutes())}`
+  );
+}
+
+function formatFireAt(fireAt: string): string {
+  return new Date(fireAt).toLocaleString();
 }
 
 export class Builder {
@@ -115,12 +146,16 @@ export class Builder {
         this.render();
       }
     });
+    this.requestScheduledList();
   }
 
   // Closing keeps the draft: memory and sessionStorage both still hold it.
   close(): void {
     this.state.previewReq = null;
     this.state.sendReq = null;
+    this.state.scheduleReq = null;
+    this.state.listReq = null;
+    this.state.cancelReq = null;
     this.unsubscribe?.();
     this.unsubscribe = null;
     this.body = null;
@@ -142,21 +177,66 @@ export class Builder {
   }
 
   handleOk(req: string): boolean {
-    if (this.state.sendReq === null || this.state.sendReq !== req) {
+    if (this.state.sendReq !== null && this.state.sendReq === req) {
+      this.state.sendReq = null;
+      this.state.draft = emptyDraft();
+      clearDraft(this.storage);
+      this.state.preview = null;
+      this.close();
+      return true;
+    }
+    // A cancel answers the same ok: drop the row, then refresh the list.
+    if (this.state.cancelReq !== null && this.state.cancelReq.req === req) {
+      const scheduleId = this.state.cancelReq.scheduleId;
+      this.state.cancelReq = null;
+      if (this.state.scheduled !== null) {
+        this.state.scheduled = this.state.scheduled.filter((item) => item.id !== scheduleId);
+      }
+      this.render();
+      this.requestScheduledList();
+      return true;
+    }
+    return false;
+  }
+
+  // The host accepted the schedule: clear the draft like a Send, keep the
+  // sheet open with a fresh default section, and refresh the list.
+  handleScheduled(req: string, item: ScheduledItem): boolean {
+    if (this.state.scheduleReq === null || this.state.scheduleReq !== req) {
       return false;
     }
-    this.state.sendReq = null;
-    this.state.draft = emptyDraft();
+    this.state.scheduleReq = null;
+    this.state.draft = addSection(emptyDraft(), "instruction");
     clearDraft(this.storage);
     this.state.preview = null;
-    this.close();
+    this.state.scheduleRow = false;
+    this.state.scheduleStatus = `Scheduled for ${formatFireAt(item.fireAt)}`;
+    this.render();
+    this.requestScheduledList();
+    return true;
+  }
+
+  handleScheduledList(req: string, items: ScheduledItem[]): boolean {
+    if (this.state.listReq === null || this.state.listReq !== req) {
+      return false;
+    }
+    this.state.listReq = null;
+    this.state.scheduled = [...items].sort(
+      (a, b) => Date.parse(a.fireAt) - Date.parse(b.fireAt),
+    );
+    this.render();
     return true;
   }
 
   handleError(message: string, req: string | null, code: string): boolean {
     const previewMatch = this.state.previewReq !== null && (req === null || this.state.previewReq === req);
     const sendMatch = this.state.sendReq !== null && (req === null || this.state.sendReq === req);
-    if (!previewMatch && !sendMatch) {
+    const scheduleMatch =
+      this.state.scheduleReq !== null && (req === null || this.state.scheduleReq === req);
+    const listMatch = this.state.listReq !== null && (req === null || this.state.listReq === req);
+    const cancelMatch =
+      this.state.cancelReq !== null && (req === null || this.state.cancelReq.req === req);
+    if (!previewMatch && !sendMatch && !scheduleMatch && !listMatch && !cancelMatch) {
       return false;
     }
     if (previewMatch) {
@@ -164,6 +244,17 @@ export class Builder {
     }
     if (sendMatch) {
       this.state.sendReq = null;
+    }
+    // A schedule, list or cancel failure keeps the draft and the rows: the
+    // message lands on the sheet's own error line, even from an old host
+    // that answers every new frame with unknown-frame.
+    if (scheduleMatch || listMatch || cancelMatch) {
+      this.state.scheduleReq = scheduleMatch ? null : this.state.scheduleReq;
+      this.state.listReq = listMatch ? null : this.state.listReq;
+      this.state.cancelReq = cancelMatch ? null : this.state.cancelReq;
+      this.state.error = message;
+      this.renderErrors();
+      return true;
     }
     const classified = classifyDraftError(code, message);
     if (classified.field === "preset") {
@@ -200,6 +291,7 @@ export class Builder {
             </select>
           </label>
         </section>
+        ${this.scheduledHtml()}
         <label>Preset
           <select id="builder-preset">${this.presetOptions()}</select>
         </label>
@@ -218,8 +310,11 @@ export class Builder {
         <pre class="builder-preview" id="builder-composed" aria-live="polite"${this.state.preview === null ? " hidden" : ""}>${esc(this.state.preview ?? "")}</pre>
         <div class="sheet-actions">
           <button type="button" class="secondary" id="builder-preview">Preview</button>
+          <button type="button" class="secondary" id="builder-schedule">Schedule</button>
           <button type="button" class="primary" id="builder-send">Send</button>
         </div>
+        ${this.scheduleRowHtml()}
+        <p class="builder-status" id="builder-schedule-status" role="status"${this.state.scheduleStatus === null ? " hidden" : ""}>${esc(this.state.scheduleStatus ?? "")}</p>
       </form>`;
     this.wire();
     this.syncSelects();
@@ -269,6 +364,47 @@ export class Builder {
           </li>`;
       })
       .join("");
+  }
+
+  // The session's pending schedules, once the list has loaded with
+  // items. Previews are user text: always escaped, never innerHTML raw.
+  private scheduledHtml(): string {
+    const scheduled = this.state.scheduled;
+    if (scheduled === null || scheduled.length === 0) {
+      return "";
+    }
+    const rows = scheduled
+      .map(
+        (item) => `
+          <li class="scheduled-item">
+            <span class="scheduled-when">${esc(formatFireAt(item.fireAt))}</span>
+            <span class="scheduled-preview">${esc(item.preview)}</span>
+            <button type="button" class="secondary" data-schedule-id="${esc(item.id)}">Cancel</button>
+          </li>`,
+      )
+      .join("");
+    return `
+        <section class="builder-scheduled" id="builder-scheduled">
+          <h3>Scheduled for this session</h3>
+          <ul class="builder-scheduled-list">${rows}</ul>
+        </section>`;
+  }
+
+  // The inline scheduling row: preset to one hour from now, never earlier
+  // than the current minute.
+  private scheduleRowHtml(): string {
+    const now = new Date();
+    const preset = toLocalInputValue(new Date(now.getTime() + 60 * 60 * 1000));
+    return `
+        <div class="builder-schedule-row" id="builder-schedule-row"${this.state.scheduleRow ? "" : " hidden"}>
+          <label>When
+            <input type="datetime-local" id="builder-schedule-at" value="${preset}" min="${toLocalInputValue(now)}">
+          </label>
+          <div class="builder-schedule-actions">
+            <button type="button" class="primary" id="builder-schedule-confirm">Confirm schedule</button>
+            <button type="button" class="secondary" id="builder-schedule-dismiss">Cancel</button>
+          </div>
+        </div>`;
   }
 
   private presetOptions(): string {
@@ -430,6 +566,19 @@ export class Builder {
     });
     body.querySelector("#builder-preview")?.addEventListener("click", () => this.preview());
     body.querySelector("#builder-send")?.addEventListener("click", () => this.send());
+    body.querySelector("#builder-schedule")?.addEventListener("click", () => {
+      this.state.scheduleRow = true;
+      this.render();
+      body.querySelector<HTMLInputElement>("#builder-schedule-at")?.focus();
+    });
+    body.querySelector("#builder-schedule-dismiss")?.addEventListener("click", () => {
+      this.state.scheduleRow = false;
+      this.render();
+    });
+    body.querySelector("#builder-schedule-confirm")?.addEventListener("click", () => this.confirmSchedule());
+    for (const button of body.querySelectorAll<HTMLButtonElement>("button[data-schedule-id]")) {
+      button.addEventListener("click", () => this.cancelScheduled(button.dataset.scheduleId ?? ""));
+    }
   }
 
   // The composed text describes the draft it came from; any edit makes it
@@ -463,6 +612,58 @@ export class Builder {
     this.state.sendReq = req;
     if (!this.callbacks.onSend(wireDraft(this.state.draft), req)) {
       this.state.sendReq = null;
+      this.state.error = "Not connected";
+      this.renderErrors();
+    }
+  }
+
+  // Confirm schedules the wire draft for the row's local time, sent as
+  // UTC. An empty, unreadable or past value is the sheet's plain error
+  // and sends nothing.
+  private confirmSchedule(): void {
+    this.clearErrors();
+    const input = this.body?.querySelector<HTMLInputElement>("#builder-schedule-at");
+    const value = input?.value ?? "";
+    const at = value === "" ? Number.NaN : new Date(value).getTime();
+    if (value === "") {
+      this.state.error = "Choose a date and time first.";
+      this.renderErrors();
+      return;
+    }
+    if (Number.isNaN(at) || at <= Date.now()) {
+      this.state.error = "Pick a time in the future.";
+      this.renderErrors();
+      return;
+    }
+    const req = newReqId();
+    this.state.scheduleReq = req;
+    if (!this.callbacks.onSchedule(wireDraft(this.state.draft), new Date(value).toISOString(), req)) {
+      this.state.scheduleReq = null;
+      this.state.error = "Not connected";
+      this.renderErrors();
+    }
+  }
+
+  private cancelScheduled(scheduleId: string): void {
+    if (scheduleId === "") {
+      return;
+    }
+    this.clearErrors();
+    const req = newReqId();
+    this.state.cancelReq = { req, scheduleId };
+    if (!this.callbacks.onScheduledCancel(scheduleId, req)) {
+      this.state.cancelReq = null;
+      this.state.error = "Not connected";
+      this.renderErrors();
+    }
+  }
+
+  // No polling: the list loads on open and after each schedule or cancel.
+  private requestScheduledList(): void {
+    const req = newReqId();
+    this.state.listReq = req;
+    if (!this.callbacks.onScheduledList(req)) {
+      this.state.listReq = null;
       this.state.error = "Not connected";
       this.renderErrors();
     }

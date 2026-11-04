@@ -198,6 +198,9 @@ describe("createShell", () => {
         draftSends.push({ draft, req });
         return sendable;
       },
+      onSchedule: () => sendable,
+      onScheduledList: () => sendable,
+      onScheduledCancel: () => sendable,
       onGraphsRequest: () => {},
       onWatchGraph: () => {},
       onUnwatchGraph: () => {},

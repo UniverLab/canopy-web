@@ -12,7 +12,10 @@ import {
   buildInput,
   buildInputText,
   buildPromptDraft,
+  buildPromptSchedule,
   buildResize,
+  buildScheduledCancel,
+  buildScheduledList,
   decodeSnapshotData,
 } from "./protocol.js";
 import type { OutFrame, PromptDraft } from "./protocol.js";
@@ -96,6 +99,28 @@ export class SessionController {
       return false;
     }
     return this.callbacks.send(buildPromptDraft(req, this.openId, draft));
+  }
+
+  // The Builder's scheduling path: the same draft, delivered at fireAt.
+  sendPromptSchedule(draft: PromptDraft, fireAt: string, req: string): boolean {
+    if (this.openId === null) {
+      return false;
+    }
+    return this.callbacks.send(buildPromptSchedule(req, this.openId, draft, fireAt));
+  }
+
+  sendScheduledList(req: string): boolean {
+    if (this.openId === null) {
+      return false;
+    }
+    return this.callbacks.send(buildScheduledList(req, this.openId));
+  }
+
+  sendScheduledCancel(scheduleId: string, req: string): boolean {
+    if (this.openId === null) {
+      return false;
+    }
+    return this.callbacks.send(buildScheduledCancel(req, this.openId, scheduleId));
   }
 
   // The control-size path: the device asserts its PTY size for the open

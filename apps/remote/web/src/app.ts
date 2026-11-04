@@ -21,7 +21,7 @@ import type { MetricsStore } from "./metrics-store.js";
 import { keyBytesWithModifiers, ModifierLatches, textBytesWithModifiers } from "./modifiers.js";
 import { NewDialog } from "./new-dialog.js";
 import { defaultDeviceLabel } from "./pairing.js";
-import type { PromptDraft, SpawnRequest } from "./protocol.js";
+import type { PromptDraft, ScheduledItem, SpawnRequest } from "./protocol.js";
 import type { OnlineHost } from "./relay.js";
 import type { ShelfHandle } from "./shelf-controller.js";
 import { convergeOpenSessionName, type SessionStore } from "./sessions.js";
@@ -68,6 +68,9 @@ export interface ShellCallbacks {
   onSpawn: (spawn: SpawnRequest, req: string) => boolean;
   onCompose: (draft: PromptDraft, req: string) => boolean;
   onSendDraft: (draft: PromptDraft, req: string) => boolean;
+  onSchedule: (draft: PromptDraft, fireAt: string, req: string) => boolean;
+  onScheduledList: (req: string) => boolean;
+  onScheduledCancel: (scheduleId: string, req: string) => boolean;
   /** Ask the host for the graphs list (the Graphs tab shows and polls it). */
   onGraphsRequest: () => void;
   /** Start watching a graph: the host pushes graph_state until unwatched. */
@@ -105,6 +108,8 @@ export interface Shell {
   showSessionExited: (code: number) => void;
   sheetSpawned: (req: string, id: string) => void;
   sheetComposed: (req: string, text: string) => void;
+  sheetScheduled: (req: string, item: ScheduledItem) => void;
+  sheetScheduledList: (req: string, items: ScheduledItem[]) => void;
   sheetOk: (req: string) => void;
   sheetError: (message: string, req: string | null, code: string) => void;
   dispose: () => void;
@@ -183,6 +188,9 @@ export function createShell(
   const builder = new Builder(catalog, {
     onCompose: (draft, req) => callbacks.onCompose(draft, req),
     onSend: (draft, req) => callbacks.onSendDraft(draft, req),
+    onSchedule: (draft, fireAt, req) => callbacks.onSchedule(draft, fireAt, req),
+    onScheduledList: (req) => callbacks.onScheduledList(req),
+    onScheduledCancel: (scheduleId, req) => callbacks.onScheduledCancel(scheduleId, req),
   });
   const closeSheets = () => {
     newDialog.close();
@@ -794,6 +802,12 @@ export function createShell(
     },
     sheetComposed(req: string, text: string): void {
       builder.handleComposed(req, text);
+    },
+    sheetScheduled(req: string, item: ScheduledItem): void {
+      builder.handleScheduled(req, item);
+    },
+    sheetScheduledList(req: string, items: ScheduledItem[]): void {
+      builder.handleScheduledList(req, items);
     },
     sheetOk(req: string): void {
       builder.handleOk(req);

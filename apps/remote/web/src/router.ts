@@ -25,6 +25,8 @@ import {
   parseOk,
   parseOut,
   parseResized,
+  parseScheduled,
+  parseScheduledList,
   parseSessionAdded,
   parseSessionRemoved,
   parseSessions,
@@ -33,6 +35,7 @@ import {
   parseShelfRemoved,
   parseSpawned,
 } from "./protocol.js";
+import type { ScheduledItem } from "./protocol.js";
 import type { SessionController } from "./session.js";
 import type { ShelfFrames } from "./shelf-controller.js";
 import type { SessionStore } from "./sessions.js";
@@ -53,6 +56,8 @@ export interface RouterShell {
   sessionResized?: (id: string, cols: number, rows: number) => void;
   sheetSpawned: (req: string, id: string) => void;
   sheetComposed: (req: string, text: string) => void;
+  sheetScheduled: (req: string, item: ScheduledItem) => void;
+  sheetScheduledList: (req: string, items: ScheduledItem[]) => void;
   sheetOk: (req: string) => void;
   sheetError: (message: string, req: string | null, code: string) => void;
 }
@@ -153,6 +158,16 @@ export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
     const composed = parseComposed(frame);
     if (composed) {
       shell.sheetComposed(composed.req, composed.text);
+      return;
+    }
+    const scheduled = parseScheduled(frame);
+    if (scheduled) {
+      shell.sheetScheduled(scheduled.req, scheduled.item);
+      return;
+    }
+    const scheduledList = parseScheduledList(frame);
+    if (scheduledList) {
+      shell.sheetScheduledList(scheduledList.req, scheduledList.items);
       return;
     }
     // The shelf half of v1: hello gates the whole feature, the rest is

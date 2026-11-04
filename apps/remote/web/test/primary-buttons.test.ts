@@ -80,7 +80,13 @@ describe("primary buttons", () => {
     builderCatalog.replace(CATALOG);
     const builder = new Builder(
       builderCatalog,
-      { onCompose: () => true, onSend: () => true },
+      {
+        onCompose: () => true,
+        onSend: () => true,
+        onSchedule: () => true,
+        onScheduledList: () => true,
+        onScheduledCancel: () => true,
+      },
       new FakeStorage(),
     );
     builder.open(builderRoot);
