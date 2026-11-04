@@ -184,7 +184,7 @@ describe("bannerSvg", () => {
     const fills = [...svg.matchAll(/<g class="look-banner-line" fill="(#[0-9a-f]{6})">/g)].map(
       (match) => match[1],
     );
-    const stops = [0, 1, 1, 2, 3, 4, 4, 5, 6, 6, 7];
+    const stops = [0, 0, 1, 1, 1, 2, 2, 3, 3, 3, 4];
     expect(fills).toEqual(stops.map((stop) => BANNER_GRADIENT[stop]));
     // A style attribute is refused by the remote's CSP: fills never use one.
     expect(svg).not.toContain("style=");
@@ -208,21 +208,13 @@ describe("the house banner", () => {
     expect(BANNER_LINES[1]).toContain("██████");
   });
 
-  it("runs the landing's eight wizard greens light to dark", () => {
-    expect(BANNER_GRADIENT).toEqual([
-      "#9dcfa1",
-      "#84be89",
-      "#6cae71",
-      "#559d5a",
-      "#3f8d44",
-      "#2b7a30",
-      "#1a6620",
-      "#0c5212",
-    ]);
+  it("runs the TUI's five-stop Canopy teal scale light to dark", () => {
+    expect(BANNER_GRADIENT).toEqual(["#52fff6", "#1ffff3", "#00e0d4", "#00a9a0", "#006661"]);
+    expect(BANNER_GRADIENT).not.toContain("#003330");
   });
 
-  it("colours the ten lines stops [0,1,2,2,3,4,5,5,6,7], first lightest and last darkest", () => {
-    const stops = [0, 1, 2, 2, 3, 4, 5, 5, 6, 7];
+  it("colours the ten lines stops [0,0,1,1,2,2,2,3,3,4], like gradient_rgb", () => {
+    const stops = [0, 0, 1, 1, 2, 2, 2, 3, 3, 4];
     expect(BANNER_LINES.map((_, index) => bannerColor(index))).toEqual(
       stops.map((stop) => BANNER_GRADIENT[stop]),
     );
@@ -262,8 +254,8 @@ describe("the header banners", () => {
     expect(REMOTE_BANNER_LINES[2]).toContain("████████");
   });
 
-  it("colours the eleven lines stops [0,1,1,2,3,4,4,5,6,6,7], first lightest and last darkest", () => {
-    const stops = [0, 1, 1, 2, 3, 4, 4, 5, 6, 6, 7];
+  it("colours the eleven lines stops [0,0,1,1,1,2,2,3,3,3,4], like gradient_rgb", () => {
+    const stops = [0, 0, 1, 1, 1, 2, 2, 3, 3, 3, 4];
     for (const lines of [GRAPHS_BANNER_LINES, REMOTE_BANNER_LINES]) {
       expect(lines.map((_, index) => bannerColor(index, lines.length))).toEqual(
         stops.map((stop) => BANNER_GRADIENT[stop]),
