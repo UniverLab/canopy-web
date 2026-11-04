@@ -16,7 +16,9 @@
  * The guest app rides its own lazy chunk behind `/g/`, partitioned out by
  * its IndexedDB name ("canopy-remote-guests") and weighed against its own
  * 6 KB budget; it shares the main stylesheet, so CSS needs no partition.
- * The main bundle must not grow for the guest either.
+ * The main bundle must not grow for the guest either, save the one step
+ * that must run before the chunk loads: resuming a guest link after the
+ * GitHub sign-in lands on `/` (GUEST_RETURN_BUDGET).
  *
  * The build goes to a temporary directory, never over apps/remote/web/dist.
  */
@@ -146,6 +148,13 @@ const CONTROL_SIZE_BUDGET = 1_024;
  * the fix impossible.
  */
 const RESIZED_BUDGET = 512;
+/**
+ * Allowance for the guest's sign-in return (main.ts resumes the guest link
+ * a tab signed in from, since the OAuth callback lands on `/`): measured
+ * +226 B gzip over the pre-change main. Added in the fix commit like RESIZED_BUDGET: it
+ * must run before the guest chunk loads, so it cannot ride that chunk.
+ */
+const GUEST_RETURN_BUDGET = 512;
 /** The budget the lazy guest chunk is allowed, gzip bytes of JS. */
 const GUEST_BUDGET = 6_144;
 /**
@@ -264,7 +273,8 @@ describe("the remote's bundle", () => {
         ARC_BOUNDS_BUDGET +
         MERGE_BUDGET +
         CONTROL_SIZE_BUDGET +
-        RESIZED_BUDGET,
+        RESIZED_BUDGET +
+        GUEST_RETURN_BUDGET,
     );
     expect(guestJs, JSON.stringify(report)).toBeLessThanOrEqual(GUEST_BUDGET + GUEST_INVITE_BUDGET);
     expect(editorJs, JSON.stringify(report)).toBeLessThanOrEqual(EDITOR_BUDGET);

@@ -31,9 +31,10 @@ view, the running one advancing every 2 seconds.
 A host shares sessions with another GitHub account through an invite:
 `canopy remote invite <login>` prints a single-use code and the guest
 link `<origin>/g/<owner_uid>/<host_id>#invite=<code>`. The guest opens
-the link and signs in with GitHub; the code rides the fragment, so it
-never reaches the relay's logs or a Referer. The page keeps it in this
-tab's sessionStorage only, strips it from the address bar, and opens the
+the link and signs in with GitHub (the page comes back to the link after
+the sign-in); the code rides the fragment, so it never reaches the
+relay's logs or a Referer. The page keeps it in this tab's
+sessionStorage only, strips it from the address bar, and opens the
 relay's guest door with its canonical `CNR-XXXX-XXXX-XXXX-XXXX` form,
 the string whose SHA-256 the host publishes. A link without a code asks
 for it in a form (case, spaces and dashes do not matter). The relay

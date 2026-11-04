@@ -2,6 +2,12 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
+  GUEST_RETURN_KEY,
+  GUEST_RETURN_TTL_MS,
+  rememberGuestReturn,
+  resumeGuestReturn,
+} from "../src/entry-path.js";
+import {
   INVITE_FORMAT_ERROR,
   canonicalInviteCode,
   forgetInvite,
@@ -14,6 +20,7 @@ import { FakeStorage } from "./fakes.js";
 
 const LINK = { ownerUid: 1001, hostId: "76805a63a6980c18" };
 const CODE = "CNR-7K3Q-HM9P-2XAB-CDEF";
+const NOW = 1793100000_000;
 
 function fakeHistory(location: { pathname: string; search: string; hash: string }): {
   calls: (string | undefined)[];
@@ -138,5 +145,38 @@ describe("invite storage", () => {
     expect(() => saveInvite(LINK, CODE, storage)).not.toThrow();
     expect(() => forgetInvite(LINK, storage)).not.toThrow();
     expect(loadInvite(LINK, null)).toBeNull();
+  });
+});
+
+describe("guest sign-in return", () => {
+  it("brings / back to the guest link the tab signed in from, once", () => {
+    const storage = new FakeStorage();
+    rememberGuestReturn("/g/1001/76805a63a6980c18", NOW, storage);
+    // The pathname only: no code ever rides this slot.
+    expect(storage.getItem(GUEST_RETURN_KEY)).not.toContain("CNR");
+    const history = fakeHistory({ pathname: "/", search: "", hash: "" });
+    expect(resumeGuestReturn({ pathname: "/" }, history, NOW + 60_000, storage)).toBe(true);
+    expect(history.calls).toEqual(["/g/1001/76805a63a6980c18"]);
+    expect(resumeGuestReturn({ pathname: "/" }, history, NOW + 60_000, storage)).toBe(false);
+  });
+
+  it("ignores other paths, stale or malformed entries, and non-guest links", () => {
+    const storage = new FakeStorage();
+    const history = fakeHistory({ pathname: "/", search: "", hash: "" });
+    rememberGuestReturn("/pair", NOW, storage);
+    expect(storage.length).toBe(0);
+    rememberGuestReturn("/g/1001/76805a63a6980c18", NOW, storage);
+    expect(resumeGuestReturn({ pathname: "/pair" }, history, NOW, storage)).toBe(false);
+    expect(resumeGuestReturn({ pathname: "/" }, history, NOW + GUEST_RETURN_TTL_MS + 1, storage)).toBe(
+      false,
+    );
+    storage.setItem(GUEST_RETURN_KEY, JSON.stringify({ path: "//evil.example/g/1/x", at: NOW }));
+    expect(resumeGuestReturn({ pathname: "/" }, history, NOW, storage)).toBe(false);
+    storage.setItem(GUEST_RETURN_KEY, "{");
+    expect(resumeGuestReturn({ pathname: "/" }, history, NOW, storage)).toBe(false);
+    expect(history.calls).toEqual([]);
+    expect(storage.length).toBe(0);
+    storage.failReads = true;
+    expect(resumeGuestReturn({ pathname: "/" }, history, NOW, storage)).toBe(false);
   });
 });

@@ -10,6 +10,7 @@
 import { armSessionHint } from "./auth.js";
 import { canonicalInviteCode, inviteFormError } from "./guest-invite.js";
 import { renderTopbar, wireAccount } from "./chrome.js";
+import { rememberGuestReturn } from "./entry-path.js";
 import { syncHeaderFondo } from "./fondo.js";
 import { REMOTE_FOOTER } from "./footer.js";
 import { renderKeyBar, updateKeyBarLatches } from "./keys.js";
@@ -152,6 +153,9 @@ export function createGuestView(
       // back must fetch /auth/me. A cancelled login self-heals — the next
       // 401 clears the hint again.
       armSessionHint();
+      // The OAuth callback lands on /: remember this guest link (never the
+      // code, which keeps its own tab-only slot) for main.ts to resume.
+      rememberGuestReturn(globalThis.location.pathname);
       globalThis.location.href = "/auth/login";
     });
   }

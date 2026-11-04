@@ -11,7 +11,7 @@ import { CatalogStore } from "./catalog.js";
 import { createChannelHandler } from "./channel.js";
 import { generateDeviceKey } from "./crypto.js";
 import type { DeviceKey } from "./crypto.js";
-import { redirectUnknownRoute } from "./entry-path.js";
+import { redirectUnknownRoute, resumeGuestReturn } from "./entry-path.js";
 import { GraphStore } from "./graph-store.js";
 import { MetricsStore } from "./metrics-store.js";
 import { buildCatalog, buildCompose, buildList, buildSpawn, newReqId } from "./protocol.js";
@@ -50,6 +50,9 @@ async function main(): Promise<void> {
   // guest checks below then read "/" and never match, and the app boots
   // on its own route — no reload, no round-trip, query and hash kept.
   redirectUnknownRoute(globalThis.location, globalThis.history);
+  // Back from a guest's GitHub sign-in (the callback lands on /): resume
+  // the guest link this tab left from, so the check below mounts it.
+  resumeGuestReturn(globalThis.location, globalThis.history);
   // The graph editor rides its own lazy chunk: no relay, no pairing, no
   // login — the drafts API it posts to is public and CORS-open.
   if (globalThis.location?.pathname.startsWith("/editor") === true) {
