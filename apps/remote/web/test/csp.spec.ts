@@ -111,5 +111,11 @@ test("opening a session, typing, resizing and listing graphs fires zero CSP viol
   // "missing listener" fails loudly if the init script never ran: an empty
   // array must mean zero violations, never a lost collector.
   const violations = await page.evaluate(() => window.__cspViolations ?? "missing listener");
-  expect(violations).toEqual([]);
+  // Vite's dev client opens this socket by itself; the built app the relay
+  // serves has no such client, so it says nothing about the policy.
+  const viteSocket = /^ws:\/\/127\.0\.0\.1:\d+\/\?token=/;
+  const real = Array.isArray(violations)
+    ? violations.filter((v) => !(v.directive === "connect-src" && viteSocket.test(v.uri)))
+    : violations;
+  expect(real).toEqual([]);
 });
