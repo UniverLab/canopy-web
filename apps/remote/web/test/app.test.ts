@@ -20,6 +20,7 @@ class FakeHandle implements TerminalHandle {
   alternate = false;
   cols: number;
   rows: number;
+  resizes: { cols: number; rows: number }[] = [];
   private inputListeners: ((text: string) => void)[] = [];
   private scrollListeners: (() => void)[] = [];
   private bufferListeners: (() => void)[] = [];
@@ -28,6 +29,12 @@ class FakeHandle implements TerminalHandle {
     this.cols = cols;
     this.rows = rows;
   }
+
+  resize = (cols: number, rows: number): void => {
+    this.cols = cols;
+    this.rows = rows;
+    this.resizes.push({ cols, rows });
+  };
 
   write = (data: Uint8Array): void => {
     this.written.push(data);
@@ -575,29 +582,87 @@ describe("createShell", () => {
     expect(calls.controlSizes).toEqual([]);
   });
 
-  it("persists control-size per session and asserts the real size", () => {
+  // happy-dom has no layout: a 400 × 320 px panel and a grid whose
+  // natural size follows the newest handle at 8 × 16 px cells, so the
+  // size that fits the panel is 50 × 20 whatever the host's size is.
+  const layOutPanel = (): void => {
+    const handle = handles[handles.length - 1];
+    const fit = root.querySelector<HTMLElement>(".term-fit");
+    const host = root.querySelector<HTMLElement>(".term-host");
+    if (!handle || !fit || !host) {
+      throw new Error("no terminal to lay out");
+    }
+    Object.defineProperty(fit, "clientWidth", { value: 400, configurable: true });
+    Object.defineProperty(fit, "clientHeight", { value: 320, configurable: true });
+    Object.defineProperty(host, "scrollWidth", { get: () => handle.cols * 8, configurable: true });
+    Object.defineProperty(host, "scrollHeight", { get: () => handle.rows * 16, configurable: true });
+  };
+
+  const flipControlSize = (checked: boolean): void => {
+    const toggle = query<HTMLInputElement>("#term-control-size");
+    toggle.checked = checked;
+    toggle.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+
+  it("asserts the size that fits this panel, never the host's own", () => {
     shell.showSession("s1", "build");
     shell.ensureTerminal("s1", 80, 24);
-    const toggle = query<HTMLInputElement>("#term-control-size");
-    // Turning it on remembers the session and asserts the open size once.
-    toggle.checked = true;
-    toggle.dispatchEvent(new Event("change", { bubbles: true }));
+    layOutPanel();
+    // Turning it on remembers the session, resizes the local terminal to
+    // the panel and asserts that size once: re-sending the host's 80 × 24
+    // would change nothing.
+    flipControlSize(true);
     expect(readControlSize("s1")).toBe(true);
     expect(readControlSize("s2")).toBe(false);
-    expect(calls.controlSizes).toEqual([{ cols: 80, rows: 24 }]);
-    // A remount (a changed host size) re-asserts while on.
+    expect(calls.controlSizes).toEqual([{ cols: 50, rows: 20 }]);
+    expect(handles).toHaveLength(1);
+    expect(handles[0]?.resizes).toEqual([{ cols: 50, rows: 20 }]);
+    // The owner renders at scale 1, not fitted to the width.
+    expect(query(".term-pane").getAttribute("data-size-owner")).toBe("true");
+    expect(query<HTMLElement>(".term-fit").dataset.scale).toBe("1");
+    // The host's snapshot at the asserted size keeps the terminal as is.
+    shell.ensureTerminal("s1", 50, 20);
+    expect(handles).toHaveLength(1);
+    expect(calls.controlSizes).toHaveLength(1);
+  });
+
+  it("re-asserts the fitted size when a remount brings the host's size back", () => {
+    shell.showSession("s1", "build");
+    shell.ensureTerminal("s1", 80, 24);
+    layOutPanel();
+    flipControlSize(true);
+    // A remount (a changed host size): the fresh terminal is laid out and
+    // the size that fits the panel goes out again.
     shell.ensureTerminal("s1", 100, 40);
+    expect(handles).toHaveLength(2);
+    layOutPanel();
+    vi.advanceTimersByTime(1000);
     expect(calls.controlSizes).toEqual([
-      { cols: 80, rows: 24 },
-      { cols: 100, rows: 40 },
+      { cols: 50, rows: 20 },
+      { cols: 50, rows: 20 },
     ]);
-    // Same size: no remount, no duplicate assert.
-    shell.ensureTerminal("s1", 100, 40);
-    expect(calls.controlSizes).toHaveLength(2);
-    // Turning it off remembers and stops asserting.
-    query<HTMLInputElement>("#term-control-size").checked = false;
-    query<HTMLInputElement>("#term-control-size").dispatchEvent(new Event("change", { bubbles: true }));
+    expect(handles[1]?.resizes).toEqual([{ cols: 50, rows: 20 }]);
+  });
+
+  it("re-asserts on zoom, debounced, and stops when turned off", () => {
+    shell.showSession("s1", "build");
+    shell.ensureTerminal("s1", 80, 24);
+    layOutPanel();
+    flipControlSize(true);
+    // Zooming in grows the cell (8 × 16 → 10 × 20): fewer fit.
+    query<HTMLButtonElement>("#term-zoom-in").click();
+    expect(calls.controlSizes).toHaveLength(1);
+    vi.advanceTimersByTime(150);
+    expect(calls.controlSizes).toEqual([
+      { cols: 50, rows: 20 },
+      { cols: 40, rows: 16 },
+    ]);
+    // Turning it off remembers, stops asserting and fits the width again.
+    flipControlSize(false);
     expect(readControlSize("s1")).toBe(false);
+    expect(query(".term-pane").hasAttribute("data-size-owner")).toBe(false);
+    query<HTMLButtonElement>("#term-zoom-out").click();
+    vi.advanceTimersByTime(1000);
     expect(calls.controlSizes).toHaveLength(2);
   });
 
@@ -606,7 +671,11 @@ describe("createShell", () => {
     shell.showSession("s1", "build");
     expect(query<HTMLInputElement>("#term-control-size").checked).toBe(true);
     shell.ensureTerminal("s1", 80, 24);
-    expect(calls.controlSizes).toEqual([{ cols: 80, rows: 24 }]);
+    // Nothing measurable yet in happy-dom: the size goes out once laid out.
+    layOutPanel();
+    vi.advanceTimersByTime(150);
+    expect(calls.controlSizes).toEqual([{ cols: 50, rows: 20 }]);
+    expect(handles[0]?.resizes).toEqual([{ cols: 50, rows: 20 }]);
   });
 
   it("keeps the terminal across state changes", () => {

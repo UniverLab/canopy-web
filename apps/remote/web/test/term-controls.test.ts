@@ -3,10 +3,19 @@
 // browser can honour it, toggling through the Fullscreen API and
 // following fullscreenchange (maximize when windowed, minimize while
 // fullscreen). happy-dom ships no Fullscreen API, so every leg stubs it.
-import { afterEach, describe, expect, it, vi } from "vitest";
+// The control-size toggle: the size that fits this device's panel, sent
+// and applied locally on, re-asserted (debounced) while on, never off.
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { icon } from "../src/icons-dom.js";
-import { termControlsHtml, wireTermControls } from "../src/term-controls.js";
-import type { TermControlsDeps } from "../src/term-controls.js";
+import {
+  SIZE_DEBOUNCE_MS,
+  termControlsHtml,
+  termSizeHtml,
+  wireTermControls,
+} from "../src/term-controls.js";
+import type { TermControls, TermControlsDeps, TermControlsView } from "../src/term-controls.js";
+import type { TermSize } from "../src/terminal.js";
+import { readControlSize, writeControlSize } from "../src/terminal-prefs.js";
 
 /** The icon markup as the DOM serializes it (paths gain close tags). */
 function rendered(name: Parameters<typeof icon>[0]): string {
@@ -20,8 +29,8 @@ function deps(root: HTMLElement): TermControlsDeps {
     root,
     sessionId: () => "s1",
     terminalView: () => null,
-    sessionSize: () => ({ cols: 80, rows: 24 }),
     onControlSize: () => {},
+    onLocalSize: () => {},
     onBuilder: () => {},
   };
 }
@@ -145,5 +154,196 @@ describe("term fullscreen button", () => {
     expect(button?.getAttribute("aria-pressed")).toBe("false");
     expect(button?.getAttribute("aria-label")).toBe("Enter fullscreen");
     expect(button?.innerHTML).toBe(rendered("maximize"));
+  });
+});
+
+/** The view slice the size toggle drives, with a panel size the test sets. */
+class StubView implements TermControlsView {
+  fitted = true;
+  isAlternate = false;
+  owner: boolean[] = [];
+  fits: TermSize | null;
+  private release: () => void = () => {};
+  private readonly readyPromise: Promise<void>;
+
+  constructor(fits: TermSize | null, open = true) {
+    this.fits = fits;
+    this.fitted = open;
+    this.readyPromise = open
+      ? Promise.resolve()
+      : new Promise<void>((resolve) => {
+          this.release = resolve;
+        });
+  }
+
+  zoomIn = (): void => {};
+  zoomOut = (): void => {};
+  scrollToLatest = (): void => {};
+  ready = (): Promise<void> => this.readyPromise;
+  ownedSize = (): TermSize | null => this.fits;
+  setSizeOwner = (owner: boolean): void => {
+    this.owner.push(owner);
+  };
+
+  open(): void {
+    this.fitted = true;
+    this.release();
+  }
+}
+
+describe("control-size toggle", () => {
+  let root: HTMLDivElement;
+  let view: StubView | null;
+  let sent: TermSize[];
+  let local: TermSize[];
+  let controls: TermControls;
+
+  const toggle = (): HTMLInputElement => {
+    const el = root.querySelector<HTMLInputElement>("#term-control-size");
+    if (!el) {
+      throw new Error("missing #term-control-size");
+    }
+    return el;
+  };
+
+  const flip = (checked: boolean): void => {
+    toggle().checked = checked;
+    toggle().dispatchEvent(new Event("change", { bubbles: true }));
+  };
+
+  const mount = (): void => {
+    root = document.createElement("div");
+    document.body.appendChild(root);
+    root.innerHTML = `<div id="term-pane"></div>${termControlsHtml()}${termSizeHtml("s1")}`;
+    controls = wireTermControls({
+      ...deps(root),
+      terminalView: () => view,
+      onControlSize: (cols, rows) => sent.push({ cols, rows }),
+      onLocalSize: (cols, rows) => local.push({ cols, rows }),
+    });
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    localStorage.clear();
+    view = new StubView({ cols: 44, rows: 19 });
+    sent = [];
+    local = [];
+    mount();
+  });
+
+  afterEach(() => {
+    controls.dispose();
+    vi.useRealTimers();
+    document.body.innerHTML = "";
+    localStorage.clear();
+  });
+
+  it("sends and applies the size that fits the panel when turned on", () => {
+    flip(true);
+    expect(readControlSize("s1")).toBe(true);
+    expect(view?.owner).toEqual([true]);
+    // The panel's own size, never the host's: the local terminal takes it
+    // too, so it renders at scale 1 instead of being fitted.
+    expect(sent).toEqual([{ cols: 44, rows: 19 }]);
+    expect(local).toEqual([{ cols: 44, rows: 19 }]);
+  });
+
+  it("re-sends once, debounced, while the panel keeps changing", () => {
+    flip(true);
+    view!.fits = { cols: 90, rows: 30 };
+    globalThis.dispatchEvent(new Event("resize"));
+    vi.advanceTimersByTime(SIZE_DEBOUNCE_MS - 50);
+    globalThis.dispatchEvent(new Event("orientationchange"));
+    vi.advanceTimersByTime(SIZE_DEBOUNCE_MS - 1);
+    expect(sent).toHaveLength(1);
+    document.dispatchEvent(new Event("fullscreenchange"));
+    vi.advanceTimersByTime(SIZE_DEBOUNCE_MS);
+    expect(sent).toEqual([
+      { cols: 44, rows: 19 },
+      { cols: 90, rows: 30 },
+    ]);
+    expect(local).toEqual(sent);
+    // A zoom reaches the same debounce through the shell.
+    view!.fits = { cols: 72, rows: 24 };
+    controls.schedule();
+    vi.advanceTimersByTime(SIZE_DEBOUNCE_MS);
+    expect(sent.at(-1)).toEqual({ cols: 72, rows: 24 });
+  });
+
+  it("never re-sends a size that did not change", () => {
+    flip(true);
+    globalThis.dispatchEvent(new Event("resize"));
+    vi.advanceTimersByTime(SIZE_DEBOUNCE_MS);
+    controls.schedule();
+    vi.advanceTimersByTime(SIZE_DEBOUNCE_MS);
+    expect(sent).toHaveLength(1);
+  });
+
+  it("stops asserting and follows the host again when turned off", () => {
+    flip(true);
+    flip(false);
+    expect(readControlSize("s1")).toBe(false);
+    expect(view?.owner).toEqual([true, false]);
+    view!.fits = { cols: 90, rows: 30 };
+    globalThis.dispatchEvent(new Event("resize"));
+    controls.schedule();
+    vi.advanceTimersByTime(SIZE_DEBOUNCE_MS * 2);
+    expect(sent).toHaveLength(1);
+  });
+
+  it("re-asserts a remembered toggle on mount, even an unchanged size", () => {
+    controls.reassert();
+    // Off: nothing to re-assert.
+    expect(sent).toEqual([]);
+    writeControlSize("s1", true);
+    controls.reassert();
+    expect(toggle().checked).toBe(true);
+    expect(sent).toEqual([{ cols: 44, rows: 19 }]);
+    // A remount (reconnect) may face a host at any size: send it again.
+    controls.reassert();
+    expect(sent).toEqual([
+      { cols: 44, rows: 19 },
+      { cols: 44, rows: 19 },
+    ]);
+  });
+
+  it("waits for a terminal behind the font gate before measuring", async () => {
+    const gated = new StubView({ cols: 50, rows: 20 }, false);
+    view = gated;
+    flip(true);
+    expect(sent).toEqual([]);
+    gated.open();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(sent).toEqual([{ cols: 50, rows: 20 }]);
+  });
+
+  it("retries a panel that is not measured yet", () => {
+    view!.fits = null;
+    flip(true);
+    expect(sent).toEqual([]);
+    vi.advanceTimersByTime(SIZE_DEBOUNCE_MS);
+    view!.fits = { cols: 60, rows: 22 };
+    vi.advanceTimersByTime(SIZE_DEBOUNCE_MS);
+    expect(sent).toEqual([{ cols: 60, rows: 22 }]);
+  });
+
+  it("asserts nothing without a terminal, until the mount re-asserts", () => {
+    view = null;
+    flip(true);
+    expect(sent).toEqual([]);
+    view = new StubView({ cols: 44, rows: 19 });
+    controls.reassert();
+    expect(sent).toEqual([{ cols: 44, rows: 19 }]);
+  });
+
+  it("stops watching the panel once disposed", () => {
+    flip(true);
+    controls.dispose();
+    view!.fits = { cols: 90, rows: 30 };
+    globalThis.dispatchEvent(new Event("resize"));
+    vi.advanceTimersByTime(SIZE_DEBOUNCE_MS * 2);
+    expect(sent).toHaveLength(1);
   });
 });

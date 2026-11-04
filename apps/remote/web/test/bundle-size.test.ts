@@ -121,6 +121,14 @@ const SHELF_DELETE_BUDGET = 1_024;
  * Merged, main is 410 B gzip over the sum of those budgets, with no new code.
  */
 const MERGE_BUDGET = 512;
+/**
+ * Allowance for the control-size fix (the panel-fitted size, the owner
+ * scale, the in-place local resize and the debounced re-assert while the
+ * toggle is on): measured +819 B gzip over the pre-change main. Added in
+ * the fix commit like SHELF_DELETE_BUDGET: the 102-byte headroom made any
+ * implementation of the fix impossible.
+ */
+const CONTROL_SIZE_BUDGET = 1_024;
 /** The budget the lazy guest chunk is allowed, gzip bytes of JS. */
 const GUEST_BUDGET = 6_144;
 /** The budget the lazy editor chunk is allowed, gzip bytes of JS. */
@@ -228,7 +236,8 @@ describe("the remote's bundle", () => {
         BAND_BUDGET +
         UPLOAD_BUDGET +
         SHELF_DELETE_BUDGET +
-        MERGE_BUDGET,
+        MERGE_BUDGET +
+        CONTROL_SIZE_BUDGET,
     );
     expect(guestJs, JSON.stringify(report)).toBeLessThanOrEqual(GUEST_BUDGET);
     expect(editorJs, JSON.stringify(report)).toBeLessThanOrEqual(EDITOR_BUDGET);

@@ -5,11 +5,16 @@ import {
   classifyTouchGesture,
   computeFitScale,
   computeMinScale,
+  computeOwnedSize,
   computeScale,
   decayFlingVelocity,
   flingVelocity,
   MAX_ZOOM,
   MIN_ZOOM,
+  OWNED_MAX_COLS,
+  OWNED_MAX_ROWS,
+  OWNED_MIN_COLS,
+  OWNED_MIN_ROWS,
   shouldContinueFling,
   shouldStartFling,
   splitTouchScroll,
@@ -29,6 +34,8 @@ class FakeHandle implements TerminalHandle {
   cols: number;
   rows: number;
   alternate = false;
+  baseScale?: number;
+  resizes: { cols: number; rows: number }[] = [];
   private inputListeners: ((text: string) => void)[] = [];
   private scrollListeners: (() => void)[] = [];
   private bufferListeners: (() => void)[] = [];
@@ -68,6 +75,11 @@ class FakeHandle implements TerminalHandle {
   onReady = (callback: () => void): (() => void) => {
     callback();
     return () => {};
+  };
+  resize = (cols: number, rows: number): void => {
+    this.cols = cols;
+    this.rows = rows;
+    this.resizes.push({ cols, rows });
   };
   dispose = (): void => {
     this.disposed = true;
@@ -148,6 +160,32 @@ describe("scale math", () => {
   it("keeps the width fit in the normal buffer", () => {
     expect(computeFitScale(340, 100, 672, 408, 1, false)).toBeCloseTo(340 / 672, 10);
     expect(computeFitScale(340, 100, 672, 408, 2, false)).toBeCloseTo((340 / 672) * 2, 10);
+  });
+});
+
+describe("owned size", () => {
+  it("fits whole cells into the panel", () => {
+    // 372 × 337 CSS px at 8.4 × 17 px cells: 44 columns, 19 rows.
+    expect(computeOwnedSize(372, 337, 8.4, 17)).toEqual({ cols: 44, rows: 19 });
+    // A part cell never counts; an exact fit does despite float error.
+    expect(computeOwnedSize(100, 100, 8, 16)).toEqual({ cols: 20, rows: 6 });
+    expect(computeOwnedSize(336, 340, 8.4, 17)).toEqual({ cols: 40, rows: 20 });
+  });
+
+  it("clamps to sane bounds", () => {
+    expect(computeOwnedSize(50, 30, 8, 16)).toEqual({ cols: OWNED_MIN_COLS, rows: OWNED_MIN_ROWS });
+    expect(computeOwnedSize(100_000, 100_000, 8, 16)).toEqual({
+      cols: OWNED_MAX_COLS,
+      rows: OWNED_MAX_ROWS,
+    });
+    expect([OWNED_MIN_COLS, OWNED_MAX_COLS, OWNED_MIN_ROWS, OWNED_MAX_ROWS]).toEqual([20, 500, 5, 200]);
+  });
+
+  it("is unknown until both the panel and the cell are measured", () => {
+    expect(computeOwnedSize(0, 300, 8, 16)).toBeNull();
+    expect(computeOwnedSize(300, 0, 8, 16)).toBeNull();
+    expect(computeOwnedSize(300, 300, 0, 16)).toBeNull();
+    expect(computeOwnedSize(300, 300, 8, Number.NaN)).toBeNull();
   });
 });
 
@@ -607,6 +645,129 @@ describe("TerminalView", () => {
     // …without re-enabling follow: no new callback, still off.
     expect(view.isFollowing).toBe(false);
     expect(follows).toEqual([false]);
+    view.dispose();
+  });
+
+  // happy-dom has no layout: a panel of panelW × panelH and a grid whose
+  // natural size follows the handle's cols × rows at 8 × 16 px cells.
+  function layOut(
+    parent: HTMLElement,
+    handle: FakeHandle,
+    panelW: number,
+    panelH: number,
+  ): { fit: HTMLElement; host: HTMLElement } {
+    const fit = parent.querySelector<HTMLElement>(".term-fit");
+    const host = parent.querySelector<HTMLElement>(".term-host");
+    if (!fit || !host) {
+      throw new Error("missing scaffold");
+    }
+    Object.defineProperty(fit, "clientWidth", { value: panelW, configurable: true });
+    Object.defineProperty(fit, "clientHeight", { value: panelH, configurable: true });
+    Object.defineProperty(host, "scrollWidth", { get: () => handle.cols * 8, configurable: true });
+    Object.defineProperty(host, "scrollHeight", { get: () => handle.rows * 16, configurable: true });
+    return { fit, host };
+  }
+
+  it("computes the size that fits its panel from the measured cell", () => {
+    const { parent, view, handles } = setup();
+    expect(view.ownedSize()).toBeNull();
+    view.mount(parent, 80, 24);
+    const handle = handles[0]!;
+    layOut(parent, handle, 400, 320);
+    // 400 / 8 and 320 / 16, whatever size the host had.
+    expect(view.ownedSize()).toEqual({ cols: 50, rows: 20 });
+    // The zoom grows the cell, so fewer fit.
+    view.setZoom(2);
+    expect(view.ownedSize()).toEqual({ cols: 25, rows: 10 });
+    // The DPR-1 double-size face shows at its base scale, not its own size.
+    view.setZoom(1);
+    handle.baseScale = 0.5;
+    expect(view.ownedSize()).toEqual({ cols: 100, rows: 40 });
+    view.dispose();
+  });
+
+  it("resizes the local terminal in place and refits", () => {
+    const { parent, view, handles } = setup();
+    view.mount(parent, 80, 24);
+    const handle = handles[0]!;
+    const { host } = layOut(parent, handle, 400, 320);
+    expect(view.resize(50, 20)).toBe(true);
+    expect(handle.resizes).toEqual([{ cols: 50, rows: 20 }]);
+    expect(view.size).toEqual({ cols: 50, rows: 20 });
+    // Fitted to the width as before: 400 / (50 × 8).
+    expect(host.style.transform).toBe("scale(1)");
+    // Unchanged or invalid sizes are no-ops.
+    expect(view.resize(50, 20)).toBe(false);
+    expect(view.resize(0, 20)).toBe(false);
+    expect(view.resize(50.5, 20)).toBe(false);
+    expect(handles).toHaveLength(1);
+    expect(handle.resizes).toHaveLength(1);
+    view.dispose();
+  });
+
+  it("opens a terminal still behind the font gate at the resized grid", async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    Object.defineProperty(document, "fonts", {
+      configurable: true,
+      value: { load: () => gate, ready: Promise.resolve() },
+    });
+    try {
+      const { parent, view, handles } = setup();
+      view.mount(parent, 80, 24);
+      expect(handles).toHaveLength(0);
+      view.resize(50, 20);
+      release();
+      await view.ready();
+      expect(handles[0]?.cols).toBe(50);
+      expect(handles[0]?.rows).toBe(20);
+      view.dispose();
+    } finally {
+      Reflect.deleteProperty(document, "fonts");
+    }
+  });
+
+  it("renders a size owner at its base scale times the zoom, never width-fitted", () => {
+    const { parent, view, handles } = setup();
+    view.mount(parent, 80, 24);
+    const handle = handles[0]!;
+    const { host } = layOut(parent, handle, 400, 320);
+    view.refit();
+    expect(host.style.transform).toBe(`scale(${400 / 640})`);
+    view.setSizeOwner(true);
+    expect(view.isSizeOwner).toBe(true);
+    expect(parent.dataset.sizeOwner).toBe("true");
+    expect(host.style.transform).toBe("scale(1)");
+    handle.baseScale = 0.5;
+    view.setZoom(1.5);
+    expect(host.style.transform).toBe("scale(0.75)");
+    // Off again: back to following the host's size, fitted to the width.
+    view.setSizeOwner(false);
+    expect(parent.dataset.sizeOwner).toBeUndefined();
+    expect(host.style.transform).toBe(`scale(${(400 / 640) * 1.5})`);
+    view.setSizeOwner(true);
+    view.dispose();
+    expect(parent.dataset.sizeOwner).toBeUndefined();
+    expect(view.isSizeOwner).toBe(false);
+  });
+
+  it("reports every zoom change", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    let zooms = 0;
+    const view = new TerminalView((_host, cols, rows) => new FakeHandle(cols, rows), {
+      onUserInput: () => {},
+      onZoomChange: () => {
+        zooms += 1;
+      },
+    });
+    view.mount(parent, 80, 24);
+    view.zoomIn();
+    view.zoomOut();
+    view.setZoom(2);
+    expect(zooms).toBe(3);
     view.dispose();
   });
 });

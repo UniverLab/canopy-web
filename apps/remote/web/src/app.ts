@@ -28,7 +28,8 @@ import { convergeOpenSessionName, type SessionStore } from "./sessions.js";
 import { createXtermHandle, TerminalView } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
 import { termControlsHtml, termSizeHtml, wireTermControls } from "./term-controls.js";
-import { pointerIsFine, readControlSize } from "./terminal-prefs.js";
+import type { TermControls } from "./term-controls.js";
+import { pointerIsFine } from "./terminal-prefs.js";
 import { shellTitle } from "./titles.js";
 import { mountUploads } from "./upload-view.js";
 import type { UploadView } from "./upload-view.js";
@@ -52,8 +53,9 @@ export interface ShellCallbacks {
   onTerminalInput: (bytes: Uint8Array) => void;
   /**
    * The device asserts its PTY size for the open session (send
-   * resize{id,cols,rows}). Fires when the control-size toggle turns on and
-   * on every terminal mount while it is on.
+   * resize{id,cols,rows}): the cols × rows that fit this device's panel.
+   * Fires when the control-size toggle turns on, on every terminal mount
+   * while it is on, and (debounced) whenever the panel changes while on.
    */
   onControlSize: (cols: number, rows: number) => void;
   /** False when the frame could not be sent; the dialog then says so. */
@@ -150,6 +152,7 @@ export function createShell(
   let sessionRows = 0;
   let terminalView: TerminalView | null = null;
   let latestButton: HTMLButtonElement | null = null;
+  let termControls: TermControls | null = null;
   let uploadView: UploadView | null = null;
   // The two state-telling slots: the host chip's link icon and the Files
   // button's folder.
@@ -284,7 +287,22 @@ export function createShell(
     builder.open(root);
   };
 
+  // The local terminal takes a new grid in place (no remount, the
+  // scrollback stays), and the shell remembers it so a snapshot at that
+  // size later does not remount either.
+  const resizeLocalTerminal = (cols: number, rows: number): void => {
+    if (!terminalView) {
+      return;
+    }
+    if (terminalView.resize(cols, rows)) {
+      sessionCols = cols;
+      sessionRows = rows;
+    }
+  };
+
   const teardownSessionWidgets = () => {
+    termControls?.dispose();
+    termControls = null;
     terminalView?.dispose();
     terminalView = null;
     latestButton = null;
@@ -336,14 +354,15 @@ export function createShell(
       shelf?.open(root);
     });
     syncFilesBadge();
-    latestButton = wireTermControls({
+    termControls = wireTermControls({
       root,
       sessionId: () => sessionId,
       terminalView: () => terminalView,
-      sessionSize: () => ({ cols: sessionCols, rows: sessionRows }),
       onControlSize: (cols, rows) => callbacks.onControlSize(cols, rows),
+      onLocalSize: (cols, rows) => resizeLocalTerminal(cols, rows),
       onBuilder: () => openBuilder(),
-    }).latestButton;
+    });
+    latestButton = termControls.latestButton;
     uploadView = shelf
       ? mountUploads({
           root,
@@ -709,6 +728,8 @@ export function createShell(
               latestButton.hidden = following;
             }
           },
+          // A zoom changes how many cells fit: the size owner re-asserts.
+          onZoomChange: () => termControls?.schedule(),
         },
       );
       terminalView.mount(pane, cols, rows);
@@ -723,11 +744,10 @@ export function createShell(
           }
         });
       }
-      // A remembered control-size toggle re-asserts on every (re)mount, so
-      // a reconnected session keeps the size this device asked for.
-      if (readControlSize(id)) {
-        callbacks.onControlSize(cols, rows);
-      }
+      // A remembered control-size toggle re-asserts on every (re)mount —
+      // the size that fits this panel, never the snapshot's — so a
+      // reconnected session keeps the size this device asked for.
+      termControls?.reassert();
     },
     writeTerminal(data: Uint8Array): void {
       terminalView?.write(data);

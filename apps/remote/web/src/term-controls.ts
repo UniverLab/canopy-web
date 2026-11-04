@@ -4,9 +4,15 @@
 // the per-session control-size toggle with its explainer. Rendered as
 // HTML beside the terminal pane and wired to the open TerminalView plus
 // the shell's live session state.
+//
+// The control-size toggle makes this device the size owner: it computes
+// the cols × rows that fit its own panel (TerminalView.ownedSize), resizes
+// the local terminal to them and asserts them to the host, then re-asserts
+// (debounced) whenever the panel changes — a resize, an orientation
+// change, fullscreen, the zoom — for as long as the toggle stays on.
 
 import { icon } from "./icons-dom.js";
-import type { TerminalView } from "./terminal.js";
+import type { TermSize, TerminalView } from "./terminal.js";
 import {
   readControlSize,
   readKeyBarVisible,
@@ -67,12 +73,20 @@ export function termSizeHtml(sessionId: string | null): string {
       </div>`;
 }
 
+/** The slice of the open TerminalView the controls drive. */
+export type TermControlsView = Pick<
+  TerminalView,
+  "zoomIn" | "zoomOut" | "scrollToLatest" | "isAlternate" | "fitted" | "ready" | "ownedSize" | "setSizeOwner"
+>;
+
 export interface TermControlsDeps {
   root: HTMLElement;
   sessionId: () => string | null;
-  terminalView: () => TerminalView | null;
-  sessionSize: () => { cols: number; rows: number };
+  terminalView: () => TermControlsView | null;
+  /** Send resize{id,cols,rows}: this device asserts its size to the host. */
   onControlSize: (cols: number, rows: number) => void;
+  /** Resize the local terminal to cols × rows (the shell tracks the size). */
+  onLocalSize: (cols: number, rows: number) => void;
   /** Open the Prompt Builder sheet; the controls row owns its button. */
   onBuilder: () => void;
 }
@@ -80,6 +94,26 @@ export interface TermControlsDeps {
 export interface TermControls {
   /** The latest button, for the shell to reveal as follow changes. */
   latestButton: HTMLButtonElement | null;
+  /**
+   * A terminal (re)mounted: a remembered toggle asserts the size that fits
+   * this panel again, even when it did not change, so a reconnected or
+   * resized session keeps the size this device asked for.
+   */
+  reassert: () => void;
+  /** The panel layout changed (the zoom): re-assert, debounced, while on. */
+  schedule: () => void;
+  /** Stop watching the panel; the session view is going away. */
+  dispose: () => void;
+}
+
+/** Panel changes settle this long before the size is asserted again. */
+export const SIZE_DEBOUNCE_MS = 150;
+// A measurement that is not ready yet (the terminal still opening) retries
+// on the debounce this many times before waiting for the next change.
+const SIZE_MEASURE_RETRIES = 5;
+
+function sameSize(a: TermSize | null, b: TermSize): boolean {
+  return a !== null && a.cols === b.cols && a.rows === b.rows;
 }
 
 export function wireTermControls(deps: TermControlsDeps): TermControls {
@@ -143,10 +177,127 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
       latestButton.hidden = true;
     }
   });
-  // Per-session, default off: while on, the device asserts its PTY size
-  // to the host. Turning it on sends the open terminal's real cols and
-  // rows at once; turning it off just stops asserting.
+  // Per-session, default off: while on, the device asserts the size that
+  // fits its own panel. Turning it on sends that size at once (and resizes
+  // the local terminal to it); turning it off stops asserting and the
+  // terminal follows the host's size again.
   const sizeToggle = root.querySelector<HTMLInputElement>("#term-control-size");
+  let owning = false;
+  let lastSent: TermSize | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let retries = 0;
+  let generation = 0;
+  let unwatch: (() => void) | null = null;
+
+  const clearTimer = (): void => {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  };
+
+  const schedule = (): void => {
+    if (!owning) {
+      return;
+    }
+    clearTimer();
+    timer = setTimeout(() => {
+      timer = null;
+      assertSize(false);
+    }, SIZE_DEBOUNCE_MS);
+  };
+
+  // Measure and send: an unchanged size is not sent again unless forced
+  // (a fresh mount, where the host may hold any size).
+  function assertSize(force: boolean): void {
+    if (!owning || deps.sessionId() === null) {
+      return;
+    }
+    const view = deps.terminalView();
+    if (!view) {
+      return;
+    }
+    const size = view.ownedSize();
+    if (size === null) {
+      if (retries < SIZE_MEASURE_RETRIES) {
+        retries += 1;
+        schedule();
+      }
+      return;
+    }
+    retries = 0;
+    if (!force && sameSize(lastSent, size)) {
+      return;
+    }
+    lastSent = size;
+    deps.onLocalSize(size.cols, size.rows);
+    deps.onControlSize(size.cols, size.rows);
+  }
+
+  // The panel changes that move the size: its own box (a window resize, a
+  // keyboard, the key bar), an orientation change and fullscreen. The zoom
+  // reaches schedule() through the shell.
+  const watch = (): void => {
+    if (unwatch !== null) {
+      return;
+    }
+    const pane = root.querySelector<HTMLElement>("#term-pane");
+    const observer =
+      pane !== null && typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => schedule())
+        : null;
+    if (pane !== null) {
+      observer?.observe(pane);
+    }
+    globalThis.addEventListener("resize", schedule);
+    globalThis.addEventListener("orientationchange", schedule);
+    document.addEventListener("fullscreenchange", schedule);
+    unwatch = () => {
+      observer?.disconnect();
+      globalThis.removeEventListener("resize", schedule);
+      globalThis.removeEventListener("orientationchange", schedule);
+      document.removeEventListener("fullscreenchange", schedule);
+    };
+  };
+
+  const stopWatching = (): void => {
+    unwatch?.();
+    unwatch = null;
+    clearTimer();
+  };
+
+  const startOwning = (): void => {
+    owning = true;
+    lastSent = null;
+    retries = 0;
+    generation += 1;
+    watch();
+    const view = deps.terminalView();
+    if (!view) {
+      // No terminal yet: its mount re-asserts.
+      return;
+    }
+    view.setSizeOwner(true);
+    if (view.fitted) {
+      assertSize(true);
+      return;
+    }
+    const pending = generation;
+    void view.ready().then(() => {
+      if (pending === generation && owning && deps.terminalView() === view) {
+        assertSize(true);
+      }
+    });
+  };
+
+  const stopOwning = (): void => {
+    owning = false;
+    lastSent = null;
+    generation += 1;
+    stopWatching();
+    deps.terminalView()?.setSizeOwner(false);
+  };
+
   sizeToggle?.addEventListener("change", () => {
     const id = deps.sessionId();
     if (id === null) {
@@ -154,10 +305,30 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
     }
     const next = sizeToggle.checked;
     writeControlSize(id, next);
-    const { cols, rows } = deps.sessionSize();
-    if (next && cols > 0 && rows > 0) {
-      deps.onControlSize(cols, rows);
+    if (next) {
+      startOwning();
+    } else {
+      stopOwning();
     }
   });
-  return { latestButton };
+
+  return {
+    latestButton,
+    reassert: () => {
+      const id = deps.sessionId();
+      if (id === null || !readControlSize(id)) {
+        return;
+      }
+      if (sizeToggle) {
+        sizeToggle.checked = true;
+      }
+      startOwning();
+    },
+    schedule,
+    dispose: () => {
+      owning = false;
+      generation += 1;
+      stopWatching();
+    },
+  };
 }

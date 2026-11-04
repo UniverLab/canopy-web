@@ -650,6 +650,14 @@ label > textarea {
   touch-action: pan-x;
 }
 
+/* While this device controls the size, the rows are measured from this
+ * box, so its height must not follow the terminal (that would feed the
+ * rows back into themselves): a fixed share of the viewport, which the
+ * fullscreen and orientation changes move on their own. */
+.term-pane[data-size-owner] .term-fit {
+  height: 40dvh;
+}
+
 /* The visual box: natural size × the scale refit wrote, clipping the
  * transformed host so the terminal scales exactly once. At zoom 1 it
  * matches the fit exactly; zoomed wider, the pane scrolls it. */
