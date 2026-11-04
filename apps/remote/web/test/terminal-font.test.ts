@@ -2,15 +2,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   TERMINAL_DPR_1_LIMIT,
+  TERMINAL_FONT_FAMILY,
   TERMINAL_FONT_SIZE,
   TERMINAL_FONT_SIZE_DPR1,
   TERMINAL_FONT_SPEC,
   TERMINAL_FONT_TIMEOUT_MS,
+  TERMINAL_SYMBOL_SAMPLE,
+  TERMINAL_SYMBOL_SPEC,
   terminalFontGate,
   terminalFontSizeForDpr,
 } from "../src/terminal-font.js";
 
-function installFonts(load: (font: string) => Promise<unknown>): void {
+function installFonts(load: (font: string, text?: string) => Promise<unknown>): void {
   Object.defineProperty(document, "fonts", {
     configurable: true,
     value: { load },
@@ -28,11 +31,32 @@ describe("terminalFontGate", () => {
     expect(terminalFontGate()).toBeNull();
   });
 
+  it("stacks Canopy Symbols behind JetBrains Mono", () => {
+    expect(TERMINAL_FONT_FAMILY).toBe(
+      '"JetBrains Mono", "Canopy Symbols", ui-monospace, monospace',
+    );
+  });
+
   it("resolves once the real face is loaded", async () => {
     const load = vi.fn(() => Promise.resolve([]));
     installFonts(load);
     await terminalFontGate();
     expect(load).toHaveBeenCalledWith(TERMINAL_FONT_SPEC);
+  });
+
+  it("waits for the symbols face with sample text from its range", async () => {
+    const load = vi.fn(() => Promise.resolve([]));
+    installFonts(load);
+    await terminalFontGate();
+    expect(load).toHaveBeenCalledWith(TERMINAL_SYMBOL_SPEC, TERMINAL_SYMBOL_SAMPLE);
+    expect(load).toHaveBeenCalledTimes(2);
+    // JetBrains Mono first: the cell size is measured from that face.
+    expect(vi.mocked(load).mock.calls[0]).toEqual([TERMINAL_FONT_SPEC]);
+  });
+
+  it("samples a code point the symbols face covers", () => {
+    expect(TERMINAL_SYMBOL_SAMPLE).toBe("⏵");
+    expect(TERMINAL_SYMBOL_SPEC).toContain("Canopy Symbols");
   });
 
   it("resolves when the load rejects", async () => {
