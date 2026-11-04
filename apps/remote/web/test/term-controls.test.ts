@@ -35,6 +35,7 @@ function deps(root: HTMLElement): TermControlsDeps {
     onControlSize: () => {},
     onLocalSize: () => {},
     onBuilder: () => {},
+    onCopy: () => {},
   };
 }
 

@@ -66,6 +66,9 @@ class FakeHandle implements TerminalHandle {
     callback();
     return () => {};
   };
+  getSelection = (): string => "";
+  onSelectionChange = (): (() => void) => () => {};
+  bufferText = (): string => "";
   dispose = (): void => {
     this.disposed = true;
   };

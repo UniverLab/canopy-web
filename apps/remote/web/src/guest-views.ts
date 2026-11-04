@@ -13,6 +13,7 @@ import { renderTopbar, wireAccount } from "./chrome.js";
 import { rememberGuestReturn } from "./entry-path.js";
 import { syncHeaderFondo } from "./fondo.js";
 import { REMOTE_FOOTER } from "./footer.js";
+import { icon } from "./icons-dom.js";
 import { renderKeyBar, updateKeyBarLatches } from "./keys.js";
 import {
   isTerminalReport,
@@ -21,6 +22,7 @@ import {
   textBytesWithModifiers,
 } from "./modifiers.js";
 import { SessionStore, renderSessions } from "./sessions.js";
+import { TermCopySheet, termCopyFloatHtml, wireCopyFloat } from "./term-copy.js";
 import { TerminalView, createXtermHandle } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
 import { pointerIsFine } from "./terminal-prefs.js";
@@ -96,6 +98,8 @@ export function createGuestView(
   let sessionCols = 0;
   let sessionRows = 0;
   let terminalView: TerminalView | null = null;
+  let copyFloatDispose: (() => void) | null = null;
+  const termCopy = new TermCopySheet();
   const latches = new ModifierLatches();
 
   function header(): string {
@@ -128,6 +132,9 @@ export function createGuestView(
   }
 
   function teardownSessionWidgets(): void {
+    copyFloatDispose?.();
+    copyFloatDispose = null;
+    termCopy.close();
     terminalView?.dispose();
     terminalView = null;
     sessionCols = 0;
@@ -321,15 +328,24 @@ export function createGuestView(
         <button type="button" id="session-back" aria-label="Back to sessions">←</button>
         <span class="session-title">${esc(sessionName || sessionId)}</span>
         <span class="session-exit" id="guest-exit" hidden></span>
+        <button type="button" id="term-copy" aria-label="Copy text" title="Copy text from the terminal">${icon("copy")}</button>
       </div>
-      <div class="term-pane" id="term-pane">
-        <p class="term-placeholder">Attaching…</p>
+      <div class="term-stage">
+        <div class="term-pane" id="term-pane">
+          <p class="term-placeholder">Attaching…</p>
+        </div>${termCopyFloatHtml()}
       </div>
       <div class="keybar" id="keybar"></div>
     </main>
     ${REMOTE_FOOTER}`;
     wireChrome();
     root.querySelector("#session-back")?.addEventListener("click", () => callbacks.onLeaveSession());
+    // Read-only viewing copies too: the guest already sees this text.
+    root.querySelector("#term-copy")?.addEventListener("click", () => {
+      if (route === "session") {
+        termCopy.open(root, { bufferText: (maxLines) => terminalView?.bufferText(maxLines) ?? "" });
+      }
+    });
     const bar = root.querySelector<HTMLElement>("#keybar");
     if (bar) {
       renderKeyBar(bar, (def) => {
@@ -467,6 +483,13 @@ export function createGuestView(
         },
       });
       terminalView.mount(pane, cols, rows);
+      // As the owner's float: rewired on every mount.
+      copyFloatDispose?.();
+      copyFloatDispose = null;
+      const floatButton = root.querySelector<HTMLButtonElement>("#term-copy-float");
+      if (floatButton) {
+        copyFloatDispose = wireCopyFloat(floatButton, terminalView);
+      }
       // As the owner's: a fine pointer takes focus once on attach, after
       // xterm is open; a touch device waits for the first tap instead.
       if (pointerIsFine()) {

@@ -11,7 +11,7 @@ const port = e2ePort(5199, import.meta.dirname, "E2E_PORT_SMOKE");
 
 export default defineConfig({
   testDir: "./test",
-  testMatch: ["smoke.spec.ts", "terminal-autofit.spec.ts", "terminal-alt-screen.spec.ts", "terminal-dpr1.spec.ts", "terminal-touch-scroll.spec.ts", "graphs.spec.ts", "editor.spec.ts", "signout.spec.ts", "csp.spec.ts", "metrics.spec.ts", "guest.spec.ts", "footer.spec.ts", "fondo.spec.ts", "touch-targets.spec.ts", "account-chip.spec.ts", "upload.spec.ts", "control-size.spec.ts", "schedule.spec.ts", "latch-keyboard.spec.ts"],
+  testMatch: ["smoke.spec.ts", "terminal-autofit.spec.ts", "terminal-alt-screen.spec.ts", "terminal-dpr1.spec.ts", "terminal-touch-scroll.spec.ts", "graphs.spec.ts", "editor.spec.ts", "signout.spec.ts", "csp.spec.ts", "metrics.spec.ts", "guest.spec.ts", "footer.spec.ts", "fondo.spec.ts", "touch-targets.spec.ts", "account-chip.spec.ts", "upload.spec.ts", "control-size.spec.ts", "schedule.spec.ts", "latch-keyboard.spec.ts", "copy.spec.ts"],
   timeout: 60_000,
   use: {
     baseURL: `http://127.0.0.1:${port}`,

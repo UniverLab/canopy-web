@@ -32,6 +32,7 @@ import type { ShelfHandle } from "./shelf-controller.js";
 import { convergeOpenSessionName, type SessionStore } from "./sessions.js";
 import { createXtermHandle, TerminalView } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
+import { TermCopySheet, termCopyFloatHtml, wireCopyFloat } from "./term-copy.js";
 import {
   latestHidden,
   termControlsHtml,
@@ -170,6 +171,7 @@ export function createShell(
   let sessionRows = 0;
   let terminalView: TerminalView | null = null;
   let latestButton: HTMLButtonElement | null = null;
+  let copyFloatDispose: (() => void) | null = null;
   let termControls: TermControls | null = null;
   let uploadView: UploadView | null = null;
   // The two state-telling slots: the host chip's link icon and the Files
@@ -197,9 +199,11 @@ export function createShell(
     onScheduledList: (req) => callbacks.onScheduledList(req),
     onScheduledCancel: (scheduleId, req) => callbacks.onScheduledCancel(scheduleId, req),
   });
+  const termCopy = new TermCopySheet();
   const closeSheets = () => {
     newDialog.close();
     builder.close();
+    termCopy.close();
     shelf?.close();
   };
 
@@ -305,7 +309,17 @@ export function createShell(
       return;
     }
     newDialog.close();
+    termCopy.close();
     builder.open(root);
+  };
+
+  const openCopy = () => {
+    if (route !== "session") {
+      return;
+    }
+    newDialog.close();
+    builder.close();
+    termCopy.open(root, { bufferText: (maxLines) => terminalView?.bufferText(maxLines) ?? "" });
   };
 
   // The local terminal takes a new grid in place (no remount, the
@@ -324,6 +338,8 @@ export function createShell(
   const teardownSessionWidgets = () => {
     termControls?.dispose();
     termControls = null;
+    copyFloatDispose?.();
+    copyFloatDispose = null;
     terminalView?.dispose();
     terminalView = null;
     latestButton = null;
@@ -377,7 +393,7 @@ export function createShell(
       <div class="term-stage">
         <div class="term-pane" id="term-pane">
           <p class="term-placeholder">Attaching…</p>
-        </div>${termLatestHtml()}
+        </div>${termLatestHtml()}${termCopyFloatHtml()}
       </div>
       ${termControlsHtml()}
       <div class="upload-tray" id="upload-tray" hidden></div>
@@ -404,6 +420,7 @@ export function createShell(
       onControlSize: (cols, rows) => callbacks.onControlSize(cols, rows),
       onLocalSize: (cols, rows) => resizeLocalTerminal(cols, rows),
       onBuilder: () => openBuilder(),
+      onCopy: () => openCopy(),
     });
     latestButton = termControls.latestButton;
     // In fullscreen the latest button follows the pane's own scroll (see
@@ -790,6 +807,13 @@ export function createShell(
         },
       );
       terminalView.mount(pane, cols, rows);
+      // The selection float follows this mount: a remount rewires it.
+      copyFloatDispose?.();
+      copyFloatDispose = null;
+      const floatButton = root.querySelector<HTMLButtonElement>("#term-copy-float");
+      if (floatButton) {
+        copyFloatDispose = wireCopyFloat(floatButton, terminalView);
+      }
       // A fine pointer types straight into the session: focus once on
       // attach, after xterm is open. A touch device never auto-opens its
       // keyboard — the first tap on the pane focuses instead.

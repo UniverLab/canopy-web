@@ -108,10 +108,10 @@ test("touch_targets_meet_44px", async ({ page }) => {
         }),
     );
   process.stdout.write(`session bar boxes at 390x844: ${JSON.stringify(barBoxes, null, 2)}\n`);
-  // Zoom out, zoom in, Keys, Builder, Attach, Attach from shelf,
+  // Zoom out, zoom in, Keys, Builder, Copy, Attach, Attach from shelf,
   // fullscreen, and the ten keys; latest stays hidden until the user
   // scrolls up.
-  expect(barBoxes).toHaveLength(17);
+  expect(barBoxes).toHaveLength(18);
   for (const control of barBoxes) {
     expect(control.width, `${control.label} width`).toBeGreaterThanOrEqual(44);
     expect(control.height, `${control.label} height`).toBeGreaterThanOrEqual(44);
@@ -121,8 +121,9 @@ test("touch_targets_meet_44px", async ({ page }) => {
 // Audit (2026-11-04): the terminal toolbar at phone widths. Keys goes
 // icon-only under 640 px (aria-label and title name it), so no label runs
 // past its button; the latest button floats over the terminal card's
-// bottom-right corner instead of wrapping onto a second toolbar row (which
-// cost the terminal a row), so the toolbar stays one 44 px row; and the
+// bottom-right corner instead of taking a toolbar slot; the toolbar
+// itself never wraps onto a second row (which cost the terminal a row)
+// but scrolls sideways instead, so it stays one 44 px row; and the
 // size switch's label is a 44 px target.
 for (const viewport of [
   { width: 360, height: 640 },
@@ -162,9 +163,13 @@ for (const viewport of [
       const latest = latestEl?.getBoundingClientRect();
       const pane = document.querySelector("#term-pane")?.getBoundingClientRect();
       const rowBox = controls.getBoundingClientRect();
+      const rowStyle = getComputedStyle(controls);
       return {
         pageOverflow: doc.scrollWidth - doc.clientWidth,
-        rowOverflow: controls.scrollWidth - controls.clientWidth,
+        rowLeft: rowBox.left,
+        rowScrollWidth: controls.scrollWidth,
+        rowWrap: rowStyle.flexWrap,
+        rowScroll: rowStyle.overflowX,
         rowHeight: rowBox.height,
         buttons,
         toggle: toggle ? { width: toggle.width, height: toggle.height } : null,
@@ -179,8 +184,10 @@ for (const viewport of [
     process.stdout.write(`toolbar at ${viewport.width}px: ${JSON.stringify(report)}\n`);
     await page.screenshot({ path: testInfo.outputPath(`toolbar-${viewport.width}.png`) });
     expect(report.pageOverflow).toBeLessThanOrEqual(1);
-    expect(report.rowOverflow).toBeLessThanOrEqual(1);
-    // One toolbar row: every control at the 44 px floor, none wrapped.
+    // One toolbar row: it never wraps (nowrap), it scrolls sideways
+    // instead, so every control stays at the 44 px floor on one row.
+    expect(report.rowWrap).toBe("nowrap");
+    expect(report.rowScroll).toBe("auto");
     expect(report.rowHeight).toBeLessThan(2 * 44);
     expect(new Set(report.buttons.map((button) => Math.round(button.top))).size).toBe(1);
     // latest floats over the card's bottom-right corner: a 44 px named
@@ -206,7 +213,12 @@ for (const viewport of [
       expect(button.width, `${button.id} width`).toBeGreaterThanOrEqual(44);
       expect(button.height, `${button.id} height`).toBeGreaterThanOrEqual(44);
       expect(button.left, `${button.id} left`).toBeGreaterThanOrEqual(0);
-      expect(button.right, `${button.id} right`).toBeLessThanOrEqual(viewport.width);
+      // Past the viewport edge a button still sits inside the scrollable
+      // row: one swipe reaches it.
+      expect(
+        button.right - report.rowLeft,
+        `${button.id} inside the scrollable row`,
+      ).toBeLessThanOrEqual(report.rowScrollWidth + 1);
     }
     expect(report.toggle?.width ?? 0).toBeGreaterThanOrEqual(44);
     expect(report.toggle?.height ?? 0).toBeGreaterThanOrEqual(44);

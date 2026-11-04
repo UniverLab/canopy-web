@@ -29,6 +29,7 @@
 
 import "@xterm/xterm/css/xterm.css";
 import { Terminal } from "@xterm/xterm";
+import { handleCopyKeydown } from "./term-copy.js";
 import {
   TERMINAL_FONT_FAMILY,
   TERMINAL_FONT_SIZE,
@@ -56,6 +57,12 @@ export interface TerminalHandle {
   onScroll: (callback: () => void) => () => void;
   /** Fires once the terminal is open (and the WebGL attempt settled). */
   onReady: (callback: () => void) => () => void;
+  /** The current drag selection, or "" when there is none. */
+  getSelection: () => string;
+  /** Fires when the drag selection changes. */
+  onSelectionChange: (callback: () => void) => () => void;
+  /** The last maxLines logical lines of the active buffer as plain text. */
+  bufferText: (maxLines: number) => string;
   /** Resize the local terminal to cols × rows. Absent means a fixed size. */
   resize?: (cols: number, rows: number) => void;
   /**
@@ -258,6 +265,46 @@ export function shouldContinueFling(velocity: number): boolean {
   return Math.abs(velocity) >= FLING_STOP_PX_PER_MS;
 }
 
+// The slice of xterm's buffer bufferText reads: structural, so the real
+// IBuffer and the unit-test fakes both fit.
+export interface BufferLineLike {
+  readonly isWrapped: boolean;
+  translateToString(trimRight?: boolean): string;
+}
+
+export interface BufferLike {
+  readonly length: number;
+  getLine(y: number): BufferLineLike | undefined;
+}
+
+// The buffer as copyable text: a line whose isWrapped is true continues
+// the logical line above it (a wrapped line copies as one line), each row
+// is right-trimmed, trailing blank lines are dropped, and only the last
+// maxLines logical lines are kept. "" when maxLines is not positive.
+export function bufferLinesToText(buffer: BufferLike, maxLines: number): string {
+  if (!(maxLines > 0)) {
+    return "";
+  }
+  const logical: string[] = [];
+  for (let y = 0; y < buffer.length; y += 1) {
+    const line = buffer.getLine(y);
+    if (!line) {
+      continue;
+    }
+    const text = line.translateToString(true);
+    if (line.isWrapped && logical.length > 0) {
+      logical[logical.length - 1] += text;
+    } else {
+      logical.push(text);
+    }
+  }
+  let end = logical.length;
+  while (end > 0 && logical[end - 1] === "") {
+    end -= 1;
+  }
+  return logical.slice(0, end).slice(-maxLines).join("\n");
+}
+
 export function createXtermHandle(
   host: HTMLElement,
   cols: number,
@@ -287,6 +334,9 @@ export function createXtermHandle(
   // After open(): the addon needs the screen's canvas. A failure or a
   // context loss leaves xterm's DOM renderer running.
   attachWebgl(terminal);
+  // Ctrl+Shift+C with a selection copies instead of reaching the session;
+  // every other key (plain Ctrl+C included) still goes through.
+  terminal.attachCustomKeyEventHandler((ev) => handleCopyKeydown(ev, () => terminal.getSelection()));
   // Test hook: the fake host's e2e reads the active buffer through it —
   // buffer reads work under WebGL too, where the DOM carries no row text.
   (host as unknown as { __xterm?: Terminal }).__xterm = terminal;
@@ -316,6 +366,12 @@ export function createXtermHandle(
       callback();
       return () => {};
     },
+    getSelection: () => terminal.getSelection(),
+    onSelectionChange: (callback) => {
+      const sub = terminal.onSelectionChange(() => callback());
+      return () => sub.dispose();
+    },
+    bufferText: (maxLines) => bufferLinesToText(terminal.buffer.active, maxLines),
     resize: (nextCols, nextRows) => terminal.resize(nextCols, nextRows),
     baseScale: TERMINAL_FONT_SIZE / fontSize,
     dispose: () => terminal.dispose(),
@@ -356,6 +412,7 @@ export class TerminalView {
   private readyPromise: Promise<void> = Promise.resolve();
   private resolveReady: (() => void) | null = null;
   private pendingWrites: Uint8Array[] = [];
+  private selectionListeners = new Set<() => void>();
 
   constructor(factory: TerminalFactory, callbacks: TerminalViewCallbacks) {
     this.factory = factory;
@@ -485,6 +542,27 @@ export class TerminalView {
 
   focus(): void {
     this.handle?.focus();
+  }
+
+  /** The current drag selection, or "" while closed or unselected. */
+  getSelection(): string {
+    return this.handle?.getSelection() ?? "";
+  }
+
+  /**
+   * Fires when the drag selection changes. Subscribing before xterm opens
+   * is fine: the view forwards to the handle once it exists.
+   */
+  onSelectionChange(callback: () => void): () => void {
+    this.selectionListeners.add(callback);
+    return () => {
+      this.selectionListeners.delete(callback);
+    };
+  }
+
+  /** The last maxLines logical lines of the active buffer, or "" while closed. */
+  bufferText(maxLines: number): string {
+    return this.handle?.bufferText(maxLines) ?? "";
   }
 
   setZoom(zoom: number): void {
@@ -681,6 +759,7 @@ export class TerminalView {
     this.following = true;
     this.alternate = false;
     this.pendingWrites.length = 0;
+    this.selectionListeners.clear();
   }
 
   private openTerminal(): void {
@@ -694,6 +773,7 @@ export class TerminalView {
     this.handle = handle;
     handle.onUserInput((text) => this.callbacks.onUserInput(text));
     handle.onScroll(() => this.refreshFollow());
+    handle.onSelectionChange(() => this.emitSelectionChange());
     // Wheel and touch scrolling never fire onScroll (xterm suppresses it on
     // the viewport path), so follow-bottom watches the viewport itself.
     host.querySelector(".xterm-viewport")?.addEventListener("scroll", () => this.refreshFollow());
@@ -748,6 +828,12 @@ export class TerminalView {
     }
     this.following = following;
     this.callbacks.onFollowChange?.({ following });
+  }
+
+  private emitSelectionChange(): void {
+    for (const listener of [...this.selectionListeners]) {
+      listener();
+    }
   }
 
   private onTouchStart(ev: TouchEvent): void {

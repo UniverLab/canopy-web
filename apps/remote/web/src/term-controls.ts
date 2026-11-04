@@ -57,7 +57,8 @@ export function termControlsHtml(): string {
           aria-label="Show terminal keys"
           title="Show or hide the terminal keys"
         >${icon("keyboard")}<span>Keys</span></button>
-        <button type="button" id="term-builder" aria-label="Builder">${icon("blocks")}<span>Builder</span></button>${fullscreen}
+        <button type="button" id="term-builder" aria-label="Builder">${icon("blocks")}<span>Builder</span></button>
+        <button type="button" id="term-copy" aria-label="Copy text" title="Copy text from the terminal">${icon("copy")}</button>${fullscreen}
       </div>`;
 }
 
@@ -128,6 +129,8 @@ export interface TermControlsDeps {
   onLocalSize: (cols: number, rows: number) => void;
   /** Open the Prompt Builder sheet; the controls row owns its button. */
   onBuilder: () => void;
+  /** Open the Copy sheet; the controls row owns its button. */
+  onCopy: () => void;
 }
 
 export interface TermControls {
@@ -169,6 +172,7 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
   root.querySelector("#term-zoom-in")?.addEventListener("click", () => deps.terminalView()?.zoomIn());
   root.querySelector("#term-zoom-out")?.addEventListener("click", () => deps.terminalView()?.zoomOut());
   root.querySelector("#term-builder")?.addEventListener("click", () => deps.onBuilder());
+  root.querySelector("#term-copy")?.addEventListener("click", () => deps.onCopy());
   // The Keys switch hides the ten-key bar and nothing else: the zoom and
   // the builder stay put. The choice is remembered per device.
   const keysButton = root.querySelector<HTMLButtonElement>("#term-keys");

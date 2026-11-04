@@ -36,6 +36,9 @@ class FakeHandle implements TerminalHandle {
     callback();
     return () => {};
   };
+  getSelection = (): string => "";
+  onSelectionChange = (): (() => void) => () => {};
+  bufferText = (): string => "";
   resizes: { cols: number; rows: number }[] = [];
   resize = (cols: number, rows: number): void => {
     this.resizes.push({ cols, rows });
