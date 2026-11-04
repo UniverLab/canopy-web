@@ -13,9 +13,10 @@
  * flow (`./handlers.js`) — leave it for a horizontal band below the main
  * flow and above the infra lane, where each handler's inputs form one bus.
  *
- * Edges never cut through the column: a range-skipping or back edge arcs
- * outside the flow the way a fail edge does, and every drawn edge that
- * touches the lane runs outside the column and enters through the gutter.
+ * Edges never cut through the column: a fail or error edge, or a pass edge
+ * that does not advance a rank, runs along its own channel above the
+ * flow, and every drawn edge that touches the lane runs outside the column
+ * and enters through the gutter.
  *
  * Everything here is total and deterministic: unknown shapes are skipped,
  * every sort has a full tiebreak, and the only randomness is the walk's
@@ -45,7 +46,7 @@ import {
 } from "./lane.js";
 import { rankUnits, type Unit } from "./rank.js";
 import { generateWalk, happyRandom, plateWalk, type WalkFail } from "./walk.js";
-import { GEOM, cubicExtent, edgePath, num, nodeBox, shortenEdgeEnd, smooth, type Pt } from "./vocabulary.js";
+import { GEOM, edgePath, num, nodeBox, smooth, type Pt } from "./vocabulary.js";
 import {
   GROUP_CHAR,
   GROUP_FOOT,
@@ -91,7 +92,7 @@ export const LANE_GAP = 20;
 export const PAD_X = 10;
 export const PAD_TOP = 10;
 export const PAD_BOTTOM = 10;
-/** Extra arc height per same-row fail edge into one target. */
+/** Extra channel height per channel edge into the drawing: every channel edge gets its own. */
 export const LIFT_STEP = 4;
 /** Node labels longer than this are truncated; the shape keeps the full name. */
 export const LABEL_MAX = 16;
@@ -390,87 +391,42 @@ export function layoutPlate(document: unknown, random: () => number = happyRando
   for (const group of groups) {
     rankByName.set(group.name, group.rank);
   }
-  const outside = (from: string, to: string, cls: EdgeClass): boolean => {
+  // Edge endpoints on the unit borders, by drawn name. A forward edge leaves
+  // the source border facing its target at the source height and enters the
+  // target border facing its source at the target height, so the bend sits
+  // at the midpoint of the rank gap. A channel edge leaves the source's top
+  // corner facing its target and enters the target's top corner facing its
+  // source, clearing the units stacked above.
+  const groupByName = new Map(groups.map((group) => [group.name, group]));
+  const displayName = drawnName;
+  /** Whether an edge draws along a channel above the flow. */
+  const channelOf = (cls: EdgeClass, from: string, to: string): boolean => {
+    if (cls === "fail" || cls === "error") {
+      return true;
+    }
+    if (cls === "order") {
+      return false;
+    }
     const fromRank = rankByName.get(from);
     const toRank = rankByName.get(to);
-    return cls !== "order" && fromRank !== undefined && toRank !== undefined && toRank - fromRank !== 1;
+    return fromRank !== undefined && toRank !== undefined && toRank - fromRank <= 0;
   };
-
-  // Edge endpoints: node centres, group flanks for ensemble wiring.
-  const groupByName = new Map(groups.map((group) => [group.name, group]));
-  const pointOf = (name: string, flank: "left" | "right" | "centre"): Pt | null => {
-    if (name.startsWith("ensemble:")) {
-      const group = groupByName.get(name.slice("ensemble:".length));
-      if (group === undefined) {
-        return null;
-      }
-      const x = flank === "left" ? group.x - group.w / 2 : flank === "right" ? group.x + group.w / 2 : group.x;
-      return { x: num(x), y: group.y };
-    }
-    const x = atX.get(name);
-    const y = atY.get(name);
-    return x === undefined || y === undefined ? null : { x, y };
-  };
-  const displayName = drawnName;
-  /** Whether an arc's vertical rise at `point` misses every other drawn unit. */
-  const riseClear = (fromId: string, toId: string, point: Pt, target: Pt): boolean => {
-    const rise = mainTop - 8 - Math.abs(point.x - target.x) * 0.1;
-    const top = Math.min(point.y, rise);
-    const bottom = Math.max(point.y, rise);
-    for (const [name, box] of extent) {
-      if (name === drawnName(fromId) || name === drawnName(toId)) {
-        continue;
-      }
-      if (Math.abs(point.x - box.x) >= box.hw) {
-        continue;
-      }
-      if (box.y + box.hh > top && box.y - box.hh < bottom) {
-        return false;
-      }
-    }
-    return true;
-  };
-  /** Whether the arc from `a` to `b` misses every other unit, sampled like the crossing test. */
-  const arcBodyClear = (fromId: string, toId: string, a: Pt, b: Pt): boolean => {
-    const rise = mainTop - 8 - Math.abs(a.x - b.x) * 0.1;
-    for (let step = 1; step <= 24; step += 1) {
-      const t = step / 24;
-      const u = 1 - t;
-      const x = u * u * u * a.x + 3 * u * u * t * a.x + 3 * u * t * t * b.x + t * t * t * b.x;
-      const y = u * u * u * (a.y - 3) + 3 * u * t * rise + t * t * t * (b.y - 3);
-      for (const [name, box] of extent) {
-        if (name === drawnName(fromId) || name === drawnName(toId)) continue;
-        const inX = x > box.x - box.hw + 0.01 && x < box.x + box.hw - 0.01;
-        const inY = y > box.y - box.hh + 0.01 && y < box.y + box.hh - 0.01;
-        if (inX && inY) return false;
-      }
-    }
-    return true;
-  };
-  /**
-   * The flank an edge leaves from: the side its target lies on, unless the
-   * arc's rise or body there would clip a neighbour now ranks stand apart.
-   */
-  const fromPoint = (fromId: string, toId: string, cls: EdgeClass, target: Pt): Pt | null => {
-    const centre = atX.get(fromId) ?? 0;
-    const preferred = target.x < centre ? "left" : "right";
-    const first = pointOf(fromId, preferred);
-    const second = pointOf(fromId, preferred === "left" ? "right" : "left");
-    if (first === null) {
-      return null;
-    }
-    const arcFrom = (point: Pt): boolean => {
-      if (!riseClear(fromId, toId, point, target)) return false;
-      const arc =
-        forceArcOf(cls, fromId, toId) ||
-        (cls === "fail" && Math.abs(target.y - point.y) <= 6) ||
-        outside(drawnName(fromId), drawnName(toId), cls);
-      return !arc || arcBodyClear(fromId, toId, point, target);
+  const forwardEnds = (from: Extent, to: Extent): { a: Pt; b: Pt } =>
+    from.x <= to.x
+      ? {
+          a: { x: num(from.x + from.hw), y: from.y },
+          b: { x: num(to.x - to.hw), y: to.y },
+        }
+      : {
+          a: { x: num(from.x - from.hw), y: from.y },
+          b: { x: num(to.x + to.hw), y: to.y },
+        };
+  const channelEnds = (from: Extent, to: Extent): { a: Pt; b: Pt } => {
+    const dir = to.x < from.x ? -1 : 1;
+    return {
+      a: { x: num(from.x + dir * from.hw), y: num(from.y - from.hh) },
+      b: { x: num(to.x - dir * to.hw), y: num(to.y - to.hh) },
     };
-    if (second === null || arcFrom(first)) {
-      return first;
-    }
-    return arcFrom(second) ? second : first;
   };
 
   interface RawEdge {
@@ -479,24 +435,21 @@ export function layoutPlate(document: unknown, random: () => number = happyRando
     cls: EdgeClass;
     a: Pt;
     b: Pt;
-    forceArc: boolean;
+    channel: boolean;
   }
   const flow = flowOf(parsed, unitId, handlers);
   const raw: RawEdge[] = [];
   for (const edge of flow.drawn) {
-    const b = pointOf(edge.to, "left");
-    const a = b === null ? null : fromPoint(edge.from, edge.to, edge.cls, b);
-    if (a === null || b === null) {
+    const from = displayName(edge.from);
+    const to = displayName(edge.to);
+    const fromBox = extent.get(from);
+    const toBox = extent.get(to);
+    if (fromBox === undefined || toBox === undefined) {
       continue;
     }
-    raw.push({
-      from: displayName(edge.from),
-      to: displayName(edge.to),
-      cls: edge.cls,
-      a,
-      b,
-      forceArc: forceArcOf(edge.cls, edge.from, edge.to),
-    });
+    const channel = channelOf(edge.cls, from, to);
+    const ends = channel ? channelEnds(fromBox, toBox) : forwardEnds(fromBox, toBox);
+    raw.push({ from, to, cls: edge.cls, ...ends, channel });
   }
   const laneRoutes: LaneEdge[] =
     band === null
@@ -521,72 +474,26 @@ export function layoutPlate(document: unknown, random: () => number = happyRando
           cls: "order",
           a: { x: a.x, y: a.y },
           b: { x: b.x, y: b.y },
-          forceArc: false,
+          channel: false,
         });
       }
     }
   }
 
-  /**
-   * Whether an edge draws as an arc above the row: forced, a same-row fail,
-   * or a range-skipping or back edge — never straight over the axis.
-   */
-  const arcs = (edge: RawEdge): boolean =>
-    edge.forceArc ||
-    (edge.cls === "fail" && Math.abs(edge.b.y - edge.a.y) <= 6) ||
-    outside(edge.from, edge.to, edge.cls);
-
-  /**
-   * Where an arc crosses above the row: over every drawn unit, so a long
-   * back edge shoots its corner above the tall group boxes instead of
-   * through them.
-   */
-  const arcRise = (a: Pt, b: Pt, lift: number): number =>
-    mainTop - 8 - Math.abs(a.x - b.x) * 0.1 - lift;
-
-  // Fail arcs above the row lift further per back edge into one target.
-  const arcIndex = new Map<string, number>();
-  const liftOf = (edge: RawEdge): number => {
-    if (!arcs(edge)) {
-      return 0;
-    }
-    const key = edge.to;
-    const index = arcIndex.get(key) ?? 0;
-    arcIndex.set(key, index + 1);
-    return index * LIFT_STEP;
-  };
-  const orderedRaw = [...raw].sort(
-    (a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : a.to < b.to ? -1 : a.to > b.to ? 1 : 0),
+  // One channel per channel edge, in from/to order, stacked above the flow.
+  raw.sort((a, b) =>
+    a.from < b.from ? -1 : a.from > b.from ? 1 : a.to < b.to ? -1 : a.to > b.to ? 1 : 0,
   );
-  const lifts = new Map<RawEdge, number>(orderedRaw.map((edge) => [edge, liftOf(edge)]));
-
-  // Arrowhead tips land on the target border: node endpoints sit on
-  // centres, so both branches shorten; group endpoints already sit on the
-  // box border, except arcs, whose -3 end dives inside the box. Sizes only,
-  // so the end is the same before and after the shift into the viewBox.
-  const targetOf = new Map<string, { hx: number; hy: number; group: boolean }>();
-  for (const node of nodes) {
-    const rot = GEOM[node.shape].rot !== 0;
-    targetOf.set(node.name, {
-      hx: ((rot ? node.w * Math.SQRT2 : node.w) / 2),
-      hy: ((rot ? node.h * Math.SQRT2 : node.h) / 2),
-      group: false,
-    });
-  }
-  for (const group of groups) {
-    targetOf.set(group.name, { hx: group.w / 2, hy: group.h / 2, group: true });
-  }
-  const drawnEnd = (edge: RawEdge, a: Pt, b: Pt): Pt => {
-    const target = edge.cls === "order" ? undefined : targetOf.get(edge.to);
-    if (target === undefined || (target.group && !arcs(edge))) {
-      return b;
+  let channelCount = 0;
+  const channelY = new Map<RawEdge, number>();
+  for (const edge of raw) {
+    if (edge.channel) {
+      channelY.set(edge, num(mainTop - 8 - channelCount * LIFT_STEP));
+      channelCount += 1;
     }
-    return arcs(edge)
-      ? shortenEdgeEnd(a, b, target.hy, "y", 1, 3)
-      : shortenEdgeEnd(a, b, target.hx, "x", null, 0);
-  };
+  }
 
-  // Bounds: shapes, group outlines, labels, fail-arc tops, marks, buses,
+  // Bounds: shapes, group outlines, labels, channel tops, marks, buses,
   // done terminals and lane routes — the viewBox grows around all of them,
   // then everything shifts into positive space.
   let minX = Number.POSITIVE_INFINITY;
@@ -633,15 +540,24 @@ export function layoutPlate(document: unknown, random: () => number = happyRando
       }
     }
   }
-  // An arc bounds by the curve it draws — from its start to its shortened
-  // end through the rise — not by its control points, and in the same
-  // design coordinates as everything else here.
+  // An edge bounds by the line it draws, in the same design coordinates
+  // as everything else here. A channel edge also spans its channel above
+  // the flow down to the higher of its two top corners.
   for (const edge of raw) {
-    if (arcs(edge)) {
-      const rise = arcRise(edge.a, edge.b, lifts.get(edge) ?? 0);
-      const end = drawnEnd(edge, edge.a, edge.b);
-      const reach = cubicExtent(edge.a.y - 3, rise, rise, end.y - 3);
-      span(Math.min(edge.a.x, end.x), Math.max(edge.a.x, end.x), reach.min, reach.max);
+    span(
+      Math.min(edge.a.x, edge.b.x),
+      Math.max(edge.a.x, edge.b.x),
+      Math.min(edge.a.y, edge.b.y),
+      Math.max(edge.a.y, edge.b.y),
+    );
+    const top = channelY.get(edge);
+    if (top !== undefined) {
+      span(
+        Math.min(edge.a.x, edge.b.x),
+        Math.max(edge.a.x, edge.b.x),
+        top,
+        Math.max(edge.a.y, edge.b.y),
+      );
     }
   }
   if (!Number.isFinite(minX)) {
@@ -706,37 +622,31 @@ export function layoutPlate(document: unknown, random: () => number = happyRando
       laneEdges.push({ from: route.from, to: route.to, cls: route.cls, d: smooth(lanePath(points)) });
     }
   }
-  // The rise is measured in design coordinates, against mainTop; the paths
-  // are drawn after the shift, so the rise shifts with them. Unshifted, it
-  // put every arc's top `dy` above the bounds, outside the viewBox.
-  const riseAt = (edge: RawEdge): number => num(arcRise(edge.a, edge.b, lifts.get(edge) ?? 0) + dy);
+  // The channel heights are measured in design coordinates, against
+  // mainTop; the paths are drawn after the shift, so the heights shift with
+  // them. Unshifted, they put every channel's top `dy` above the bounds,
+  // outside the viewBox.
   const edges: PlacedEdge[] = [
     ...raw.map((edge) => {
       const a = shift(edge.a);
-      const end = drawnEnd(edge, a, shift(edge.b));
-      const arc = arcs(edge);
+      const b = shift(edge.b);
+      const top = channelY.get(edge);
       return {
         from: edge.from,
         to: edge.to,
         cls: edge.cls,
         d: smooth(
-          edgePath(
-            a,
-            end,
-            edge.cls === "fail",
-            lifts.get(edge) ?? 0,
-            arc,
-            arc ? riseAt(edge) : undefined,
-          ),
+          edge.channel ? edgePath(a, b, true, 0, true, (top ?? 0) + dy) : edgePath(a, b),
         ),
       };
     }),
     ...laneEdges,
   ];
 
-  // The token walks the walk — the pass chain with its fail detours —
-  // through the drawn curves. A fail leg rides the arc of the drawn fail
-  // edge it took, at the same curve lift, centre to centre.
+  // The token walks the walk — the pass chain with its fail detours — along
+  // the drawn edges, joining consecutive legs straight through the unit
+  // between them. A leg with no drawn edge, a mark or a bus, walks straight
+  // to the unit's centre.
   const centres = new Map<string, Pt>();
   for (const node of nodes) {
     centres.set(node.name, { x: node.x, y: node.y });
@@ -745,25 +655,15 @@ export function layoutPlate(document: unknown, random: () => number = happyRando
     centres.set(group.name, { x: group.x, y: group.y });
   }
   const steps = generateWalk(parsed, entry === null ? null : entry.name, new Set(centres.keys()), random);
-  const failStyle = new Map<string, { lift: number; forceArc: boolean; rise?: number }>();
-  for (const edge of raw) {
-    if (edge.cls !== "fail") {
-      continue;
-    }
-    const key = `${edge.from}→${edge.to}`;
-    if (!failStyle.has(key)) {
-      const lift = lifts.get(edge) ?? 0;
-      failStyle.set(key, {
-        lift,
-        forceArc: edge.forceArc,
-        rise: arcs(edge) ? riseAt(edge) : undefined,
-      });
-    }
+  const edgeD = new Map<string, string>();
+  for (const edge of edges) {
+    edgeD.set(`${edge.cls}:${edge.from}→${edge.to}`, edge.d);
   }
-  const walked = plateWalk(steps, centres, (a, b, step) => {
-    const style = step.fail === true ? failStyle.get(`${step.from}→${step.to}`) : undefined;
-    return edgePath(a, b, step.fail, style?.lift ?? 0, style?.forceArc ?? false, style?.rise);
-  });
+  const walked = plateWalk(
+    steps,
+    centres,
+    (step) => edgeD.get(`${step.fail ? "fail" : "pass"}:${step.from}→${step.to}`) ?? null,
+  );
 
   const order = [...nodes]
     .sort((a, b) => a.rank - b.rank || a.y - b.y || (a.name < b.name ? -1 : 1))

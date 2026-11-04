@@ -89,8 +89,8 @@ describe("lazy cell sprites", () => {
 
 describe("sliced label map", () => {
   it("stays -1 until the last slice, then answers from the full map", async () => {
-    expect(ID_SLICE_ROWS).toBe(128);
-    // 300 rows: three slices (128, 128, 44) with a yield between each.
+    expect(ID_SLICE_ROWS).toBe(64);
+    // 300 rows: five slices (64, 64, 64, 64, 44) with a yield between each.
     const W = 8;
     const H = 300;
     const sizes: number[] = [];
@@ -126,16 +126,16 @@ describe("sliced label map", () => {
       expect(idx.ready).toBe(false);
       expect(lookupCell(idx, 3, 0)).toBe(-1);
     });
-    expect(sizes).toEqual([128, 128, 44]);
+    expect(sizes).toEqual([64, 64, 64, 64, 44]);
     expect(sizes.every((size) => size <= ID_SLICE_ROWS)).toBe(true);
-    expect(slices).toEqual([128, 256, 300]);
-    expect(yields).toBe(2);
+    expect(slices).toEqual([64, 128, 192, 256, 300]);
+    expect(yields).toBe(4);
     expect(index.ready).toBe(true);
 
     // Correct after: every pixel's id minus one, across slice boundaries.
     expect(lookupCell(index, 0, 0)).toBe(0);
-    expect(lookupCell(index, 7, 127)).toBe(127 * W + 7);
-    expect(lookupCell(index, 0, 128)).toBe(128 * W);
+    expect(lookupCell(index, 7, 63)).toBe(63 * W + 7);
+    expect(lookupCell(index, 0, 64)).toBe(64 * W);
     expect(lookupCell(index, 3, 299)).toBe(299 * W + 3);
     expect(lookupCell(index, -1, 0)).toBe(-1);
     expect(lookupCell(index, W, 0)).toBe(-1);

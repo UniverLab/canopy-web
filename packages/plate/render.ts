@@ -2,7 +2,7 @@
 /**
  * The plate renderer: a laid-out graph becomes one self-contained `<svg>`
  * in the Canopy vocabulary — node kinds as shapes, pass edges as teal
- * S-curves, fail edges as red dashed arcs above the row, ensembles as
+ * orthogonal lines, fail edges as red dashed channels above the row, ensembles as
  * dashed group outlines, the infra node in a lower lane, and a walking
  * token along the main pass chain that may ride a red fail edge back
  * before getting through.
@@ -192,7 +192,7 @@ function litStyle(): string {
 const EDGE_ORDER = { error: 0, order: 1, pass: 2, fail: 3 } as const;
 
 /**
- * The lit twin of a fail edge the walk rode: the same dashed curve a
+ * The lit twin of a fail edge the walk rode: the same dashed path a
  * touch brighter and thicker, carrying a discrete SMIL opacity animation
  * that lights it exactly while the walker rides its legs — one window
  * per leg, as many as the walk crossed the edge. The twin rides beside

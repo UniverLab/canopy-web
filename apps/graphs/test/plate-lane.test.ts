@@ -99,27 +99,44 @@ function dones(svg: string): string[] {
   );
 }
 
-/** Sample a path's points: every M/L endpoint and 24 points per cubic. */
+/** Sample a path's points: every M/L/H/V endpoint and 24 points per Q corner. */
 function samples(d: string): Array<[number, number]> {
   const points: Array<[number, number]> = [];
   let cursor: [number, number] = [0, 0];
-  for (const part of d.matchAll(/([MLC])([^MLC]*)/g)) {
+  for (const part of d.matchAll(/([MLHVQ])([^MLHVQ]*)/g)) {
     const nums = (part[2] ?? "").match(/-?[\d.]+/g)?.map(Number) ?? [];
     if (part[1] === "M" || part[1] === "L") {
-      cursor = [nums[0] ?? 0, nums[1] ?? 0];
-      points.push(cursor);
-    } else if (part[1] === "C") {
-      const [x0, y0] = cursor;
-      const [x1, y1, x2, y2, x3, y3] = nums;
-      for (let step = 1; step <= 24; step += 1) {
-        const t = step / 24;
-        const u = 1 - t;
-        points.push([
-          u * u * u * x0 + 3 * u * u * t * (x1 ?? 0) + 3 * u * t * t * (x2 ?? 0) + t * t * t * (x3 ?? 0),
-          u * u * u * y0 + 3 * u * u * t * (y1 ?? 0) + 3 * u * t * t * (y2 ?? 0) + t * t * t * (y3 ?? 0),
-        ]);
+      for (let i = 0; i + 1 < nums.length; i += 2) {
+        cursor = [nums[i] ?? 0, nums[i + 1] ?? 0];
+        points.push(cursor);
       }
-      cursor = [x3 ?? 0, y3 ?? 0];
+    } else if (part[1] === "H") {
+      for (const x of nums) {
+        cursor = [x, cursor[1]];
+        points.push(cursor);
+      }
+    } else if (part[1] === "V") {
+      for (const y of nums) {
+        cursor = [cursor[0], y];
+        points.push(cursor);
+      }
+    } else if (part[1] === "Q") {
+      for (let i = 0; i + 3 < nums.length; i += 4) {
+        const [x0, y0] = cursor;
+        const cx = nums[i] ?? 0;
+        const cy = nums[i + 1] ?? 0;
+        const x1 = nums[i + 2] ?? 0;
+        const y1 = nums[i + 3] ?? 0;
+        for (let step = 1; step <= 24; step += 1) {
+          const t = step / 24;
+          const u = 1 - t;
+          points.push([
+            u * u * x0 + 2 * u * t * cx + t * t * x1,
+            u * u * y0 + 2 * u * t * cy + t * t * y1,
+          ]);
+        }
+        cursor = [x1, y1];
+      }
     }
   }
   return points;
@@ -261,6 +278,6 @@ describe("no-handler plates", () => {
     const svg = renderPlate(qualityBubble as unknown as GraphDocument);
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(svg));
     const hex = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-    expect(hex).toBe("3837a904ede8279a7fac7dd959f717bed615c8b56cc6115d581cafe880400732");
+    expect(hex).toBe("ee6a2114e16aa9cedac16a3a2a6481605ce8822adc4ab84e66bed29bfd284b0d");
   });
 });

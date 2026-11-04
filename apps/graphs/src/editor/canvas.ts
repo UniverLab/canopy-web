@@ -7,7 +7,7 @@
  * 1 (the plate itself draws at `PLATE_SCALE` 5; an editing surface needs
  * bigger targets). Each node renders as `translate(x y) scale(12)` over
  * its plate geometry, edges call the plate's own `edgePath` in units
- * inside `transform="scale(12)"` — so shapes, curves, the fail arc's
+ * inside `transform="scale(12)"` — so shapes, lines, the fail channels'
  * lift, the label metrics and the colours are the plate's constants,
  * never re-derived here. The paint rules live in a `<style>` the canvas
  * builds once from `PALETTE`, so there is not one duplicated hex in the
@@ -256,25 +256,29 @@ export class Canvas {
         (left.from.name < right.from.name ? -1 : left.from.name > right.from.name ? 1 : 0) ||
         (left.to.name < right.to.name ? -1 : left.to.name > right.to.name ? 1 : 0),
     );
-    // Same-row fail arcs stack, exactly like the plate's: one lift per extra
-    // back edge into the same target.
+    // Fail channels stack, like the plate's: one lift per extra channel
+    // into the same target, so no two share a segment.
     const arcIndex = new Map<string, number>();
     const edges = drawn
       .map(({ edge, cls, from, to }) => {
         const a: Pt = { x: from.x / SCALE, y: from.y / SCALE };
         const b: Pt = { x: to.x / SCALE, y: to.y / SCALE };
-        const arc = cls === "fail" && Math.abs(b.y - a.y) <= 6;
+        const geom = GEOM[shapeOfKind(to.kind)];
+        const rot = geom.rot !== 0;
+        const channel = cls === "fail";
         let lift = 0;
-        if (arc) {
+        if (channel) {
           lift = (arcIndex.get(edge.to) ?? 0) * LIFT_STEP;
           arcIndex.set(edge.to, (arcIndex.get(edge.to) ?? 0) + 1);
         }
-        const geom = GEOM[shapeOfKind(to.kind)];
-        const rot = geom.rot !== 0;
-        const end = arc
-          ? shortenEdgeEnd(a, b, (rot ? geom.h * Math.SQRT2 : geom.h) / 2, "y", 1, 3)
+        // A channel drops onto the target's top edge, so its end pulls
+        // back from the top with no pre-applied bias — the orthogonal
+        // path ends exactly at its endpoint. A forward edge keeps the
+        // old flank end, arriving horizontally.
+        const end = channel
+          ? shortenEdgeEnd(a, b, (rot ? geom.h * Math.SQRT2 : geom.h) / 2, "y", 1, 0)
           : shortenEdgeEnd(a, b, (rot ? geom.w * Math.SQRT2 : geom.w) / 2, "x", null, 0);
-        const d = edgePath(a, end, cls === "fail", lift, arc);
+        const d = edgePath(a, end, channel, lift, channel);
         const selected = this.selected.edge === edge.id;
         return (
           `<g class="edge ${cls}${selected ? " selected" : ""}" data-edge="${edge.id}">` +

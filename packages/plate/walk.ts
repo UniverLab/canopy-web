@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
  * The plate's walk generator: the edges one animated walk rides, decided
- * by an injected `random()` — the layout turns the steps into curves, the
+ * by an injected `random()` — the layout turns the steps into paths, the
  * tests into plain arrays, and neither needs a DOM.
  *
  * A walk starts at the entry and steps along each unit's first outgoing
@@ -10,7 +10,7 @@
  * ensemble's `on_fail_to` exit — the walk first draws `random()`: below
  * FAIL_CHANCE it rides a fail edge instead (uniformly, when several),
  * but only when the landing can return to the main flow, looping back
- * along the red curve before the unit finally gets through. Fail edges
+ * along the red channel before the unit finally gets through. Fail edges
  * into terminal units are never ridden: the dot stays on the happy path.
  * One walk rides at most FAIL_CAP fail edges; after the third every unit
  * passes, so every walk reaches the end and the animation restarts.
@@ -245,32 +245,67 @@ export interface WalkFail {
   legs: number[];
 }
 
+/** The start point of a placed edge path: its leading M coordinates. */
+function pathStart(d: string): Pt | null {
+  const match = /^M(-?[\d.]+)[ ,](-?[\d.]+)/.exec(d);
+  return match === null ? null : { x: Number(match[1]), y: Number(match[2]) };
+}
+
+/** The end point of a placed edge path: its last two coordinates. */
+function pathEnd(d: string): Pt | null {
+  const nums = d.match(/-?[\d.]+/g);
+  if (nums === null || nums.length < 4) {
+    return null;
+  }
+  return { x: Number(nums[nums.length - 2]), y: Number(nums[nums.length - 1]) };
+}
+
 /**
- * The token's path over the walk's steps: one leg per step through the
- * edge curve, at STEP_SECONDS a leg — fail legs alike,
- * at the same speed as pass ones. Each ridden fail edge is reported back
- * with the legs it carried, so the renderer can light it. Null when the
- * walk has no legs.
+ * The token's path over the walk's steps: one leg per step along the placed
+ * edge whose from and to match, at STEP_SECONDS a leg — fail legs alike,
+ * at the same speed as pass ones. Consecutive legs join with a straight L
+ * through the unit between them, so the walk lies on the drawn edges. A
+ * step with no placed edge — one drawn only as a mark or a bus — goes
+ * straight from the previous point to the unit's centre. Each ridden fail
+ * edge is reported back with the legs it carried, so the renderer can light
+ * it. Null when the walk has no legs.
  */
 export function plateWalk(
   steps: WalkStep[],
   centres: Map<string, Pt>,
-  curve: (a: Pt, b: Pt, step: WalkStep) => string,
+  edgeOf: (step: WalkStep) => string | null,
 ): { walk: string | null; seconds: number; fails: WalkFail[] } {
-  const first = steps[0];
-  const start = first === undefined ? undefined : centres.get(first.from);
   const legs: string[] = [];
   const fails = new Map<string, WalkFail>();
-  if (start === undefined) {
-    return { walk: null, seconds: 0, fails: [] };
-  }
+  let pen: Pt | null = null;
   for (const [index, step] of steps.entries()) {
-    const a = centres.get(step.from);
-    const b = centres.get(step.to);
-    if (a === undefined || b === undefined) {
-      break;
+    const d = edgeOf(step);
+    if (d !== null) {
+      const start = pathStart(d);
+      const end = pathEnd(d);
+      if (start === null || end === null) {
+        break;
+      }
+      legs.push(
+        pen === null ? d : `L${num(start.x)} ${num(start.y)}${d.replace(/^M-?[\d.]+[ ,]-?[\d.]+/, "")}`,
+      );
+      pen = end;
+    } else {
+      const b = centres.get(step.to);
+      if (b === undefined) {
+        break;
+      }
+      if (pen === null) {
+        const a = centres.get(step.from);
+        if (a === undefined) {
+          break;
+        }
+        legs.push(`M${num(a.x)} ${num(a.y)}L${num(b.x)} ${num(b.y)}`);
+      } else {
+        legs.push(`L${num(b.x)} ${num(b.y)}`);
+      }
+      pen = b;
     }
-    legs.push(smooth(curve(a, b, step)).replace(/^M[^C]+/, ""));
     if (step.fail) {
       const key = `${step.from}→${step.to}`;
       const ridden = fails.get(key) ?? { from: step.from, to: step.to, legs: [] };
@@ -282,7 +317,7 @@ export function plateWalk(
     return { walk: null, seconds: 0, fails: [] };
   }
   return {
-    walk: `M${start.x} ${start.y}${legs.join("")}`,
+    walk: smooth(legs.join("")),
     seconds: num(legs.length * STEP_SECONDS),
     fails: [...fails.values()],
   };

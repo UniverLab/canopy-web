@@ -6,7 +6,7 @@
  * flow; the `✓ done` terminals sit under the units the flow ends on.
  */
 import type { Handler } from "./handlers.js";
-import { num, smooth, type Pt } from "./vocabulary.js";
+import { num, orthogonalPath, smooth, type Pt } from "./vocabulary.js";
 
 /** Extra bus offset per handler, so two buses in one band never overlap. */
 export const BUS_STACK = 8;
@@ -142,9 +142,9 @@ function drawn(id: string): string {
   return id.startsWith("ensemble:") ? id.slice("ensemble:".length) : id;
 }
 
-/** A polyline path through the given points. */
+/** An orthogonal polyline through the given points, with the edge corner radius. */
 export function lanePath(points: Pt[]): string {
-  return points.map((point, index) => `${index === 0 ? "M" : "L"}${num(point.x)} ${num(point.y)}`).join(" ");
+  return orthogonalPath(points);
 }
 
 /** Slide the done terminals into the padded viewBox. */

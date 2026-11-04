@@ -3,8 +3,8 @@
  * The drawing vocabulary of the Canopy plates, copied from univerlab's
  * `src/lib/canopy-graph.ts` (the shared vocabulary of the Canopy page's
  * GraphMorph and its "Autonomous graph" section): the same node geometry,
- * the same palette and type sizes, the same edge curves — so a node kind,
- * an edge curve or a colour means the same thing here as on univerlab.org.
+ * the same palette and type sizes, the same edge style — so a node kind,
+ * an edge or a colour means the same thing here as on univerlab.org.
  */
 
 export type Kind = "chip" | "agent" | "check" | "gate" | "commit";
@@ -99,63 +99,82 @@ export function smooth(d: string): string {
   return d.replace(/-?\d+\.\d+/g, (match) => String(num(Number(match))));
 }
 
+/** The radius of every orthogonal edge corner, in plate units. */
+export const CORNER_RADIUS = 0.8;
+
 /**
- * Edge path between two node centres: a smooth S-curve. A failure that drops to
- * another row is the same curve; one that routes back along the same row arcs
- * ABOVE the pair (labels sit below nodes). `lift` raises such an arc further, so
- * two back-edges into one node stay distinct (0 = the hero's drawing).
- * `forceArc` draws the arc whatever the row gap — a fail or error edge
- * touching an ensemble group never S-curves through the row. An explicit
- * `rise` places the arc's top exactly, for a plate that has measured the
- * height every unit's box needs to stay clear.
+ * An orthogonal polyline through the given points: consecutive duplicates
+ * and collinear middles drop out, and each remaining interior vertex is cut
+ * into a rounded corner of CORNER_RADIUS, drawn with Q. Axis-aligned runs
+ * stay straight Ls; nothing else here draws a curve.
  */
-export function edgePath(a: Pt, b: Pt, fail: boolean, lift = 0, forceArc = false, rise?: number): string {
-  if (!forceArc && (!fail || Math.abs(b.y - a.y) > 6)) {
-    const mx = (a.x + b.x) / 2;
-    return `M${a.x} ${a.y} C${mx} ${a.y} ${mx} ${b.y} ${b.x} ${b.y}`;
+export function orthogonalPath(points: Pt[]): string {
+  const deduped: Pt[] = [];
+  for (const point of points) {
+    const last = deduped[deduped.length - 1];
+    if (last === undefined || last.x !== point.x || last.y !== point.y) {
+      deduped.push({ x: num(point.x), y: num(point.y) });
+    }
   }
-  const top = rise ?? Math.min(a.y, b.y) - 8 - Math.abs(a.x - b.x) * 0.1 - lift;
-  return `M${a.x} ${a.y - 3} C${a.x} ${top} ${b.x} ${top} ${b.x} ${b.y - 3}`;
+  const path: Pt[] = [];
+  for (const point of deduped) {
+    const count = path.length;
+    const prev = path[count - 1];
+    const before = path[count - 2];
+    if (count >= 2 && before !== undefined && prev !== undefined) {
+      const vertical = before.x === prev.x && prev.x === point.x;
+      const horizontal = before.y === prev.y && prev.y === point.y;
+      if (vertical || horizontal) {
+        path.pop();
+      }
+    }
+    path.push(point);
+  }
+  const first = path[0];
+  const last = path[path.length - 1];
+  if (first === undefined || last === undefined) {
+    return "";
+  }
+  let d = `M${first.x} ${first.y}`;
+  for (let index = 1; index < path.length - 1; index += 1) {
+    const prev = path[index - 1] as Pt;
+    const vertex = path[index] as Pt;
+    const next = path[index + 1] as Pt;
+    const inLen = Math.hypot(vertex.x - prev.x, vertex.y - prev.y);
+    const outLen = Math.hypot(next.x - vertex.x, next.y - vertex.y);
+    const cut = Math.min(CORNER_RADIUS, inLen / 2, outLen / 2);
+    const near = {
+      x: num(vertex.x - ((vertex.x - prev.x) / inLen) * cut),
+      y: num(vertex.y - ((vertex.y - prev.y) / inLen) * cut),
+    };
+    const far = {
+      x: num(vertex.x + ((next.x - vertex.x) / outLen) * cut),
+      y: num(vertex.y + ((next.y - vertex.y) / outLen) * cut),
+    };
+    d += ` L${near.x} ${near.y} Q${vertex.x} ${vertex.y} ${far.x} ${far.y}`;
+  }
+  return `${d} L${last.x} ${last.y}`;
 }
 
 /**
- * The extent one axis of a cubic Bézier actually reaches, from its four
- * coordinates on that axis: the endpoints and any interior turning point.
- * A curve stays inside its control hull but rarely touches it, so bounds
- * read this instead of the control points — an arc's apex sits a quarter
- * of its height below its controls.
+ * Edge path between two border points: an orthogonal polyline. A forward
+ * edge runs straight when both ends share the axis, else horizontal,
+ * vertical, horizontal, with its bend at the midpoint of the gap. A failure
+ * or forced channel leaves the top of its source, runs along a channel
+ * above the flow at `rise`, and enters the top of its target. `lift` lowers
+ * such a channel when no explicit `rise` is given, so two back-edges into
+ * one node stay distinct (0 = the hero's drawing).
  */
-export function cubicExtent(p0: number, p1: number, p2: number, p3: number): { min: number; max: number } {
-  let min = Math.min(p0, p3);
-  let max = Math.max(p0, p3);
-  const at = (t: number): number => {
-    const u = 1 - t;
-    return u * u * u * p0 + 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t * p3;
-  };
-  const take = (t: number): void => {
-    if (t > 0 && t < 1) {
-      const value = at(t);
-      min = Math.min(min, value);
-      max = Math.max(max, value);
-    }
-  };
-  // The derivative over 3: a t² + b t + c.
-  const a = -p0 + 3 * p1 - 3 * p2 + p3;
-  const b = 2 * (p0 - 2 * p1 + p2);
-  const c = p1 - p0;
-  if (Math.abs(a) < 1e-12) {
-    if (Math.abs(b) > 1e-12) {
-      take(-c / b);
-    }
-    return { min, max };
+export function edgePath(a: Pt, b: Pt, fail = false, lift = 0, forceArc = false, rise?: number): string {
+  if (fail || forceArc) {
+    const top = rise ?? Math.min(a.y, b.y) - 8 - Math.abs(a.x - b.x) * 0.1 - lift;
+    return orthogonalPath([a, { x: a.x, y: top }, { x: b.x, y: top }, b]);
   }
-  const disc = b * b - 4 * a * c;
-  if (disc >= 0) {
-    const root = Math.sqrt(disc);
-    take((-b + root) / (2 * a));
-    take((-b - root) / (2 * a));
+  if (a.x === b.x || a.y === b.y) {
+    return orthogonalPath([a, b]);
   }
-  return { min, max };
+  const mx = (a.x + b.x) / 2;
+  return orthogonalPath([a, { x: mx, y: a.y }, { x: mx, y: b.y }, b]);
 }
 
 /** A node's drawn half extents: a rotated gate's bounding box is the wider one. */
@@ -174,10 +193,10 @@ export const ARROW_MARGIN = 0.8;
  * Pull an edge endpoint back so an arrowhead tip lands on the target's
  * border instead of hiding under its shape. `half` is the target's
  * half-extent along the arrival `axis`, `arrive` the arrival direction
- * (+1/-1; null follows the endpoint delta, for S-curves), and `bias` the
- * offset the path builder already applies on that axis (arcs end 3 short
- * of b). Returns b unchanged when the bias already covers the pullback
- * or the endpoints overlap with no room to shorten.
+ * (+1/-1; null follows the endpoint delta), and `bias` a pre-applied
+ * offset on that axis, subtracted from the pullback. Returns b unchanged
+ * when the bias already covers the pullback or the endpoints overlap
+ * with no room to shorten.
  */
 export function shortenEdgeEnd(
   a: Pt,

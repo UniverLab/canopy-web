@@ -22,8 +22,8 @@ import {
 } from "../../../packages/plate/document.js";
 import { renderNodePlate, renderPlate } from "../../../packages/plate/render.js";
 import { layoutPlate } from "../../../packages/plate/layout.js";
+import { nodeBox } from "../../../packages/plate/vocabulary.js";
 import { mulberry32 } from "../../../packages/plate/walk.js";
-import { cubicExtent } from "../../../packages/plate/vocabulary.js";
 import { BUNDLED_PATTERNS } from "../src/patterns-data.generated.js";
 import { ROUND_ROBIN_GRAPH, TUI_POLISH_GRAPH, sixtyNodeGraph } from "./plate-fixture.js";
 
@@ -489,8 +489,9 @@ describe("plate rank geometry", () => {
 });
 
 /**
- * The extent a drawn path actually reaches: its absolute M, L and C
- * segments, each cubic by its real turning points rather than its controls.
+ * The extent a drawn path actually reaches: its absolute M, L, H and V
+ * points, and each Q by its control and end — the quadratic stays inside
+ * its control hull, so the hull bounds the curve.
  */
 function pathExtent(d: string): { minX: number; maxX: number; minY: number; maxY: number } {
   const extent = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
@@ -501,15 +502,26 @@ function pathExtent(d: string): { minX: number; maxX: number; minY: number; maxY
     extent.maxY = Math.max(extent.maxY, y1);
   };
   let pen = { x: 0, y: 0 };
-  for (const match of d.matchAll(/([MLC])([^MLC]*)/g)) {
+  for (const match of d.matchAll(/([MLHVQ])([^MLHVQ]*)/g)) {
     const values = (match[2] ?? "").trim().split(/[\s,]+/).filter((v) => v !== "").map(Number);
-    if (match[1] === "C") {
-      for (let i = 0; i + 5 < values.length; i += 6) {
-        const [x1, y1, x2, y2, x, y] = values.slice(i, i + 6) as [number, number, number, number, number, number];
-        const xs = cubicExtent(pen.x, x1, x2, x);
-        const ys = cubicExtent(pen.y, y1, y2, y);
-        take(xs.min, xs.max, ys.min, ys.max);
+    if (match[1] === "Q") {
+      for (let i = 0; i + 3 < values.length; i += 4) {
+        const cx = values[i] ?? 0;
+        const cy = values[i + 1] ?? 0;
+        const x = values[i + 2] ?? 0;
+        const y = values[i + 3] ?? 0;
+        take(Math.min(pen.x, cx, x), Math.max(pen.x, cx, x), Math.min(pen.y, cy, y), Math.max(pen.y, cy, y));
         pen = { x, y };
+      }
+    } else if (match[1] === "H") {
+      for (const x of values) {
+        pen = { x, y: pen.y };
+        take(pen.x, pen.x, pen.y, pen.y);
+      }
+    } else if (match[1] === "V") {
+      for (const y of values) {
+        pen = { x: pen.x, y };
+        take(pen.x, pen.x, pen.y, pen.y);
       }
     } else {
       for (let i = 0; i + 1 < values.length; i += 2) {
@@ -533,12 +545,7 @@ describe("plate bounds", () => {
     ]),
   ];
 
-  it("cubicExtent reaches an arc's apex, a quarter below its controls", () => {
-    expect(cubicExtent(40, 0, 0, 40)).toEqual({ min: 10, max: 40 });
-    expect(cubicExtent(0, 1, 2, 3)).toEqual({ min: 0, max: 3 });
-  });
-
-  it("keeps every edge and the walk inside the viewBox, fail arcs included", () => {
+  it("keeps every edge and the walk inside the viewBox, channels included", () => {
     for (const [name, document] of documents) {
       const layout = layoutPlate(document, mulberry32(7));
       expect(layout, name).not.toBeNull();
@@ -560,7 +567,7 @@ describe("plate bounds", () => {
     }
   });
 
-  it("canopy-builder: the highest fail arc tops out one padding below the viewBox top", () => {
+  it("canopy-builder: the highest fail channel tops out one padding below the viewBox top", () => {
     const layout = layoutPlate(canopyBuilder);
     const top = Math.min(
       ...(layout?.edges ?? []).filter((edge) => edge.cls === "fail").map((edge) => pathExtent(edge.d).minY),
@@ -695,42 +702,74 @@ describe("marker scoping", () => {
 });
 
 describe("the pattern figures", () => {
-  /** The eight numbers of a cubic edge path: endpoints and control points. */
-  function cubic(d: string): number[] {
-    return (d.match(/-?[\d.]+/g) ?? []).map(Number);
+  /** The command letters of an edge path. */
+  function commands(d: string): string[] {
+    return d.match(/[A-Za-z]/g) ?? [];
   }
 
-  it("review-panel: the panel fail edge arcs above the row, never through it", () => {
+  /** The first endpoint of an edge path. */
+  function pathStart(d: string): [number, number] {
+    const nums = (d.match(/-?[\d.]+/g) ?? []).map(Number);
+    return [nums[0] ?? Number.NaN, nums[1] ?? Number.NaN];
+  }
+
+  /** The last endpoint of an edge path. */
+  function pathEnd(d: string): [number, number] {
+    const nums = (d.match(/-?[\d.]+/g) ?? []).map(Number);
+    return [nums[nums.length - 2] ?? Number.NaN, nums[nums.length - 1] ?? Number.NaN];
+  }
+
+  it("review-panel: the panel fail edge runs a channel above the row, never through it", () => {
     const layout = layoutPlate(reviewPanel as unknown as GraphDocument);
     expect(layout).not.toBeNull();
     const fail = layout?.edges.find((edge) => edge.from === "review-panel" && edge.to === "implement");
     expect(fail?.cls).toBe("fail");
-    // An arc: both control points share the rise, at the endpoints' own x —
-    // an S-curve through the row would share the midpoint's x instead.
-    const [ax, , c1x, c1y, c2x, c2y, bx] = cubic(fail?.d ?? "");
-    expect(c1x).toBe(ax);
-    expect(c2x).toBe(bx);
-    expect(c1y).toBe(c2y);
+    // A channel: only straight runs and rounded corners, from the source's
+    // top corner to the target's top corner, topping out above the row.
+    for (const letter of commands(fail?.d ?? "")) {
+      expect("MLQ").toContain(letter);
+    }
+    const panel = layout?.groups.find((group) => group.name === "review-panel");
+    const implement = layout?.nodes.find((node) => node.name === "implement");
+    expect(panel).toBeDefined();
+    expect(implement).toBeDefined();
+    if (panel === undefined || implement === undefined || fail === undefined) {
+      return;
+    }
+    const box = nodeBox(implement);
+    const round = (value: number): number => Math.round(value * 100) / 100;
+    expect([
+      [round(panel.x - panel.w / 2), round(panel.y - panel.h / 2)],
+      [round(panel.x + panel.w / 2), round(panel.y - panel.h / 2)],
+    ]).toContainEqual(pathStart(fail.d));
+    expect([
+      [round(implement.x - box.hw), round(implement.y - box.hh)],
+      [round(implement.x + box.hw), round(implement.y - box.hh)],
+    ]).toContainEqual(pathEnd(fail.d));
     const rowTop = Math.min(
-      ...(layout?.nodes ?? []).filter((node) => node.lane === "main").map((node) => node.y - node.h / 2),
+      ...(layout?.nodes ?? [])
+        .filter((node) => node.lane === "main")
+        .map((node) => node.y - nodeBox(node).hh),
     );
-    expect(c1y ?? Number.POSITIVE_INFINITY).toBeLessThan(rowTop);
+    expect(pathExtent(fail.d).minY).toBeLessThan(rowTop);
   });
 
-  it("resilient-members: resilience ranks after start, the fail arcs parted", () => {
+  it("resilient-members: resilience ranks after start, the fail channels parted", () => {
     const layout = layoutPlate(resilientMembers as unknown as GraphDocument);
     expect(layout).not.toBeNull();
     const rank = new Map((layout?.nodes ?? []).map((node) => [node.name, node.rank]));
     expect(rank.get("resilience") ?? -1).toBeGreaterThan(rank.get("start") ?? Number.MAX_SAFE_INTEGER);
     expect(layout?.order).toEqual(["start", "resilience", "gate", "review"]);
-    // All three fail edges draw as arcs, and the two into start part lifts.
+    // All three fail edges draw as channels, and the two into start part lifts.
     const fails = (layout?.edges ?? []).filter((edge) => edge.cls === "fail");
     expect(fails).toHaveLength(3);
     for (const edge of fails) {
-      const [ax, , c1x, c1y, c2x, c2y, bx] = cubic(edge.d);
-      expect([c1x, c2x, c1y, c2y], `${edge.from}→${edge.to}`).toEqual([ax, bx, c1y, c1y]);
+      for (const letter of commands(edge.d)) {
+        expect("MLQ", `${edge.from}→${edge.to}: command ${letter}`).toContain(letter);
+      }
     }
-    const rises = fails.filter((edge) => edge.to === "start").map((edge) => cubic(edge.d)[3]);
+    const rises = fails.filter((edge) => edge.to === "start").map((edge) => pathExtent(edge.d).minY);
+    expect(rises).toHaveLength(2);
     expect(new Set(rises).size).toBe(2);
   });
 
