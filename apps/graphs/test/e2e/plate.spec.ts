@@ -2,16 +2,52 @@
 /**
  * The document plate viewport, in a browser against the fixture Worker:
  * one horizontal plate at every size, as tall as the datasheet beside it
- * on desktop (1440x900) and full width at 60svh on a phone (390x844),
- * panning under a drag, zooming under `+`, and restored whole by Fit —
- * with no vertical twin anywhere. A screenshot per test is attached to
- * the report for the operator's review, never compared.
+ * on desktop (1440x900) and full width on a phone (390x844), as tall as
+ * the fitted drawing between 200 px and 60svh, panning under a drag,
+ * zooming under `+`, and restored whole by Fit — every edge path, fail
+ * arcs included, inside the viewport — with no vertical twin anywhere.
+ * A screenshot per test is attached to the report for the operator's
+ * review, never compared.
  */
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 /** The scale out of a `translate(xpx, ypx) scale(z)` paint. */
 function scaleOf(transform: string): number {
   return Number(/scale\(([^)]+)\)/.exec(transform)?.[1] ?? Number.NaN);
+}
+
+/**
+ * The drawn edge paths that leave the live viewport: each path's own
+ * painted box, not the svg's, so an arc cut off by the svg's viewBox
+ * (which the svg box alone never shows) counts as outside.
+ */
+async function pathsOutside(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const figure = document.querySelector("figure.plate") as HTMLElement;
+    const svg = figure.querySelector("svg") as SVGSVGElement;
+    const rect = figure.getBoundingClientRect();
+    const left = rect.left + figure.clientLeft;
+    const top = rect.top + figure.clientTop;
+    const right = left + figure.clientWidth;
+    const bottom = top + figure.clientHeight;
+    const viewBox = svg.viewBox.baseVal;
+    const outside: string[] = [];
+    for (const path of svg.querySelectorAll("g.edges path")) {
+      const box = path.getBoundingClientRect();
+      const own = (path as SVGPathElement).getBBox();
+      const inViewBox =
+        own.x >= viewBox.x - 0.01 &&
+        own.y >= viewBox.y - 0.01 &&
+        own.x + own.width <= viewBox.x + viewBox.width + 0.01 &&
+        own.y + own.height <= viewBox.y + viewBox.height + 0.01;
+      const inViewport =
+        box.left >= left - 0.5 && box.top >= top - 0.5 && box.right <= right + 0.5 && box.bottom <= bottom + 0.5;
+      if (!inViewBox || !inViewport) {
+        outside.push(path.getAttribute("d") ?? "");
+      }
+    }
+    return outside;
+  });
 }
 
 test("the viewport stands as tall as the datasheet at 1440x900", async ({ page }, testInfo) => {
@@ -47,7 +83,7 @@ test("the viewport stands as tall as the datasheet at 1440x900", async ({ page }
   await testInfo.attach("plate-desktop", { body: shot, contentType: "image/png" });
 });
 
-test("one horizontal plate in a 60svh viewport at 390x844", async ({ page }, testInfo) => {
+test("one horizontal plate in a viewport as tall as the fitted drawing at 390x844", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/g/hello-graph", { waitUntil: "load" });
   const figure = page.locator("figure.plate");
@@ -57,20 +93,28 @@ test("one horizontal plate in a 60svh viewport at 390x844", async ({ page }, tes
   await expect(page.locator("figure.plate svg.plate-h")).toBeVisible();
   await expect(page.locator("svg.plate-v")).toHaveCount(0);
 
-  // Full width of the content column, 60svh tall.
+  // Full width of the content column, and as tall as the drawing fitted
+  // to that width, between 200 px and 60svh: no letterbox bands.
   const box = await page.evaluate(() => {
     const main = document.querySelector("main.look-col") as HTMLElement;
     const style = getComputedStyle(main);
     const fig = document.querySelector("figure.plate")!.getBoundingClientRect();
+    const svg = document.querySelector("figure.plate svg") as SVGSVGElement;
     return {
       width: fig.width,
       column: main.getBoundingClientRect().width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
       height: fig.height,
+      drawn: fig.width * (Number(svg.getAttribute("height")) / Number(svg.getAttribute("width"))),
       svh: window.innerHeight * 0.6,
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     };
   });
   expect(Math.abs(box.width - box.column)).toBeLessThanOrEqual(1);
-  expect(Math.abs(box.height - box.svh)).toBeLessThanOrEqual(2);
+  expect(Math.abs(box.height - Math.min(box.svh, Math.max(200, box.drawn)))).toBeLessThanOrEqual(2);
+  expect(box.overflow).toBe(0);
+  // Every edge, the fail and back arcs above the row included, lies
+  // inside the viewport at Fit.
+  expect(await pathsOutside(page)).toEqual([]);
 
   // The node page draws its one node the same way.
   await page.goto("/n/hello-node", { waitUntil: "load" });
@@ -105,6 +149,7 @@ test("drag pans, + zooms, Fit restores the whole graph", async ({ page }, testIn
       );
     });
   expect(await fits()).toBe(true);
+  expect(await pathsOutside(page)).toEqual([]);
 
   // A drag moves the view.
   await figure.scrollIntoViewIfNeeded();
@@ -131,6 +176,7 @@ test("drag pans, + zooms, Fit restores the whole graph", async ({ page }, testIn
   // Fit restores the whole graph, centred in the viewport.
   await page.getByRole("button", { name: "Fit the graph" }).click();
   expect(await fits()).toBe(true);
+  expect(await pathsOutside(page)).toEqual([]);
   expect(await transform()).toBe(before);
 
   const shot = await page.screenshot({

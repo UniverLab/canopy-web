@@ -377,7 +377,8 @@ figure.plate {
 /* The document plate viewport: full width and 60svh below the datasheet
  * breakpoint, stretched beside the datasheet above it (see the 1024 px
  * block). Without scripting it scrolls at scale 1; the plate client
- * adds is-live and pans/zooms the drawing itself instead. */
+ * adds is-live and pans/zooms the drawing itself instead, and the
+ * one-column viewport then follows the drawing's proportions (below). */
 .doc-cols figure.plate {
   margin: 0;
   width: 100%;
@@ -389,6 +390,16 @@ figure.plate.is-live {
   overflow: hidden;
   position: relative;
   touch-action: none;
+}
+/* Live in one column, the viewport takes the drawing's own proportions
+ * (--plate-ratio, set by the client) between 200 px and 60svh: a wide
+ * plate fits the full width without the letterbox bands a fixed 60svh
+ * left above and below it on a phone; a tall one still stops at 60svh. */
+.doc-cols figure.plate.is-live {
+  height: auto;
+  aspect-ratio: var(--plate-ratio, auto);
+  min-height: 200px;
+  max-height: 60svh;
 }
 .plate svg { display: block; height: auto; margin: 0 auto; }
 .plate.is-live svg { margin: 0; transform-origin: 0 0; }
@@ -636,6 +647,7 @@ pre.prompt, pre.hash {
 @media (min-width: 1024px) {
   .doc-cols { flex-direction: row; align-items: stretch; }
   .doc-cols figure.plate { flex: 1; min-width: 0; width: auto; height: auto; min-height: 420px; }
+  .doc-cols figure.plate.is-live { aspect-ratio: auto; min-height: 420px; max-height: none; }
   dl.sheet { flex: 0 0 320px; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1091,7 +1103,8 @@ figure.plate {
 /* The document plate viewport: full width and 60svh below the datasheet
  * breakpoint, stretched beside the datasheet above it (see the 1024 px
  * block). Without scripting it scrolls at scale 1; the plate client
- * adds is-live and pans/zooms the drawing itself instead. */
+ * adds is-live and pans/zooms the drawing itself instead, and the
+ * one-column viewport then follows the drawing's proportions (below). */
 .doc-cols figure.plate {
   margin: 0;
   width: 100%;
@@ -1103,6 +1116,16 @@ figure.plate.is-live {
   overflow: hidden;
   position: relative;
   touch-action: none;
+}
+/* Live in one column, the viewport takes the drawing's own proportions
+ * (--plate-ratio, set by the client) between 200 px and 60svh: a wide
+ * plate fits the full width without the letterbox bands a fixed 60svh
+ * left above and below it on a phone; a tall one still stops at 60svh. */
+.doc-cols figure.plate.is-live {
+  height: auto;
+  aspect-ratio: var(--plate-ratio, auto);
+  min-height: 200px;
+  max-height: 60svh;
 }
 .plate svg { display: block; height: auto; margin: 0 auto; }
 .plate.is-live svg { margin: 0; transform-origin: 0 0; }
@@ -1350,6 +1373,7 @@ pre.prompt, pre.hash {
 @media (min-width: 1024px) {
   .doc-cols { flex-direction: row; align-items: stretch; }
   .doc-cols figure.plate { flex: 1; min-width: 0; width: auto; height: auto; min-height: 420px; }
+  .doc-cols figure.plate.is-live { aspect-ratio: auto; min-height: 420px; max-height: none; }
   dl.sheet { flex: 0 0 320px; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1815,7 +1839,8 @@ figure.plate {
 /* The document plate viewport: full width and 60svh below the datasheet
  * breakpoint, stretched beside the datasheet above it (see the 1024 px
  * block). Without scripting it scrolls at scale 1; the plate client
- * adds is-live and pans/zooms the drawing itself instead. */
+ * adds is-live and pans/zooms the drawing itself instead, and the
+ * one-column viewport then follows the drawing's proportions (below). */
 .doc-cols figure.plate {
   margin: 0;
   width: 100%;
@@ -1827,6 +1852,16 @@ figure.plate.is-live {
   overflow: hidden;
   position: relative;
   touch-action: none;
+}
+/* Live in one column, the viewport takes the drawing's own proportions
+ * (--plate-ratio, set by the client) between 200 px and 60svh: a wide
+ * plate fits the full width without the letterbox bands a fixed 60svh
+ * left above and below it on a phone; a tall one still stops at 60svh. */
+.doc-cols figure.plate.is-live {
+  height: auto;
+  aspect-ratio: var(--plate-ratio, auto);
+  min-height: 200px;
+  max-height: 60svh;
 }
 .plate svg { display: block; height: auto; margin: 0 auto; }
 .plate.is-live svg { margin: 0; transform-origin: 0 0; }
@@ -2074,6 +2109,7 @@ pre.prompt, pre.hash {
 @media (min-width: 1024px) {
   .doc-cols { flex-direction: row; align-items: stretch; }
   .doc-cols figure.plate { flex: 1; min-width: 0; width: auto; height: auto; min-height: 420px; }
+  .doc-cols figure.plate.is-live { aspect-ratio: auto; min-height: 420px; max-height: none; }
   dl.sheet { flex: 0 0 320px; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -2559,7 +2595,8 @@ figure.plate {
 /* The document plate viewport: full width and 60svh below the datasheet
  * breakpoint, stretched beside the datasheet above it (see the 1024 px
  * block). Without scripting it scrolls at scale 1; the plate client
- * adds is-live and pans/zooms the drawing itself instead. */
+ * adds is-live and pans/zooms the drawing itself instead, and the
+ * one-column viewport then follows the drawing's proportions (below). */
 .doc-cols figure.plate {
   margin: 0;
   width: 100%;
@@ -2571,6 +2608,16 @@ figure.plate.is-live {
   overflow: hidden;
   position: relative;
   touch-action: none;
+}
+/* Live in one column, the viewport takes the drawing's own proportions
+ * (--plate-ratio, set by the client) between 200 px and 60svh: a wide
+ * plate fits the full width without the letterbox bands a fixed 60svh
+ * left above and below it on a phone; a tall one still stops at 60svh. */
+.doc-cols figure.plate.is-live {
+  height: auto;
+  aspect-ratio: var(--plate-ratio, auto);
+  min-height: 200px;
+  max-height: 60svh;
 }
 .plate svg { display: block; height: auto; margin: 0 auto; }
 .plate.is-live svg { margin: 0; transform-origin: 0 0; }
@@ -2818,6 +2865,7 @@ pre.prompt, pre.hash {
 @media (min-width: 1024px) {
   .doc-cols { flex-direction: row; align-items: stretch; }
   .doc-cols figure.plate { flex: 1; min-width: 0; width: auto; height: auto; min-height: 420px; }
+  .doc-cols figure.plate.is-live { aspect-ratio: auto; min-height: 420px; max-height: none; }
   dl.sheet { flex: 0 0 320px; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -3277,7 +3325,8 @@ figure.plate {
 /* The document plate viewport: full width and 60svh below the datasheet
  * breakpoint, stretched beside the datasheet above it (see the 1024 px
  * block). Without scripting it scrolls at scale 1; the plate client
- * adds is-live and pans/zooms the drawing itself instead. */
+ * adds is-live and pans/zooms the drawing itself instead, and the
+ * one-column viewport then follows the drawing's proportions (below). */
 .doc-cols figure.plate {
   margin: 0;
   width: 100%;
@@ -3289,6 +3338,16 @@ figure.plate.is-live {
   overflow: hidden;
   position: relative;
   touch-action: none;
+}
+/* Live in one column, the viewport takes the drawing's own proportions
+ * (--plate-ratio, set by the client) between 200 px and 60svh: a wide
+ * plate fits the full width without the letterbox bands a fixed 60svh
+ * left above and below it on a phone; a tall one still stops at 60svh. */
+.doc-cols figure.plate.is-live {
+  height: auto;
+  aspect-ratio: var(--plate-ratio, auto);
+  min-height: 200px;
+  max-height: 60svh;
 }
 .plate svg { display: block; height: auto; margin: 0 auto; }
 .plate.is-live svg { margin: 0; transform-origin: 0 0; }
@@ -3536,6 +3595,7 @@ pre.prompt, pre.hash {
 @media (min-width: 1024px) {
   .doc-cols { flex-direction: row; align-items: stretch; }
   .doc-cols figure.plate { flex: 1; min-width: 0; width: auto; height: auto; min-height: 420px; }
+  .doc-cols figure.plate.is-live { aspect-ratio: auto; min-height: 420px; max-height: none; }
   dl.sheet { flex: 0 0 320px; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -3986,7 +4046,8 @@ figure.plate {
 /* The document plate viewport: full width and 60svh below the datasheet
  * breakpoint, stretched beside the datasheet above it (see the 1024 px
  * block). Without scripting it scrolls at scale 1; the plate client
- * adds is-live and pans/zooms the drawing itself instead. */
+ * adds is-live and pans/zooms the drawing itself instead, and the
+ * one-column viewport then follows the drawing's proportions (below). */
 .doc-cols figure.plate {
   margin: 0;
   width: 100%;
@@ -3998,6 +4059,16 @@ figure.plate.is-live {
   overflow: hidden;
   position: relative;
   touch-action: none;
+}
+/* Live in one column, the viewport takes the drawing's own proportions
+ * (--plate-ratio, set by the client) between 200 px and 60svh: a wide
+ * plate fits the full width without the letterbox bands a fixed 60svh
+ * left above and below it on a phone; a tall one still stops at 60svh. */
+.doc-cols figure.plate.is-live {
+  height: auto;
+  aspect-ratio: var(--plate-ratio, auto);
+  min-height: 200px;
+  max-height: 60svh;
 }
 .plate svg { display: block; height: auto; margin: 0 auto; }
 .plate.is-live svg { margin: 0; transform-origin: 0 0; }
@@ -4245,6 +4316,7 @@ pre.prompt, pre.hash {
 @media (min-width: 1024px) {
   .doc-cols { flex-direction: row; align-items: stretch; }
   .doc-cols figure.plate { flex: 1; min-width: 0; width: auto; height: auto; min-height: 420px; }
+  .doc-cols figure.plate.is-live { aspect-ratio: auto; min-height: 420px; max-height: none; }
   dl.sheet { flex: 0 0 320px; }
 }
 @media (prefers-reduced-motion: reduce) {
