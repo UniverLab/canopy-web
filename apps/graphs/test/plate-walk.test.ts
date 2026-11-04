@@ -234,11 +234,46 @@ describe("the lit fail edges", () => {
     expect(values.split(";")).toEqual(["0", "1", "0", "1", "0", "1", "0", "0", "0"]);
   });
 
-  it("leaves the default plate alone: the happy path rides no fail edge", () => {
+  it("leaves the happy path without a lit fail edge", () => {
     const svg = renderPlate(LOOP);
-    expect(svg).not.toContain("edge-lit");
-    expect(svg).not.toContain("data-lit");
-    expect(svg).not.toContain(`@media (prefers-reduced-motion:reduce){.plate-svg .edge-lit`);
+    expect(svg).not.toContain(`<path class="edge-lit"`);
+    // The catalogue still lights its units: the walk visits them.
+    expect(svg).toContain(`<g class="lits">`);
+  });
+});
+
+describe("the lit units", () => {
+  /** The discrete values of the twin the walk drew for one unit. */
+  function twinValues(svg: string, name: string): string[] {
+    const pattern = new RegExp(
+      `<rect class="unit-lit"[^>]*data-name="${name}"[^>]*>[\\s\\S]*?values="([^"]+)"`,
+    );
+    return pattern.exec(svg)?.[1]?.split(";") ?? [];
+  }
+
+  it("lights a twin only on the legs that touch its unit", () => {
+    // Every draw dips: the eight-leg walk loops gate↔fix three times, so
+    // fix touches legs 1–6, start only leg 0 and done only the final leg.
+    const svg = renderPlate(LOOP, undefined, () => 0);
+    expect(svg.match(/class="unit-lit"/g) ?? []).toHaveLength(4);
+    expect(twinValues(svg, "fix")).toEqual(["0", "1", "1", "1", "1", "1", "1", "0", "0"]);
+    expect(twinValues(svg, "gate")).toEqual(["1", "1", "1", "1", "1", "1", "1", "1", "0"]);
+    expect(twinValues(svg, "start")).toEqual(["1", "0", "0", "0", "0", "0", "0", "0", "0"]);
+    expect(twinValues(svg, "done")).toEqual(["0", "0", "0", "0", "0", "0", "0", "1", "0"]);
+    expect(svg).toContain(
+      `@media (prefers-reduced-motion:reduce){.plate-svg .unit-lit{display:none}}`,
+    );
+  });
+
+  it("draws no twin for a plate with no walk", () => {
+    const single: GraphDocument = {
+      name: "single",
+      nodes: [{ name: "only", kind: "agent", position: 1, config: {} }],
+      edges: [],
+    };
+    const svg = renderPlate(single);
+    expect(svg).not.toContain("unit-lit");
+    expect(svg).not.toContain(`<g class="lits">`);
   });
 });
 

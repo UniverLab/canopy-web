@@ -45,7 +45,13 @@ import {
   type PlacedMark,
 } from "./lane.js";
 import { rankUnits, type Unit } from "./rank.js";
-import { generateWalk, happyRandom, plateWalk, type WalkFail } from "./walk.js";
+import {
+  generateWalk,
+  happyRandom,
+  plateWalk,
+  type WalkFail,
+  type WalkStep,
+} from "./walk.js";
 import { GEOM, edgePath, num, nodeBox, smooth, type Pt } from "./vocabulary.js";
 import {
   GROUP_CHAR,
@@ -125,6 +131,8 @@ export interface PlateLayout {
   walkSeconds: number;
   /** The walk's fail legs, by the drawn edge they rode — the renderer lights these. */
   walkFails: WalkFail[];
+  /** The walk's steps — the renderer lights each unit on the legs that touch it. */
+  walkSteps: WalkStep[];
   /** Node names in drawn order, for the svg `<desc>`. */
   order: string[];
 }
@@ -682,6 +690,7 @@ export function layoutPlate(document: unknown, random: () => number = happyRando
     walk: walked.walk,
     walkSeconds: walked.seconds,
     walkFails: walked.fails,
+    walkSteps: steps,
     order,
   };
 }

@@ -124,6 +124,17 @@ describe("renderPlate with a state", () => {
     expect(svg).not.toContain(`<animateMotion`);
   });
 
+  it("draws one static twin for the running unit and no SMIL", () => {
+    const svg = renderPlate(CHAIN, {
+      nodes: { first: "pass", second: "running" },
+      current: "second",
+    });
+    expect(svg.match(/class="unit-lit"/g) ?? []).toHaveLength(1);
+    expect(svg).toMatch(/<rect class="unit-lit"[^>]*data-lit data-name="second"/);
+    expect(svg).not.toContain("<animate");
+    expect(svg).not.toContain("<animateMotion");
+  });
+
   it("draws no ring and no token for a state that names nothing drawn", () => {
     const svg = renderPlate(CHAIN, { nodes: { nowhere: "running" } });
     expect(svg).not.toContain(`class="state-ring"`);

@@ -274,10 +274,11 @@ describe("canopy-builder", () => {
 describe("no-handler plates", () => {
   it("keeps a handler-free svg byte-identical", async () => {
     // Re-pinned when the vertical layout went away and the marker ids lost
-    // their orientation prefix.
+    // their orientation prefix, then again when the walk's unit twins joined
+    // the catalogue plate.
     const svg = renderPlate(qualityBubble as unknown as GraphDocument);
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(svg));
     const hex = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-    expect(hex).toBe("ee6a2114e16aa9cedac16a3a2a6481605ce8822adc4ab84e66bed29bfd284b0d");
+    expect(hex).toBe("c954baa22c0d109fefd430e1d67ccccf54b30f1170437c88635db556e24a1130");
   });
 });
