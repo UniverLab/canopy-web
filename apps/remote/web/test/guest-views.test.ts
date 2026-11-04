@@ -36,6 +36,10 @@ class FakeHandle implements TerminalHandle {
     callback();
     return () => {};
   };
+  resizes: { cols: number; rows: number }[] = [];
+  resize = (cols: number, rows: number): void => {
+    this.resizes.push({ cols, rows });
+  };
   dispose = (): void => {
     this.disposed = true;
   };
@@ -254,6 +258,19 @@ describe("guest session view", () => {
     view.ensureTerminal("s1", 100, 30);
     expect(handles.length).toBe(2);
     expect(handles[0]?.disposed).toBe(true);
+  });
+
+  it("follows the host's resized frame in place", () => {
+    const { view, handles } = setup();
+    view.showSession("s1", "build");
+    view.ensureTerminal("s1", 80, 24);
+    view.sessionResized("s2", 90, 20);
+    view.sessionResized("s1", 120, 40);
+    expect(handles).toHaveLength(1);
+    expect(handles[0]?.resizes).toEqual([{ cols: 120, rows: 40 }]);
+    // The snapshot at the new size keeps the same terminal.
+    view.ensureTerminal("s1", 120, 40);
+    expect(handles).toHaveLength(1);
   });
 
   it("sends typed text and key-bar keys as input", () => {

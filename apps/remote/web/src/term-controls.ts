@@ -10,6 +10,9 @@
 // the local terminal to them and asserts them to the host, then re-asserts
 // (debounced) whenever the panel changes — a resize, an orientation
 // change, fullscreen, the zoom — for as long as the toggle stays on.
+// The host's `resized` frame lands in handleResized: a follower resizes
+// to it, and an owner whose size was replaced by another device's lets go
+// (no resize ping-pong) and says so in the size row's note.
 
 import { icon } from "./icons-dom.js";
 import type { TermSize, TerminalView } from "./terminal.js";
@@ -58,6 +61,10 @@ export function termControlsHtml(): string {
       </div>`;
 }
 
+const SIZE_NOTE = "Only one client should control the size.";
+/** The size row's note once another device replaced this one's size. */
+export const SIZE_TAKEN_NOTE = "Size taken over by another device.";
+
 // The size row lives below the keybar, not beside the controls: the ten
 // keys must all stay inside a 360×640 viewport, and any row above them
 // pushes the second key row out of view.
@@ -69,7 +76,7 @@ export function termSizeHtml(sessionId: string | null): string {
           id="term-control-size"
           ${sessionId !== null && readControlSize(sessionId) ? "checked" : ""}
         > This device controls the size</label>
-        <p class="term-size-note">Only one client should control the size.</p>
+        <p class="term-size-note" role="status">${SIZE_NOTE}</p>
       </div>`;
 }
 
@@ -102,6 +109,12 @@ export interface TermControls {
   reassert: () => void;
   /** The panel layout changed (the zoom): re-assert, debounced, while on. */
   schedule: () => void;
+  /**
+   * The host reports the session's PTY size. A follower resizes to it; an
+   * owner whose own size it is not (another device took over) turns its
+   * toggle off, remembers that, and follows.
+   */
+  handleResized: (cols: number, rows: number) => void;
   /** Stop watching the panel; the session view is going away. */
   dispose: () => void;
 }
@@ -111,6 +124,9 @@ export const SIZE_DEBOUNCE_MS = 150;
 // A measurement that is not ready yet (the terminal still opening) retries
 // on the debounce this many times before waiting for the next change.
 const SIZE_MEASURE_RETRIES = 5;
+// The sizes this device sent that the host may still echo back: a slow
+// echo of an older one must not read as another device taking over.
+const MAX_ASSERTED = 8;
 
 function sameSize(a: TermSize | null, b: TermSize): boolean {
   return a !== null && a.cols === b.cols && a.rows === b.rows;
@@ -182,8 +198,10 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
   // the local terminal to it); turning it off stops asserting and the
   // terminal follows the host's size again.
   const sizeToggle = root.querySelector<HTMLInputElement>("#term-control-size");
+  const sizeNote = root.querySelector<HTMLElement>(".term-size-note");
   let owning = false;
   let lastSent: TermSize | null = null;
+  let asserted: TermSize[] = [];
   let timer: ReturnType<typeof setTimeout> | null = null;
   let retries = 0;
   let generation = 0;
@@ -230,6 +248,10 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
       return;
     }
     lastSent = size;
+    asserted.push(size);
+    if (asserted.length > MAX_ASSERTED) {
+      asserted.shift();
+    }
     deps.onLocalSize(size.cols, size.rows);
     deps.onControlSize(size.cols, size.rows);
   }
@@ -266,9 +288,18 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
     clearTimer();
   };
 
+  const setNote = (text: string): void => {
+    if (sizeNote) {
+      sizeNote.textContent = text;
+      sizeNote.classList.toggle("is-notice", text !== SIZE_NOTE);
+    }
+  };
+
   const startOwning = (): void => {
     owning = true;
     lastSent = null;
+    asserted = [];
+    setNote(SIZE_NOTE);
     retries = 0;
     generation += 1;
     watch();
@@ -293,6 +324,7 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
   const stopOwning = (): void => {
     owning = false;
     lastSent = null;
+    asserted = [];
     generation += 1;
     stopWatching();
     deps.terminalView()?.setSizeOwner(false);
@@ -325,6 +357,30 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
       startOwning();
     },
     schedule,
+    handleResized: (cols, rows) => {
+      const reported = { cols, rows };
+      if (owning && asserted.length > 0) {
+        const index = asserted.findIndex((size) => sameSize(size, reported));
+        if (index >= 0) {
+          // The host confirms one of ours: drop the older ones.
+          asserted = asserted.slice(index);
+          return;
+        }
+        // Another device (or the host's own TUI) set a size this device
+        // never asked for: let it have the size rather than fight back.
+        const id = deps.sessionId();
+        if (id !== null) {
+          writeControlSize(id, false);
+        }
+        if (sizeToggle) {
+          sizeToggle.checked = false;
+        }
+        stopOwning();
+        setNote(SIZE_TAKEN_NOTE);
+      }
+      // A follower (or an owner yet to assert) takes the host's size.
+      deps.onLocalSize(cols, rows);
+    },
     dispose: () => {
       owning = false;
       generation += 1;

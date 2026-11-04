@@ -92,6 +92,8 @@ export interface Shell {
   setPairBusy: (busy: boolean) => void;
   setSignOutError: (message: string | null) => void;
   ensureTerminal: (id: string, cols: number, rows: number) => void;
+  /** The host's `resized` frame for the open session. */
+  sessionResized: (id: string, cols: number, rows: number) => void;
   writeTerminal: (data: Uint8Array) => void;
   clearTerminal: () => void;
   showSessionExited: (code: number) => void;
@@ -748,6 +750,18 @@ export function createShell(
       // the size that fits this panel, never the snapshot's — so a
       // reconnected session keeps the size this device asked for.
       termControls?.reassert();
+    },
+    sessionResized(id: string, cols: number, rows: number): void {
+      if (route !== "session" || id !== sessionId) {
+        return;
+      }
+      // The controls decide: a follower resizes in place and refits, an
+      // owner that was overridden lets go first.
+      if (termControls) {
+        termControls.handleResized(cols, rows);
+      } else {
+        resizeLocalTerminal(cols, rows);
+      }
     },
     writeTerminal(data: Uint8Array): void {
       terminalView?.write(data);

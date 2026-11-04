@@ -178,6 +178,30 @@ export function parseExited(frame: unknown): { id: string; code: number } | null
   return { id: frame.id, code: frame.code };
 }
 
+export interface ResizedFrame {
+  id: string;
+  cols: number;
+  rows: number;
+}
+
+// The host's size_field bounds: integers 1..=65535.
+function isPtySize(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 65535;
+}
+
+// `resized{id,cols,rows}`: a session's PTY size changed on the host —
+// another device asserted its size, or the local TUI resized it. Older
+// hosts never send it; anything malformed is dropped like an unknown frame.
+export function parseResized(frame: unknown): ResizedFrame | null {
+  if (frameType(frame) !== "resized" || !isRecord(frame)) {
+    return null;
+  }
+  if (typeof frame.id !== "string" || frame.id === "" || !isPtySize(frame.cols) || !isPtySize(frame.rows)) {
+    return null;
+  }
+  return { id: frame.id, cols: frame.cols, rows: frame.rows };
+}
+
 function b64Bytes(data: string): Uint8Array | null {
   if (!/^[A-Za-z0-9+/]*={0,2}$/.test(data) || data.length % 4 !== 0) {
     return null;

@@ -515,6 +515,7 @@ export function createGuestSession(root: HTMLElement, deps: GuestSessionDeps): G
   // bypasses this entirely and reaches onForbidden below.
   const routerShell: RouterShell = {
     ensureTerminal: (id, cols, rows) => view.ensureTerminal(id, cols, rows),
+    sessionResized: (id, cols, rows) => view.sessionResized(id, cols, rows),
     sheetSpawned: () => {},
     sheetComposed: () => {},
     sheetOk: () => {},

@@ -120,6 +120,20 @@ function main(): void {
   const sent: unknown[] = [];
   const terminalOutput: Uint8Array[] = [];
   let seq = 7;
+  // Each session's PTY size as the fake host holds it: 80×24 until a
+  // resize changes it, and every change is announced as `resized`, the
+  // way the real host tells every attached device.
+  const ptySizes = new Map<string, { cols: number; rows: number }>();
+  const ptySize = (id: string): { cols: number; rows: number } =>
+    ptySizes.get(id) ?? { cols: 80, rows: 24 };
+  const setPtySize = (id: string, cols: number, rows: number): void => {
+    const current = ptySize(id);
+    if (current.cols === cols && current.rows === rows) {
+      return;
+    }
+    ptySizes.set(id, { cols, rows });
+    deliver({ t: "resized", id, cols, rows });
+  };
   let nextSpawn = 0;
   let promptError: { code: string; message: string } | null = null;
 
@@ -385,6 +399,8 @@ function main(): void {
       mime?: string;
       part?: number;
       data?: string;
+      cols?: number;
+      rows?: number;
     };
     sent.push(frame);
     if (frame.t === "list") {
@@ -421,7 +437,8 @@ function main(): void {
         deliver({ t: "error", code: "forbidden", id: frame.id });
       } else {
         const full = b64(SMOKE_OUTPUT);
-        deliver({ t: "snapshot", id: frame.id, cols: 80, rows: 24, seq, data: full.slice(0, 10) });
+        const { cols, rows } = ptySize(frame.id);
+        deliver({ t: "snapshot", id: frame.id, cols, rows, seq, data: full.slice(0, 10) });
         deliver({ t: "snapshot_more", id: frame.id, data: full.slice(10), last: true });
         const attached = frame.id;
         if (pushedFor === null) {
@@ -432,6 +449,13 @@ function main(): void {
           }, 2000);
         }
       }
+    } else if (
+      frame.t === "resize" &&
+      typeof frame.id === "string" &&
+      typeof frame.cols === "number" &&
+      typeof frame.rows === "number"
+    ) {
+      setPtySize(frame.id, frame.cols, frame.rows);
     } else if (frame.t === "shelf_put_begin" && typeof frame.req === "string") {
       if (uploadMode === "denied") {
         deliver({ t: "error", req: frame.req, code: "forbidden", message: "upload not allowed" });
@@ -768,6 +792,9 @@ function main(): void {
     pushMetrics: (patch?: Record<string, unknown>) => {
       deliver(metricsFrame(patch ?? {}));
     },
+    resizeFromElsewhere: (cols: number, rows: number, id = "smoke") => {
+      setPtySize(id, cols, rows);
+    },
   };
 }
 
@@ -793,6 +820,8 @@ declare global {
       pushMetrics: (patch?: Record<string, unknown>) => void;
       /** Guest mode only: open one session by id, listed or not. */
       guestOpen?: (id: string) => void;
+      /** Another device (or the host's TUI) resizes a session's PTY. */
+      resizeFromElsewhere?: (cols: number, rows: number, id?: string) => void;
     };
   }
 }

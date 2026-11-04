@@ -666,6 +666,44 @@ describe("createShell", () => {
     expect(calls.controlSizes).toHaveLength(2);
   });
 
+  it("follows the host's resized frame in place while not the size owner", () => {
+    shell.showSession("s1", "build");
+    shell.ensureTerminal("s1", 80, 24);
+    handles[0]?.write(new TextEncoder().encode("kept"));
+    shell.sessionResized("s1", 120, 40);
+    // Resized in place: the same terminal, its content kept.
+    expect(handles).toHaveLength(1);
+    expect(handles[0]?.resizes).toEqual([{ cols: 120, rows: 40 }]);
+    expect(handles[0]?.written).toHaveLength(1);
+    // A snapshot at the new size does not remount.
+    shell.ensureTerminal("s1", 120, 40);
+    expect(handles).toHaveLength(1);
+    // Another session's frame changes nothing.
+    shell.sessionResized("s2", 90, 20);
+    expect(handles[0]?.resizes).toHaveLength(1);
+    expect(calls.controlSizes).toEqual([]);
+  });
+
+  it("turns the toggle off when another device takes the size over", () => {
+    shell.showSession("s1", "build");
+    shell.ensureTerminal("s1", 80, 24);
+    layOutPanel();
+    flipControlSize(true);
+    expect(calls.controlSizes).toEqual([{ cols: 50, rows: 20 }]);
+    // The host echoes this device's own size: nothing changes.
+    shell.sessionResized("s1", 50, 20);
+    expect(query<HTMLInputElement>("#term-control-size").checked).toBe(true);
+    // Another device asserts 120 × 40: let it, follow it, say so.
+    shell.sessionResized("s1", 120, 40);
+    expect(query<HTMLInputElement>("#term-control-size").checked).toBe(false);
+    expect(readControlSize("s1")).toBe(false);
+    expect(query(".term-size-note").textContent).toBe("Size taken over by another device.");
+    expect(query(".term-pane").hasAttribute("data-size-owner")).toBe(false);
+    expect(handles[0]?.resizes.at(-1)).toEqual({ cols: 120, rows: 40 });
+    vi.advanceTimersByTime(1000);
+    expect(calls.controlSizes).toHaveLength(1);
+  });
+
   it("re-asserts a remembered control-size toggle on mount", () => {
     writeControlSize("s1", true);
     shell.showSession("s1", "build");

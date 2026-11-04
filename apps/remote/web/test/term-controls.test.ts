@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { icon } from "../src/icons-dom.js";
 import {
   SIZE_DEBOUNCE_MS,
+  SIZE_TAKEN_NOTE,
   termControlsHtml,
   termSizeHtml,
   wireTermControls,
@@ -345,5 +346,67 @@ describe("control-size toggle", () => {
     globalThis.dispatchEvent(new Event("resize"));
     vi.advanceTimersByTime(SIZE_DEBOUNCE_MS * 2);
     expect(sent).toHaveLength(1);
+  });
+
+  const note = (): string => root.querySelector(".term-size-note")?.textContent ?? "";
+
+  it("follows the host's resized frame while off", () => {
+    controls.handleResized(120, 40);
+    expect(local).toEqual([{ cols: 120, rows: 40 }]);
+    expect(sent).toEqual([]);
+    expect(toggle().checked).toBe(false);
+  });
+
+  it("keeps the size when the host echoes this device's own", () => {
+    flip(true);
+    controls.handleResized(44, 19);
+    expect(toggle().checked).toBe(true);
+    expect(readControlSize("s1")).toBe(true);
+    expect(local).toEqual([{ cols: 44, rows: 19 }]);
+  });
+
+  it("never mistakes a slow echo of an older size for a takeover", () => {
+    flip(true);
+    view!.fits = { cols: 90, rows: 30 };
+    globalThis.dispatchEvent(new Event("resize"));
+    vi.advanceTimersByTime(SIZE_DEBOUNCE_MS);
+    expect(sent).toHaveLength(2);
+    // The host answers both, the older one first.
+    controls.handleResized(44, 19);
+    controls.handleResized(90, 30);
+    expect(toggle().checked).toBe(true);
+    expect(note()).not.toBe(SIZE_TAKEN_NOTE);
+  });
+
+  it("lets go without fighting when another device takes the size over", () => {
+    flip(true);
+    expect(sent).toEqual([{ cols: 44, rows: 19 }]);
+    controls.handleResized(120, 40);
+    // Off and remembered off, said in the note; the local terminal follows
+    // the new size and nothing is sent back.
+    expect(toggle().checked).toBe(false);
+    expect(readControlSize("s1")).toBe(false);
+    expect(view?.owner).toEqual([true, false]);
+    expect(note()).toBe(SIZE_TAKEN_NOTE);
+    expect(root.querySelector(".term-size-note")?.classList.contains("is-notice")).toBe(true);
+    expect(local.at(-1)).toEqual({ cols: 120, rows: 40 });
+    expect(sent).toEqual([{ cols: 44, rows: 19 }]);
+    // No longer watching: a panel change sends nothing.
+    globalThis.dispatchEvent(new Event("resize"));
+    vi.advanceTimersByTime(SIZE_DEBOUNCE_MS * 2);
+    expect(sent).toHaveLength(1);
+    // Taking it back clears the notice and asserts again.
+    flip(true);
+    expect(note()).toBe("Only one client should control the size.");
+    expect(sent).toHaveLength(2);
+  });
+
+  it("follows a resize that lands before its own first assert", () => {
+    const gated = new StubView({ cols: 50, rows: 20 }, false);
+    view = gated;
+    flip(true);
+    controls.handleResized(120, 40);
+    expect(toggle().checked).toBe(true);
+    expect(local).toEqual([{ cols: 120, rows: 40 }]);
   });
 });

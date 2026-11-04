@@ -37,6 +37,8 @@ export interface GuestView {
   showList: (notice?: string | null) => void;
   showSession: (id: string, name: string) => void;
   ensureTerminal: (id: string, cols: number, rows: number) => void;
+  /** The host resized the open session's PTY: follow it in place. */
+  sessionResized: (id: string, cols: number, rows: number) => void;
   writeTerminal: (data: Uint8Array) => void;
   clearTerminal: () => void;
   setSessionStatus: (status: string | null) => void;
@@ -303,6 +305,17 @@ export function createGuestView(
       sessionId = id;
       sessionName = name;
       paintSession();
+    },
+    sessionResized: (id: string, cols: number, rows: number) => {
+      if (route !== "session" || id !== sessionId || !terminalView) {
+        return;
+      }
+      // A guest never owns the size: it follows the host's in place, and a
+      // snapshot at that size later does not remount.
+      if (terminalView.resize(cols, rows)) {
+        sessionCols = cols;
+        sessionRows = rows;
+      }
     },
     ensureTerminal: (id: string, cols: number, rows: number) => {
       if (route !== "session" || id !== sessionId) {

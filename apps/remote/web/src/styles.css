@@ -721,6 +721,12 @@ label > textarea {
   color: var(--muted);
 }
 
+/* Another device took the size over: the note says so in the ink colour
+ * (the words carry it, the colour only lifts it off the muted line). */
+.term-size-note.is-notice {
+  color: var(--ink);
+}
+
 /* Ten keys, all visible: two rows of five equal-width touch targets.
  * The bar is one info block; the keys inside stay flat so the tint
  * reads once. */

@@ -24,6 +24,7 @@ interface Harness {
   controller: SessionController;
   written: Uint8Array[];
   terminals: { id: string; cols: number; rows: number }[];
+  resizes: { id: string; cols: number; rows: number }[];
   exits: number[];
   spawned: { req: string; id: string }[];
   composed: { req: string; text: string }[];
@@ -38,6 +39,7 @@ function setup(onForbidden?: (id: string | null) => void, shelf?: ShelfFrames): 
   const catalog = new CatalogStore();
   const written: Uint8Array[] = [];
   const terminals: Harness["terminals"] = [];
+  const resizes: Harness["resizes"] = [];
   const exits: number[] = [];
   const spawned: Harness["spawned"] = [];
   const composed: Harness["composed"] = [];
@@ -47,6 +49,9 @@ function setup(onForbidden?: (id: string | null) => void, shelf?: ShelfFrames): 
   const shell = {
     ensureTerminal: (id: string, cols: number, rows: number) => {
       terminals.push({ id, cols, rows });
+    },
+    sessionResized: (id: string, cols: number, rows: number) => {
+      resizes.push({ id, cols, rows });
     },
     showSessionExited: (code: number) => {
       exits.push(code);
@@ -92,6 +97,7 @@ function setup(onForbidden?: (id: string | null) => void, shelf?: ShelfFrames): 
     controller,
     written,
     terminals,
+    resizes,
     exits,
     spawned,
     composed,
@@ -253,6 +259,39 @@ describe("createFrameRouter", () => {
     // An old host says nothing: everything is offered again.
     h.hostSend({ t: "hello", features: [] });
     expect(h.catalog.availableClis.map((cli) => cli.cli)).toEqual(["muse", "opencode"]);
+  });
+
+  it("routes the attached session's resized frame to the shell, only that one", () => {
+    const h = setup();
+    // Nothing attached: dropped.
+    h.hostSend({ t: "resized", id: "s1", cols: 100, rows: 30 });
+    expect(h.resizes).toEqual([]);
+    h.controller.open("s1");
+    h.hostSend({ t: "resized", id: "s1", cols: 100, rows: 30 });
+    h.hostSend({ t: "resized", id: "s2", cols: 90, rows: 20 });
+    // Malformed: dropped like an unknown frame, never an error.
+    h.hostSend({ t: "resized", id: "s1", cols: 0, rows: 30 });
+    h.hostSend({ t: "resized", id: "s1", cols: "100", rows: 30 });
+    expect(h.resizes).toEqual([{ id: "s1", cols: 100, rows: 30 }]);
+    expect(h.sheetErrors).toEqual([]);
+  });
+
+  it("drops resized for a shell that does not follow it", () => {
+    const h = setup();
+    const bare = createFrameRouter({
+      store: h.store,
+      controller: h.controller,
+      catalog: h.catalog,
+      shell: {
+        ensureTerminal: () => {},
+        sheetSpawned: () => {},
+        sheetComposed: () => {},
+        sheetOk: () => {},
+        sheetError: () => {},
+      },
+    });
+    h.controller.open("s1");
+    expect(() => bare.handleFrame({ t: "resized", id: "s1", cols: 100, rows: 30 })).not.toThrow();
   });
 
   it("ignores unknown frames without throwing", () => {
