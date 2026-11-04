@@ -278,9 +278,11 @@ describe.each(["horizontal", "vertical"] as const)("canopy-builder %s", (orienta
 
 describe("no-handler plates", () => {
   it("keeps a handler-free svg byte-identical", async () => {
+    // Re-pinned when the fail arcs' rise moved into the shifted viewBox
+    // coordinates and the bounds took the arcs' drawn apex.
     const svg = renderPlate(qualityBubble as unknown as GraphDocument);
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(svg));
     const hex = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-    expect(hex).toBe("1c9a793e36ad803b7f30908e96a7b86250a70bc851c5faa60758f90499241409");
+    expect(hex).toBe("c42b44147641124a9264d8a5dbe29a150185227696f8daead66a36f9ebe3c4b9");
   });
 });

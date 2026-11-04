@@ -11,6 +11,8 @@ import helloGraph from "./fixtures/graphs/hello-graph/graph.json" with { type: "
 import qualityBubble from "./fixtures/graphs/quality-bubble/graph.json" with { type: "json" };
 import singleCommitter from "./fixtures/graphs/single-committer/graph.json" with { type: "json" };
 import specLoop from "./fixtures/graphs/spec-loop/graph.json" with { type: "json" };
+import canopyBuilder from "./fixtures/graphs/canopy-builder/graph.json" with { type: "json" };
+import adversarialDeveloper from "./fixtures/graphs/adversarial-developer/graph.json" with { type: "json" };
 import reviewPanel from "./fixtures/patterns/review-panel.figure.json" with { type: "json" };
 import resilientMembers from "./fixtures/patterns/resilient-members.figure.json" with { type: "json" };
 import {
@@ -22,6 +24,8 @@ import { renderNodePlate, renderPlate } from "../../../packages/plate/render.js"
 import { PLATE_SCALE, layoutPlate } from "../../../packages/plate/layout.js";
 import { layoutPlateVertical } from "../../../packages/plate/vertical.js";
 import { mulberry32 } from "../../../packages/plate/walk.js";
+import { cubicExtent } from "../../../packages/plate/vocabulary.js";
+import { BUNDLED_PATTERNS } from "../src/patterns-data.generated.js";
 import { ROUND_ROBIN_GRAPH, TUI_POLISH_GRAPH, sixtyNodeGraph } from "./plate-fixture.js";
 
 const GRAPHS: Array<[string, GraphDocument]> = [
@@ -417,6 +421,91 @@ describe("plate centring", () => {
     for (const node of layout?.nodes ?? []) {
       expect(node.x).toBe((layout?.width ?? 0) / 2);
     }
+  });
+});
+
+/**
+ * The extent a drawn path actually reaches: its absolute M, L and C
+ * segments, each cubic by its real turning points rather than its controls.
+ */
+function pathExtent(d: string): { minX: number; maxX: number; minY: number; maxY: number } {
+  const extent = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+  const take = (x0: number, x1: number, y0: number, y1: number): void => {
+    extent.minX = Math.min(extent.minX, x0);
+    extent.maxX = Math.max(extent.maxX, x1);
+    extent.minY = Math.min(extent.minY, y0);
+    extent.maxY = Math.max(extent.maxY, y1);
+  };
+  let pen = { x: 0, y: 0 };
+  for (const match of d.matchAll(/([MLC])([^MLC]*)/g)) {
+    const values = (match[2] ?? "").trim().split(/[\s,]+/).filter((v) => v !== "").map(Number);
+    if (match[1] === "C") {
+      for (let i = 0; i + 5 < values.length; i += 6) {
+        const [x1, y1, x2, y2, x, y] = values.slice(i, i + 6) as [number, number, number, number, number, number];
+        const xs = cubicExtent(pen.x, x1, x2, x);
+        const ys = cubicExtent(pen.y, y1, y2, y);
+        take(xs.min, xs.max, ys.min, ys.max);
+        pen = { x, y };
+      }
+    } else {
+      for (let i = 0; i + 1 < values.length; i += 2) {
+        pen = { x: values[i] ?? 0, y: values[i + 1] ?? 0 };
+        take(pen.x, pen.x, pen.y, pen.y);
+      }
+    }
+  }
+  return extent;
+}
+
+describe("plate bounds", () => {
+  const documents: Array<[string, GraphDocument]> = [
+    ...GRAPHS,
+    ["canopy-builder", canopyBuilder as unknown as GraphDocument],
+    ["adversarial-developer", adversarialDeveloper as unknown as GraphDocument],
+    ["round-robin", ROUND_ROBIN_GRAPH],
+    ...BUNDLED_PATTERNS.map((pattern): [string, GraphDocument] => [
+      `pattern ${pattern.slug}`,
+      JSON.parse(pattern.figure) as GraphDocument,
+    ]),
+  ];
+
+  it("cubicExtent reaches an arc's apex, a quarter below its controls", () => {
+    expect(cubicExtent(40, 0, 0, 40)).toEqual({ min: 10, max: 40 });
+    expect(cubicExtent(0, 1, 2, 3)).toEqual({ min: 0, max: 3 });
+  });
+
+  for (const orientation of ["horizontal", "vertical"] as const) {
+    it(`keeps every edge and the walk inside the ${orientation} viewBox, fail arcs included`, () => {
+      for (const [name, document] of documents) {
+        const layout = orientation === "horizontal"
+          ? layoutPlate(document, mulberry32(7))
+          : layoutPlateVertical(document, mulberry32(7));
+        expect(layout, name).not.toBeNull();
+        if (layout === null) {
+          continue;
+        }
+        const paths = [
+          ...layout.edges.map((edge) => [`${edge.from}→${edge.to}`, edge.d] as const),
+          ...(layout.walk === null ? [] : [["walk", layout.walk] as const]),
+        ];
+        for (const [label, d] of paths) {
+          const reach = pathExtent(d);
+          const where = `${name} ${orientation} ${label}: ${d}`;
+          expect(reach.minX, where).toBeGreaterThanOrEqual(0);
+          expect(reach.minY, where).toBeGreaterThanOrEqual(0);
+          expect(reach.maxX, where).toBeLessThanOrEqual(layout.width);
+          expect(reach.maxY, where).toBeLessThanOrEqual(layout.height);
+        }
+      }
+    });
+  }
+
+  it("canopy-builder: the highest fail arc tops out one padding below the viewBox top", () => {
+    const layout = layoutPlate(canopyBuilder);
+    const top = Math.min(
+      ...(layout?.edges ?? []).filter((edge) => edge.cls === "fail").map((edge) => pathExtent(edge.d).minY),
+    );
+    expect(top).toBeCloseTo(10, 0);
   });
 });
 

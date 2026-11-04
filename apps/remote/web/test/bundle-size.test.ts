@@ -116,6 +116,15 @@ const UPLOAD_BUDGET = 4_096;
  */
 const SHELF_DELETE_BUDGET = 1_024;
 /**
+ * Allowance for the plate's arc bounds (cubicExtent, and the arrowhead end
+ * measured before the shift so the fail arcs stay inside the viewBox):
+ * measured +237 B gzip over the pre-change main (167 968 → 168 205), JS
+ * only. Added in the fix commit like SHELF_DELETE_BUDGET: the 102-byte
+ * headroom could not hold any bounds that read the drawn curve, and the
+ * shared plate code rides the main bundle.
+ */
+const ARC_BOUNDS_BUDGET = 512;
+/**
  * Allowance for merging the two parallel branches of the first release: each
  * measured its budgets over the same base, so both spent the same headroom.
  * Merged, main is 410 B gzip over the sum of those budgets, with no new code.
@@ -244,6 +253,7 @@ describe("the remote's bundle", () => {
         BAND_BUDGET +
         UPLOAD_BUDGET +
         SHELF_DELETE_BUDGET +
+        ARC_BOUNDS_BUDGET +
         MERGE_BUDGET +
         CONTROL_SIZE_BUDGET +
         RESIZED_BUDGET,

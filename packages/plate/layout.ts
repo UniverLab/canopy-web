@@ -46,7 +46,7 @@ import {
 } from "./lane.js";
 import { rankUnits } from "./rank.js";
 import { generateWalk, happyRandom, plateWalk, type WalkFail } from "./walk.js";
-import { GEOM, edgePath, num, nodeBox, shortenEdgeEnd, smooth, type Pt } from "./vocabulary.js";
+import { GEOM, cubicExtent, edgePath, num, nodeBox, shortenEdgeEnd, smooth, type Pt } from "./vocabulary.js";
 import {
   GROUP_CHAR,
   GROUP_FOOT,
@@ -494,6 +494,32 @@ export function layoutPlate(document: unknown, random: () => number = happyRando
   );
   const lifts = new Map<RawEdge, number>(orderedRaw.map((edge) => [edge, liftOf(edge)]));
 
+  // Arrowhead tips land on the target border: node endpoints sit on
+  // centres, so both branches shorten; group endpoints already sit on the
+  // box border, except arcs, whose -3 end dives inside the box. Sizes only,
+  // so the end is the same before and after the shift into the viewBox.
+  const targetOf = new Map<string, { hx: number; hy: number; group: boolean }>();
+  for (const node of nodes) {
+    const rot = GEOM[node.shape].rot !== 0;
+    targetOf.set(node.name, {
+      hx: ((rot ? node.w * Math.SQRT2 : node.w) / 2),
+      hy: ((rot ? node.h * Math.SQRT2 : node.h) / 2),
+      group: false,
+    });
+  }
+  for (const group of groups) {
+    targetOf.set(group.name, { hx: group.w / 2, hy: group.h / 2, group: true });
+  }
+  const drawnEnd = (edge: RawEdge, a: Pt, b: Pt): Pt => {
+    const target = edge.cls === "order" ? undefined : targetOf.get(edge.to);
+    if (target === undefined || (target.group && !arcs(edge))) {
+      return b;
+    }
+    return arcs(edge)
+      ? shortenEdgeEnd(a, b, target.hy, "y", 1, 3)
+      : shortenEdgeEnd(a, b, target.hx, "x", null, 0);
+  };
+
   // Bounds: shapes, group outlines, labels, fail-arc tops, marks, buses,
   // done terminals and lane routes — the viewBox grows around all of them,
   // then everything shifts into positive space.
@@ -544,10 +570,15 @@ export function layoutPlate(document: unknown, random: () => number = happyRando
       }
     }
   }
+  // An arc bounds by the curve it draws — from its start to its shortened
+  // end through the rise — not by its control points, and in the same
+  // design coordinates as everything else here.
   for (const edge of raw) {
     if (arcs(edge)) {
       const rise = arcRise(edge.a, edge.b, lifts.get(edge) ?? 0);
-      minY = Math.min(minY, rise, edge.a.y - 3, edge.b.y - 3);
+      const end = drawnEnd(edge, edge.a, edge.b);
+      const reach = cubicExtent(edge.a.y - 3, rise, rise, end.y - 3);
+      span(Math.min(edge.a.x, end.x), Math.max(edge.a.x, end.x), reach.min, reach.max);
     }
   }
   if (!Number.isFinite(minX)) {
@@ -612,33 +643,15 @@ export function layoutPlate(document: unknown, random: () => number = happyRando
       laneEdges.push({ from: route.from, to: route.to, cls: route.cls, d: smooth(lanePath(points)) });
     }
   }
-  const targetOf = new Map<string, { hx: number; hy: number; group: boolean }>();
-  for (const node of nodes) {
-    const rot = GEOM[node.shape].rot !== 0;
-    targetOf.set(node.name, {
-      hx: ((rot ? node.w * Math.SQRT2 : node.w) / 2),
-      hy: ((rot ? node.h * Math.SQRT2 : node.h) / 2),
-      group: false,
-    });
-  }
-  for (const group of groups) {
-    targetOf.set(group.name, { hx: group.w / 2, hy: group.h / 2, group: true });
-  }
+  // The rise is measured in design coordinates, against mainTop; the paths
+  // are drawn after the shift, so the rise shifts with them. Unshifted, it
+  // put every arc's top `dy` above the bounds, outside the viewBox.
+  const riseAt = (edge: RawEdge): number => num(arcRise(edge.a, edge.b, lifts.get(edge) ?? 0) + dy);
   const edges: PlacedEdge[] = [
     ...raw.map((edge) => {
       const a = shift(edge.a);
-      const b = shift(edge.b);
-      // Arrowhead tips land on the target border: node endpoints sit on
-      // centres, so both branches shorten; group endpoints already sit on
-      // the box border, except arcs, whose -3 end dives inside the box.
-      const target = edge.cls === "order" ? undefined : targetOf.get(edge.to);
+      const end = drawnEnd(edge, a, shift(edge.b));
       const arc = arcs(edge);
-      let end = b;
-      if (target !== undefined && (!target.group || arc)) {
-        end = arc
-          ? shortenEdgeEnd(a, b, target.hy, "y", 1, 3)
-          : shortenEdgeEnd(a, b, target.hx, "x", null, 0);
-      }
       return {
         from: edge.from,
         to: edge.to,
@@ -650,7 +663,7 @@ export function layoutPlate(document: unknown, random: () => number = happyRando
             edge.cls === "fail",
             lifts.get(edge) ?? 0,
             arc,
-            arc ? arcRise(edge.a, edge.b, lifts.get(edge) ?? 0) : undefined,
+            arc ? riseAt(edge) : undefined,
           ),
         ),
       };
@@ -680,7 +693,7 @@ export function layoutPlate(document: unknown, random: () => number = happyRando
       failStyle.set(key, {
         lift,
         forceArc: edge.forceArc,
-        rise: arcs(edge) ? arcRise(edge.a, edge.b, lift) : undefined,
+        rise: arcs(edge) ? riseAt(edge) : undefined,
       });
     }
   }
