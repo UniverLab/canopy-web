@@ -118,6 +118,46 @@ export function edgePath(a: Pt, b: Pt, fail: boolean, lift = 0, forceArc = false
   return `M${a.x} ${a.y - 3} C${a.x} ${top} ${b.x} ${top} ${b.x} ${b.y - 3}`;
 }
 
+/**
+ * The extent one axis of a cubic Bézier actually reaches, from its four
+ * coordinates on that axis: the endpoints and any interior turning point.
+ * A curve stays inside its control hull but rarely touches it, so bounds
+ * read this instead of the control points — an arc's apex sits a quarter
+ * of its height below its controls.
+ */
+export function cubicExtent(p0: number, p1: number, p2: number, p3: number): { min: number; max: number } {
+  let min = Math.min(p0, p3);
+  let max = Math.max(p0, p3);
+  const at = (t: number): number => {
+    const u = 1 - t;
+    return u * u * u * p0 + 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t * p3;
+  };
+  const take = (t: number): void => {
+    if (t > 0 && t < 1) {
+      const value = at(t);
+      min = Math.min(min, value);
+      max = Math.max(max, value);
+    }
+  };
+  // The derivative over 3: a t² + b t + c.
+  const a = -p0 + 3 * p1 - 3 * p2 + p3;
+  const b = 2 * (p0 - 2 * p1 + p2);
+  const c = p1 - p0;
+  if (Math.abs(a) < 1e-12) {
+    if (Math.abs(b) > 1e-12) {
+      take(-c / b);
+    }
+    return { min, max };
+  }
+  const disc = b * b - 4 * a * c;
+  if (disc >= 0) {
+    const root = Math.sqrt(disc);
+    take((-b + root) / (2 * a));
+    take((-b - root) / (2 * a));
+  }
+  return { min, max };
+}
+
 /** A node's drawn half extents: a rotated gate's bounding box is the wider one. */
 export function nodeBox(node: { shape: Kind; w: number; h: number }): { hw: number; hh: number } {
   const rot = GEOM[node.shape].rot !== 0;

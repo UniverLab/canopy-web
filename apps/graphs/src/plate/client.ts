@@ -130,6 +130,9 @@ function mountFigure(figure: HTMLElement): void {
   figure.classList.add("is-live");
   svg.style.width = `${content.w}px`;
   svg.style.height = `${content.h}px`;
+  // The drawing's proportions, for the one-column layout's viewport height
+  // (look.ts): full width, as tall as the fitted drawing within its bounds.
+  figure.style.setProperty("--plate-ratio", `${content.w} / ${content.h}`);
   const viewer: Viewer = {
     figure,
     svg,

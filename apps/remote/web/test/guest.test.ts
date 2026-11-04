@@ -2,12 +2,14 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { b64decode, b64encode, generateDeviceKey, importSpkiVerifyKey } from "../src/crypto.js";
 import type { DeviceKey } from "../src/crypto.js";
-import { GuestPeer, createGuestSession, guestRelayUrl, parseGuestLink } from "../src/guest.js";
+import { GuestPeer, createGuestSession, guestRelayUrl, mountGuest, parseGuestLink } from "../src/guest.js";
+import type { GuestMountDeps } from "../src/guest.js";
+import { INVITE_FORMAT_ERROR, INVITE_REFUSED_MESSAGE, INVITE_SPENT_MESSAGE } from "../src/guest-invite.js";
 import type { GuestHostRecord } from "../src/guest-store.js";
 import { guestHostKey } from "../src/guest-store.js";
 import { connectFailMessage } from "../src/peer.js";
 import type { PeerEvent } from "../src/peer.js";
-import { defaultRelayUrl } from "../src/relay.js";
+import { RelaySocket, defaultRelayUrl } from "../src/relay.js";
 import type { TerminalFactory, TerminalHandle } from "../src/terminal.js";
 import {
   connectRelay,
@@ -15,12 +17,14 @@ import {
   createRelayHarness,
   createTestHost,
   createTurnFetcher,
+  FakeStorage,
+  FakeWebSocket,
   flush,
   signTestAnswer,
   textOf,
   waitForSend,
 } from "./fakes.js";
-import type { FakeWebSocket, PeerHarness, RelayHarness, TestHost } from "./fakes.js";
+import type { PeerHarness, RelayHarness, TestHost } from "./fakes.js";
 
 const ANSWER_SDP = "v=0\r\no=- 9 9 IN IP4 127.0.0.1\r\n";
 const OWNER_UID = 7;
@@ -60,8 +64,17 @@ describe("parseGuestLink", () => {
 });
 
 describe("guestRelayUrl", () => {
-  it("is the device door with the owner as guest_of", () => {
-    expect(guestRelayUrl(OWNER_UID)).toBe(`${defaultRelayUrl()}?guest_of=${OWNER_UID}`);
+  it("is the device door with the owner as guest_of and the invite code", () => {
+    expect(guestRelayUrl(OWNER_UID, "CNR-7K3Q-HM9P-2XAB-CDEF")).toBe(
+      `${defaultRelayUrl()}?guest_of=${OWNER_UID}&invite=CNR-7K3Q-HM9P-2XAB-CDEF`,
+    );
+  });
+
+  it("encodes the code as one query value", () => {
+    const url = new URL(guestRelayUrl(OWNER_UID, "a&b=c d#e"));
+    expect(url.searchParams.get("guest_of")).toBe(String(OWNER_UID));
+    expect(url.searchParams.get("invite")).toBe("a&b=c d#e");
+    expect(url.hash).toBe("");
   });
 });
 
@@ -561,5 +574,223 @@ describe("createGuestSession", () => {
     session.push(JSON.stringify({ t: "snapshot", id: "s1", cols: 80, rows: 24, seq: 9, data: full }));
     session.push(JSON.stringify({ t: "snapshot_more", id: "s1", data: "", last: true }));
     expect(textOf(collected)).toBe("fresh");
+  });
+});
+
+describe("mountGuest", () => {
+  const CODE = "CNR-7K3Q-HM9P-2XAB-CDEF";
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  interface Mounted {
+    root: HTMLElement;
+    sockets: FakeWebSocket[];
+    storage: FakeStorage;
+    replaced: (string | undefined)[];
+    host: TestHost;
+    device: DeviceKey;
+    peerHarness: PeerHarness;
+    done: Promise<void>;
+  }
+
+  async function mount(options: {
+    hash?: string;
+    stored?: string;
+    login?: string | null;
+    online?: boolean;
+  }): Promise<Mounted> {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    const host = await createTestHost();
+    const device = await generateDeviceKey();
+    const sockets: FakeWebSocket[] = [];
+    const storage = new FakeStorage();
+    const pathname = `/g/${OWNER_UID}/${host.record.host_id}`;
+    if (options.stored !== undefined) {
+      storage.setItem(`canopy.remote.invite:${OWNER_UID}/${host.record.host_id}`, options.stored);
+    }
+    const location = { pathname, search: "", hash: options.hash ?? "" };
+    const replaced: (string | undefined)[] = [];
+    const peerHarness = createPeerHarness();
+    const pins = new Map<string, GuestHostRecord>();
+    const deps: Partial<GuestMountDeps> = {
+      location,
+      history: {
+        replaceState: (_data, _unused, url) => {
+          replaced.push(url);
+          location.hash = "";
+        },
+      },
+      storage,
+      fetchLogin: async () => (options.login === undefined ? "bob" : options.login),
+      signOut: async () => {},
+      ensureDeviceKey: async () => device,
+      clearDevice: async () => {},
+      createRelay: (url) =>
+        new RelaySocket(url, (openUrl) => {
+          const ws = new FakeWebSocket(openUrl);
+          sockets.push(ws);
+          return ws as unknown as WebSocket;
+        }),
+      isOnline: () => options.online ?? true,
+      peer: {
+        fetchTurn: createTurnFetcher(true).fetchTurn,
+        createConnection: peerHarness.factory,
+        nowMs: () => 1793100000_000,
+        getPin: async (ownerUid, hostId) => pins.get(guestHostKey(ownerUid, hostId)) ?? null,
+        savePin: async (record) => {
+          pins.set(record.key, record);
+        },
+      },
+    };
+    const done = mountGuest(root, deps);
+    return { root, sockets, storage, replaced, host, device, peerHarness, done };
+  }
+
+  async function until(check: () => boolean): Promise<void> {
+    for (let i = 0; i < 200 && !check(); i += 1) {
+      await flush();
+    }
+    expect(check()).toBe(true);
+  }
+
+  function inviteKey(m: Mounted): string {
+    return `canopy.remote.invite:${OWNER_UID}/${m.host.record.host_id}`;
+  }
+
+  function submit(m: Mounted, value: string): void {
+    const input = m.root.querySelector<HTMLInputElement>("#guest-invite-code");
+    if (!input) {
+      throw new Error("no invite field");
+    }
+    input.value = value;
+    m.root.querySelector<HTMLFormElement>("#guest-invite-form")?.requestSubmit();
+  }
+
+  it("takes the fragment's code, strips it and opens the door with the canonical form", async () => {
+    const m = await mount({ hash: "#invite=cnr7k3qhm9p2xabcdef" });
+    // Stripped before anything else ran: path only, no fragment.
+    expect(m.replaced).toEqual([`/g/${OWNER_UID}/${m.host.record.host_id}`]);
+    expect(m.storage.getItem(inviteKey(m))).toBe(CODE);
+    await until(() => m.sockets.length === 1);
+    expect(m.sockets[0]?.url).toBe(`${defaultRelayUrl()}?guest_of=${OWNER_UID}&invite=${CODE}`);
+    m.sockets[0]?.fail();
+    await m.done;
+  });
+
+  it("asks for the code when the link carries none, and validates it", async () => {
+    const m = await mount({});
+    await m.done;
+    const input = m.root.querySelector<HTMLInputElement>("#guest-invite-code");
+    expect(input).not.toBeNull();
+    expect(input?.closest("label")?.textContent).toContain("Invite code");
+    expect(input?.getAttribute("aria-describedby")).toBe("guest-invite-hint guest-invite-error");
+    expect(m.sockets).toHaveLength(0);
+    // Not a code: the error is tied to the field and nothing is sent.
+    submit(m, "CNR-7K3Q");
+    const error = m.root.querySelector<HTMLElement>("#guest-invite-error");
+    expect(error?.hidden).toBe(false);
+    expect(error?.getAttribute("role")).toBe("alert");
+    expect(error?.textContent).toBe(INVITE_FORMAT_ERROR);
+    expect(input?.getAttribute("aria-invalid")).toBe("true");
+    expect(m.sockets).toHaveLength(0);
+    // Typed lowercase with spaces: sent canonical, kept for the tab.
+    submit(m, "7k3q hm9p 2xab cdef");
+    await until(() => m.sockets.length === 1);
+    expect(new URL(m.sockets[0]?.url ?? "").searchParams.get("invite")).toBe(CODE);
+    expect(m.storage.getItem(inviteKey(m))).toBe(CODE);
+    m.sockets[0]?.fail();
+    await until(() => m.root.querySelector("#guest-invite-notice") !== null);
+  });
+
+  it("reconnects in the same tab with the stored code, no form", async () => {
+    const m = await mount({ stored: CODE });
+    await until(() => m.sockets.length === 1);
+    expect(new URL(m.sockets[0]?.url ?? "").searchParams.get("invite")).toBe(CODE);
+    expect(m.root.querySelector("#guest-invite-form")).toBeNull();
+    m.sockets[0]?.fail();
+    await m.done;
+  });
+
+  it("turns a refused door (bad_invite) into the form again, prefilled, never 'no longer paired'", async () => {
+    const m = await mount({ stored: CODE });
+    await until(() => m.sockets.length === 1);
+    // The relay answers 403 bad_invite: the browser sees only a close
+    // before the socket ever opened.
+    m.sockets[0]?.fail();
+    await m.done;
+    const notice = m.root.querySelector("#guest-invite-notice");
+    expect(notice?.textContent).toBe(INVITE_REFUSED_MESSAGE);
+    expect(notice?.getAttribute("role")).toBe("alert");
+    expect(m.root.textContent).not.toContain("no longer paired");
+    expect(m.root.querySelector<HTMLInputElement>("#guest-invite-code")?.value).toBe(CODE);
+    // The refused code leaves the tab; a fresh one opens a fresh door.
+    expect(m.storage.getItem(inviteKey(m))).toBeNull();
+    submit(m, "CNR-1111-0000-1111-0000");
+    await until(() => m.sockets.length === 2);
+    expect(new URL(m.sockets[1]?.url ?? "").searchParams.get("invite")).toBe("CNR-1111-0000-1111-0000");
+    m.sockets[1]?.fail();
+    await until(() => m.root.querySelector("#guest-invite-notice") !== null);
+  });
+
+  it("keeps the code and says the relay is unreachable when the browser is offline", async () => {
+    const m = await mount({ stored: CODE, online: false });
+    await until(() => m.sockets.length === 1);
+    m.sockets[0]?.fail();
+    await m.done;
+    expect(m.root.querySelector("#guest-invite-form")).toBeNull();
+    expect(m.root.textContent).toContain("Could not reach the relay");
+    expect(m.storage.getItem(inviteKey(m))).toBe(CODE);
+  });
+
+  it("prefills a malformed fragment code with a notice instead of connecting", async () => {
+    const m = await mount({ hash: "#invite=CNR-7K3Q" });
+    await m.done;
+    expect(m.replaced).toHaveLength(1);
+    expect(m.sockets).toHaveLength(0);
+    expect(m.root.querySelector("#guest-invite-notice")?.textContent).toContain("malformed");
+    expect(m.root.querySelector<HTMLInputElement>("#guest-invite-code")?.value).toBe("CNR-7K3Q");
+  });
+
+  it("keeps the fragment's code through the sign-in gate", async () => {
+    const m = await mount({ hash: `#invite=${CODE}`, login: null });
+    await m.done;
+    expect(m.replaced).toHaveLength(1);
+    expect(m.storage.getItem(inviteKey(m))).toBe(CODE);
+    expect(m.root.querySelector("#signin-go")).not.toBeNull();
+    expect(m.sockets).toHaveLength(0);
+  });
+
+  it("says the code is spent when the door refuses it after the host let this tab in", async () => {
+    const m = await mount({ stored: CODE });
+    await until(() => m.sockets.length === 1);
+    const ws = m.sockets[0] as FakeWebSocket;
+    ws.open();
+    await waitForSend(ws);
+    const offer = ws.envelopes().find((e) => e.body.t === "offer");
+    const offerSig = (offer?.body as { sig: string }).sig;
+    const sig = await signTestAnswer(m.host.privateKey, m.device.deviceId, offerSig, ANSWER_SDP);
+    ws.receive(`h:${m.host.record.host_id}`, {
+      t: "answer",
+      sdp: ANSWER_SDP,
+      sig,
+      host_spki: m.host.record.host_spki,
+    });
+    await until(() => m.peerHarness.latest().remoteDescription !== null);
+    m.peerHarness.latest().firstChannel().remoteOpen();
+    await m.done;
+    await until(() => m.root.querySelector("#guest-list") !== null);
+    // The peer and the relay socket drop; Retry finds the door shut: the
+    // first accepted offer burned the code.
+    m.peerHarness.latest().firstChannel().close();
+    ws.close(1006);
+    await until(() => m.root.querySelector("#guest-retry") !== null);
+    m.root.querySelector<HTMLButtonElement>("#guest-retry")?.click();
+    await until(() => m.sockets.length === 2);
+    m.sockets[1]?.fail();
+    await until(() => m.root.querySelector("#guest-invite-notice") !== null);
+    expect(m.root.querySelector("#guest-invite-notice")?.textContent).toBe(INVITE_SPENT_MESSAGE);
   });
 });

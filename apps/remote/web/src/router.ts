@@ -24,6 +24,7 @@ import {
   parseHello,
   parseOk,
   parseOut,
+  parseResized,
   parseSessionAdded,
   parseSessionRemoved,
   parseSessions,
@@ -48,6 +49,8 @@ export interface FrameRouter {
  */
 export interface RouterShell {
   ensureTerminal: (id: string, cols: number, rows: number) => void;
+  /** The open session's PTY size changed on the host (a `resized` frame). */
+  sessionResized?: (id: string, cols: number, rows: number) => void;
   sheetSpawned: (req: string, id: string) => void;
   sheetComposed: (req: string, text: string) => void;
   sheetOk: (req: string) => void;
@@ -102,6 +105,14 @@ export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
     const out = parseOut(frame);
     if (out) {
       controller.handleOut(out);
+      return;
+    }
+    // Only the attached session's size matters; any other is dropped.
+    const resized = parseResized(frame);
+    if (resized) {
+      if (controller.sessionId === resized.id) {
+        shell.sessionResized?.(resized.id, resized.cols, resized.rows);
+      }
       return;
     }
     // Graph watching: the list, the watch reply (summary + drawing) and

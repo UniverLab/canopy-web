@@ -53,3 +53,90 @@ export function redirectUnknownRoute(
   history.replaceState(null, "", homeHref(location));
   return true;
 }
+
+/** Where a guest link waits out the GitHub sign-in round trip (this tab). */
+export const GUEST_RETURN_KEY = "canopy.remote.guestReturn";
+/** A remembered guest link older than this is ignored: 15 minutes. */
+export const GUEST_RETURN_TTL_MS = 15 * 60 * 1000;
+const GUEST_PATH = /^\/g\/[1-9][0-9]*\/[0-9a-f]{16}\/?$/;
+
+/** The sessionStorage slice the return trip needs. */
+export interface ReturnStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+function sessionStore(): ReturnStorage | null {
+  try {
+    return globalThis.sessionStorage ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Remember the guest link this tab signs in from: the OAuth callback
+ * lands on `/`, which would otherwise drop the guest on the pairing form.
+ * Only the pathname is kept; the invite code has its own tab-only slot.
+ */
+export function rememberGuestReturn(
+  pathname: string,
+  nowMs = Date.now(),
+  storage: ReturnStorage | null = sessionStore(),
+): void {
+  if (!GUEST_PATH.test(pathname)) {
+    return;
+  }
+  try {
+    storage?.setItem(GUEST_RETURN_KEY, JSON.stringify({ path: pathname, at: nowMs }));
+  } catch {
+    // Without storage the guest opens the link again after signing in.
+  }
+}
+
+/**
+ * Back from sign-in at `/`: rewrite the URL to the remembered guest link,
+ * in place, and forget it. True when it did. A stale, malformed or absent
+ * entry changes nothing (and a stale or malformed one is dropped).
+ */
+export function resumeGuestReturn(
+  location: { pathname: string },
+  history: { replaceState(data: unknown, unused: string, url?: string): void },
+  nowMs = Date.now(),
+  storage: ReturnStorage | null = sessionStore(),
+): boolean {
+  if (location.pathname !== "/") {
+    return false;
+  }
+  let raw: string | null;
+  try {
+    raw = storage?.getItem(GUEST_RETURN_KEY) ?? null;
+    if (raw !== null) {
+      storage?.removeItem(GUEST_RETURN_KEY);
+    }
+  } catch {
+    return false;
+  }
+  if (raw === null) {
+    return false;
+  }
+  let entry: unknown;
+  try {
+    entry = JSON.parse(raw);
+  } catch {
+    return false;
+  }
+  const { path, at } = (entry ?? {}) as { path?: unknown; at?: unknown };
+  if (
+    typeof path !== "string" ||
+    !GUEST_PATH.test(path) ||
+    typeof at !== "number" ||
+    nowMs - at < 0 ||
+    nowMs - at > GUEST_RETURN_TTL_MS
+  ) {
+    return false;
+  }
+  history.replaceState(null, "", path);
+  return true;
+}

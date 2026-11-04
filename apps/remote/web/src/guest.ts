@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-// The guest side of a /g/<owner_uid>/<host_id> link: GitHub sign-in
-// through the existing app, a guest relay socket into the owner's room, a
-// TOFU WebRTC handshake with the named host, and the shared session list.
+// The guest side of a /g/<owner_uid>/<host_id>#invite=<code> link: GitHub
+// sign-in through the existing app, the host-issued invite code (from the
+// fragment, or typed into a form), a guest relay socket into the owner's
+// room opened with that code, a TOFU WebRTC handshake with the named host,
+// and the shared session list.
 // The hub authorizes everything from the relayed GitHub identity: this
 // side only renders what arrives and fails closed on forbidden.
 
@@ -21,6 +23,16 @@ import type { DeviceKey } from "./crypto.js";
 import { getGuestHost, guestHostKey, saveGuestHost } from "./guest-store.js";
 import type { GuestHostRecord } from "./guest-store.js";
 import { guardGuestSend } from "./guest-guard.js";
+import {
+  INVITE_REFUSED_MESSAGE,
+  INVITE_SPENT_MESSAGE,
+  canonicalInviteCode,
+  forgetInvite,
+  loadInvite,
+  saveInvite,
+  takeInviteFragment,
+} from "./guest-invite.js";
+import type { InviteStorage } from "./guest-invite.js";
 import { createGuestView } from "./guest-views.js";
 import type { GuestView } from "./guest-views.js";
 import type { TerminalFactory } from "./terminal.js";
@@ -58,9 +70,13 @@ export function parseGuestLink(pathname: string): GuestLink | null {
   return { ownerUid, hostId: match[2] as string };
 }
 
-/** The relay door for a guest of one owner. */
-export function guestRelayUrl(ownerUid: number): string {
-  return `${defaultRelayUrl()}?guest_of=${ownerUid}`;
+/**
+ * The relay door for a guest of one owner, carrying the invite code. The
+ * relay hashes the decoded `invite` value as is, so `code` must already be
+ * canonical (see canonicalInviteCode).
+ */
+export function guestRelayUrl(ownerUid: number, code: string): string {
+  return `${defaultRelayUrl()}?guest_of=${ownerUid}&invite=${encodeURIComponent(code)}`;
 }
 
 export interface GuestPeerDeps {
@@ -438,6 +454,8 @@ export interface GuestSessionDeps {
   onRetry: () => void;
   onSignOut: () => void;
   onForgetDevice: () => void;
+  /** A valid invite code was submitted from the invite form. */
+  onInviteSubmit?: (code: string) => void;
   /** Injected in tests; production opens the real xterm terminal. */
   terminalFactory?: TerminalFactory;
   /** Test hook the fake host uses to read terminal output back. */
@@ -481,6 +499,7 @@ export function createGuestSession(root: HTMLElement, deps: GuestSessionDeps): G
       onRetry: deps.onRetry,
       onSignOut: deps.onSignOut,
       onForgetDevice: deps.onForgetDevice,
+      onInviteSubmit: (code) => deps.onInviteSubmit?.(code),
       onInput: (bytes) => {
         controller.sendInputBytes(bytes);
       },
@@ -515,6 +534,7 @@ export function createGuestSession(root: HTMLElement, deps: GuestSessionDeps): G
   // bypasses this entirely and reaches onForbidden below.
   const routerShell: RouterShell = {
     ensureTerminal: (id, cols, rows) => view.ensureTerminal(id, cols, rows),
+    sessionResized: (id, cols, rows) => view.sessionResized(id, cols, rows),
     sheetSpawned: () => {},
     sheetComposed: () => {},
     sheetOk: () => {},
@@ -552,21 +572,97 @@ export function createGuestSession(root: HTMLElement, deps: GuestSessionDeps): G
   };
 }
 
+/** What mountGuest reaches outside itself; tests replace any of it. */
+export interface GuestMountDeps {
+  location: { pathname: string; search: string; hash: string };
+  history: { replaceState(data: unknown, unused: string, url?: string): void };
+  /** This tab's storage for the invite code (sessionStorage). */
+  storage: InviteStorage | null;
+  fetchLogin: () => Promise<string | null>;
+  signOut: () => Promise<void>;
+  ensureDeviceKey: () => Promise<DeviceKey>;
+  clearDevice: () => Promise<void>;
+  /** One relay socket for one door URL. */
+  createRelay: (url: string) => RelaySocket;
+  /** False when the browser knows it is offline. */
+  isOnline: () => boolean;
+  /** Extra GuestPeer deps (TURN, RTCPeerConnection, pins) for tests. */
+  peer?: Partial<GuestPeerDeps>;
+  terminalFactory?: TerminalFactory;
+}
+
+function sessionStore(): InviteStorage | null {
+  try {
+    return globalThis.sessionStorage ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function defaultMountDeps(): GuestMountDeps {
+  return {
+    location: globalThis.location,
+    history: globalThis.history,
+    storage: sessionStore(),
+    fetchLogin,
+    signOut,
+    ensureDeviceKey,
+    clearDevice,
+    createRelay: (url) => new RelaySocket(url),
+    isOnline: () => globalThis.navigator?.onLine !== false,
+  };
+}
+
 /** Mount the guest app behind a /g/ link; main.ts calls this and returns. */
-export async function mountGuest(root: HTMLElement): Promise<void> {
+export async function mountGuest(root: HTMLElement, overrides: Partial<GuestMountDeps> = {}): Promise<void> {
+  const deps: GuestMountDeps = { ...defaultMountDeps(), ...overrides };
   let peer: GuestPeer | null = null;
   let relay: RelaySocket | null = null;
   let keepalive: RelayKeepalive | null = null;
   let revoked = false;
+  // The code this tab joins with, and whether the host ever let this tab
+  // in with it: invites are single-use, so a later refusal means spent.
+  let invite: string | null = null;
+  let admitted = false;
+  let inviteNotice: string | null = null;
+  let inviteDraft = "";
 
-  const login = await fetchLogin();
-  const link = parseGuestLink(globalThis.location.pathname);
+  const link = parseGuestLink(deps.location.pathname);
+  // The fragment goes first, before any await: the code leaves the address
+  // bar (and the history entry) at once, and waits in this tab's storage
+  // through a sign-in round trip. A malformed one prefills the form.
+  const fromFragment = link === null ? null : takeInviteFragment(deps.location, deps.history);
+  if (link !== null) {
+    if (fromFragment !== null) {
+      const canonical = canonicalInviteCode(fromFragment);
+      if (canonical === null) {
+        inviteNotice = "The invite code in this link is malformed. Check it, or ask the host for a new link.";
+        inviteDraft = fromFragment;
+      } else {
+        saveInvite(link, canonical, deps.storage);
+      }
+    }
+    invite = inviteNotice === null ? loadInvite(link, deps.storage) : null;
+  }
+
+  const login = await deps.fetchLogin();
   const session = createGuestSession(root, {
     login,
     send: (data) => peer?.send(data) ?? false,
     onRetry: () => void connect(),
     onSignOut: () => void doSignOut(false),
     onForgetDevice: () => void doSignOut(true),
+    onInviteSubmit: (code) => {
+      if (link === null) {
+        return;
+      }
+      saveInvite(link, code, deps.storage);
+      invite = code;
+      admitted = false;
+      closeRelay();
+      void connect();
+    },
+    terminalFactory: deps.terminalFactory,
   });
   const view = session.view;
   if (link === null) {
@@ -580,31 +676,58 @@ export async function mountGuest(root: HTMLElement): Promise<void> {
   // Plain consts: the hoisted connect() below cannot carry the null check.
   const ownerUid = link.ownerUid;
   const hostId = link.hostId;
-  const device = await ensureDeviceKey();
-  relay = new RelaySocket(guestRelayUrl(ownerUid));
-  keepalive = new RelayKeepalive({ relay });
-  keepalive.start();
-  // A 4003 is the relay kicking a guest whose uid left the allowlist: tear
-  // down and land on the terminal screen. The keepalive already stopped
-  // itself on the same close, so this socket never reconnects.
-  relay.onClose((ev) => {
-    if (ev.code !== 4003) {
-      return;
-    }
-    revoked = true;
-    session.detach();
-    peer?.close();
-    peer = null;
+  const device = await deps.ensureDeviceKey();
+
+  // One socket per code: the door URL carries it, so a new code is a new
+  // socket. A 4003 is the relay kicking a guest whose uid left the
+  // allowlist: tear down and land on the terminal screen. The keepalive
+  // already stopped itself on the same close, so it never reconnects.
+  function openRelay(code: string): RelaySocket {
+    const socket = deps.createRelay(guestRelayUrl(ownerUid, code));
+    relay = socket;
+    keepalive = new RelayKeepalive({ relay: socket });
+    keepalive.start();
+    socket.onClose((ev) => {
+      if (ev.code !== 4003 || relay !== socket) {
+        return;
+      }
+      revoked = true;
+      session.detach();
+      peer?.close();
+      peer = null;
+      closeRelay();
+      view.showForbidden("access revoked");
+    });
+    return socket;
+  }
+
+  function closeRelay(): void {
     keepalive?.stop();
-    relay?.close();
-    view.showForbidden("access revoked");
-  });
+    keepalive = null;
+    const socket = relay;
+    relay = null;
+    socket?.close();
+  }
+
+  // The relay refuses a bad door with an HTTP status (403 bad_invite) the
+  // browser never shows to the page: a socket that closes before it ever
+  // opened, while online, is the door saying no. Drop the code from this
+  // tab and ask again, prefilled so a retry is one tap.
+  function inviteRefused(code: string): void {
+    closeRelay();
+    forgetInvite(link as GuestLink, deps.storage);
+    invite = null;
+    view.setConnectionState("failed: invite not accepted");
+    view.showInvite(admitted ? INVITE_SPENT_MESSAGE : INVITE_REFUSED_MESSAGE, code);
+  }
 
   async function connect(): Promise<void> {
-    const socket = relay;
-    if (socket === null) {
+    const code = invite;
+    if (code === null) {
+      view.showInvite(inviteNotice, inviteDraft);
       return;
     }
+    const socket = relay ?? openRelay(code);
     view.showConnecting();
     view.setConnectionState("connecting");
     peer?.close();
@@ -614,15 +737,22 @@ export async function mountGuest(root: HTMLElement): Promise<void> {
       await socket.connect();
     } catch {
       // A kick racing the open already painted the terminal screen above.
-      if (!revoked) {
+      if (revoked || relay !== socket) {
+        return;
+      }
+      if (deps.isOnline()) {
+        inviteRefused(code);
+      } else {
         view.setConnectionState("failed: Could not reach the relay");
       }
       return;
     }
-    const next = new GuestPeer({ relay: socket, ownerUid, hostId, device });
+    const next = new GuestPeer({ ...deps.peer, relay: socket, ownerUid, hostId, device });
     peer = next;
     next.onEvent((ev) => {
       if (ev.type === "open") {
+        // The host accepted the offer: the code is spent from here on.
+        admitted = true;
         view.setConnectionState("connected");
         view.showList();
         next.send(buildList(newReqId()));
@@ -658,7 +788,7 @@ export async function mountGuest(root: HTMLElement): Promise<void> {
   async function doSignOut(forget: boolean): Promise<void> {
     view.setSignOutError(null);
     try {
-      await signOut();
+      await deps.signOut();
     } catch (err) {
       view.setSignOutError(err instanceof Error ? err.message : "Could not sign out");
       return;
@@ -668,11 +798,10 @@ export async function mountGuest(root: HTMLElement): Promise<void> {
     session.detach();
     peer?.close();
     peer = null;
-    keepalive?.stop();
-    relay?.close();
+    closeRelay();
     if (forget) {
       try {
-        await clearDevice();
+        await deps.clearDevice();
       } catch {
         // The session is already dead; a stale key row is repaired on
         // the next pair, never a reason to hold the sign-in screen.

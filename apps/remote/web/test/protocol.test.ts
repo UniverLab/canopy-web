@@ -33,6 +33,7 @@ import {
   parseHello,
   parseOk,
   parseOut,
+  parseResized,
   parseSessionAdded,
   parseSessionItem,
   parseSessionRemoved,
@@ -220,6 +221,34 @@ describe("frame parsers", () => {
     expect(parseSessionRemoved({ t: "session_removed" })).toBeNull();
     expect(parseExited({ t: "exited", id: "a", code: 1 })).toEqual({ id: "a", code: 1 });
     expect(parseExited({ t: "exited", id: "a" })).toBeNull();
+  });
+
+  it("parses resized frames with a valid size only", () => {
+    expect(parseResized({ t: "resized", id: "a", cols: 120, rows: 40 })).toEqual({
+      id: "a",
+      cols: 120,
+      rows: 40,
+    });
+    // The host's size bounds, 1..=65535 on both axes.
+    expect(parseResized({ t: "resized", id: "a", cols: 1, rows: 65535 })).toEqual({
+      id: "a",
+      cols: 1,
+      rows: 65535,
+    });
+    for (const bad of [
+      { t: "resized", id: "a", cols: 0, rows: 40 },
+      { t: "resized", id: "a", cols: 120, rows: 65536 },
+      { t: "resized", id: "a", cols: 120.5, rows: 40 },
+      { t: "resized", id: "a", cols: "120", rows: 40 },
+      { t: "resized", id: "a", cols: 120 },
+      { t: "resized", id: "", cols: 120, rows: 40 },
+      { t: "resized", cols: 120, rows: 40 },
+      { t: "resize", id: "a", cols: 120, rows: 40 },
+      null,
+      "resized",
+    ]) {
+      expect(parseResized(bad)).toBeNull();
+    }
   });
 
   it("parses out frames and rejects bad base64", () => {

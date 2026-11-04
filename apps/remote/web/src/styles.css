@@ -464,6 +464,34 @@ label > textarea {
   white-space: nowrap;
 }
 
+/* The guest's invite form sits in the sign-in card: the field and its
+ * hint read left to right like the pairing form; the relay's refusal is
+ * the error tint above it, with the same "Error:" label. */
+.invite-form {
+  text-align: left;
+}
+
+.invite-hint {
+  margin: -0.25rem 0 0.75rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.invite-notice {
+  color: var(--ink);
+  background: var(--tint-error);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.invite-notice::before {
+  content: "Error: ";
+  color: var(--err-label);
+}
+
 #pair-error:empty {
   display: none;
 }
@@ -650,6 +678,14 @@ label > textarea {
   touch-action: pan-x;
 }
 
+/* While this device controls the size, the rows are measured from this
+ * box, so its height must not follow the terminal (that would feed the
+ * rows back into themselves): a fixed share of the viewport, which the
+ * fullscreen and orientation changes move on their own. */
+.term-pane[data-size-owner] .term-fit {
+  height: 40dvh;
+}
+
 /* The visual box: natural size × the scale refit wrote, clipping the
  * transformed host so the terminal scales exactly once. At zoom 1 it
  * matches the fit exactly; zoomed wider, the pane scrolls it. */
@@ -661,56 +697,153 @@ label > textarea {
   transform-origin: top left;
 }
 
+/* The row wraps rather than clips as a last resort: the latest button
+ * floats over the terminal (below), so with fullscreen and both attach
+ * buttons up the row holds seven 44 px targets and stays one row tall on
+ * a phone. */
 .term-controls {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--gap);
 }
 
 /* Every control beside the terminal keeps the 44x44 touch floor: the base
- * button height is 2.75rem and this widens the short icon buttons. */
+ * button height is 2.75rem and this widens the short icon buttons. A
+ * labelled button grows to its label (icon and word side by side, never
+ * stacked) instead of squeezing it past its border. */
 .term-controls button {
   min-width: 2.75rem;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding-inline: 0.6rem;
+  white-space: nowrap;
+}
+
+/* The terminal card plus the latest button floating over its
+ * bottom-right corner: the stage is the positioning box, so the button
+ * stays put while the pane scrolls beneath it. It only shows once the view
+ * left the bottom (or, in fullscreen, the frame's top), when the cursor
+ * line is off screen; a 44 px round target in the key look, inset by the
+ * pane's padding, and slightly see-through until pointed at or focused. */
+.term-stage {
+  position: relative;
+  min-height: 0;
 }
 
 #term-latest {
-  margin-left: auto;
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  min-width: 2.75rem;
+  padding: 0;
+  border-radius: 50%;
+  opacity: 0.85;
+}
+
+#term-latest:hover,
+#term-latest:focus-visible {
+  opacity: 1;
 }
 
 #term-latest[hidden] {
   display: none;
 }
 
-/* The per-session size control: the toggle and its one-line explainer sit
- * side by side and wrap on narrow phones. */
+/* The per-session size control, laid out like a settings row: the switch
+ * on the left, its words on the first line beside it and the explainer
+ * (or the takeover notice) on the second. The label spans both lines, so
+ * the whole 44 px row is the switch's target (audit E4, like .yolo-row)
+ * without the row growing taller than the two lines of text. */
 .term-size {
-  display: flex;
-  align-items: baseline;
-  gap: var(--gap);
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1fr);
+  column-gap: 0.5rem;
 }
 
 .term-size-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
+  grid-area: 1 / 1 / 3 / 3;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
   font-size: 0.85rem;
   margin: 0;
+  min-height: 44px;
+  min-width: 44px;
+  cursor: pointer;
 }
 
-/* The toggle's checkbox keeps its own box: without this the global
- * label > input rule stretches it into a full-width 44 px control and
- * the size row doubles in height. */
+/* The checkbox drawn as a switch: a track in the key-bar tint with a
+ * thumb that slides right and fills teal when on, the latched-key look.
+ * It keeps its own box: without the width and min-height here the global
+ * label > input rule stretches it into a full-width control. */
 .term-size-toggle input {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex: none;
+  align-self: center;
   display: inline-block;
-  width: auto;
+  width: 2.75rem;
+  height: 1.5rem;
   min-height: 0;
   margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--key-bg);
+  cursor: pointer;
+}
+
+.term-size-toggle input::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: calc(1.5rem - 6px);
+  height: calc(1.5rem - 6px);
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform 120ms ease-out;
+}
+
+.term-size-toggle input:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.term-size-toggle input:checked::before {
+  background: var(--accent-ink);
+  transform: translateX(1.25rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .term-size-toggle input::before {
+    transition: none;
+  }
 }
 
 .term-size-note {
+  grid-area: 2 / 2 / 3 / 3;
   margin: 0;
   font-size: 0.8rem;
   color: var(--muted);
+  /* Taps on the note still reach the label beneath it. */
+  pointer-events: none;
+}
+
+/* Another device took the size over: the note says so in the ink colour
+ * (the words carry it, the colour only lifts it off the muted line). */
+.term-size-note.is-notice {
+  color: var(--ink);
 }
 
 /* Ten keys, all visible: two rows of five equal-width touch targets.
@@ -776,7 +909,11 @@ label > textarea {
     gap: 0.15rem;
   }
 
-  #term-builder span {
+  /* The labelled controls go icon-only on a phone: the aria-label (and
+   * the title tooltip) names them, and seven 44 px targets stay inside
+   * 360 px without a word overflowing its button. */
+  #term-builder span,
+  #term-keys span {
     display: none;
   }
 

@@ -119,8 +119,10 @@ for (const viewport of [
     // The full 80-column row arrived intact (start label, end marker).
     expect(state.rows[11]).toContain("|END");
     expect(state.rows[11]?.trimEnd().length).toBe(80);
-    // Follow is off while fullscreen: the latest button shows.
-    await expect(page.locator("#term-latest")).toBeVisible();
+    // Follow is off while fullscreen, but the whole frame fits with the
+    // pane at its top: nothing to jump to, so the floating latest button
+    // stays off the frame (and off the app's input line).
+    await expect(page.locator("#term-latest")).toBeHidden();
     // The fitted scale is the whole-frame fit…
     await expect
       .poll(async () => {

@@ -163,15 +163,15 @@ for (const viewport of VIEWPORTS) {
       expect(box).not.toBeNull();
       expect(Math.abs((box?.height ?? 0) - (viewport.width < 640 ? 96 : 160))).toBeLessThanOrEqual(5);
       expect((box?.width ?? 0) + (box?.x ?? 0)).toBeLessThanOrEqual(viewport.width);
-      // The wizard green gradient is a `fill` presentation attribute —
-      // never a style attribute, which this page's CSP would refuse — so
-      // the art runs light to dark, not flat ink.
+      // The teal gradient is a `fill` presentation attribute — never a
+      // style attribute, which this page's CSP would refuse — so the art
+      // is teal, not flat ink.
       const inks = await page
         .locator("header .look-banner-line")
         .evaluateAll((groups) => groups.map((group) => getComputedStyle(group).fill));
       expect(inks).toHaveLength(11);
-      expect(inks[0]).toBe("rgb(157, 207, 161)");
-      expect(inks[10]).toBe("rgb(12, 82, 18)");
+      expect(inks[0]).toBe("rgb(82, 255, 246)");
+      expect(inks[10]).toBe("rgb(0, 102, 97)");
       expect(refused.filter((text) => text.includes("Content Security Policy"))).toEqual([]);
       await expect(page.locator("header nav.site-nav a[href='/editor']")).toHaveText("Editor");
       await expect(page.locator("header nav.site-nav a[href='/publish']")).toHaveText("Publish");

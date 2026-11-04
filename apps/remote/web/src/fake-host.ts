@@ -13,6 +13,7 @@ import { createFakeShelfDeleter } from "./fake-delete.js";
 import { createFakeGraphs } from "./fake-graphs.js";
 import { GraphStore } from "./graph-store.js";
 import { createGuestSession } from "./guest.js";
+import { INVITE_REFUSED_MESSAGE } from "./guest-invite.js";
 import { MetricsStore } from "./metrics-store.js";
 import { buildCatalog, buildList, buildSpawn, newReqId } from "./protocol.js";
 import type { PromptDraft, SessionItem, ShelfItem } from "./protocol.js";
@@ -120,6 +121,20 @@ function main(): void {
   const sent: unknown[] = [];
   const terminalOutput: Uint8Array[] = [];
   let seq = 7;
+  // Each session's PTY size as the fake host holds it: 80×24 until a
+  // resize changes it, and every change is announced as `resized`, the
+  // way the real host tells every attached device.
+  const ptySizes = new Map<string, { cols: number; rows: number }>();
+  const ptySize = (id: string): { cols: number; rows: number } =>
+    ptySizes.get(id) ?? { cols: 80, rows: 24 };
+  const setPtySize = (id: string, cols: number, rows: number): void => {
+    const current = ptySize(id);
+    if (current.cols === cols && current.rows === rows) {
+      return;
+    }
+    ptySizes.set(id, { cols, rows });
+    deliver({ t: "resized", id, cols, rows });
+  };
   let nextSpawn = 0;
   let promptError: { code: string; message: string } | null = null;
 
@@ -385,6 +400,8 @@ function main(): void {
       mime?: string;
       part?: number;
       data?: string;
+      cols?: number;
+      rows?: number;
     };
     sent.push(frame);
     if (frame.t === "list") {
@@ -421,7 +438,8 @@ function main(): void {
         deliver({ t: "error", code: "forbidden", id: frame.id });
       } else {
         const full = b64(SMOKE_OUTPUT);
-        deliver({ t: "snapshot", id: frame.id, cols: 80, rows: 24, seq, data: full.slice(0, 10) });
+        const { cols, rows } = ptySize(frame.id);
+        deliver({ t: "snapshot", id: frame.id, cols, rows, seq, data: full.slice(0, 10) });
         deliver({ t: "snapshot_more", id: frame.id, data: full.slice(10), last: true });
         const attached = frame.id;
         if (pushedFor === null) {
@@ -432,6 +450,13 @@ function main(): void {
           }, 2000);
         }
       }
+    } else if (
+      frame.t === "resize" &&
+      typeof frame.id === "string" &&
+      typeof frame.cols === "number" &&
+      typeof frame.rows === "number"
+    ) {
+      setPtySize(frame.id, frame.cols, frame.rows);
     } else if (frame.t === "shelf_put_begin" && typeof frame.req === "string") {
       if (uploadMode === "denied") {
         deliver({ t: "error", req: frame.req, code: "forbidden", message: "upload not allowed" });
@@ -544,15 +569,35 @@ function main(): void {
 
   // Guest mode: the /g/ session wiring against the fake host — no relay,
   // no peer, the same guest views, store, controller and router that
-  // production mounts, already connected.
+  // production mounts, already connected. `&invite=ask` starts on the
+  // invite form instead (a link without #invite=), and `&invite=refuse`
+  // also refuses the first code the way the relay's 403 bad_invite lands.
   if (fakeParams.get("screen") === "guest") {
     const guestOutput: Uint8Array[] = [];
+    const inviteMode = fakeParams.get("invite");
+    const invites: string[] = [];
+    let refuseNext = inviteMode === "refuse";
+    const admit = (): void => {
+      session.view.setConnectionState("connected");
+      session.view.showList();
+      send(buildList(newReqId()));
+    };
     const session = createGuestSession(root, {
       login: "guest-user",
       send,
       onRetry: () => {},
       onSignOut: () => {},
       onForgetDevice: () => {},
+      onInviteSubmit: (code) => {
+        invites.push(code);
+        if (refuseNext) {
+          refuseNext = false;
+          session.view.setConnectionState("failed: invite not accepted");
+          session.view.showInvite(INVITE_REFUSED_MESSAGE, code);
+          return;
+        }
+        admit();
+      },
       onTerminalBytes: (bytes) => {
         guestOutput.push(bytes);
       },
@@ -561,9 +606,12 @@ function main(): void {
       },
     });
     deliverInto = (raw: string) => session.push(raw);
-    session.view.setConnectionState("connected");
-    session.view.showList();
-    send(buildList(newReqId()));
+    if (inviteMode === null) {
+      admit();
+    } else {
+      session.view.setConnectionState("connecting");
+      session.view.showInvite(null, "");
+    }
     window.__fake = {
       sent: () => [...sent],
       clearSent: () => {
@@ -591,6 +639,7 @@ function main(): void {
         deliver(metricsFrame(patch ?? {}));
       },
       guestOpen: (id: string) => session.open(id),
+      guestInvites: () => [...invites],
     };
     return;
   }
@@ -768,6 +817,9 @@ function main(): void {
     pushMetrics: (patch?: Record<string, unknown>) => {
       deliver(metricsFrame(patch ?? {}));
     },
+    resizeFromElsewhere: (cols: number, rows: number, id = "smoke") => {
+      setPtySize(id, cols, rows);
+    },
   };
 }
 
@@ -793,6 +845,10 @@ declare global {
       pushMetrics: (patch?: Record<string, unknown>) => void;
       /** Guest mode only: open one session by id, listed or not. */
       guestOpen?: (id: string) => void;
+      /** Guest mode only: the canonical codes the invite form submitted. */
+      guestInvites?: () => string[];
+      /** Another device (or the host's TUI) resizes a session's PTY. */
+      resizeFromElsewhere?: (cols: number, rows: number, id?: string) => void;
     };
   }
 }

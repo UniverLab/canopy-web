@@ -218,6 +218,10 @@ describe("the plate drawing", () => {
     expect(html).toMatch(/\.doc-cols figure\.plate \{[^}]*width: 100%;[^}]*height: 60svh;[^}]*min-height: 320px;/);
     expect(html).toMatch(/@media \(min-width: 1024px\) \{[\s\S]*\.doc-cols \{ flex-direction: row; align-items: stretch; \}/);
     expect(html).toMatch(/\.doc-cols figure\.plate \{ flex: 1; min-width: 0; width: auto; height: auto; min-height: 420px; \}/);
+    // Live in one column, the viewport follows the drawing's proportions
+    // between 200 px and 60svh; beside the datasheet it stretches again.
+    expect(html).toMatch(/\.doc-cols figure\.plate\.is-live \{[^}]*height: auto;[^}]*aspect-ratio: var\(--plate-ratio, auto\);[^}]*min-height: 200px;[^}]*max-height: 60svh;/);
+    expect(html).toMatch(/\.doc-cols figure\.plate\.is-live \{ aspect-ratio: auto; min-height: 420px; max-height: none; \}/);
     // One labelled shape per node: agents are circles, checks rounded
     // squares, gates and routers diamonds — the router reads as a gate.
     for (const label of ["build", "test", "gate", "triage", "docs"]) {

@@ -21,11 +21,17 @@
 // and on buffer change. Every refit anchors the pane at scrollLeft 0, so
 // the line start stays visible and a stale scroll never clips the left
 // edge.
+//
+// While this device controls the size (the control-size toggle), the
+// direction flips: the grid is computed from the panel (ownedSize) and the
+// local terminal is resized to it, so it renders at its base scale (the
+// face at 14 CSS px) times the zoom instead of being fitted to the width.
 
 import "@xterm/xterm/css/xterm.css";
 import { Terminal } from "@xterm/xterm";
 import {
   TERMINAL_FONT_FAMILY,
+  TERMINAL_FONT_SIZE,
   terminalFontSizeForDpr,
   terminalFontGate,
 } from "./terminal-font.js";
@@ -50,6 +56,13 @@ export interface TerminalHandle {
   onScroll: (callback: () => void) => () => void;
   /** Fires once the terminal is open (and the WebGL attempt settled). */
   onReady: (callback: () => void) => () => void;
+  /** Resize the local terminal to cols × rows. Absent means a fixed size. */
+  resize?: (cols: number, rows: number) => void;
+  /**
+   * The scale that shows the opened face at TERMINAL_FONT_SIZE CSS px: the
+   * DPR-1 double-size face renders at 0.5. Absent means 1.
+   */
+  baseScale?: number;
   dispose: () => void;
 }
 
@@ -65,6 +78,43 @@ const FALLBACK_ROW_HEIGHT = 17;
 
 export function clampZoom(zoom: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
+}
+
+export interface TermSize {
+  cols: number;
+  rows: number;
+}
+
+// The bounds of a size this device asserts: below them a session is
+// unusable, above them the panel measurement is surely wrong.
+export const OWNED_MIN_COLS = 20;
+export const OWNED_MAX_COLS = 500;
+export const OWNED_MIN_ROWS = 5;
+export const OWNED_MAX_ROWS = 200;
+
+function clampInt(value: number, low: number, high: number): number {
+  return Math.min(high, Math.max(low, value));
+}
+
+// The cols × rows that fit a panel of panelWidth × panelHeight CSS px with
+// cells of cellWidth × cellHeight CSS px (as they render on screen), within
+// the owned bounds. Null when either box is not measured yet.
+export function computeOwnedSize(
+  panelWidth: number,
+  panelHeight: number,
+  cellWidth: number,
+  cellHeight: number,
+): TermSize | null {
+  if (!(panelWidth > 0 && panelHeight > 0 && cellWidth > 0 && cellHeight > 0)) {
+    return null;
+  }
+  // The epsilon keeps an exact fit (336 / 8.4) from flooring one short.
+  const cols = Math.floor(panelWidth / cellWidth + 1e-6);
+  const rows = Math.floor(panelHeight / cellHeight + 1e-6);
+  return {
+    cols: clampInt(cols, OWNED_MIN_COLS, OWNED_MAX_COLS),
+    rows: clampInt(rows, OWNED_MIN_ROWS, OWNED_MAX_ROWS),
+  };
 }
 
 // 11 CSS px of glyph at the terminal's natural row height.
@@ -219,11 +269,12 @@ export function createXtermHandle(
   // (see terminal-font.ts). The size is fixed at open — a later browser
   // zoom lands as layout and the fit scale absorbs it, no re-open.
   const dpr = typeof devicePixelRatio === "number" ? devicePixelRatio : undefined;
+  const fontSize = terminalFontSizeForDpr(dpr);
   const terminal = new Terminal({
     cols,
     rows,
     scrollback: 2000,
-    fontSize: terminalFontSizeForDpr(dpr),
+    fontSize,
     fontFamily: TERMINAL_FONT_FAMILY,
     fontWeight: 400,
     fontWeightBold: 700,
@@ -265,6 +316,8 @@ export function createXtermHandle(
       callback();
       return () => {};
     },
+    resize: (nextCols, nextRows) => terminal.resize(nextCols, nextRows),
+    baseScale: TERMINAL_FONT_SIZE / fontSize,
     dispose: () => terminal.dispose(),
   };
 }
@@ -272,6 +325,8 @@ export function createXtermHandle(
 export interface TerminalViewCallbacks {
   onUserInput: (text: string) => void;
   onFollowChange?: (state: FollowState) => void;
+  /** Fires after the zoom changed (buttons or pinch). */
+  onZoomChange?: () => void;
 }
 
 export class TerminalView {
@@ -283,7 +338,9 @@ export class TerminalView {
   private pane: HTMLElement | null = null;
   private handle: TerminalHandle | null = null;
   private zoom = 1;
+  private cols = 0;
   private rows = 0;
+  private sizeOwner = false;
   private following = true;
   private alternate = false;
   private stopObserving: (() => void) | null = null;
@@ -325,6 +382,7 @@ export class TerminalView {
     this.scaler = scaler;
     this.host = host;
     this.pane = parent;
+    this.cols = cols;
     this.rows = rows;
     // Tapping anywhere in the pane — the terminal or its padding — focuses
     // xterm's hidden textarea so the phone keyboard opens. The listener
@@ -382,10 +440,10 @@ export class TerminalView {
           this.settleReady();
           return;
         }
-        this.openTerminal(cols, rows);
+        this.openTerminal();
       });
     } else {
-      this.openTerminal(cols, rows);
+      this.openTerminal();
       this.readyPromise = Promise.resolve();
     }
   }
@@ -432,6 +490,72 @@ export class TerminalView {
   setZoom(zoom: number): void {
     this.zoom = clampZoom(zoom);
     this.refit();
+    this.callbacks.onZoomChange?.();
+  }
+
+  /** True while this device asserts the PTY size (the control-size toggle). */
+  get isSizeOwner(): boolean {
+    return this.sizeOwner;
+  }
+
+  // While this device owns the size the terminal is sized to the panel, so
+  // it renders at its base scale times the zoom instead of being fitted;
+  // the pane carries data-size-owner so the stylesheet gives the fit box a
+  // height that never follows the content (rows are measured from it).
+  setSizeOwner(owner: boolean): void {
+    if (this.sizeOwner === owner) {
+      return;
+    }
+    this.sizeOwner = owner;
+    if (this.pane) {
+      if (owner) {
+        this.pane.dataset.sizeOwner = "true";
+      } else {
+        delete this.pane.dataset.sizeOwner;
+      }
+    }
+    this.refit();
+  }
+
+  // The cols × rows that fit this device's panel at the current font size
+  // and zoom: the cell is measured off the open terminal (screen / grid)
+  // and shown at the owner scale. Null until the terminal is open and laid
+  // out.
+  ownedSize(): TermSize | null {
+    const fit = this.fit;
+    const natural = this.naturalSize();
+    if (!this.handle || !fit || !natural || this.cols <= 0 || this.rows <= 0) {
+      return null;
+    }
+    const scale = this.ownerScale();
+    return computeOwnedSize(
+      fit.clientWidth,
+      fit.clientHeight,
+      (natural.width / this.cols) * scale,
+      (natural.height / this.rows) * scale,
+    );
+  }
+
+  // Resizes the local terminal (the host's size changed, or this device
+  // asserted its own) and refits. A terminal still behind the font gate
+  // opens at the new size. False when the size is invalid or unchanged.
+  resize(cols: number, rows: number): boolean {
+    if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols <= 0 || rows <= 0) {
+      return false;
+    }
+    if (cols === this.cols && rows === this.rows) {
+      return false;
+    }
+    this.cols = cols;
+    this.rows = rows;
+    this.handle?.resize?.(cols, rows);
+    this.refit();
+    return true;
+  }
+
+  /** The local terminal's current grid, 0 × 0 before mount. */
+  get size(): TermSize {
+    return { cols: this.cols, rows: this.rows };
   }
 
   zoomIn(): void {
@@ -460,21 +584,12 @@ export class TerminalView {
     const fit = this.fit;
     const scaler = this.scaler;
     const host = this.host;
-    if (!fit || !scaler || !host) {
+    const natural = this.naturalSize();
+    if (!fit || !scaler || !host || !natural) {
       return;
     }
-    const content = host.firstElementChild ?? host;
-    const screen = host.querySelector<HTMLElement>(".xterm-screen");
-    // The scale measures the real .xterm-screen, never the .xterm wrapper:
-    // the wrapper can be narrower than the screen it holds, and a scale
-    // from the wrapper overflows the panel on the right.
-    const naturalWidth =
-      screen && screen.scrollWidth > 0 ? screen.scrollWidth : content.scrollWidth;
-    const naturalHeight =
-      screen && screen.offsetHeight > 0 ? screen.offsetHeight : content.scrollHeight;
-    if (naturalWidth <= 0 || naturalHeight <= 0) {
-      return;
-    }
+    const naturalWidth = natural.width;
+    const naturalHeight = natural.height;
     // Both renderers size .xterm-screen in layout px (a CSS transform does
     // not affect offsetHeight), so this is the unscaled row height.
     const rowHeight = this.rows > 0 ? naturalHeight / this.rows : FALLBACK_ROW_HEIGHT;
@@ -483,14 +598,18 @@ export class TerminalView {
     // height, capped at 60vh by the stylesheet). Before any layout the
     // box has no height yet, so alternate falls back to the width fit.
     const fitAll = this.alternate && fit.clientHeight > 0;
-    const scale = computeFitScale(
-      fit.clientWidth,
-      fit.clientHeight,
-      naturalWidth,
-      naturalHeight,
-      this.zoom,
-      fitAll,
-    );
+    // A size owner's terminal already fits the panel by its grid: it shows
+    // at the base scale times the zoom, never stretched to the width.
+    const scale = this.sizeOwner
+      ? this.ownerScale()
+      : computeFitScale(
+          fit.clientWidth,
+          fit.clientHeight,
+          naturalWidth,
+          naturalHeight,
+          this.zoom,
+          fitAll,
+        );
     // One scale, applied once: the host is natural-size and carries the
     // transform; the scaler is the visual box (natural × scale) that
     // clips it, so the terminal never renders at scale².
@@ -510,6 +629,30 @@ export class TerminalView {
     }
   }
 
+  // The terminal's unscaled pixel size. The scale measures the real
+  // .xterm-screen, never the .xterm wrapper: the wrapper can be narrower
+  // than the screen it holds, and a scale from the wrapper overflows the
+  // panel on the right.
+  private naturalSize(): { width: number; height: number } | null {
+    const host = this.host;
+    if (!host) {
+      return null;
+    }
+    const content = host.firstElementChild ?? host;
+    const screen = host.querySelector<HTMLElement>(".xterm-screen");
+    const width = screen && screen.scrollWidth > 0 ? screen.scrollWidth : content.scrollWidth;
+    const height = screen && screen.offsetHeight > 0 ? screen.offsetHeight : content.scrollHeight;
+    if (width <= 0 || height <= 0) {
+      return null;
+    }
+    return { width, height };
+  }
+
+  private ownerScale(): number {
+    const base = this.handle?.baseScale;
+    return (base !== undefined && base > 0 ? base : 1) * this.zoom;
+  }
+
   dispose(): void {
     this.generation += 1;
     this.settleReady();
@@ -520,6 +663,10 @@ export class TerminalView {
       this.paneClick.parent.removeEventListener("click", this.paneClick.handler);
       this.paneClick = null;
     }
+    if (this.pane) {
+      delete this.pane.dataset.sizeOwner;
+    }
+    this.sizeOwner = false;
     this.handle?.dispose();
     this.handle = null;
     this.fit?.remove();
@@ -527,6 +674,7 @@ export class TerminalView {
     this.scaler = null;
     this.host = null;
     this.pane = null;
+    this.cols = 0;
     this.rows = 0;
     this.pinchStart = null;
     this.touchGesture = null;
@@ -535,13 +683,14 @@ export class TerminalView {
     this.pendingWrites.length = 0;
   }
 
-  private openTerminal(cols: number, rows: number): void {
+  private openTerminal(): void {
     const host = this.host;
     if (!host) {
       this.settleReady();
       return;
     }
-    const handle = this.factory(host, cols, rows);
+    // The grid as it stands now: a resize behind the font gate counts.
+    const handle = this.factory(host, this.cols, this.rows);
     this.handle = handle;
     handle.onUserInput((text) => this.callbacks.onUserInput(text));
     handle.onScroll(() => this.refreshFollow());
