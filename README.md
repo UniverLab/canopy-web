@@ -1,13 +1,37 @@
-# canopy-web
+<p align="center">
+  <img src="https://raw.githubusercontent.com/UniverLab/.github/main/assets/banner-canopy-web.svg" alt="Canopy Web"/>
+</p>
 
-The web side of Canopy, one repository with one app per subdomain:
+<p align="center">
+  <a href="https://github.com/UniverLab/canopy-web/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/UniverLab/canopy-web/ci.yml?style=for-the-badge&label=CI" alt="CI"/></a>
+  <a href="https://github.com/UniverLab/canopy-web/releases"><img src="https://img.shields.io/github/v/release/UniverLab/canopy-web?style=for-the-badge&color=3CC7BD" alt="Release"/></a>
+  <img src="https://img.shields.io/badge/runs%20on-Cloudflare%20Workers-F38020?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Cloudflare Workers"/>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-2E8B57?style=for-the-badge" alt="License"/></a>
+</p>
 
-- `apps/graphs/` — the graphs catalogue at graphs.univerlab.org: browse,
-  share and install graph and node designs.
-- `apps/remote/` — Canopy remote control at remote.univerlab.org: reach your
-  canopy sessions from a browser, peer to peer.
+<p align="center">
+  <a href="https://graphs.univerlab.org"><b>graphs.univerlab.org</b></a> ·
+  <a href="https://remote.univerlab.org"><b>remote.univerlab.org</b></a> ·
+  <a href="https://github.com/UniverLab/harness-canopy">Canopy</a> ·
+  <a href="https://univerlab.org/canopy/">Docs</a>
+</p>
 
-Each app is its own Cloudflare Worker with its own secrets and origin.
+The web side of [Canopy](https://github.com/UniverLab/harness-canopy), the graph
+engine for AI coding agents: one repository with one app per subdomain, each its
+own Cloudflare Worker with its own secrets and origin.
+
+| App | Where | What it does |
+| --- | --- | --- |
+| [Graphs](apps/graphs/README.md) | [graphs.univerlab.org](https://graphs.univerlab.org) | Browse, share and install graph and node designs, each with its plate, its README and every prompt in full. |
+| [Remote](apps/remote/README.md) | [remote.univerlab.org](https://remote.univerlab.org) | Reach your Canopy sessions from any browser, over an encrypted peer-to-peer link: drive a terminal, compose or schedule a prompt, copy its text, watch your graphs, invite a guest. |
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/UniverLab/harness-canopy/main/scripts/install.sh | sh
+canopy remote login   # sign in with GitHub
+canopy remote pair    # a code and a QR for remote.univerlab.org
+```
+
+---
 
 ## Graphs catalogue
 
