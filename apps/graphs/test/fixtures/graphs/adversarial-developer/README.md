@@ -15,12 +15,10 @@ resilience node that can schedule its own wake-up.
 
 Differences that matter when you move from here to `canopy-builder`:
 
-- **One commit, at the end.** The documenter leaves its docs uncommitted
+- **One commit, docs included.** The documenter leaves its docs uncommitted
   and `Commit` lands the spec's work and its docs together, under the
-  spec's own message. `canopy-builder` commits the code first, reviews the
-  commit, and commits the audit fixes separately.
-- **The auditor reads the working tree.** Here the change is
-  uncommitted when it audits; in `canopy-builder` it reads `HEAD`.
+  spec's own message. `canopy-builder` also commits once per spec, after the
+  auditor, but its documenter commits the docs separately.
 - **No lock.** Nothing stops another process committing while the loop
   runs, so do not run two of these against the same branch.
 - **A designer failure ends the spec.** There is no resilience node to
