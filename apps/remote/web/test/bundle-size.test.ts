@@ -161,6 +161,22 @@ const RESIZED_BUDGET = 512;
  * must run before the guest chunk loads, so it cannot ride that chunk.
  */
 const GUEST_RETURN_BUDGET = 512;
+/**
+ * Allowance for the flow-axis plate spec (cumulative rank spacing, ranks
+ * centred on the axis, and the flank guard that keeps arcs off adjacent
+ * boxes): measured +244 B gzip over the allowed total
+ * (main 173 702 → 173 946), JS only. Added in the feature commit like
+ * GUEST_RETURN_BUDGET: the shared plate code rides the main bundle.
+ */
+const FLOW_AXIS_BUDGET = 512;
+/**
+ * Allowance for the unit-glow spec (the lit unit twins behind the
+ * catalogue's walk, the static twin under a running unit's ring, and their
+ * stylesheet rules): measured +464 B gzip over the pre-change main
+ * (main 173 517 → 173 981). Added in the feature commit like
+ * FLOW_AXIS_BUDGET: the shared plate code rides the main bundle.
+ */
+const UNIT_GLOW_BUDGET = 512;
 /** The budget the lazy guest chunk is allowed, gzip bytes of JS. */
 const GUEST_BUDGET = 6_144;
 /**
@@ -281,7 +297,9 @@ describe("the remote's bundle", () => {
         SESSION_TOOLS_BUDGET +
         CONTROL_SIZE_BUDGET +
         RESIZED_BUDGET +
-        GUEST_RETURN_BUDGET,
+        GUEST_RETURN_BUDGET +
+        FLOW_AXIS_BUDGET +
+        UNIT_GLOW_BUDGET,
     );
     expect(guestJs, JSON.stringify(report)).toBeLessThanOrEqual(GUEST_BUDGET + GUEST_INVITE_BUDGET);
     expect(editorJs, JSON.stringify(report)).toBeLessThanOrEqual(EDITOR_BUDGET);

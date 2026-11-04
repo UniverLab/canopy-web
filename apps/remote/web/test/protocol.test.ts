@@ -15,13 +15,13 @@ import {
   buildPromptDraft,
   buildPromptSchedule,
   buildResize,
+  buildResizeRelease,
   buildScheduledCancel,
   buildScheduledList,
   buildShelfDelete,
   buildShelfGet,
   buildShelfList,
   buildSpawn,
-  decodeSnapshotData,
   formatLastOutput,
   newReqId,
   parseCatalog,
@@ -171,6 +171,10 @@ describe("builders", () => {
       cols: 1,
       rows: 1,
     });
+  });
+
+  it("builds the exact resize-release frame, with no answer", () => {
+    expect(JSON.parse(buildResizeRelease("s1"))).toEqual({ t: "resize_release", id: "s1" });
   });
 
   it("mints unique req ids", () => {
@@ -412,13 +416,6 @@ describe("frame parsers", () => {
     });
     expect(parseCatalog({ t: "sessions", items: [] })).toBeNull();
   });
-
-  it("decodes snapshot data to the host's bytes", () => {
-    expect(decodeSnapshotData(b64encode(new TextEncoder().encode("héllo")))).toEqual(
-      new TextEncoder().encode("héllo"),
-    );
-    expect(decodeSnapshotData("!!!")).toBeNull();
-  });
 });
 
 describe("display helpers", () => {
@@ -647,7 +644,7 @@ describe("graph frames", () => {
 
   it("builds the exact graph requests", () => {
     expect(JSON.parse(buildGraphs("r1"))).toEqual({ t: "graphs", req: "r1" });
-    expect(JSON.parse(buildGraphWatch("g1"))).toEqual({ t: "graph_watch", id: "g1" });
+    expect(JSON.parse(buildGraphWatch("r1", "g1"))).toEqual({ t: "graph_watch", req: "r1", id: "g1" });
     expect(JSON.parse(buildGraphUnwatch("g1"))).toEqual({ t: "graph_unwatch", id: "g1" });
   });
 

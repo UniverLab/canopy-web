@@ -41,6 +41,12 @@ async function resizesSent(page: import("@playwright/test").Page): Promise<{ col
   );
 }
 
+async function releasesSent(page: import("@playwright/test").Page): Promise<unknown[]> {
+  return page.evaluate(() =>
+    window.__fake.sent().filter((frame) => (frame as { t?: string }).t === "resize_release"),
+  );
+}
+
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/fake.html");
@@ -92,6 +98,19 @@ test("follows a host resize in place while not the size owner", async ({ page })
     return pane.scrollWidth - pane.clientWidth;
   });
   expect(paneOverflow).toBeLessThanOrEqual(1);
+  expect(await resizesSent(page)).toEqual([]);
+});
+
+test("gives the size back when the toggle turns off", async ({ page }) => {
+  await page.locator(".term-size-toggle").click();
+  await expect.poll(() => resizesSent(page).then((sent) => sent.length)).toBe(1);
+  await page.evaluate(() => window.__fake.clearSent());
+  await page.locator(".term-size-toggle").click();
+  await expect(page.locator("#term-control-size")).not.toBeChecked();
+  // Exactly one release goes out, and the host's own size comes back: the
+  // terminal returns to the host's 80 columns and stops owning the size.
+  await expect.poll(() => releasesSent(page).then((sent) => sent.length)).toBe(1);
+  await expect.poll(() => termState(page)).toEqual({ cols: 80, rows: 24, owner: false });
   expect(await resizesSent(page)).toEqual([]);
 });
 

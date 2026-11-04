@@ -194,18 +194,12 @@ describe("the walk generator", () => {
     expect(steps.some((step) => step.fail)).toBe(false);
   });
 
-  it("walks both orientations the same fail edges from one shared seed", () => {
-    // The pages replay one seed per orientation's own generator, so the
-    // H/V pair carries the same walk — same length, same lit windows.
-    const horizontal = renderPlate(LOOP, "horizontal", undefined, mulberry32(7));
-    const vertical = renderPlate(LOOP, "vertical", undefined, mulberry32(7));
-    const duration = (svg: string): string | undefined =>
-      /<animateMotion[^>]*dur="([^"]+)"/.exec(svg)?.[1];
-    const lit = (svg: string): string | undefined => /values="([^"]+)"/.exec(svg)?.[1];
-    expect(duration(horizontal)).toBe("5.4s");
-    expect(duration(vertical)).toBe(duration(horizontal));
-    expect(lit(horizontal)).toBeDefined();
-    expect(lit(vertical)).toBe(lit(horizontal));
+  it("walks the same fail edges from one seeded generator", () => {
+    const svg = renderPlate(LOOP, undefined, mulberry32(7));
+    const duration = (source: string): string | undefined =>
+      /<animateMotion[^>]*dur="([^"]+)"/.exec(source)?.[1];
+    expect(duration(svg)).toBe("5.4s");
+    expect(/values="([^"]+)"/.exec(svg)?.[1]).toBeDefined();
   });
 
   it("replays the same walk from the same seed, in [0, 1)", () => {
@@ -229,7 +223,7 @@ describe("the walk generator", () => {
 
 describe("the lit fail edges", () => {
   it("lights one window per leg the walk rode, and hides the light under reduced motion", () => {
-    const svg = renderPlate(LOOP, "horizontal", undefined, () => 0);
+    const svg = renderPlate(LOOP, undefined, () => 0);
     expect(svg).toContain(`<path class="edge-lit" `);
     expect(svg).toContain(` data-lit>`);
     expect(svg).toContain(`<animate attributeName="opacity" calcMode="discrete"`);
@@ -240,11 +234,46 @@ describe("the lit fail edges", () => {
     expect(values.split(";")).toEqual(["0", "1", "0", "1", "0", "1", "0", "0", "0"]);
   });
 
-  it("leaves the default plate alone: the happy path rides no fail edge", () => {
+  it("leaves the happy path without a lit fail edge", () => {
     const svg = renderPlate(LOOP);
-    expect(svg).not.toContain("edge-lit");
-    expect(svg).not.toContain("data-lit");
-    expect(svg).not.toContain(`@media (prefers-reduced-motion:reduce){.plate-svg .edge-lit`);
+    expect(svg).not.toContain(`<path class="edge-lit"`);
+    // The catalogue still lights its units: the walk visits them.
+    expect(svg).toContain(`<g class="lits">`);
+  });
+});
+
+describe("the lit units", () => {
+  /** The discrete values of the twin the walk drew for one unit. */
+  function twinValues(svg: string, name: string): string[] {
+    const pattern = new RegExp(
+      `<rect class="unit-lit"[^>]*data-name="${name}"[^>]*>[\\s\\S]*?values="([^"]+)"`,
+    );
+    return pattern.exec(svg)?.[1]?.split(";") ?? [];
+  }
+
+  it("lights a twin only on the legs that touch its unit", () => {
+    // Every draw dips: the eight-leg walk loops gate↔fix three times, so
+    // fix touches legs 1–6, start only leg 0 and done only the final leg.
+    const svg = renderPlate(LOOP, undefined, () => 0);
+    expect(svg.match(/class="unit-lit"/g) ?? []).toHaveLength(4);
+    expect(twinValues(svg, "fix")).toEqual(["0", "1", "1", "1", "1", "1", "1", "0", "0"]);
+    expect(twinValues(svg, "gate")).toEqual(["1", "1", "1", "1", "1", "1", "1", "1", "0"]);
+    expect(twinValues(svg, "start")).toEqual(["1", "0", "0", "0", "0", "0", "0", "0", "0"]);
+    expect(twinValues(svg, "done")).toEqual(["0", "0", "0", "0", "0", "0", "0", "1", "0"]);
+    expect(svg).toContain(
+      `@media (prefers-reduced-motion:reduce){.plate-svg .unit-lit{display:none}}`,
+    );
+  });
+
+  it("draws no twin for a plate with no walk", () => {
+    const single: GraphDocument = {
+      name: "single",
+      nodes: [{ name: "only", kind: "agent", position: 1, config: {} }],
+      edges: [],
+    };
+    const svg = renderPlate(single);
+    expect(svg).not.toContain("unit-lit");
+    expect(svg).not.toContain(`<g class="lits">`);
   });
 });
 

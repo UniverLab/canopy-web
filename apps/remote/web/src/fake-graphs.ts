@@ -374,7 +374,16 @@ export function createFakeGraphs(deliver: (frame: unknown) => void): FakeGraphs 
         });
         return true;
       }
-      if (frame.t === "graph_watch" && typeof frame.id === "string") {
+      if (frame.t === "graph_watch") {
+        // The host names the req first: any watch without a string req is
+        // refused before the id is even looked at.
+        if (typeof frame.req !== "string") {
+          deliver({ t: "error", code: "bad_request", message: "graph_watch: missing field 'req'" });
+          return true;
+        }
+        if (typeof frame.id !== "string") {
+          return false;
+        }
         const reply = replyFor(frame.id, Date.now());
         if (reply === null) {
           return true;

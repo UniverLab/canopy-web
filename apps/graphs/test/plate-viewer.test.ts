@@ -2,8 +2,8 @@
 /**
  * The plate viewport's transform math: the fit scale, the fit view, the
  * clamped zoom around a point, and the pan that always keeps the content
- * covering the viewport's centre. Pure numbers, no DOM — the client in
- * `src/plate/client.ts` paints what these return.
+ * covering the viewport's centre. Pure numbers, no DOM — the viewer in
+ * `packages/plate/viewport.ts` paints what these return.
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -17,7 +17,7 @@ import {
   fitView,
   panBy,
   zoomAround,
-} from "../src/plate/transform.js";
+} from "../../../packages/plate/viewport.js";
 
 const CONTENT = { w: 2000, h: 500 };
 const VIEWPORT = { w: 700, h: 900 };

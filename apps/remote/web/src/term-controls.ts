@@ -125,6 +125,8 @@ export interface TermControlsDeps {
   terminalView: () => TermControlsView | null;
   /** Send resize{id,cols,rows}: this device asserts its size to the host. */
   onControlSize: (cols: number, rows: number) => void;
+  /** Send resize_release{id}: the toggle turned off, give the size back. */
+  onReleaseSize: () => void;
   /** Resize the local terminal to cols × rows (the shell tracks the size). */
   onLocalSize: (cols: number, rows: number) => void;
   /** Open the Prompt Builder sheet; the controls row owns its button. */
@@ -376,6 +378,7 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
       startOwning();
     } else {
       stopOwning();
+      deps.onReleaseSize();
     }
   });
 

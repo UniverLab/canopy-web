@@ -2,13 +2,10 @@
 /**
  * Arrowhead markers for the plate and the editor canvas: one id shape,
  * `<prefix>-arrow` / `<prefix>-arrow-fail` / `<prefix>-arrow-error`,
- * shared by both. A plate's prefix carries its orientation and its
- * figure's marker seed — `vertical-9f3` — so the two plates in one
- * figure never share an id: `url(#…)` resolves to the *first* marker in
- * the document, and Chrome paints no marker from a `display:none`
- * subtree, which is exactly how the phone's hidden horizontal twin used
- * to swallow every arrowhead. The canvas passes the fixed prefix `edge`,
- * keeping its markers and stylesheet byte-identical.
+ * shared by both. A plate's prefix is its figure's marker seed —
+ * `plate-9f3` — so the plates in one page never share an id: `url(#…)`
+ * resolves to the *first* marker in the document. The canvas passes the
+ * fixed prefix `edge`, keeping its markers and stylesheet byte-identical.
  *
  * The head is a 1.3-unit triangle in user units, tip at the path end;
  * `markerCss` returns the rules painting each head, every selector

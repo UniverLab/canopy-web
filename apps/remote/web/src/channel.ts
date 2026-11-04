@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 // Protocol v1 data-channel frames. Snapshot bodies arrive split across one
-// `snapshot` frame plus `snapshot_more` chunks; they are joined into a single
-// snapshot before delivery to the session layer. Every other frame passes
-// through untouched.
+// `snapshot` frame plus `snapshot_more` chunks; each part carries its own
+// base64 so its own `=` padding, so the parts are decoded one by one and
+// joined as bytes before delivery to the session layer. Every other frame
+// passes through untouched.
+
+import { b64decode } from "./crypto.js";
 
 export interface JoinedSnapshot {
   id: string;
   cols: number;
   rows: number;
   seq: number;
-  data: string;
+  data: Uint8Array;
 }
 
 export interface ChannelHandlers {
@@ -72,6 +75,30 @@ export interface ChannelAssembler {
 export function createChannelHandler(handlers: ChannelHandlers): ChannelAssembler {
   let pending: (SnapshotHead & { parts: string[] }) | null = null;
 
+  // The host base64-encodes each part on its own, so every part may end in
+  // `=` padding; joining the strings would put that padding in the middle,
+  // where `atob` throws. Decode one by one and concatenate the bytes, and
+  // drop a part that cannot decode so one bad frame never blanks the view.
+  const joinParts = (parts: string[]): Uint8Array => {
+    const chunks: Uint8Array[] = [];
+    for (const part of parts) {
+      try {
+        chunks.push(b64decode(part));
+      } catch {
+        // An undecodable part paints as absent; the rest still reaches
+        // the terminal.
+      }
+    }
+    const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    const joined = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      joined.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return joined;
+  };
+
   const flush = () => {
     if (!pending) {
       return;
@@ -81,9 +108,11 @@ export function createChannelHandler(handlers: ChannelHandlers): ChannelAssemble
       cols: pending.cols,
       rows: pending.rows,
       seq: pending.seq,
-      data: pending.parts.join(""),
+      data: joinParts(pending.parts),
     };
     pending = null;
+    // Always delivered, even when nothing survived decoding: the session
+    // layer needs the snapshot beat so the live output after it flows.
     handlers.onSnapshot(done);
   };
 

@@ -50,6 +50,7 @@ const CALLBACKS: ShellCallbacks = {
   onKeyPress: () => {},
   onTerminalInput: () => {},
   onControlSize: () => {},
+  onReleaseSize: () => {},
   onSpawn: () => true,
   onCompose: () => true,
   onSendDraft: () => true,

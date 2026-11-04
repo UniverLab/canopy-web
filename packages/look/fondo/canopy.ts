@@ -7,6 +7,9 @@ import { createSpriteStore, drawCells, writeCellPixels } from './sprites.js';
 import type { SpriteStore } from './sprites.js';
 
 const TEAL = '#3fb8b0';
+// A macrotask boundary: the map blit, the sliced decode and the layout
+// tail each settle in their own task, so no single task holds all three.
+const nextTask = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 const STEP_MS = 120;
 export const ON = 1;
 export const DYING = 2;
@@ -299,14 +302,20 @@ export const mount: MountFondo = (host: HTMLElement, opts: FondoOpts): Fondo => 
     k.height = map!.h;
     const kc = k.getContext('2d') as CanvasRenderingContext2D;
     kc.drawImage(labels.source, 0, 0);
-    // The ids land in slices of at most 128 rows per task; `ready` flips
-    // only after the last slice, in the same task as layout and the seeds.
+    // The full-map blit above settles in its own task: the sliced decode
+    // starts after a yield, never in the blit's shadow.
+    await nextTask();
+    // The ids land in slices of at most ID_SLICE_ROWS rows per task;
+    // `ready` flips only after the last slice.
     const rows: LabelRows = {
       width: map!.w,
       height: map!.h,
       readRows: (y, count) => kc.getImageData(0, y, map!.w, count).data,
     };
     index = await loadCellIndex(rows);
+    // The last slice settles in its own task too: canvas sizing, the comb
+    // glow and layout run after a yield, never piled onto the final slice.
+    await nextTask();
     lit.width = glow.width = combGlow.width = Math.round(map!.w * HALO);
     lit.height = glow.height = combGlow.height = Math.round(map!.h * HALO);
     tiny.width = Math.max(1, Math.round(lit.width / BLUR_DOWN));

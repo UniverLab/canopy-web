@@ -14,9 +14,9 @@ import {
   buildPromptDraft,
   buildPromptSchedule,
   buildResize,
+  buildResizeRelease,
   buildScheduledCancel,
   buildScheduledList,
-  decodeSnapshotData,
 } from "./protocol.js";
 import type { OutFrame, PromptDraft } from "./protocol.js";
 
@@ -132,6 +132,16 @@ export class SessionController {
     return this.callbacks.send(buildResize(this.openId, cols, rows));
   }
 
+  // The control-size toggle turning off: give the size back so the host's
+  // own TUI re-asserts its size at once. Takeovers and teardown stay
+  // silent: only the user's own toggle calls this.
+  releaseSize(): boolean {
+    if (this.openId === null) {
+      return false;
+    }
+    return this.callbacks.send(buildResizeRelease(this.openId));
+  }
+
   handleSnapshot(snapshot: JoinedSnapshot): void {
     if (this.openId === null || snapshot.id !== this.openId) {
       return;
@@ -140,14 +150,11 @@ export class SessionController {
     if (!terminal) {
       return;
     }
-    const bytes = decodeSnapshotData(snapshot.data);
-    if (!bytes) {
-      return;
-    }
+    // The channel already decoded the parts: bytes written as they came.
     terminal.clear();
     this.lastSeq = snapshot.seq;
     this.snapshotSeen = true;
-    terminal.write(bytes);
+    terminal.write(snapshot.data);
     this.drainPending(terminal);
   }
 

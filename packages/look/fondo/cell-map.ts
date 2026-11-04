@@ -11,7 +11,7 @@
  */
 
 /** Rows decoded per task; the map lands slice by slice, never in one block. */
-export const ID_SLICE_ROWS = 128;
+export const ID_SLICE_ROWS = 64;
 
 /** Row slices of the decoded label image, whatever decoded it. */
 export interface LabelRows {

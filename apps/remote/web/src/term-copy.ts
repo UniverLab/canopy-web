@@ -256,3 +256,43 @@ export function wireCopyFloat(
     }
   };
 }
+
+// The slice of xterm's buffer bufferText reads: structural, so the real
+// IBuffer and the unit-test fakes both fit.
+export interface BufferLineLike {
+  readonly isWrapped: boolean;
+  translateToString(trimRight?: boolean): string;
+}
+
+export interface BufferLike {
+  readonly length: number;
+  getLine(y: number): BufferLineLike | undefined;
+}
+
+// The buffer as copyable text: a line whose isWrapped is true continues
+// the logical line above it (a wrapped line copies as one line), each row
+// is right-trimmed, trailing blank lines are dropped, and only the last
+// maxLines logical lines are kept. "" when maxLines is not positive.
+export function bufferLinesToText(buffer: BufferLike, maxLines: number): string {
+  if (!(maxLines > 0)) {
+    return "";
+  }
+  const logical: string[] = [];
+  for (let y = 0; y < buffer.length; y += 1) {
+    const line = buffer.getLine(y);
+    if (!line) {
+      continue;
+    }
+    const text = line.translateToString(true);
+    if (line.isWrapped && logical.length > 0) {
+      logical[logical.length - 1] += text;
+    } else {
+      logical.push(text);
+    }
+  }
+  let end = logical.length;
+  while (end > 0 && logical[end - 1] === "") {
+    end -= 1;
+  }
+  return logical.slice(0, end).slice(-maxLines).join("\n");
+}

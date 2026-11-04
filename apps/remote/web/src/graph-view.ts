@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 // The graph view: the header (name, status chip, done/total, blocker
-// text), the plate on the black stage — re-rendered from every
-// `graph_state` push with its scroll position kept, vertical below 720 px
-// and horizontal above — and the spec checklist below it in queue order.
-// Read-only, and through a disconnect it keeps the last state with a
-// "disconnected — last update" note. The shell owns the watches; this
-// module only paints what the store holds.
+// text), the plate on the black stage — repainted from every
+// `graph_state` push through one pan-and-zoom viewer that keeps its view —
+// and the spec checklist below it in queue order. Read-only, and through a
+// disconnect it keeps the last state with a "disconnected — last update"
+// note. The shell owns the watches; this module only paints what the store
+// holds.
 
 import type { GraphDocument } from "../../../../packages/plate/document.js";
 import { renderPlate } from "../../../../packages/plate/render.js";
 import type { PlateState } from "../../../../packages/plate/render.js";
+import { mountPlateViewer, type PlateLabels, type PlateViewer } from "../../../../packages/plate/viewport.js";
 import { REMOTE_FOOTER } from "./footer.js";
 import { specMark, statusChip } from "./graphs-list.js";
 import { icon } from "./icons-dom.js";
@@ -28,13 +29,31 @@ export interface GraphViewArgs {
   state: GraphState | null;
   /** When the last state arrived locally (epoch ms), or null. */
   receivedAt: number | null;
+  /** The failed watch's message, shown until the drawing arrives. */
+  watchError?: string | null;
   connected: boolean;
-  orientation: "vertical" | "horizontal";
   onBack: () => void;
 }
 
+/** The catalogue's words for the three overlaid controls. */
+const PLATE_LABELS: PlateLabels = {
+  zoomOut: "Zoom out",
+  zoomIn: "Zoom in",
+  fit: "Fit",
+  fitLabel: "Fit the graph",
+};
+
+/** The mounted viewer, if the stage currently holds a readable drawing. */
+let viewer: PlateViewer | null = null;
+
 /** The running spec row already scrolled into view; null until it changes. */
 let scrolledRunning: string | null = null;
+
+/** Take the viewer down: leaving the view, or a stage with no drawing. */
+export function disposeGraphView(): void {
+  viewer?.dispose();
+  viewer = null;
+}
 
 function esc(text: string): string {
   return text
@@ -59,13 +78,21 @@ export function plateStateOf(state: GraphState | null): PlateState | undefined {
     : { nodes: state.nodes, current: state.current_node ?? undefined };
 }
 
+/** The stage's content: the drawing's svg, or the line that holds it. */
+type Stage = { svg: string } | { wait: string };
+
 /** The plate with the live overlay; a missing drawing holds the stage. */
-function stageHtml(args: GraphViewArgs): string {
+function stageOf(args: GraphViewArgs): Stage {
   if (args.doc === null || args.doc === undefined) {
-    return `<p class="graph-wait">Waiting for the drawing…</p>`;
+    if (args.watchError !== null && args.watchError !== undefined) {
+      return { wait: `<p class="graph-wait">Could not open this graph: ${esc(args.watchError)}</p>` };
+    }
+    return { wait: `<p class="graph-wait">Waiting for the drawing…</p>` };
   }
-  const html = renderPlate(args.doc as GraphDocument, args.orientation, plateStateOf(args.state));
-  return html === "" ? `<p class="graph-wait">This drawing could not be read.</p>` : html;
+  const svg = renderPlate(args.doc as GraphDocument, plateStateOf(args.state));
+  return svg === ""
+    ? { wait: `<p class="graph-wait">This drawing could not be read.</p>` }
+    : { svg };
 }
 
 function specRow(spec: GraphSpecRow): string {
@@ -88,7 +115,7 @@ function specRow(spec: GraphSpecRow): string {
 
 function checklistHtml(state: GraphState | null): string {
   if (state === null) {
-    return `<p class="empty">No state yet.</p>`;
+    return `<p class="empty">Waiting for the specs…</p>`;
   }
   if (state.specs.length === 0) {
     return `<p class="empty">No specs in the queue.</p>`;
@@ -121,6 +148,24 @@ function scrollRunning(list: HTMLElement, state: GraphState | null): void {
     }
   }
   scrolledRunning = id;
+}
+
+/** Paint the stage: the viewer holds a drawing, or a line holds the stage. */
+function paintStage(stage: HTMLElement, args: GraphViewArgs): void {
+  const next = stageOf(args);
+  if ("wait" in next) {
+    disposeGraphView();
+    stage.innerHTML = next.wait;
+    return;
+  }
+  // A live viewer swaps only the drawing, so a push never resets the view.
+  if (viewer !== null) {
+    viewer.replaceSvg(next.svg);
+    return;
+  }
+  stage.innerHTML = `<figure class="plate" data-plate>${next.svg}</figure>`;
+  const figure = stage.querySelector<HTMLElement>("figure.plate[data-plate]");
+  viewer = figure === null ? null : mountPlateViewer(figure, PLATE_LABELS);
 }
 
 function paint(main: HTMLElement, args: GraphViewArgs): void {
@@ -165,10 +210,7 @@ function paint(main: HTMLElement, args: GraphViewArgs): void {
   }
   const stage = main.querySelector<HTMLElement>("#graph-stage");
   if (stage) {
-    const keep = { left: stage.scrollLeft, top: stage.scrollTop };
-    stage.innerHTML = stageHtml(args);
-    stage.scrollLeft = keep.left;
-    stage.scrollTop = keep.top;
+    paintStage(stage, args);
   }
   const list = main.querySelector<HTMLElement>("#spec-list");
   if (list) {
@@ -191,7 +233,7 @@ function viewHtml(args: GraphViewArgs): string {
     `<p class="graph-blocker" id="graph-blocker" hidden></p>` +
     `<p class="graph-note" id="graph-note" hidden></p>` +
     `<div class="graph-stage" id="graph-stage"></div>` +
-    `<h2>Checklist</h2>` +
+    `<h2>Specs</h2>` +
     `<ol class="spec-list" id="spec-list"></ol>` +
     `</main>` +
     REMOTE_FOOTER
@@ -200,6 +242,7 @@ function viewHtml(args: GraphViewArgs): string {
 
 /** Mount the graph view (or update it in place when it is already up). */
 export function renderGraphView(root: HTMLElement, args: GraphViewArgs): void {
+  disposeGraphView();
   scrolledRunning = null;
   root.innerHTML = viewHtml(args);
   root.querySelector("#graph-back")?.addEventListener("click", () => args.onBack());
@@ -213,6 +256,7 @@ export function renderGraphView(root: HTMLElement, args: GraphViewArgs): void {
 export function updateGraphView(root: HTMLElement, args: GraphViewArgs): void {
   const main = root.querySelector<HTMLElement>("main.graph-view");
   if (main === null) {
+    disposeGraphView();
     return;
   }
   paint(main, args);

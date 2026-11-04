@@ -125,6 +125,9 @@ async function main(): Promise<void> {
       onControlSize: (cols, rows) => {
         controller.sendResize(cols, rows);
       },
+      onReleaseSize: () => {
+        controller.releaseSize();
+      },
       onSpawn: (spawn, req) => manager?.send(buildSpawn(req, spawn)) ?? false,
       onCompose: (draft, req) => manager?.send(buildCompose(req, draft)) ?? false,
       onSendDraft: (draft, req) => controller.sendPromptDraft(draft, req),

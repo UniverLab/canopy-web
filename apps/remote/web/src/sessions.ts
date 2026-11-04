@@ -191,7 +191,7 @@ export function renderSessions(
       `${shelf.unseen === 0 ? "" : shelf.unseen}</span></button></li>`
     : "";
   const shelfList = shelfRow === "" ? "" : `<ul class="session-list">${shelfRow}</ul>`;
-  const heading = guest ? "Shared sessions" : "Sessions";
+  const heading = guest ? `<h2>Shared sessions</h2>` : "";
   const empty = loaded
     ? guest
       ? "No sessions shared with you."
@@ -201,7 +201,7 @@ export function renderSessions(
     ? ""
     : `<button type="button" id="session-new">${icon("plus")}<span>New session</span></button>`;
   root.innerHTML =
-    `<div class="sessions-head"><h2>${heading}</h2>${newButton}</div>` +
+    `<div class="sessions-head">${heading}${newButton}</div>` +
     (items.length === 0
       ? `${shelfList}<p class="empty">${empty}</p>`
       : `${shelfList}${group("Agents", agents)}${group("Terminals", terminals)}`);

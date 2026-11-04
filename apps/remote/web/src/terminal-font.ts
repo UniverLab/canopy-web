@@ -6,7 +6,7 @@
 // misaligns. We wait for document.fonts.load, but never longer than 1.5 s:
 // a slow network must not leave the operator with no terminal at all.
 
-export const TERMINAL_FONT_FAMILY = '"JetBrains Mono", ui-monospace, monospace';
+export const TERMINAL_FONT_FAMILY = '"JetBrains Mono", "Canopy Symbols", ui-monospace, monospace';
 export const TERMINAL_FONT_SIZE = 14;
 // DPR-1 fallback size: at devicePixelRatio 1 the WebGL backing store is the
 // CSS size with no supersampling, so JetBrains Mono's cells hold only
@@ -24,6 +24,10 @@ export const TERMINAL_FONT_SIZE_DPR1 = 28;
 // scales above it (125 %, 150 %) already rasterise a thicker stroke.
 export const TERMINAL_DPR_1_LIMIT = 1.05;
 export const TERMINAL_FONT_SPEC = `${TERMINAL_FONT_SIZE}px "JetBrains Mono"`;
+// A sample from the symbols face's own range: the load below only counts
+// when the browser matched this text to the Canopy Symbols face.
+export const TERMINAL_SYMBOL_SPEC = `${TERMINAL_FONT_SIZE}px "Canopy Symbols"`;
+export const TERMINAL_SYMBOL_SAMPLE = "⏵";
 
 // The size createXtermHandle opens with: the double-size fallback at DPI 1,
 // the measured default everywhere else. An unknown or invalid DPR counts
@@ -46,9 +50,15 @@ export function terminalFontGate(): Promise<void> | null {
   if (!fonts || typeof fonts.load !== "function") {
     return null;
   }
+  // Both faces under one timer: xterm's WebGL atlas caches a rasterised
+  // glyph, so the symbols face must be ready before the first paint, and
+  // a slow network must still not leave the operator with no terminal.
   let loaded: Promise<unknown>;
   try {
-    loaded = fonts.load(TERMINAL_FONT_SPEC);
+    loaded = Promise.all([
+      fonts.load(TERMINAL_FONT_SPEC),
+      fonts.load(TERMINAL_SYMBOL_SPEC, TERMINAL_SYMBOL_SAMPLE),
+    ]);
   } catch {
     return null;
   }

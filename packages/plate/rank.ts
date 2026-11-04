@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * The plate's ranking phase, shared by both orientations: a parsed graph
- * becomes layout units in document order, longest-path ranks over the rank
- * edges, fail-only targets lifted right after the unit that fails into
- * them, and one barycenter sweep ordering the units within each rank.
+ * The plate's ranking phase: a parsed graph becomes layout units in document
+ * order, longest-path ranks over the rank edges, fail-only targets lifted
+ * right after the unit that fails into them, and one barycenter sweep
+ * ordering the units within each rank.
  *
  * Ranks are longest paths from the entry over `pass`/`always`/route edges
  * and ensemble `on_pass_to` exits — an ensemble is one layout unit, fail
@@ -77,8 +77,7 @@ export interface RankEdge {
 /**
  * A parsed graph ranked for layout: its units, the rank edges between them,
  * each unit's rank, the barycenter-ordered units per rank, the entry node
- * and the name-to-unit resolver. Both orientations rank identically; only
- * the geometry after this differs.
+ * and the name-to-unit resolver.
  */
 export interface RankedGraph {
   units: Unit[];
@@ -215,7 +214,7 @@ function rerankFailOnly(
  * Rank a parsed graph: units in document order, longest-path ranks over the
  * rank edges, fail-only nodes lifted into their own rank after the unit
  * that fails into them, one barycenter sweep within each rank. Deterministic
- * and total — the same input ranks the same way for both orientations.
+ * and total — the same input always ranks the same way.
  */
 export function rankUnits(parsed: ParsedGraph): RankedGraph {
   const nodeNames = new Set(parsed.nodes.map((node) => node.name));

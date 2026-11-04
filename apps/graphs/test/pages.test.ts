@@ -410,6 +410,20 @@ describe("the page shell", () => {
     const html = await long.text();
     expect(html).toContain("canopy graph install hello-graph");
   });
+
+  it("keeps the gap between a button's icon and its label", async () => {
+    const html = await (await call("/g/hello-graph")).text();
+    // The shared rule lays icon buttons out as a flex row with a gap.
+    expect(html).toContain(
+      ".copy, .search button, .site-nav a, .button { display: inline-flex; align-items: center; gap: 0.4rem; }",
+    );
+    // The standalone .button rule must not redeclare display: anything here
+    // wins by cascade and collapses the gap. Anchored to the line start —
+    // the shared rule above also ends in ".button {".
+    const standalone = /^\.button \{[^}]*\}/m.exec(html)?.[0] ?? "";
+    expect(standalone).not.toBe("");
+    expect(standalone).not.toMatch(/display\s*:/);
+  });
 });
 
 describe("the technical index", () => {

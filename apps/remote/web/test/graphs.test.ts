@@ -7,6 +7,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Shell } from "../src/app.js";
 import { CatalogStore } from "../src/catalog.js";
+import { createFakeGraphs } from "../src/fake-graphs.js";
 import { GraphStore } from "../src/graph-store.js";
 import { plateStateOf, renderGraphView, updateGraphView } from "../src/graph-view.js";
 import type { GraphViewArgs } from "../src/graph-view.js";
@@ -80,7 +81,6 @@ function viewArgs(overrides: Partial<GraphViewArgs> = {}): GraphViewArgs {
     state: graphState(),
     receivedAt: 1793100000_000,
     connected: true,
-    orientation: "horizontal",
     onBack: () => {},
     ...overrides,
   };
@@ -209,11 +209,16 @@ describe("GraphStore", () => {
     expect(store.currentSummary()).toBeNull();
     expect(store.currentDoc()).toBeNull();
     expect(store.currentState()).toBeNull();
-    expect(sent).toEqual([
-      { t: "graph_watch", id: "g1" },
-      { t: "graph_watch", id: "g1" },
-      { t: "graph_watch", id: "g2" },
-    ]);
+    // Every watch carries its own non-empty req, so the host can answer it.
+    expect(sent).toHaveLength(3);
+    const ids = ["g1", "g1", "g2"];
+    for (const [index, frame] of sent.entries()) {
+      expect(frame).toMatchObject({ t: "graph_watch", id: ids[index] });
+      expect(typeof (frame as { req: unknown }).req).toBe("string");
+      expect((frame as { req: string }).req).not.toBe("");
+    }
+    const reqs = sent.map((frame) => (frame as { req: string }).req);
+    expect(new Set(reqs).size).toBe(3);
     expect(store.watchedId()).toBe("g2");
   });
 
@@ -223,10 +228,10 @@ describe("GraphStore", () => {
     expect(sent).toEqual([]);
     store.watch("g1");
     expect(store.unwatch()).toBe(true);
-    expect(sent).toEqual([
-      { t: "graph_watch", id: "g1" },
-      { t: "graph_unwatch", id: "g1" },
-    ]);
+    expect(sent).toHaveLength(2);
+    expect(sent[0]).toMatchObject({ t: "graph_watch", id: "g1" });
+    expect((sent[0] as { req: string }).req).not.toBe("");
+    expect(sent[1]).toEqual({ t: "graph_unwatch", id: "g1" });
     expect(store.watchedId()).toBeNull();
   });
 
@@ -241,7 +246,52 @@ describe("GraphStore", () => {
     store.watch("g1");
     sent.length = 0;
     expect(store.rewatch()).toBe(true);
-    expect(sent).toEqual([{ t: "graph_watch", id: "g1" }]);
+    // The rewatch is a fresh request with its own non-empty req.
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ t: "graph_watch", id: "g1" });
+    expect(typeof (sent[0] as { req: unknown }).req).toBe("string");
+    expect((sent[0] as { req: string }).req).not.toBe("");
+  });
+
+  it("claims only the error answering the latest watch", () => {
+    const { store, sent } = setup();
+    // No watch yet: nothing is claimed, and nobody is notified.
+    const seen: Array<string | null> = [];
+    store.subscribe(() => seen.push(store.watchError()));
+    expect(store.handleWatchError("late", "r-stale")).toBe(false);
+    expect(store.handleWatchError("late", null)).toBe(false);
+    expect(store.watchError()).toBeNull();
+    store.watch("g1");
+    const first = (sent[0] as { req: string }).req;
+    store.watch("g1");
+    const latest = (sent[1] as { req: string }).req;
+    // A stale req and a missing one fall through to the sheets.
+    expect(store.handleWatchError("stale", first)).toBe(false);
+    expect(store.handleWatchError("missing", null)).toBe(false);
+    expect(store.watchError()).toBeNull();
+    // The latest watch's error is kept, and the view is notified.
+    expect(store.handleWatchError("graph_watch: missing field 'req'", latest)).toBe(true);
+    expect(store.watchError()).toBe("graph_watch: missing field 'req'");
+    expect(seen).toEqual(["graph_watch: missing field 'req'"]);
+  });
+
+  it("clears the failed watch on the next watch, reply or reset", () => {
+    const { store, sent } = setup();
+    store.watch("g1");
+    const req = (sent[0] as { req: string }).req;
+    expect(store.handleWatchError("no such graph", req)).toBe(true);
+    // A fresh watch clears it before the host even answers.
+    store.watch("g1");
+    expect(store.watchError()).toBeNull();
+    const again = (sent[1] as { req: string }).req;
+    expect(store.handleWatchError("no such graph", again)).toBe(true);
+    // A late reply still wins over the failure.
+    store.handleGraph({ summary: summary(), doc: CHAIN, state: graphState() });
+    expect(store.watchError()).toBeNull();
+    expect(store.handleWatchError("no such graph", again)).toBe(true);
+    store.reset();
+    expect(store.watchError()).toBeNull();
+    expect(store.handleWatchError("no such graph", again)).toBe(false);
   });
 
   it("holds the list sorted, the watch reply and the pushed state", () => {
@@ -344,33 +394,63 @@ describe("the graph view", () => {
     expect(plateStateOf(null)).toBeUndefined();
   });
 
-  it("draws vertical below 720 px and horizontal above", () => {
-    const root = document.createElement("div");
-    renderGraphView(root, viewArgs({ orientation: "vertical" }));
-    expect(root.querySelector("#graph-stage .plate-svg")?.classList.contains("plate-v")).toBe(true);
-    updateGraphView(root, viewArgs({ orientation: "horizontal" }));
-    expect(root.querySelector("#graph-stage .plate-svg")?.classList.contains("plate-h")).toBe(true);
-  });
-
-  it("keeps the stage scroll across a state push", () => {
+  it("mounts one viewer with the three overlaid controls", () => {
     const root = document.createElement("div");
     renderGraphView(root, viewArgs());
-    const stage = root.querySelector("#graph-stage") as HTMLElement;
-    stage.scrollTop = 42;
-    stage.scrollLeft = 7;
+    const plate = root.querySelector<HTMLElement>("#graph-stage figure.plate");
+    expect(plate?.classList.contains("is-live")).toBe(true);
+    const controls = [...root.querySelectorAll<HTMLButtonElement>(".plate-controls button")];
+    expect(controls.map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Zoom out",
+      "Zoom in",
+      "Fit the graph",
+    ]);
+    expect(plate?.style.getPropertyValue("--plate-ratio")).not.toBe("");
+  });
+
+  it("keeps the viewer's transform across a state push", () => {
+    const root = document.createElement("div");
+    renderGraphView(root, viewArgs());
+    const zoomIn = root.querySelector<HTMLButtonElement>('.plate-controls button[aria-label="Zoom in"]');
+    zoomIn?.click();
+    const zoomed = root.querySelector<SVGSVGElement>("#graph-stage .plate-svg")?.style.transform ?? "";
+    expect(zoomed).toContain("scale(1.25)");
     updateGraphView(root, viewArgs({ state: graphState({ current_node: "first" }) }));
-    expect(stage.scrollTop).toBe(42);
-    expect(stage.scrollLeft).toBe(7);
+    // The push swapped the drawing but painted the same view on it.
+    const after = root.querySelector<SVGSVGElement>("#graph-stage .plate-svg");
+    expect(after?.style.transform).toBe(zoomed);
   });
 
   it("holds the stage until the drawing arrives, and past an unreadable one", () => {
     const root = document.createElement("div");
     renderGraphView(root, viewArgs({ doc: null, state: null }));
     expect(root.querySelector(".graph-wait")?.textContent).toBe("Waiting for the drawing…");
-    expect(root.querySelector(".spec-list")?.textContent).toBe("No state yet.");
+    expect(root.querySelector(".spec-list")?.textContent).toBe("Waiting for the specs…");
     updateGraphView(root, viewArgs({ doc: {}, state: graphState({ specs: [] }) }));
     expect(root.querySelector(".graph-wait")?.textContent).toBe("This drawing could not be read.");
     expect(root.querySelector(".spec-list")?.textContent).toBe("No specs in the queue.");
+  });
+
+  it("heads the queue Specs and shows a failed watch instead of waiting", () => {
+    const root = document.createElement("div");
+    renderGraphView(root, viewArgs({ doc: null, state: null }));
+    expect(root.querySelector("main.graph-view h2")?.textContent).toBe("Specs");
+    // The failed watch replaces exactly the waiting line, before the reply.
+    updateGraphView(root, viewArgs({ doc: null, state: null, watchError: "no such graph" }));
+    expect(root.querySelector(".graph-wait")?.textContent).toBe(
+      "Could not open this graph: no such graph",
+    );
+    // The message is host text: markup in it never becomes elements.
+    updateGraphView(
+      root,
+      viewArgs({ doc: null, state: null, watchError: `<img src=x onerror=alert(1)>` }),
+    );
+    expect(root.querySelector(".graph-wait")?.querySelector("img")).toBeNull();
+    expect(root.querySelector(".graph-wait")?.innerHTML).toContain("&lt;img");
+    // A later reply clears it: the plate takes the stage.
+    updateGraphView(root, viewArgs({ watchError: null }));
+    expect(root.querySelector("#graph-stage .plate-svg")).not.toBeNull();
+    expect(root.querySelector(".graph-wait")).toBeNull();
   });
 
   it("checks each spec row with its icon and label", () => {
@@ -501,10 +581,20 @@ describe("the graph view", () => {
 });
 
 describe("routing the graph frames", () => {
-  function setup(): { router: ReturnType<typeof createFrameRouter>; graphs: GraphStore } {
+  function setup(): {
+    router: ReturnType<typeof createFrameRouter>;
+    graphs: GraphStore;
+    sent: unknown[];
+  } {
     const store = new SessionStore();
     const catalog = new CatalogStore();
-    const graphs = new GraphStore({ send: () => true });
+    const sent: unknown[] = [];
+    const graphs = new GraphStore({
+      send: (data) => {
+        sent.push(JSON.parse(data));
+        return true;
+      },
+    });
     const controller = new SessionController({
       send: () => true,
       terminal: () => ({
@@ -520,7 +610,7 @@ describe("routing the graph frames", () => {
       catalog,
       graphs,
     });
-    return { router, graphs };
+    return { router, graphs, sent };
   }
 
   it("routes the list, the watch reply and the pushes to the store", () => {
@@ -561,6 +651,18 @@ describe("routing the graph frames", () => {
     expect(graphs.currentState()?.current_node).toBe("first");
   });
 
+  it("routes a failed watch to the store, never to a sheet", () => {
+    const { router, graphs, sent } = setup();
+    graphs.watch("g1");
+    const req = (sent[0] as { req: string }).req;
+    // The shell stub owns no sheets: falling through would throw on the
+    // missing sheetError, so this pins the store's claim.
+    expect(() =>
+      router.handleFrame({ t: "error", req, code: "not_found", message: "no such graph" }),
+    ).not.toThrow();
+    expect(graphs.watchError()).toBe("no such graph");
+  });
+
   it("routes nothing without the store, and never throws", () => {
     const store = new SessionStore();
     const catalog = new CatalogStore();
@@ -578,6 +680,32 @@ describe("routing the graph frames", () => {
       router.handleFrame({ t: "graph", req: "r7", id: "g1", document: CHAIN, state: graphState() });
       router.handleFrame({ t: "graph_state", id: "g1", state: graphState() });
     }).not.toThrow();
+  });
+});
+
+describe("the fake graphs host", () => {
+  it("refuses a watch without a req exactly like the host", () => {
+    const delivered: unknown[] = [];
+    const fake = createFakeGraphs((frame) => delivered.push(frame));
+    expect(fake.handle({ t: "graph_watch", id: "g-loop" })).toBe(true);
+    expect(delivered).toEqual([
+      { t: "error", code: "bad_request", message: "graph_watch: missing field 'req'" },
+    ]);
+    // The host names the req first: without an id either, the same refusal.
+    expect(fake.handle({ t: "graph_watch" })).toBe(true);
+    expect(delivered).toHaveLength(2);
+    expect(delivered[1]).toEqual(delivered[0]);
+  });
+
+  it("echoes the watch's req in the graph reply", () => {
+    const delivered: unknown[] = [];
+    const fake = createFakeGraphs((frame) => delivered.push(frame));
+    expect(fake.handle({ t: "graph_watch", req: "r9", id: "g-loop" })).toBe(true);
+    const reply = delivered.find((frame) => (frame as { t: string }).t === "graph") as {
+      req: string;
+    };
+    expect(reply.req).toBe("r9");
+    fake.handle({ t: "graph_unwatch", id: "g-loop" });
   });
 });
 

@@ -2,10 +2,10 @@
 /**
  * The plate renderer: a laid-out graph becomes one self-contained `<svg>`
  * in the Canopy vocabulary — node kinds as shapes, pass edges as teal
- * S-curves, fail edges as red dashed arcs above the row (left of the column
- * in the vertical orientation), ensembles as dashed group outlines, the
- * infra node in a lower lane, and a walking token along the main pass
- * chain that may ride a red fail edge back before getting through.
+ * orthogonal lines, fail edges as red dashed channels above the row, ensembles as
+ * dashed group outlines, the infra node in a lower lane, and a walking
+ * token along the main pass chain that may ride a red fail edge back
+ * before getting through.
  *
  * Node colours follow univerlab's GraphMorph: the shape fills with its
  * harness colour at 22% over the deep (`--nc`, the Canopy teal when the
@@ -29,15 +29,14 @@ import {
   PLATE_SCALE,
   layoutPlate,
   plateLabel,
-  type Orientation,
   type PlacedEdge,
+  type PlacedGroup,
   type PlacedMember,
   type PlacedNode,
   type PlateLayout,
 } from "./layout.js";
-import { V_HARNESS_DY, V_LABEL_DX, V_LABEL_DY, layoutPlateVertical } from "./vertical.js";
 import { GEOM, TYPE, harnessColor } from "./vocabulary.js";
-import { happyRandom, STEP_SECONDS } from "./walk.js";
+import { happyRandom, STEP_SECONDS, type WalkStep } from "./walk.js";
 import { isArray, isNumber, isRecord, isString } from "./guards.js";
 import { markerCss, markerDefs, markerId } from "./markers.js";
 
@@ -168,6 +167,7 @@ function stateStyle(): string {
     `animation:plate-ring-pulse 1.6s ease-in-out infinite}` +
     `@keyframes plate-ring-pulse{0%,100%{opacity:1}50%{opacity:.3}}` +
     `@media (prefers-reduced-motion:reduce){.plate-svg .state-ring{animation:none}}` +
+    `.plate-svg .unit-lit{fill:var(--canopy,#00a9a0);fill-opacity:.18;stroke:var(--canopy,#00a9a0);stroke-width:.7}` +
     `.plate-svg .state-fail .shape,.plate-svg .state-fail .member-shape{stroke:#ff6b6b}` +
     `.plate-svg .state-badge-bg{fill:#04110f;stroke:none;opacity:.9}` +
     `.plate-svg .state-badge-mark{fill:none;stroke-width:.9;stroke-linecap:round;stroke-linejoin:round}` +
@@ -187,31 +187,43 @@ function stateStyle(): string {
 function litStyle(): string {
   return (
     `.plate-svg .edge-lit{fill:none;stroke:#ff6b6b;stroke-width:.8;stroke-dasharray:1.4 1.1}` +
-    `@media (prefers-reduced-motion:reduce){.plate-svg .edge-lit{display:none}}`
+    `.plate-svg .unit-lit{fill:var(--canopy,#00a9a0);fill-opacity:.18;stroke:var(--canopy,#00a9a0);stroke-width:.7}` +
+    `@media (prefers-reduced-motion:reduce){.plate-svg .edge-lit{display:none}}` +
+    `@media (prefers-reduced-motion:reduce){.plate-svg .unit-lit{display:none}}`
   );
 }
 
 const EDGE_ORDER = { error: 0, order: 1, pass: 2, fail: 3 } as const;
 
 /**
- * The lit twin of a fail edge the walk rode: the same dashed curve a
- * touch brighter and thicker, carrying a discrete SMIL opacity animation
- * that lights it exactly while the walker rides its legs — one window
- * per leg, as many as the walk crossed the edge. The twin rides beside
- * the base edge, never in its place, so the static drawing stays whole.
+ * The discrete SMIL timing over a walk: one slot per leg, `1` on the legs
+ * the lit element rides and `0` elsewhere, with a keyTime per slot. Both
+ * the fail-edge twin and the unit twin light through this one builder.
  */
-function renderLitEdge(edge: PlacedEdge, legs: number[], total: number, seconds: number): string {
+function litTiming(legs: number[], total: number): { values: string; keyTimes: string } {
   const values: string[] = [];
   const keyTimes: string[] = [];
   for (let index = 0; index <= total; index += 1) {
     keyTimes.push(String(Math.round((index / total) * 10000) / 10000));
     values.push(index < total && legs.includes(index) ? "1" : "0");
   }
+  return { values: values.join(";"), keyTimes: keyTimes.join(";") };
+}
+
+/**
+ * The lit twin of a fail edge the walk rode: the same dashed path a
+ * touch brighter and thicker, carrying a discrete SMIL opacity animation
+ * that lights it exactly while the walker rides its legs — one window
+ * per leg, as many as the walk crossed the edge. The twin rides beside
+ * the base edge, never in its place, so the static drawing stays whole.
+ */
+function renderLitEdge(edge: PlacedEdge, legs: number[], total: number, seconds: number): string {
+  const { values, keyTimes } = litTiming(legs, total);
   return (
     `<path class="edge-lit" d="${edge.d}" ` +
     `data-from="${escape(edge.from)}" data-to="${escape(edge.to)}" data-lit>` +
-    `<animate attributeName="opacity" calcMode="discrete" values="${values.join(";")}" ` +
-    `keyTimes="${keyTimes.join(";")}" dur="${seconds}s" repeatCount="indefinite"/>` +
+    `<animate attributeName="opacity" calcMode="discrete" values="${values}" ` +
+    `keyTimes="${keyTimes}" dur="${seconds}s" repeatCount="indefinite"/>` +
     `</path>`
   );
 }
@@ -222,7 +234,7 @@ function edgeMarker(prefix: string, cls: string): string {
   return id === null ? "" : ` marker-end="url(#${id})"`;
 }
 
-function renderEdges(layout: PlateLayout, prefix: string): string {
+function renderEdges(layout: PlateLayout, prefix: string, state: PlateState | undefined): string {
   const litOf = new Map(layout.walkFails.map((lit) => [`${lit.from}→${lit.to}`, lit.legs]));
   const total = Math.round(layout.walkSeconds / STEP_SECONDS);
   const edges = [...layout.edges].sort(
@@ -235,7 +247,9 @@ function renderEdges(layout: PlateLayout, prefix: string): string {
       const base =
         `<path class="edge ${edge.cls}" d="${edge.d}"${edgeMarker(prefix, edge.cls)} ` +
         `data-from="${escape(edge.from)}" data-to="${escape(edge.to)}"/>`;
-      const legs = edge.cls === "fail" ? litOf.get(`${edge.from}→${edge.to}`) : undefined;
+      // A stateful plate carries no SMIL at all: the overlay is the animation.
+      const legs =
+        state === undefined && edge.cls === "fail" ? litOf.get(`${edge.from}→${edge.to}`) : undefined;
       return legs === undefined || legs.length === 0 || total <= 0
         ? base
         : base + renderLitEdge(edge, legs, total, layout.walkSeconds);
@@ -301,6 +315,92 @@ function renderRing(cx: number, cy: number, r: number): string {
   return `<circle class="state-ring" cx="${num2(cx)}" cy="${num2(cy)}" r="${num2(r)}"/>`;
 }
 
+/** The rect a unit's glow copies: a node's shape or an ensemble's outline. */
+interface UnitTwin {
+  name: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  rx: number;
+  rotate: number;
+}
+
+function nodeTwin(node: PlacedNode): UnitTwin {
+  const geom = GEOM[node.shape];
+  return {
+    name: node.name,
+    x: node.x,
+    y: node.y,
+    w: geom.w,
+    h: geom.h,
+    rx: geom.rx,
+    rotate: geom.rot,
+  };
+}
+
+function groupTwin(group: PlacedGroup): UnitTwin {
+  return { name: group.name, x: group.x, y: group.y, w: group.w, h: group.h, rx: 2, rotate: 0 };
+}
+
+/** A unit twin's opening tag, without the close, so a child may animate it. */
+function twinOpen(twin: UnitTwin): string {
+  const rotate =
+    twin.rotate === 0 ? "" : ` transform="rotate(${twin.rotate} ${twin.x} ${twin.y})"`;
+  return (
+    `<rect class="unit-lit" x="${num2(twin.x - twin.w / 2)}" y="${num2(twin.y - twin.h / 2)}" ` +
+    `width="${twin.w}" height="${twin.h}" rx="${twin.rx}" ` +
+    `fill="var(--canopy,#00a9a0)" fill-opacity="0.18" stroke="var(--canopy,#00a9a0)" stroke-width="0.7" ` +
+    `data-lit data-name="${escape(twin.name)}"${rotate}`
+  );
+}
+
+/**
+ * The catalogue's lit unit: the unit's own rect behind it, riding a
+ * discrete SMIL opacity that turns on exactly on the walk's legs that
+ * touch it. `prefers-reduced-motion` hides it whole.
+ */
+function renderLitUnit(twin: UnitTwin, legs: number[], total: number, seconds: number): string {
+  const { values, keyTimes } = litTiming(legs, total);
+  return (
+    `${twinOpen(twin)}>` +
+    `<animate attributeName="opacity" calcMode="discrete" values="${values}" ` +
+    `keyTimes="${keyTimes}" dur="${seconds}s" repeatCount="indefinite"/>` +
+    `</rect>`
+  );
+}
+
+/** The remote's lit unit: the same glow, static, for a running unit. */
+function renderStaticLitUnit(twin: UnitTwin): string {
+  return `${twinOpen(twin)}/>`;
+}
+
+/** The legs of the walk that reach or leave one unit. */
+function touchingLegs(steps: WalkStep[], name: string): number[] {
+  const legs: number[] = [];
+  for (const [index, step] of steps.entries()) {
+    if (step.from === name || step.to === name) {
+      legs.push(index);
+    }
+  }
+  return legs;
+}
+
+/** The catalogue's glow: one lit twin per unit the walk visits, behind them. */
+function renderLits(layout: PlateLayout): string {
+  const total = layout.walkSteps.length;
+  if (total === 0) {
+    return "";
+  }
+  const units = [
+    ...layout.nodes.map((node) => ({ twin: nodeTwin(node), legs: touchingLegs(layout.walkSteps, node.name) })),
+    ...layout.groups.map((group) => ({ twin: groupTwin(group), legs: touchingLegs(layout.walkSteps, group.name) })),
+  ].filter((unit) => unit.legs.length > 0);
+  return `<g class="lits">${units
+    .map((unit) => renderLitUnit(unit.twin, unit.legs, total, layout.walkSeconds))
+    .join("")}</g>`;
+}
+
 function renderMember(
   groupName: string,
   member: PlacedMember,
@@ -335,6 +435,18 @@ function renderMember(
   );
 }
 
+/** Whether a running key lights the whole ensemble. */
+function groupRunning(state: PlateState | undefined, group: PlacedGroup): boolean {
+  if (state === undefined) {
+    return false;
+  }
+  const keys = [
+    group.name,
+    ...group.members.flatMap((member, index) => [member.label, `${group.name}#${index + 1}`]),
+  ];
+  return keys.some((key) => statusOf(state, key) === "running");
+}
+
 function renderGroups(layout: PlateLayout, state: PlateState | undefined): string {
   return layout.groups
     .map((group) => {
@@ -343,10 +455,12 @@ function renderGroups(layout: PlateLayout, state: PlateState | undefined): strin
           renderMember(group.name, member, index, markOf(state, [member.label, `${group.name}#${index + 1}`])),
         )
         .join("");
+      const twin = groupRunning(state, group) ? renderStaticLitUnit(groupTwin(group)) : "";
       return (
         `<g class="ensemble" data-name="${escape(group.name)}">` +
         `<rect class="group-box" x="${group.x - group.w / 2}" y="${group.y - group.h / 2}" ` +
         `width="${group.w}" height="${group.h}" rx="2"/>` +
+        twin +
         `<text class="group-title" x="${groupLabelX(group)}" y="${groupTitleY(group)}">${escape(group.title)}</text>` +
         `<text class="group-subtitle" x="${groupLabelX(group)}" y="${groupSubtitleY(group)}">${escape(group.subtitle)}</text>` +
         members +
@@ -356,22 +470,14 @@ function renderGroups(layout: PlateLayout, state: PlateState | undefined): strin
     .join("");
 }
 
-function renderNode(node: PlacedNode, orientation: Orientation, mark: Mark | null): string {
+function renderNode(node: PlacedNode, mark: Mark | null): string {
   const geom = GEOM[node.shape];
   const rotate = geom.rot === 0 ? "" : ` transform="rotate(${geom.rot} ${node.x} ${node.y})"`;
   const dataHarness = node.harness === null ? "" : ` data-harness="${escape(node.harness)}"`;
-  // The lane's units label beneath their shapes in both orientations: the
-  // column already keeps its labels to the right, and the channel beside
-  // the lane has to stay clear for the routes and the bus.
-  const labelsRight = orientation === "vertical" && node.lane !== "handler";
-  const label = labelsRight
-    ? `<text class="label" x="${num2(node.x + node.w / 2 + V_LABEL_DX)}" y="${node.y}" dy="${V_LABEL_DY}" text-anchor="start">${escape(plateLabel(node.name))}</text>`
-    : `<text class="label" x="${node.x}" y="${node.y}" dy="${TYPE.labelDy}" text-anchor="middle">${escape(plateLabel(node.name))}</text>`;
+  const label = `<text class="label" x="${node.x}" y="${node.y}" dy="${TYPE.labelDy}" text-anchor="middle">${escape(plateLabel(node.name))}</text>`;
   const harness = node.harness === null
     ? ""
-    : labelsRight
-      ? `<text class="harness" x="${num2(node.x + node.w / 2 + V_LABEL_DX)}" y="${node.y}" dy="${V_HARNESS_DY}" text-anchor="start">${escape(node.harness)}</text>`
-      : `<text class="harness" x="${node.x}" y="${node.y}" dy="${TYPE.harnessDy}" text-anchor="middle">${escape(node.harness)}</text>`;
+    : `<text class="harness" x="${node.x}" y="${node.y}" dy="${TYPE.harnessDy}" text-anchor="middle">${escape(node.harness)}</text>`;
   // With a state the title names the state — the palette alone cannot tell
   // passed from failed — without one it keeps reading like the catalogue's.
   const title = mark === null
@@ -379,6 +485,7 @@ function renderNode(node: PlacedNode, orientation: Orientation, mark: Mark | nul
     : `<title>${escape(node.name)} — ${STATE_WORD[mark.status]}</title>`;
   const stateCls = mark === null ? "" : ` state-${mark.status}`;
   const stateData = mark === null ? "" : ` data-state="${mark.status}"`;
+  const twin = mark?.lit === true ? renderStaticLitUnit(nodeTwin(node)) : "";
   const ring = mark?.lit === true
     ? renderRing(node.x, node.y, Math.max(geom.w, geom.h) / 2 + 2.2)
     : "";
@@ -392,6 +499,7 @@ function renderNode(node: PlacedNode, orientation: Orientation, mark: Mark | nul
     title +
     `<rect class="shape" x="${node.x - geom.w / 2}" y="${node.y - geom.h / 2}" ` +
     `width="${geom.w}" height="${geom.h}" rx="${geom.rx}"${rotate}/>` +
+    twin +
     ring +
     label +
     harness +
@@ -407,7 +515,7 @@ function num2(value: number): number {
 
 function renderNodes(layout: PlateLayout, state: PlateState | undefined): string {
   return layout.nodes
-    .map((node) => renderNode(node, layout.orientation, markOf(state, [node.name])))
+    .map((node) => renderNode(node, markOf(state, [node.name])))
     .join("");
 }
 
@@ -464,13 +572,15 @@ function renderLayout(layout: PlateLayout, state: PlateState | undefined, prefix
     ensembles.length === 0 ? null : `Ensembles: ${ensembles.join(", ")}.`,
   ].filter((part) => part !== null);
   const desc = parts.join(" ");
-  const cls = layout.orientation === "vertical" ? "plate-svg plate-v" : "plate-svg plate-h";
-  // The overlays' CSS rides only on a stateful or a fail-lit render: a
-  // plain plate stays byte-identical to the catalogue's own drawing.
+  const cls = "plate-svg plate-h";
+  // The overlays' CSS rides only on a stateful or a lit render: a plate
+  // with no walk and no ridden fail edge stays byte-identical to before.
+  const needsLit =
+    state === undefined && (layout.walkFails.length > 0 || layout.walkSteps.length > 0);
   const style =
     plateStyle(prefix) +
     (state === undefined ? "" : stateStyle()) +
-    (layout.walkFails.length === 0 ? "" : litStyle());
+    (needsLit ? litStyle() : "");
   return (
     `<svg class="${cls}" viewBox="0 0 ${layout.width} ${layout.height}" ` +
     `width="${Math.round(layout.width * PLATE_SCALE)}" height="${Math.round(layout.height * PLATE_SCALE)}" ` +
@@ -479,7 +589,8 @@ function renderLayout(layout: PlateLayout, state: PlateState | undefined, prefix
     `<desc>${escape(desc)}</desc>` +
     `<style>${style}</style>` +
     markerDefs(prefix) +
-    `<g class="edges">${renderEdges(layout, prefix)}${renderBuses(layout, prefix)}</g>` +
+    `<g class="edges">${renderEdges(layout, prefix, state)}${renderBuses(layout, prefix)}</g>` +
+    (state === undefined ? renderLits(layout) : "") +
     `<g class="groups">${renderGroups(layout, state)}</g>` +
     `<g class="nodes">${renderNodes(layout, state)}</g>` +
     `<g class="marks">${renderMarks(layout)}</g>` +
@@ -490,9 +601,9 @@ function renderLayout(layout: PlateLayout, state: PlateState | undefined, prefix
 }
 
 /**
- * Render a graph document as a self-contained Canopy plate, horizontal
- * (ranks left to right) or vertical (ranks top to bottom). An unreadable
- * document draws nothing: the pages only ever pass validated graphs.
+ * Render a graph document as a self-contained Canopy plate: ranks left to
+ * right, the horizontal layout. An unreadable document draws nothing: the
+ * pages only ever pass validated graphs.
  *
  * The optional state overlays a live run on the same drawing: running and
  * current units get a pulsing teal ring (static under reduced motion) with
@@ -507,24 +618,18 @@ function renderLayout(layout: PlateLayout, state: PlateState | undefined, prefix
  * draw never fails a unit — the pure happy path — so a caller that passes
  * none keeps the old walk, byte for byte.
  *
- * The optional `markerSeed` scopes the arrowhead marker ids with the
- * orientation — `{orientation}-{seed}-arrow` — so two plates in one page
- * (one of them `display:none` at the current width) each resolve their
- * markers inside their own svg. The default keeps single-plate pages
- * working unchanged.
+ * The optional `markerSeed` scopes the arrowhead marker ids — `{seed}-arrow`
+ * — so two plates in one page each resolve their markers inside their own
+ * svg. The default keeps single-plate pages working unchanged.
  */
 export function renderPlate(
   document: GraphDocument,
-  orientation: Orientation = "horizontal",
   state?: PlateState,
   random: () => number = happyRandom,
   markerSeed = "plate",
 ): string {
-  const layout =
-    orientation === "vertical"
-      ? layoutPlateVertical(document, random)
-      : layoutPlate(document, random);
-  return layout === null ? "" : renderLayout(layout, state, `${orientation}-${markerSeed}`);
+  const layout = layoutPlate(document, random);
+  return layout === null ? "" : renderLayout(layout, state, markerSeed);
 }
 
 /**
@@ -535,7 +640,6 @@ export function renderPlate(
  */
 export function renderNodePlate(
   document: NodeDocument,
-  orientation: Orientation = "horizontal",
   markerSeed = "plate",
 ): string {
   if (!isRecord(document) || !isString(document["name"]) || !isString(document["kind"])) {
@@ -563,12 +667,12 @@ export function renderNodePlate(
         },
       ],
     };
-    return renderPlate(graph, orientation, undefined, undefined, markerSeed);
+    return renderPlate(graph, undefined, undefined, markerSeed);
   }
   const graph: GraphDocument = {
     name,
     nodes: [{ name, kind, position: 1, config }],
     edges: [],
   };
-  return renderPlate(graph, orientation, undefined, undefined, markerSeed);
+  return renderPlate(graph, undefined, undefined, markerSeed);
 }

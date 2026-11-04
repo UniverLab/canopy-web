@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * The canopy-builder plate's lanes, in both orientations: the reader must
- * see the flow, and see where failure goes without counting nine long lines
- * that read as the main path. These tests hold the drawing to the shape of
- * the graph — handlers below the flow in a band (left of the column when
- * vertical), one bus per class into each, one `✓ done` under the flow's
- * real end, and no edge crossing a node.
+ * The canopy-builder plate's lanes: the reader must see the flow, and see
+ * where failure goes without counting nine long lines that read as the main
+ * path. These tests hold the drawing to the shape of the graph — handlers
+ * below the flow in a band, one bus per class into each, one `✓ done` under
+ * the flow's real end, and no edge crossing a node.
  */
 import { describe, expect, it } from "vitest";
 import builder from "./fixtures/graphs/canopy-builder/graph.json" with { type: "json" };
@@ -100,27 +99,44 @@ function dones(svg: string): string[] {
   );
 }
 
-/** Sample a path's points: every M/L endpoint and 24 points per cubic. */
+/** Sample a path's points: every M/L/H/V endpoint and 24 points per Q corner. */
 function samples(d: string): Array<[number, number]> {
   const points: Array<[number, number]> = [];
   let cursor: [number, number] = [0, 0];
-  for (const part of d.matchAll(/([MLC])([^MLC]*)/g)) {
+  for (const part of d.matchAll(/([MLHVQ])([^MLHVQ]*)/g)) {
     const nums = (part[2] ?? "").match(/-?[\d.]+/g)?.map(Number) ?? [];
     if (part[1] === "M" || part[1] === "L") {
-      cursor = [nums[0] ?? 0, nums[1] ?? 0];
-      points.push(cursor);
-    } else if (part[1] === "C") {
-      const [x0, y0] = cursor;
-      const [x1, y1, x2, y2, x3, y3] = nums;
-      for (let step = 1; step <= 24; step += 1) {
-        const t = step / 24;
-        const u = 1 - t;
-        points.push([
-          u * u * u * x0 + 3 * u * u * t * (x1 ?? 0) + 3 * u * t * t * (x2 ?? 0) + t * t * t * (x3 ?? 0),
-          u * u * u * y0 + 3 * u * u * t * (y1 ?? 0) + 3 * u * t * t * (y2 ?? 0) + t * t * t * (y3 ?? 0),
-        ]);
+      for (let i = 0; i + 1 < nums.length; i += 2) {
+        cursor = [nums[i] ?? 0, nums[i + 1] ?? 0];
+        points.push(cursor);
       }
-      cursor = [x3 ?? 0, y3 ?? 0];
+    } else if (part[1] === "H") {
+      for (const x of nums) {
+        cursor = [x, cursor[1]];
+        points.push(cursor);
+      }
+    } else if (part[1] === "V") {
+      for (const y of nums) {
+        cursor = [cursor[0], y];
+        points.push(cursor);
+      }
+    } else if (part[1] === "Q") {
+      for (let i = 0; i + 3 < nums.length; i += 4) {
+        const [x0, y0] = cursor;
+        const cx = nums[i] ?? 0;
+        const cy = nums[i + 1] ?? 0;
+        const x1 = nums[i + 2] ?? 0;
+        const y1 = nums[i + 3] ?? 0;
+        for (let step = 1; step <= 24; step += 1) {
+          const t = step / 24;
+          const u = 1 - t;
+          points.push([
+            u * u * x0 + 2 * u * t * cx + t * t * x1,
+            u * u * y0 + 2 * u * t * cy + t * t * y1,
+          ]);
+        }
+        cursor = [x1, y1];
+      }
     }
   }
   return points;
@@ -132,8 +148,8 @@ function endOf(d: string): [number, number] {
   return points[points.length - 1] ?? [Number.NaN, Number.NaN];
 }
 
-describe.each(["horizontal", "vertical"] as const)("canopy-builder %s", (orientation) => {
-  const svg = renderPlate(DOC, orientation);
+describe("canopy-builder", () => {
+  const svg = renderPlate(DOC);
   const nodes = boxes(svg);
   const all = [...nodes, ...groupBoxes(svg)];
   const main = nodes.filter((node) => node.lane === "main");
@@ -143,16 +159,6 @@ describe.each(["horizontal", "vertical"] as const)("canopy-builder %s", (orienta
     expect(handlers.map((node) => node.name)).toEqual(["Human verdict", "Resilience"]);
     const verdict = nodes.find((node) => node.name === "Human verdict") as Box;
     const resilience = nodes.find((node) => node.name === "Resilience") as Box;
-    if (orientation === "vertical") {
-      // Outside the column: every lane unit sits left of every flow unit.
-      const columnLeft = Math.min(...main.map((node) => node.cx - node.hw));
-      for (const node of handlers) {
-        expect(node.cx + node.hw, node.name).toBeLessThan(columnLeft);
-      }
-      // Human verdict above Resilience, at the column's mid height.
-      expect(verdict.cy).toBeLessThan(resilience.cy);
-      return;
-    }
     // The band below the flow: every handler at or right of Start, below
     // every main-lane node, and never left of the flow's left edge.
     const start = nodes.find((node) => node.name === "Start") as Box;
@@ -199,11 +205,6 @@ describe.each(["horizontal", "vertical"] as const)("canopy-builder %s", (orienta
     expect(into).toHaveLength(1);
     const resilience = nodes.find((node) => node.name === "Resilience");
     const [x, y] = endOf(into[0]?.d ?? "");
-    if (orientation === "vertical") {
-      expect(x).toBeCloseTo((resilience?.cx ?? 0) - (resilience?.hw ?? 0), 1);
-      expect(y).toBeCloseTo(resilience?.cy ?? 0, 1);
-      return;
-    }
     expect(x).toBeCloseTo(resilience?.cx ?? 0, 1);
     expect(y).toBeCloseTo((resilience?.cy ?? 0) - (resilience?.hh ?? 0), 1);
   });
@@ -232,18 +233,12 @@ describe.each(["horizontal", "vertical"] as const)("canopy-builder %s", (orienta
       (path) => path.bus === null && path.cls === "fail" && path.from === "Designer" && path.to === "Resilience",
     );
     expect(kept).toBeDefined();
-    // The lane edge leaves the flow where this orientation puts failure —
-    // below the row into the band, left of the column — never across it.
+    // The lane edge leaves the flow below the row into the band, never
+    // across it.
     const points = samples(kept?.d ?? "");
-    if (orientation === "horizontal") {
-      expect(Math.max(...points.map((point) => point[1]))).toBeGreaterThan(
-        Math.max(...all.filter((box) => box.lane === "main").map((box) => box.cy + box.hh)),
-      );
-    } else {
-      expect(Math.min(...points.map((point) => point[0]))).toBeLessThan(
-        Math.min(...main.map((box) => box.cx - box.hw)),
-      );
-    }
+    expect(Math.max(...points.map((point) => point[1]))).toBeGreaterThan(
+      Math.max(...all.filter((box) => box.lane === "main").map((box) => box.cy + box.hh)),
+    );
   });
 
   it("never crosses a drawn node or group", () => {
@@ -278,11 +273,12 @@ describe.each(["horizontal", "vertical"] as const)("canopy-builder %s", (orienta
 
 describe("no-handler plates", () => {
   it("keeps a handler-free svg byte-identical", async () => {
-    // Re-pinned when the fail arcs' rise moved into the shifted viewBox
-    // coordinates and the bounds took the arcs' drawn apex.
+    // Re-pinned when the vertical layout went away and the marker ids lost
+    // their orientation prefix, then again when the walk's unit twins joined
+    // the catalogue plate.
     const svg = renderPlate(qualityBubble as unknown as GraphDocument);
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(svg));
     const hex = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-    expect(hex).toBe("c42b44147641124a9264d8a5dbe29a150185227696f8daead66a36f9ebe3c4b9");
+    expect(hex).toBe("c954baa22c0d109fefd430e1d67ccccf54b30f1170437c88635db556e24a1130");
   });
 });

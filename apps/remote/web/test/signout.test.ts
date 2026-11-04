@@ -73,6 +73,7 @@ describe("sign out", () => {
       onKeyPress: () => {},
       onTerminalInput: () => {},
       onControlSize: () => {},
+      onReleaseSize: () => {},
       onSpawn: () => true,
       onCompose: () => true,
       onSendDraft: () => true,
@@ -269,7 +270,6 @@ describe("sign out on the graph view", () => {
       state: null,
       receivedAt: null,
       connected: true,
-      orientation: "horizontal",
       onBack: () => {},
       ...overrides,
     };

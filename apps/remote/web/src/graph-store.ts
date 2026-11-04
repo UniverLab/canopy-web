@@ -25,6 +25,10 @@ export class GraphStore {
   private doc: unknown = null;
   private state: GraphState | null = null;
   private receivedAt: number | null = null;
+  /** The latest watch's req: an error carrying it failed this watch. */
+  private watchReq: string | null = null;
+  /** The latest watch's failure, cleared by the next watch or reply. */
+  private watchErrorMessage: string | null = null;
 
   constructor(deps: GraphStoreDeps) {
     this.send = deps.send;
@@ -60,7 +64,10 @@ export class GraphStore {
       this.receivedAt = null;
     }
     this.watching = id;
-    return this.send(buildGraphWatch(id));
+    const req = newReqId();
+    this.watchReq = req;
+    this.watchErrorMessage = null;
+    return this.send(buildGraphWatch(req, id));
   }
 
   /** Stop watching; the last state stays for the next watch or reconnect. */
@@ -72,11 +79,22 @@ export class GraphStore {
 
   /** Re-send the watch after a reconnect, only while a watch is open. */
   rewatch(): boolean {
-    return this.watching === null ? true : this.send(buildGraphWatch(this.watching));
+    if (this.watching === null) {
+      return true;
+    }
+    const req = newReqId();
+    this.watchReq = req;
+    this.watchErrorMessage = null;
+    return this.send(buildGraphWatch(req, this.watching));
   }
 
   watchedId(): string | null {
     return this.watching;
+  }
+
+  /** The latest watch's failure message, or null while it stands. */
+  watchError(): string | null {
+    return this.watchErrorMessage;
   }
 
   // --- inbound --------------------------------------------------------
@@ -86,10 +104,25 @@ export class GraphStore {
     this.notify();
   }
 
+  /**
+   * True when the error failed this watch: its req is the latest watch's.
+   * The router stays dumb — the store claims its own errors, like the
+   * shelf fetcher does for its transfers.
+   */
+  handleWatchError(message: string, req: string | null): boolean {
+    if (req === null || req !== this.watchReq) {
+      return false;
+    }
+    this.watchErrorMessage = message;
+    this.notify();
+    return true;
+  }
+
   handleGraph(reply: GraphWatchReply): void {
     if (this.open !== null && reply.summary.id !== this.open) {
       return;
     }
+    this.watchErrorMessage = null;
     this.summary = reply.summary;
     this.doc = reply.doc;
     // The reply carries the first live state: apply it exactly like a
@@ -114,6 +147,8 @@ export class GraphStore {
     this.doc = null;
     this.state = null;
     this.receivedAt = null;
+    this.watchReq = null;
+    this.watchErrorMessage = null;
     this.notify();
   }
 

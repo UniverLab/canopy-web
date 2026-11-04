@@ -346,7 +346,6 @@ ul.sources { margin: 0 0 1.5rem; padding-left: 1.25rem; font-family: var(--font-
 ul.sources li { margin: 0 0 0.35rem; }
 
 .button {
-  display: inline-block;
   padding: 0.6rem 1.1rem;
   border: 1px solid var(--tint-line);
   border-radius: var(--radius-ctl);

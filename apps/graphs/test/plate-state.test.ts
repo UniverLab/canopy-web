@@ -36,15 +36,13 @@ function memberLabel(svg: string, group: string, index: number): string {
 }
 
 describe("renderPlate without a state", () => {
-  it("is the catalogue's own drawing, with or without the third argument", () => {
-    expect(renderPlate(CHAIN, "horizontal", undefined)).toBe(renderPlate(CHAIN));
-    expect(renderPlate(TUI_POLISH_GRAPH, "vertical", undefined)).toBe(
-      renderPlate(TUI_POLISH_GRAPH, "vertical"),
-    );
+  it("is the catalogue's own drawing, with or without the overlay argument", () => {
+    expect(renderPlate(CHAIN, undefined)).toBe(renderPlate(CHAIN));
+    expect(renderPlate(TUI_POLISH_GRAPH, undefined)).toBe(renderPlate(TUI_POLISH_GRAPH));
   });
 
   it("carries no overlay markup at all", () => {
-    for (const svg of [renderPlate(CHAIN), renderPlate(TUI_POLISH_GRAPH, "vertical")]) {
+    for (const svg of [renderPlate(CHAIN), renderPlate(TUI_POLISH_GRAPH)]) {
       expect(svg).not.toContain("state-");
       expect(svg).not.toContain("data-state");
       expect(svg).not.toContain("plate-ring-pulse");
@@ -61,7 +59,7 @@ describe("renderPlate without a state", () => {
 
 describe("renderPlate with a state", () => {
   it("lights the running node and stops the token on it", () => {
-    const svg = renderPlate(CHAIN, "horizontal", {
+    const svg = renderPlate(CHAIN, {
       nodes: { first: "pass", second: "running" },
       current: "second",
     });
@@ -78,7 +76,7 @@ describe("renderPlate with a state", () => {
   });
 
   it("reads a current with no entry of its own as running", () => {
-    const svg = renderPlate(CHAIN, "horizontal", { nodes: {}, current: "first" });
+    const svg = renderPlate(CHAIN, { nodes: {}, current: "first" });
     expect(tagOf(svg, /<g class="node[^"]*" data-name="first"[^>]*>/)).toContain(
       `data-state="running"`,
     );
@@ -88,7 +86,7 @@ describe("renderPlate with a state", () => {
   });
 
   it("badges a passed node with a check", () => {
-    const svg = renderPlate(CHAIN, "horizontal", { nodes: { first: "pass" } });
+    const svg = renderPlate(CHAIN, { nodes: { first: "pass" } });
     expect(tagOf(svg, /<g class="node[^"]*" data-name="first"[^>]*>/)).toContain(`state-pass`);
     expect(tagOf(svg, /<g class="node[^"]*" data-name="first"[^>]*>/)).toContain(`data-state="pass"`);
     expect(svg).toContain(`<title>first — passed</title>`);
@@ -99,7 +97,7 @@ describe("renderPlate with a state", () => {
   });
 
   it("badges a failed node with a cross and a red stroke", () => {
-    const svg = renderPlate(CHAIN, "horizontal", { nodes: { second: "fail" } });
+    const svg = renderPlate(CHAIN, { nodes: { second: "fail" } });
     const tag = tagOf(svg, /<g class="node[^"]*" data-name="second"[^>]*>/);
     expect(tag).toContain(`state-fail`);
     expect(tag).toContain(`data-state="fail"`);
@@ -112,7 +110,7 @@ describe("renderPlate with a state", () => {
     const plain = renderPlate(TUI_POLISH_GRAPH);
     const label = memberLabel(plain, "proposers", 1);
     expect(label).not.toBe("");
-    const svg = renderPlate(TUI_POLISH_GRAPH, "horizontal", {
+    const svg = renderPlate(TUI_POLISH_GRAPH, {
       nodes: { [label]: "running", "proposers#2": "pass" },
     });
     const first = tagOf(svg, /<g class="member[^"]*" data-name="proposers" data-i="1"[^>]*>/);
@@ -126,19 +124,19 @@ describe("renderPlate with a state", () => {
     expect(svg).not.toContain(`<animateMotion`);
   });
 
-  it("overlays the vertical plate the same way", () => {
-    const svg = renderPlate(CHAIN, "vertical", {
-      nodes: { second: "running" },
+  it("draws one static twin for the running unit and no SMIL", () => {
+    const svg = renderPlate(CHAIN, {
+      nodes: { first: "pass", second: "running" },
       current: "second",
     });
-    expect(svg).toContain(`<svg class="plate-svg plate-v"`);
-    expect(svg).toContain(`<title>second — running</title>`);
-    expect(svg).toContain(`class="state-ring"`);
-    expect(svg).not.toContain(`<animateMotion`);
+    expect(svg.match(/class="unit-lit"/g) ?? []).toHaveLength(1);
+    expect(svg).toMatch(/<rect class="unit-lit"[^>]*data-lit data-name="second"/);
+    expect(svg).not.toContain("<animate");
+    expect(svg).not.toContain("<animateMotion");
   });
 
   it("draws no ring and no token for a state that names nothing drawn", () => {
-    const svg = renderPlate(CHAIN, "horizontal", { nodes: { nowhere: "running" } });
+    const svg = renderPlate(CHAIN, { nodes: { nowhere: "running" } });
     expect(svg).not.toContain(`class="state-ring"`);
     expect(svg).not.toContain(`<circle class="token"`);
   });

@@ -227,10 +227,6 @@ export function parseOut(frame: unknown): OutFrame | null {
   return { id: frame.id, seq: frame.seq, data };
 }
 
-export function decodeSnapshotData(data: string): Uint8Array | null {
-  return b64Bytes(data);
-}
-
 export function parseOk(frame: unknown): string | null {
   if (frameType(frame) !== "ok" || !isRecord(frame)) {
     return null;
@@ -642,6 +638,10 @@ export function buildResize(id: string, cols: number, rows: number): string {
 
 export function buildDetach(id: string): string {
   return JSON.stringify({ t: "detach", id });
+}
+
+export function buildResizeRelease(id: string): string {
+  return JSON.stringify({ t: "resize_release", id });
 }
 
 export function buildInput(id: string, bytes: Uint8Array): string {

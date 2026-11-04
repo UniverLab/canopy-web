@@ -110,6 +110,7 @@ describe("createShell", () => {
   };
   let handles: FakeHandle[];
   let sendable: boolean;
+  let released: number;
 
   const query = <T extends Element>(selector: string): T => {
     const el = root.querySelector(selector);
@@ -150,6 +151,7 @@ describe("createShell", () => {
     const keys: Uint8Array[] = [];
     const inputs: Uint8Array[] = [];
     const controlSizes: { cols: number; rows: number }[] = [];
+    released = 0;
     const spawns: { spawn: SpawnRequest; req: string }[] = [];
     const composes: { draft: PromptDraft; req: string }[] = [];
     const draftSends: { draft: PromptDraft; req: string }[] = [];
@@ -189,6 +191,9 @@ describe("createShell", () => {
       onKeyPress: (bytes) => keys.push(bytes),
       onTerminalInput: (bytes) => inputs.push(bytes),
       onControlSize: (cols, rows) => controlSizes.push({ cols, rows }),
+      onReleaseSize: () => {
+        released += 1;
+      },
       onSpawn: (spawn, req) => {
         spawns.push({ spawn, req });
         return sendable;
@@ -732,10 +737,12 @@ describe("createShell", () => {
     // Turning it off remembers, stops asserting and fits the width again.
     flipControlSize(false);
     expect(readControlSize("s1")).toBe(false);
+    expect(released).toBe(1);
     expect(query(".term-pane").hasAttribute("data-size-owner")).toBe(false);
     query<HTMLButtonElement>("#term-zoom-out").click();
     vi.advanceTimersByTime(1000);
     expect(calls.controlSizes).toHaveLength(2);
+    expect(released).toBe(1);
   });
 
   it("follows the host's resized frame in place while not the size owner", () => {
@@ -774,6 +781,9 @@ describe("createShell", () => {
     expect(handles[0]?.resizes.at(-1)).toEqual({ cols: 120, rows: 40 });
     vi.advanceTimersByTime(1000);
     expect(calls.controlSizes).toHaveLength(1);
+    // A takeover is not the user's toggle: the size stays taken, nothing
+    // goes back.
+    expect(released).toBe(0);
   });
 
   it("re-asserts a remembered control-size toggle on mount", () => {
@@ -1013,6 +1023,17 @@ describe("createShell", () => {
     const error = query<HTMLElement>("#new-directory-error");
     expect(error.hidden).toBe(false);
     expect(error.textContent).toBe("unknown workdir: /home/u/demo");
+  });
+
+  it("shows no sheet for an old host's req-less unknown-frame error", () => {
+    // A host too old to know resize_release answers an error with no req:
+    // with nothing pending neither sheet claims it and nothing renders.
+    expect(() =>
+      shell.sheetError("unknown frame: resize_release", null, "unknown_frame"),
+    ).not.toThrow();
+    expect(root.querySelector("#builder-error")?.textContent ?? "").toBe("");
+    expect(root.querySelector("#new-error")?.textContent ?? "").toBe("");
+    expect(root.querySelector(".sheet-overlay")).toBeNull();
   });
 
   it("previews and sends a draft from the Builder", () => {

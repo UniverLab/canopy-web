@@ -520,6 +520,12 @@ label > textarea {
   margin: 0.75rem 0;
 }
 
+/* The owner's head holds only the New button: space-between with one
+ * child left-aligns, so the button pushes itself right. */
+.sessions-head #session-new {
+  margin-left: auto;
+}
+
 /* The Agents / Terminals group headings: the h3 scale, one step down
  * from the Sessions title, spacing only. */
 .session-group {
@@ -2017,21 +2023,66 @@ label > textarea {
   display: none;
 }
 
-/* The stage: black like the terminal's, the drawing full width inside. */
+/* The stage: black like the terminal's, the drawing filling it. The plate
+ * is a pan and zoom canvas at every size (packages/plate/viewport.ts), so
+ * the stage never scrolls itself; a stage with no drawing holds the
+ * waiting line below. */
 .graph-stage {
   background: var(--stage-bg);
   border: 1px solid var(--stage-line);
   border-radius: var(--radius-card);
-  padding: 0.75rem;
-  overflow: auto;
-  overscroll-behavior: contain;
-  touch-action: pan-x pan-y;
 }
 
-.graph-stage .plate-svg {
-  display: block;
-  width: 100%;
+figure.plate {
+  margin: 0;
+}
+
+/* The live viewport: the viewer adds is-live and pans/zooms the drawing
+ * itself, so the plate takes the drawing's own proportions (--plate-ratio,
+ * set by the viewer) between 200 px and 60svh. */
+figure.plate.is-live {
+  padding: 0;
+  overflow: hidden;
+  position: relative;
+  touch-action: none;
   height: auto;
+  aspect-ratio: var(--plate-ratio, auto);
+  min-height: 200px;
+  max-height: 60svh;
+}
+
+.plate.is-live svg {
+  display: block;
+  height: auto;
+  margin: 0;
+  transform-origin: 0 0;
+}
+
+/* The overlaid zoom controls: three 44 px targets in the corner, over the
+ * drawing. */
+.plate-controls {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.plate-controls button {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  background: var(--surface-panel);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-ctl);
+  color: var(--surface-ink);
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.plate-controls button:hover {
+  border-color: var(--accent);
 }
 
 .graph-wait {

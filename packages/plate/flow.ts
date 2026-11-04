@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * The plate's wiring, read once for both orientations: which edges draw
- * through the column, which belong to the handler lane (routed outside it or
- * grouped away into marks and buses), and in what order they arrive. The
- * orientations turn these into their own endpoints and curves.
+ * The plate's wiring, read once: which edges draw through the column, which
+ * belong to the handler band (routed around the flow or grouped away into
+ * marks and buses), and in what order they arrive.
  */
 import type { EdgeClass, ParsedGraph } from "./document.js";
 import { wiringOf, type Handlers } from "./handlers.js";

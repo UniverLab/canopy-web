@@ -85,12 +85,13 @@ function setup(): Harness {
 }
 
 function snapshotFrames(id: string, seq: number, text: string): unknown[] {
-  // The host splits the base64 stream, so split the encoding, not the text.
-  const full = b64(text);
-  const cut = Math.min(3, full.length);
+  // The host encodes each part on its own: cut the raw bytes, not the
+  // base64, so each part carries its own `=` padding like a real split.
+  const raw = new TextEncoder().encode(text);
+  const cut = Math.min(3, raw.length);
   return [
-    { t: "snapshot", id, cols: 80, rows: 24, seq, data: full.slice(0, cut) },
-    { t: "snapshot_more", id, data: full.slice(cut), last: true },
+    { t: "snapshot", id, cols: 80, rows: 24, seq, data: b64encode(raw.slice(0, cut)) },
+    { t: "snapshot_more", id, data: b64encode(raw.slice(cut)), last: true },
   ];
 }
 
@@ -231,5 +232,15 @@ describe("session flow over a fake data channel", () => {
     expect(h.sent()).toContainEqual({ t: "resize", id: "s1", cols: 100, rows: 40 });
     h.controller.close();
     expect(h.controller.sendResize(100, 40)).toBe(false);
+  });
+
+  it("releases the size for the open session only", () => {
+    const h = setup();
+    expect(h.controller.releaseSize()).toBe(false);
+    h.controller.open("s1");
+    expect(h.controller.releaseSize()).toBe(true);
+    expect(h.sent()).toContainEqual({ t: "resize_release", id: "s1" });
+    h.controller.close();
+    expect(h.controller.releaseSize()).toBe(false);
   });
 });
