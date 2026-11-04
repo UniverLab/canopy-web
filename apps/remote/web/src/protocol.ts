@@ -640,6 +640,10 @@ export function buildDetach(id: string): string {
   return JSON.stringify({ t: "detach", id });
 }
 
+export function buildResizeRelease(id: string): string {
+  return JSON.stringify({ t: "resize_release", id });
+}
+
 export function buildInput(id: string, bytes: Uint8Array): string {
   return JSON.stringify({ t: "input", id, data: b64encode(bytes) });
 }

@@ -148,6 +148,7 @@ describe("Prompt Builder send through the shell", () => {
         onKeyPress: () => {},
         onTerminalInput: () => {},
         onControlSize: () => {},
+        onReleaseSize: () => {},
         onSpawn: () => true,
         onCompose: () => true,
         onSendDraft: (draft, req) => controller?.sendPromptDraft(draft, req) ?? false,

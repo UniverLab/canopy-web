@@ -14,6 +14,7 @@ import {
   buildPromptDraft,
   buildPromptSchedule,
   buildResize,
+  buildResizeRelease,
   buildScheduledCancel,
   buildScheduledList,
 } from "./protocol.js";
@@ -129,6 +130,16 @@ export class SessionController {
       return false;
     }
     return this.callbacks.send(buildResize(this.openId, cols, rows));
+  }
+
+  // The control-size toggle turning off: give the size back so the host's
+  // own TUI re-asserts its size at once. Takeovers and teardown stay
+  // silent: only the user's own toggle calls this.
+  releaseSize(): boolean {
+    if (this.openId === null) {
+      return false;
+    }
+    return this.callbacks.send(buildResizeRelease(this.openId));
   }
 
   handleSnapshot(snapshot: JoinedSnapshot): void {

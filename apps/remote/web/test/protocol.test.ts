@@ -15,6 +15,7 @@ import {
   buildPromptDraft,
   buildPromptSchedule,
   buildResize,
+  buildResizeRelease,
   buildScheduledCancel,
   buildScheduledList,
   buildShelfDelete,
@@ -170,6 +171,10 @@ describe("builders", () => {
       cols: 1,
       rows: 1,
     });
+  });
+
+  it("builds the exact resize-release frame, with no answer", () => {
+    expect(JSON.parse(buildResizeRelease("s1"))).toEqual({ t: "resize_release", id: "s1" });
   });
 
   it("mints unique req ids", () => {

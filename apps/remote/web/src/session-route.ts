@@ -44,6 +44,8 @@ export interface SessionRouteCallbacks {
    * while it is on, and (debounced) whenever the panel changes while on.
    */
   onControlSize: (cols: number, rows: number) => void;
+  /** The control-size toggle turned off: give the size back to the host. */
+  onReleaseSize: () => void;
   onLeaveSession: () => void;
 }
 
@@ -172,6 +174,7 @@ export class SessionRoute {
       sessionId: () => this.sessionId,
       terminalView: () => this.terminalView,
       onControlSize: (cols, rows) => this.callbacks.onControlSize(cols, rows),
+      onReleaseSize: () => this.callbacks.onReleaseSize(),
       onLocalSize: (cols, rows) => this.resizeLocalTerminal(cols, rows),
       onBuilder: () => this.openBuilder(),
       onCopy: () => this.openCopy(),

@@ -33,6 +33,7 @@ function deps(root: HTMLElement): TermControlsDeps {
     sessionId: () => "s1",
     terminalView: () => null,
     onControlSize: () => {},
+    onReleaseSize: () => {},
     onLocalSize: () => {},
     onBuilder: () => {},
     onCopy: () => {},
@@ -200,6 +201,7 @@ describe("control-size toggle", () => {
   let view: StubView | null;
   let sent: TermSize[];
   let local: TermSize[];
+  let released: number;
   let controls: TermControls;
 
   const toggle = (): HTMLInputElement => {
@@ -223,6 +225,9 @@ describe("control-size toggle", () => {
       ...deps(root),
       terminalView: () => view,
       onControlSize: (cols, rows) => sent.push({ cols, rows }),
+      onReleaseSize: () => {
+        released += 1;
+      },
       onLocalSize: (cols, rows) => local.push({ cols, rows }),
     });
   };
@@ -233,6 +238,7 @@ describe("control-size toggle", () => {
     view = new StubView({ cols: 44, rows: 19 });
     sent = [];
     local = [];
+    released = 0;
     mount();
   });
 
@@ -289,11 +295,14 @@ describe("control-size toggle", () => {
     flip(false);
     expect(readControlSize("s1")).toBe(false);
     expect(view?.owner).toEqual([true, false]);
+    // The user's own toggle gives the size back exactly once.
+    expect(released).toBe(1);
     view!.fits = { cols: 90, rows: 30 };
     globalThis.dispatchEvent(new Event("resize"));
     controls.schedule();
     vi.advanceTimersByTime(SIZE_DEBOUNCE_MS * 2);
     expect(sent).toHaveLength(1);
+    expect(released).toBe(1);
   });
 
   it("re-asserts a remembered toggle on mount, even an unchanged size", () => {
@@ -349,6 +358,9 @@ describe("control-size toggle", () => {
     globalThis.dispatchEvent(new Event("resize"));
     vi.advanceTimersByTime(SIZE_DEBOUNCE_MS * 2);
     expect(sent).toHaveLength(1);
+    // Tearing the view down never gives the size back: the host releases
+    // the sizes of a disconnecting device on its own.
+    expect(released).toBe(0);
   });
 
   const note = (): string => root.querySelector(".term-size-note")?.textContent ?? "";
@@ -357,6 +369,8 @@ describe("control-size toggle", () => {
     controls.handleResized(120, 40);
     expect(local).toEqual([{ cols: 120, rows: 40 }]);
     expect(sent).toEqual([]);
+    // A follower holds nothing to give back.
+    expect(released).toBe(0);
     expect(toggle().checked).toBe(false);
   });
 
@@ -394,6 +408,8 @@ describe("control-size toggle", () => {
     expect(root.querySelector(".term-size-note")?.classList.contains("is-notice")).toBe(true);
     expect(local.at(-1)).toEqual({ cols: 120, rows: 40 });
     expect(sent).toEqual([{ cols: 44, rows: 19 }]);
+    // A takeover is not the user's toggle: nothing goes back.
+    expect(released).toBe(0);
     // No longer watching: a panel change sends nothing.
     globalThis.dispatchEvent(new Event("resize"));
     vi.advanceTimersByTime(SIZE_DEBOUNCE_MS * 2);

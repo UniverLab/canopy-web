@@ -233,4 +233,14 @@ describe("session flow over a fake data channel", () => {
     h.controller.close();
     expect(h.controller.sendResize(100, 40)).toBe(false);
   });
+
+  it("releases the size for the open session only", () => {
+    const h = setup();
+    expect(h.controller.releaseSize()).toBe(false);
+    h.controller.open("s1");
+    expect(h.controller.releaseSize()).toBe(true);
+    expect(h.sent()).toContainEqual({ t: "resize_release", id: "s1" });
+    h.controller.close();
+    expect(h.controller.releaseSize()).toBe(false);
+  });
 });

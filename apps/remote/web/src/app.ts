@@ -52,6 +52,8 @@ export interface ShellCallbacks {
    * while it is on, and (debounced) whenever the panel changes while on.
    */
   onControlSize: (cols: number, rows: number) => void;
+  /** The control-size toggle turned off: give the size back to the host. */
+  onReleaseSize: () => void;
   /** False when the frame could not be sent; the dialog then says so. */
   onSpawn: (spawn: SpawnRequest, req: string) => boolean;
   onCompose: (draft: PromptDraft, req: string) => boolean;
@@ -361,6 +363,7 @@ export function createShell(
       onKeyPress: (bytes) => callbacks.onKeyPress(bytes),
       onTerminalInput: (bytes) => callbacks.onTerminalInput(bytes),
       onControlSize: (cols, rows) => callbacks.onControlSize(cols, rows),
+      onReleaseSize: () => callbacks.onReleaseSize(),
       onLeaveSession: () => callbacks.onLeaveSession(),
     },
     {

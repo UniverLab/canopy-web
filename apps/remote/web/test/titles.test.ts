@@ -82,6 +82,7 @@ describe("shell titles", () => {
         onKeyPress: () => {},
         onTerminalInput: () => {},
         onControlSize: () => {},
+        onReleaseSize: () => {},
         onSpawn: () => true,
         onCompose: () => true,
         onSendDraft: () => true,

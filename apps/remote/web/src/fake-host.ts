@@ -129,6 +129,7 @@ function main(): void {
   const ptySizes = new Map<string, { cols: number; rows: number }>();
   const ptySize = (id: string): { cols: number; rows: number } =>
     ptySizes.get(id) ?? { cols: 80, rows: 24 };
+  const prevSizes = new Map<string, { cols: number; rows: number }>();
   const setPtySize = (id: string, cols: number, rows: number): void => {
     const current = ptySize(id);
     if (current.cols === cols && current.rows === rows) {
@@ -358,7 +359,16 @@ function main(): void {
       typeof frame.cols === "number" &&
       typeof frame.rows === "number"
     ) {
+      if (!prevSizes.has(frame.id)) {
+        prevSizes.set(frame.id, ptySize(frame.id));
+      }
       setPtySize(frame.id, frame.cols, frame.rows);
+    } else if (frame.t === "resize_release" && typeof frame.id === "string" && frame.id !== "") {
+      // The device gives the size back: the host's own TUI re-asserts the
+      // size it held before this device took control.
+      const prev = prevSizes.get(frame.id) ?? { cols: 80, rows: 24 };
+      prevSizes.delete(frame.id);
+      setPtySize(frame.id, prev.cols, prev.rows);
     } else if (fakeUploads.handle(frame)) {
       // shelf_put_begin/part/end/abort: stored on the target shelf.
     } else if (frame.t === "shelf_list") {
@@ -571,6 +581,9 @@ function main(): void {
       },
       onControlSize: (cols, rows) => {
         controller.sendResize(cols, rows);
+      },
+      onReleaseSize: () => {
+        controller.releaseSize();
       },
       onSpawn: (spawn, req) => send(buildSpawn(req, spawn)),
       onCompose: (draft, req) => send(JSON.stringify({ t: "compose", req, draft })),
