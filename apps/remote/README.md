@@ -6,6 +6,22 @@ or watch its graphs — over an encrypted peer-to-peer link. `web/` is the
 browser app, `worker/` the blind signaling relay that introduces the two
 ends (see its own README).
 
+## Working in a session
+
+The key bar under the terminal carries what a phone keyboard lacks. Ctrl and
+Shift are one-shot modifiers: a tap arms the key and opens the keyboard, the
+next key goes out with it, and a second tap disarms it.
+
+**Copy** opens the terminal's text in a sheet where the phone's own long-press
+selection works, with Copy selection and Copy all. With a mouse, drag over the
+terminal and use the floating Copy button or `Ctrl+Shift+C`; plain `Ctrl+C`
+always stays an interrupt for the session.
+
+The **Prompt Builder** sends now or later: Schedule picks a date and time, and
+the sheet lists the session's pending schedules, each with a Cancel. The host
+delivers a schedule even with no browser open; it needs the session still
+running at that time. Terminals take no schedules, only agent sessions do.
+
 ## Watching graphs
 
 The home screen switches between **Sessions** and **Graphs**. Graphs lists
