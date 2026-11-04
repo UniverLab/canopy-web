@@ -311,8 +311,13 @@ describe("createShell", () => {
     expect(query("#term-zoom-in svg")).not.toBeNull();
     expect(query("#term-builder svg")).not.toBeNull();
     expect(query("#term-builder").textContent).toContain("Builder");
-    // The Keys switch stays a word: it names the bar it shows.
+    // The Keys switch keeps its word beside a keyboard icon (the word
+    // steps aside on a phone; the aria-label names it there).
     expect(query("#term-keys").textContent).toBe("Keys");
+    expect(query("#term-keys svg")).not.toBeNull();
+    expect(query("#term-keys").getAttribute("aria-label")).toBe("Show terminal keys");
+    expect(query("#term-latest").getAttribute("aria-label")).toBe("Scroll to the latest output");
+    expect(query("#term-latest").getAttribute("title")).toBe("Scroll to the latest output");
   });
 
   it("ends every view in the same UniverLab footer, after the main", () => {
@@ -575,6 +580,10 @@ describe("createShell", () => {
     const toggle = query<HTMLInputElement>("#term-control-size");
     expect(toggle.checked).toBe(false);
     expect(toggle.closest("label")?.textContent).toContain("This device controls the size");
+    // A switch: the label wraps it (the whole label is the target) and
+    // it announces on/off.
+    expect(toggle.getAttribute("role")).toBe("switch");
+    expect(toggle.closest("label")?.classList.contains("term-size-toggle")).toBe(true);
     expect(query(".term-size-note").textContent).toContain("Only one client should control the size");
     expect(calls.controlSizes).toEqual([]);
     // Mounting while off asserts nothing.

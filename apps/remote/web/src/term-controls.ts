@@ -55,9 +55,15 @@ export function termControlsHtml(): string {
           aria-pressed="${readKeyBarVisible() ? "true" : "false"}"
           aria-label="Show terminal keys"
           title="Show or hide the terminal keys"
-        >Keys</button>
+        >${icon("keyboard")}<span>Keys</span></button>
         <button type="button" id="term-builder" aria-label="Builder">${icon("blocks")}<span>Builder</span></button>${fullscreen}
-        <button type="button" id="term-latest" hidden aria-label="Scroll to the latest output">${icon("arrowDown")}<span>latest</span></button>
+        <button
+          type="button"
+          id="term-latest"
+          hidden
+          aria-label="Scroll to the latest output"
+          title="Scroll to the latest output"
+        >${icon("arrowDown")}<span>latest</span></button>
       </div>`;
 }
 
@@ -67,15 +73,18 @@ export const SIZE_TAKEN_NOTE = "Size taken over by another device.";
 
 // The size row lives below the keybar, not beside the controls: the ten
 // keys must all stay inside a 360×640 viewport, and any row above them
-// pushes the second key row out of view.
+// pushes the second key row out of view. The checkbox is drawn as a
+// switch (role="switch" announces on/off) and the whole label is its
+// 44 px target; Space toggles it and the focus ring is the global one.
 export function termSizeHtml(sessionId: string | null): string {
   return `
       <div class="term-size">
         <label class="term-size-toggle"><input
           type="checkbox"
+          role="switch"
           id="term-control-size"
           ${sessionId !== null && readControlSize(sessionId) ? "checked" : ""}
-        > This device controls the size</label>
+        ><span>This device controls the size</span></label>
         <p class="term-size-note" role="status">${SIZE_NOTE}</p>
       </div>`;
 }

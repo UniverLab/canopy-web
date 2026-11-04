@@ -117,3 +117,68 @@ test("touch_targets_meet_44px", async ({ page }) => {
     expect(control.height, `${control.label} height`).toBeGreaterThanOrEqual(44);
   }
 });
+
+// Audit (2026-11-04): the terminal toolbar at phone widths. Keys and
+// latest go icon-only under 640 px (aria-label and title name them), so
+// no label runs past its button; with the latest button up, eight 44 px
+// targets wrap rather than run past the viewport; and the size switch's
+// label is a 44 px target.
+for (const viewport of [
+  { width: 360, height: 640 },
+  { width: 390, height: 844 },
+] as const) {
+  test(`terminal toolbar fits without clipping at ${viewport.width}px`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await page.goto("/fake.html");
+    await page.locator('[data-session="smoke"]').click();
+    await expect(page.locator("#term-pane")).toBeVisible();
+    // Reveal latest the way scrolling up does, so the full row is measured.
+    await page.evaluate(() => {
+      const latest = document.querySelector<HTMLButtonElement>("#term-latest");
+      if (latest) {
+        latest.hidden = false;
+      }
+    });
+    const report = await page.evaluate(() => {
+      const doc = document.scrollingElement ?? document.documentElement;
+      const controls = document.querySelector(".term-controls") as HTMLElement;
+      const buttons = [...controls.querySelectorAll<HTMLElement>("button")]
+        .filter((el) => el.offsetParent !== null)
+        .map((el) => {
+          const box = el.getBoundingClientRect();
+          return {
+            id: el.id,
+            width: box.width,
+            height: box.height,
+            left: box.left,
+            right: box.right,
+            clipped: el.scrollWidth > el.clientWidth + 1,
+          };
+        });
+      const toggle = document.querySelector(".term-size-toggle")?.getBoundingClientRect();
+      return {
+        pageOverflow: doc.scrollWidth - doc.clientWidth,
+        rowOverflow: controls.scrollWidth - controls.clientWidth,
+        buttons,
+        toggle: toggle ? { width: toggle.width, height: toggle.height } : null,
+      };
+    });
+    process.stdout.write(`toolbar at ${viewport.width}px: ${JSON.stringify(report)}\n`);
+    expect(report.pageOverflow).toBeLessThanOrEqual(1);
+    expect(report.rowOverflow).toBeLessThanOrEqual(1);
+    expect(report.buttons.map((button) => button.id)).toContain("term-latest");
+    for (const button of report.buttons) {
+      expect(button.clipped, `${button.id} clips its label`).toBe(false);
+      expect(button.width, `${button.id} width`).toBeGreaterThanOrEqual(44);
+      expect(button.height, `${button.id} height`).toBeGreaterThanOrEqual(44);
+      expect(button.left, `${button.id} left`).toBeGreaterThanOrEqual(0);
+      expect(button.right, `${button.id} right`).toBeLessThanOrEqual(viewport.width);
+    }
+    expect(report.toggle?.width ?? 0).toBeGreaterThanOrEqual(44);
+    expect(report.toggle?.height ?? 0).toBeGreaterThanOrEqual(44);
+    // The switch toggles from the keyboard.
+    await page.locator("#term-control-size").focus();
+    await page.keyboard.press("Space");
+    await expect(page.locator("#term-control-size")).toBeChecked();
+  });
+}
