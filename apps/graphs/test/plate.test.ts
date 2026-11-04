@@ -423,6 +423,71 @@ describe("plate centring", () => {
   });
 });
 
+describe("plate rank geometry", () => {
+  it("canopy-builder: no two groups overlap, and no group overlaps a main node", () => {
+    const svg = renderPlate(canopyBuilder as unknown as GraphDocument);
+    const mains = nodeBoxes(svg).filter((box) => box.lane === "main");
+    const ensembles = groupBoxes(svg);
+    expect(ensembles.length).toBeGreaterThan(1);
+    for (let a = 0; a < ensembles.length; a += 1) {
+      for (let b = a + 1; b < ensembles.length; b += 1) {
+        expect(
+          overlaps(ensembles[a] as Box, ensembles[b] as Box),
+          `${ensembles[a]?.name} vs ${ensembles[b]?.name}`,
+        ).toBe(false);
+      }
+      for (const node of mains) {
+        expect(overlaps(ensembles[a] as Box, node), `${ensembles[a]?.name} vs ${node.name}`).toBe(
+          false,
+        );
+      }
+    }
+  });
+
+  it("canopy-builder: every single-unit rank sits on the flow axis", () => {
+    const layout = layoutPlate(canopyBuilder as unknown as GraphDocument);
+    expect(layout).not.toBeNull();
+    const byRank = new Map<number, number[]>();
+    for (const node of layout?.nodes ?? []) {
+      if (node.lane !== "main") {
+        continue;
+      }
+      byRank.set(node.rank, [...(byRank.get(node.rank) ?? []), node.y]);
+    }
+    for (const group of layout?.groups ?? []) {
+      byRank.set(group.rank, [...(byRank.get(group.rank) ?? []), group.y]);
+    }
+    const singles = [...byRank.values()]
+      .filter((ys) => ys.length === 1)
+      .map((ys) => ys[0] ?? 0);
+    expect(singles.length).toBeGreaterThan(1);
+    for (const y of singles) {
+      expect(y).toBe(singles[0]);
+    }
+  });
+
+  it("a node-only plate keeps the 26-unit rank step", () => {
+    const document = {
+      name: "node-chain",
+      nodes: [
+        { name: "a", kind: "agent", position: 1, config: {} },
+        { name: "b", kind: "agent", position: 2, config: {} },
+        { name: "c", kind: "agent", position: 3, config: {} },
+      ],
+      edges: [
+        { from_node: "a", to_node: "b", condition: "pass" },
+        { from_node: "b", to_node: "c", condition: "pass" },
+      ],
+    } as unknown as GraphDocument;
+    const layout = layoutPlate(document);
+    expect(layout).not.toBeNull();
+    const xs = (layout?.nodes ?? []).sort((a, b) => a.rank - b.rank).map((node) => node.x);
+    expect(xs).toHaveLength(3);
+    expect((xs[1] ?? 0) - (xs[0] ?? 0)).toBe(26);
+    expect((xs[2] ?? 0) - (xs[1] ?? 0)).toBe(26);
+  });
+});
+
 /**
  * The extent a drawn path actually reaches: its absolute M, L and C
  * segments, each cubic by its real turning points rather than its controls.
