@@ -14,12 +14,22 @@ import { createFakeShelfDeleter } from "./fake-delete.js";
 import { createFakeGraphs } from "./fake-graphs.js";
 import { createFakeKiller } from "./fake-kill.js";
 import { createFakeMetrics } from "./fake-metrics.js";
+import { createFakeResume } from "./fake-resume.js";
+import { createFakeScheduler } from "./fake-schedule.js";
 import { createFakeUploads } from "./fake-upload.js";
 import { GraphStore } from "./graph-store.js";
 import { createGuestSession } from "./guest.js";
 import { INVITE_REFUSED_MESSAGE } from "./guest-invite.js";
 import { MetricsStore } from "./metrics-store.js";
-import { buildCatalog, buildGraphControl, buildList, buildSpawn, newReqId } from "./protocol.js";
+import {
+  buildCatalog,
+  buildGraphControl,
+  buildList,
+  buildResumableList,
+  buildSessionResume,
+  buildSpawn,
+  newReqId,
+} from "./protocol.js";
 import type { GraphControlAction, PromptDraft, SessionItem, ShelfItem } from "./protocol.js";
 import { createFrameRouter } from "./router.js";
 import { SessionController } from "./session.js";
@@ -142,10 +152,6 @@ function main(): void {
   };
   let nextSpawn = 0;
   let promptError: { code: string; message: string } | null = null;
-  // The pending schedules per session: the preview is the composed text's
-  // first 120 chars, like the real host's.
-  const scheduled: { id: string; sessionId: string; fire_at: string; preview: string }[] = [];
-  let scheduleCounter = 0;
 
   const sessions: SessionItem[] = [
     {
@@ -260,6 +266,10 @@ function main(): void {
   const fakeGraphs = createFakeGraphs(deliver);
 
   const fakeMetrics = createFakeMetrics({ deliver });
+
+  const fakeResume = createFakeResume({ deliver, sessions });
+
+  const fakeScheduler = createFakeScheduler({ deliver, compose: composeText });
 
   // Guest mode (?screen=guest): the hub's grant over the sessions the
   // owner holds, enforced the way the hub enforces it — the list carries
@@ -410,6 +420,10 @@ function main(): void {
       }
     } else if (deleter.handle(frame)) {
       // shelf_delete: ok plus the removed broadcast, or an error.
+    } else if (typeof frame.req !== "string" || frame.req === "") {
+      // Every request frame from here on carries a req: without one the
+      // real host refuses it, so the fake answers bad_request too.
+      deliver({ t: "error", code: "bad_request", message: "frame needs a req" });
     } else if (frame.t === "spawn") {
       nextSpawn += 1;
       const id = `spawned-${nextSpawn}`;
@@ -427,6 +441,8 @@ function main(): void {
       sessions.push(item);
       deliver({ t: "spawned", req: frame.req, id });
       deliver({ t: "session_added", item: sessionItems()[sessions.length - 1] });
+    } else if (fakeResume.handle(frame)) {
+      // resumable_list and session_resume: the fixtures answer.
     } else if (frame.t === "compose") {
       const draft = frame.draft ?? { sections: [], skills: [] };
       deliver({ t: "composed", req: frame.req, text: composeText(draft) });
@@ -437,41 +453,8 @@ function main(): void {
       } else {
         deliver({ t: "ok", req: frame.req });
       }
-    } else if (
-      frame.t === "prompt_schedule" &&
-      typeof frame.req === "string" &&
-      typeof frame.id === "string" &&
-      typeof frame.fire_at === "string"
-    ) {
-      scheduleCounter += 1;
-      const item = {
-        id: `ss-${scheduleCounter}`,
-        fire_at: frame.fire_at,
-        preview: composeText(frame.draft ?? { sections: [], skills: [] }).slice(0, 120),
-      };
-      scheduled.push({ ...item, sessionId: frame.id });
-      deliver({ t: "scheduled", req: frame.req, item });
-    } else if (frame.t === "scheduled_list" && typeof frame.req === "string" && typeof frame.id === "string") {
-      const items = scheduled
-        .filter((entry) => entry.sessionId === frame.id)
-        .sort((a, b) => Date.parse(a.fire_at) - Date.parse(b.fire_at))
-        .map((entry) => ({ id: entry.id, fire_at: entry.fire_at, preview: entry.preview }));
-      deliver({ t: "scheduled_list", req: frame.req, id: frame.id, items });
-    } else if (
-      frame.t === "scheduled_cancel" &&
-      typeof frame.req === "string" &&
-      typeof frame.id === "string" &&
-      typeof frame.schedule_id === "string"
-    ) {
-      const index = scheduled.findIndex(
-        (entry) => entry.sessionId === frame.id && entry.id === frame.schedule_id,
-      );
-      if (index < 0) {
-        deliver({ t: "error", req: frame.req, code: "not_found", message: "no such schedule" });
-      } else {
-        scheduled.splice(index, 1);
-        deliver({ t: "ok", req: frame.req });
-      }
+    } else if (fakeScheduler.handle(frame)) {
+      // prompt_schedule, scheduled_list and scheduled_cancel.
     }
     return true;
   };
@@ -592,6 +575,8 @@ function main(): void {
       },
       onKill: (req) => controller.kill(req),
       onSpawn: (spawn, req) => send(buildSpawn(req, spawn)),
+      onResumableList: (req) => send(buildResumableList(req)),
+      onResume: (id, req) => send(buildSessionResume(req, id)),
       onCompose: (draft, req) => send(JSON.stringify({ t: "compose", req, draft })),
       onSendDraft: (draft, req) => controller.sendPromptDraft(draft, req),
       onSchedule: (draft, fireAt, req) => controller.sendPromptSchedule(draft, fireAt, req),

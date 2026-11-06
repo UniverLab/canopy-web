@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
-// The New dialog: start an agent or a terminal on the host. A segmented
-// control picks the kind (Agent by default). Agents pick a harness, a
-// directory, an optional yolo mode, name and first prompt; terminals pick
-// a directory and a name, and the host runs the user's shell. There is no
-// model field: the harness's own default applies. Create sends
-// spawn{req,kind,...}; a matching spawned{req,id} closes the dialog and
-// the shell opens the session. An error keeps the form exactly as it was.
+// The New dialog: start an agent or a terminal on the host, or resume one
+// of the host's recorded conversations. A segmented control picks the kind
+// (Agent by default). Agents pick a harness, a directory, an optional yolo
+// mode, name and first prompt; terminals pick a directory and a name, and
+// the host runs the user's shell. There is no model field: the harness's
+// own default applies. Create sends spawn{req,kind,...}; a matching
+// spawned{req,id} closes the dialog and the shell opens the session. An
+// error keeps the form exactly as it was. On a host whose hello carries
+// "session_resume" agents get a second control: Resume lists the host's
+// recorded conversations (resume-list.ts) and session_resume{req,id}
+// answers the same spawned. Without the feature nothing changes.
 
 import { CatalogStore } from "./catalog.js";
 import {
@@ -17,14 +21,21 @@ import {
 } from "./dir-history.js";
 import { classifyDraftError } from "./draft.js";
 import { newReqId } from "./protocol.js";
-import type { SessionItem, SpawnKind, SpawnRequest } from "./protocol.js";
+import type { ResumableSession, SessionItem, SpawnKind, SpawnRequest } from "./protocol.js";
+import { ResumeList } from "./resume-list.js";
 import { Sheet, esc } from "./sheet.js";
 import { icon } from "./icons-dom.js";
 
 export interface NewDialogCallbacks {
   /** Returns false when the frame could not be sent (no connection). */
   onSpawn: (spawn: SpawnRequest, req: string) => boolean;
+  /** Ask for the recorded conversations: resumable_list{req}. */
+  onResumableList?: (req: string) => boolean;
+  /** Bring one recorded conversation back: session_resume{req,id}. */
+  onResume?: (id: string, req: string) => boolean;
 }
+
+type DialogMode = "new" | "resume";
 
 export interface NewDialogSessions {
   list: () => SessionItem[];
@@ -61,6 +72,9 @@ export class NewDialog {
   private body: HTMLElement | null = null;
   private error: string | null = null;
   private directoryError: string | null = null;
+  private hasResume = false;
+  private mode: DialogMode = "new";
+  private readonly resume: ResumeList;
 
   constructor(catalog: CatalogStore, callbacks: NewDialogCallbacks, env?: NewDialogEnv) {
     this.catalog = catalog;
@@ -68,6 +82,29 @@ export class NewDialog {
     this.sheet = new Sheet({ kind: "new", title: "Start a session on this host" }, () => this.close());
     this.sessions = env?.sessions ?? null;
     this.hostId = env?.hostId ?? "";
+    this.resume = new ResumeList({
+      onResume: (id) => this.resumeSession(id),
+      onRetry: () => this.requestResumeList(),
+    });
+  }
+
+  /** hello.features: only a host that speaks "session_resume" offers Resume. */
+  setHasResume(has: boolean): void {
+    this.hasResume = has;
+    if (!has) {
+      this.mode = "new";
+    }
+    if (this.sheet.isOpen) {
+      this.render();
+    }
+  }
+
+  /** The host's recorded conversations: only the Resume pane consumes them. */
+  handleResumable(sessions: ResumableSession[]): void {
+    if (!this.resumeMode()) {
+      return;
+    }
+    this.resume.setItems(sessions);
   }
 
   setHostId(hostId: string): void {
@@ -98,8 +135,9 @@ export class NewDialog {
     this.directoryError = null;
     this.pending = null;
     this.pendingName = null;
-    // Every open starts an agent with yolo off; the directory keeps a
-    // cancelled draft, or the last directory used on this host.
+    // Every open starts in New, as an agent with yolo off; the directory
+    // keeps a cancelled draft, or the last directory used on this host.
+    this.mode = "new";
     this.form.kind = "agent";
     this.form.yolo = false;
     if (this.form.directory === "") {
@@ -121,6 +159,8 @@ export class NewDialog {
     this.pendingName = null;
     this.error = null;
     this.directoryError = null;
+    this.mode = "new";
+    this.resume.clear();
     this.unsubscribe?.();
     this.unsubscribe = null;
     this.body = null;
@@ -129,6 +169,12 @@ export class NewDialog {
 
   handleSpawned(req: string): string | null {
     if (this.pending === null || this.pending !== req) {
+      // A resume answers its own spawned: close and let the shell open the
+      // session through the path a spawn takes.
+      if (this.resume.handleSpawned(req)) {
+        this.close();
+        return "";
+      }
       return null;
     }
     const name = this.pendingName ?? "";
@@ -141,10 +187,10 @@ export class NewDialog {
 
   handleError(message: string, req: string | null, code: string): boolean {
     if (this.pending === null) {
-      return false;
+      return this.resume.handleError(message, req);
     }
     if (req !== null && req !== this.pending) {
-      return false;
+      return this.resume.handleError(message, req);
     }
     this.pending = null;
     this.pendingName = null;
@@ -198,21 +244,81 @@ export class NewDialog {
       return;
     }
     const agent = this.form.kind === "agent";
+    const resume = this.resumeMode();
+    // A form in New (Enter submits the spawn); a plain div in Resume, so
+    // Enter in the filter never submits an empty spawn.
+    const tag = resume ? "div" : "form";
     body.innerHTML = `
-      <form id="new-form" class="new-form">
+      <${tag} id="new-form" class="new-form">
+        ${this.modeControl()}
         <div class="kind-segment" role="radiogroup" aria-label="Session kind">
           <label class="kind-option"><input type="radio" name="kind" id="new-kind-agent" value="agent"${agent ? " checked" : ""}> Agent</label>
           <label class="kind-option"><input type="radio" name="kind" id="new-kind-terminal" value="terminal"${agent ? "" : " checked"}> Terminal</label>
         </div>
-        ${agent ? this.agentFields() : this.terminalFields()}
+        ${resume ? `<div id="new-resume-root"></div>` : agent ? this.agentFields() : this.terminalFields()}
         <p class="sheet-error" id="new-error" role="alert">${esc(this.error ?? "")}</p>
         <div class="sheet-actions">
           <button type="button" id="new-cancel">Cancel</button>
-          <button type="submit" class="primary" id="new-create">Create</button>
+          ${resume ? "" : `<button type="submit" class="primary" id="new-create">Create</button>`}
         </div>
-      </form>`;
+      </${tag}>`;
     this.wire();
     this.syncSelects();
+    if (resume) {
+      const root = body.querySelector<HTMLElement>("#new-resume-root");
+      if (root) {
+        this.resume.mount(root);
+      }
+    }
+  }
+
+  // The second segmented control: only agents on a host that speaks
+  // "session_resume" see it, and New is the default on every open.
+  private modeControl(): string {
+    if (!this.hasResume || this.form.kind !== "agent") {
+      return "";
+    }
+    const resumed = this.mode === "resume";
+    return `
+        <div class="kind-segment" role="radiogroup" aria-label="Session mode">
+          <label class="kind-option"><input type="radio" name="mode" id="new-mode-new" value="new"${resumed ? "" : " checked"}> New</label>
+          <label class="kind-option"><input type="radio" name="mode" id="new-mode-resume" value="resume"${resumed ? " checked" : ""}> Resume</label>
+        </div>`;
+  }
+
+  private resumeMode(): boolean {
+    return this.hasResume && this.form.kind === "agent" && this.mode === "resume";
+  }
+
+  private setMode(mode: DialogMode): void {
+    if (this.mode === mode) {
+      return;
+    }
+    this.mode = mode;
+    this.error = null;
+    this.directoryError = null;
+    this.render();
+    if (mode === "resume") {
+      this.requestResumeList();
+    }
+  }
+
+  // Entering Resume asks for the history; the pane says "Loading…" until
+  // the host answers or refuses.
+  private requestResumeList(): void {
+    const req = newReqId();
+    this.resume.setLoading(req);
+    if (!(this.callbacks.onResumableList?.(req) ?? false)) {
+      this.resume.setError("Not connected");
+    }
+  }
+
+  private resumeSession(id: string): void {
+    const req = newReqId();
+    this.resume.setLoading(req);
+    if (!(this.callbacks.onResume?.(id, req) ?? false)) {
+      this.resume.setError("Not connected");
+    }
   }
 
   private directoryField(): string {
@@ -295,9 +401,19 @@ export class NewDialog {
         this.syncFields();
         const picked = body.querySelector<HTMLInputElement>('input[name="kind"]:checked')?.value;
         this.form.kind = picked === "terminal" ? "terminal" : "agent";
+        // Resume belongs to agents: a terminal starts fresh.
+        if (this.form.kind !== "agent") {
+          this.mode = "new";
+        }
         this.error = null;
         this.directoryError = null;
         this.render();
+      });
+    }
+    for (const input of body.querySelectorAll<HTMLInputElement>('input[name="mode"]')) {
+      input.addEventListener("change", () => {
+        const picked = body.querySelector<HTMLInputElement>('input[name="mode"]:checked')?.value;
+        this.setMode(picked === "resume" ? "resume" : "new");
       });
     }
     body.querySelector<HTMLSelectElement>("#new-cli")?.addEventListener("change", (ev) => {

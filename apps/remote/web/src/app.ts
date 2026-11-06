@@ -18,7 +18,13 @@ import { MetricsRoute } from "./metrics-route.js";
 import type { MetricsStore } from "./metrics-store.js";
 import { NewDialog } from "./new-dialog.js";
 import { defaultDeviceLabel } from "./pairing.js";
-import type { GraphControlAction, PromptDraft, ScheduledItem, SpawnRequest } from "./protocol.js";
+import type {
+  GraphControlAction,
+  PromptDraft,
+  ResumableSession,
+  ScheduledItem,
+  SpawnRequest,
+} from "./protocol.js";
 import type { OnlineHost } from "./relay.js";
 import type { ShelfHandle } from "./shelf-controller.js";
 import type { SessionStore } from "./sessions.js";
@@ -61,6 +67,10 @@ export interface ShellCallbacks {
   onKill: (req: string) => boolean;
   /** False when the frame could not be sent; the dialog then says so. */
   onSpawn: (spawn: SpawnRequest, req: string) => boolean;
+  /** The New dialog's Resume pane asks for the host's history. */
+  onResumableList?: (req: string) => boolean;
+  /** Resume one recorded conversation the pane listed. */
+  onResume?: (id: string, req: string) => boolean;
   onCompose: (draft: PromptDraft, req: string) => boolean;
   onSendDraft: (draft: PromptDraft, req: string) => boolean;
   onSchedule: (draft: PromptDraft, fireAt: string, req: string) => boolean;
@@ -112,6 +122,10 @@ export interface Shell {
   killError: (req: string | null, message: string) => boolean;
   /** The host greets: the graph view's pause/continue gate follows hello. */
   graphHello: (features: string[]) => void;
+  /** The host greets: the New dialog offers Resume only when it does. */
+  resumeHello: (features: string[]) => void;
+  /** The host's recorded conversations answer the Resume pane's request. */
+  resumeList: (sessions: ResumableSession[]) => void;
   /** A graph_control ok; true when the graph route consumed it. */
   graphControlOk: (req: string) => boolean;
   /** A graph_control error; true when the graph route consumed it. */
@@ -168,6 +182,8 @@ export function createShell(
     catalog,
     {
       onSpawn: (spawn, req) => callbacks.onSpawn(spawn, req),
+      onResumableList: (req) => callbacks.onResumableList?.(req) ?? false,
+      onResume: (id, req) => callbacks.onResume?.(id, req) ?? false,
     },
     { sessions: store, hostId },
   );
@@ -611,6 +627,12 @@ export function createShell(
     },
     graphHello(features: string[]): void {
       graphRoute.handleHello(features);
+    },
+    resumeHello(features: string[]): void {
+      newDialog.setHasResume(features.includes("session_resume"));
+    },
+    resumeList(sessions: ResumableSession[]): void {
+      newDialog.handleResumable(sessions);
     },
     graphControlOk(req: string): boolean {
       return graphRoute.handleControlOk(req);

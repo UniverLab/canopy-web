@@ -675,6 +675,56 @@ export function buildShelfDelete(req: string, fileId: string): string {
   return JSON.stringify({ t: "shelf_delete", req, file_id: fileId });
 }
 
+// --- Resuming recorded conversations (additive to v1) ----------------
+// A host whose hello carries "session_resume" answers `resumable_list{req}`
+// with `resumable{req, sessions}` — the conversations it recorded, newest
+// first — and `session_resume{req, id}` with `spawned{req, id}` once that
+// session is back. Without the feature the New dialog offers no Resume.
+
+export interface ResumableSession {
+  id: string;
+  name: string;
+  cli: string;
+  workdir: string;
+  /** Start time as epoch milliseconds, or null when the host sent none. */
+  started_at: number | null;
+  /** False when the record is only the folder's latest, with no transcript. */
+  has_conversation: boolean;
+}
+
+function parseResumableItem(value: unknown): ResumableSession | null {
+  if (!isRecord(value) || typeof value.id !== "string" || value.id === "") {
+    return null;
+  }
+  return {
+    id: value.id,
+    name: asString(value.name),
+    cli: asString(value.cli),
+    workdir: asString(value.workdir),
+    started_at: parseEpochMs(value.started_at),
+    has_conversation: value.has_conversation === true,
+  };
+}
+
+// One malformed row is dropped so the rest of the history still lists,
+// like a catalog frame.
+export function parseResumable(
+  frame: unknown,
+): { req: string | null; sessions: ResumableSession[] } | null {
+  if (frameType(frame) !== "resumable" || !isRecord(frame) || !Array.isArray(frame.sessions)) {
+    return null;
+  }
+  return { req: typeof frame.req === "string" ? frame.req : null, sessions: collect(frame.sessions, parseResumableItem) };
+}
+
+export function buildResumableList(req: string): string {
+  return JSON.stringify({ t: "resumable_list", req });
+}
+
+export function buildSessionResume(req: string, id: string): string {
+  return JSON.stringify({ t: "session_resume", req, id });
+}
+
 // --- Graph watching (additive to v1) --------------------------------
 // The host lets a remote client watch one graph's drawing, active node
 // and spec checklist live: ask with `graphs`, then `graph_watch {id}` —

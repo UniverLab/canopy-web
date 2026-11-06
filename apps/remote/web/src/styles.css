@@ -1134,6 +1134,88 @@ label > textarea {
   margin: 0;
 }
 
+/* The New dialog's Resume pane: a filter over a scrolling list of the
+ * host's recorded conversations. Every row is a 44 px target. */
+.resume-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 45dvh;
+  overflow-y: auto;
+  margin: 0.5rem 0;
+}
+
+.resume-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  width: 100%;
+  min-height: max(2.75rem, 44px);
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.resume-row:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.resume-name {
+  font-weight: 500;
+}
+
+.resume-meta {
+  color: var(--muted);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.resume-status {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0.25rem 0;
+}
+
+.resume-status:empty {
+  display: none;
+}
+
+.resume-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: var(--ink);
+  background: var(--tint-error);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  margin: 0.5rem 0;
+  overflow-wrap: anywhere;
+}
+
+.resume-error[hidden] {
+  display: none;
+}
+
+.resume-error:not([hidden])::before {
+  content: "Error: ";
+  color: var(--err-label);
+}
+
+.resume-error #resume-retry {
+  flex: none;
+  min-height: max(2.75rem, 44px);
+}
+
 /* Shared modal sheet: New dialog and Prompt Builder. */
 .sheet-overlay {
   position: fixed;

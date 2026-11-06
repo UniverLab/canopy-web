@@ -14,7 +14,16 @@ import type { DeviceKey } from "./crypto.js";
 import { redirectUnknownRoute, resumeGuestReturn } from "./entry-path.js";
 import { GraphStore } from "./graph-store.js";
 import { MetricsStore } from "./metrics-store.js";
-import { buildCatalog, buildCompose, buildGraphControl, buildList, buildSpawn, newReqId } from "./protocol.js";
+import {
+  buildCatalog,
+  buildCompose,
+  buildGraphControl,
+  buildList,
+  buildResumableList,
+  buildSessionResume,
+  buildSpawn,
+  newReqId,
+} from "./protocol.js";
 import { runPairing } from "./pairing.js";
 import { ConnectionManager } from "./reconnect.js";
 import { RelayKeepalive } from "./keepalive.js";
@@ -130,6 +139,8 @@ async function main(): Promise<void> {
       },
       onKill: (req) => controller.kill(req),
       onSpawn: (spawn, req) => manager?.send(buildSpawn(req, spawn)) ?? false,
+      onResumableList: (req) => manager?.send(buildResumableList(req)) ?? false,
+      onResume: (id, req) => manager?.send(buildSessionResume(req, id)) ?? false,
       onCompose: (draft, req) => manager?.send(buildCompose(req, draft)) ?? false,
       onSendDraft: (draft, req) => controller.sendPromptDraft(draft, req),
       onSchedule: (draft, fireAt, req) => controller.sendPromptSchedule(draft, fireAt, req),

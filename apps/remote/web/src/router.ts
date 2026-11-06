@@ -25,6 +25,7 @@ import {
   parseOk,
   parseOut,
   parseResized,
+  parseResumable,
   parseScheduled,
   parseScheduledList,
   parseSessionAdded,
@@ -35,7 +36,7 @@ import {
   parseShelfRemoved,
   parseSpawned,
 } from "./protocol.js";
-import type { ScheduledItem } from "./protocol.js";
+import type { ResumableSession, ScheduledItem } from "./protocol.js";
 import type { SessionController } from "./session.js";
 import type { ShelfFrames } from "./shelf-controller.js";
 import type { SessionStore } from "./sessions.js";
@@ -66,6 +67,10 @@ export interface RouterShell {
   killError?: (req: string | null, message: string) => boolean;
   /** The host greets: the graph view's pause/continue gate. */
   graphHello?: (features: string[]) => void;
+  /** The host greets: the New dialog's Resume offer follows the feature. */
+  resumeHello?: (features: string[]) => void;
+  /** The host's recorded conversations answered resumable_list. */
+  resumeList?: (sessions: ResumableSession[]) => void;
   /** A graph_control ok; true when the graph route consumed it. */
   graphControlOk?: (req: string) => boolean;
   /** A graph_control error; true when the graph route consumed it. */
@@ -193,6 +198,15 @@ export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
       catalog.setInstalledHarnesses(hello.harnesses);
       shelf?.handleHello(hello.features);
       shell.graphHello?.(hello.features);
+      shell.resumeHello?.(hello.features);
+      return;
+    }
+    // The New dialog's Resume pane: the host's recorded conversations.
+    // Without "session_resume" in hello the dialog never asks, so this
+    // branch stays cold on an older host.
+    const resumable = parseResumable(frame);
+    if (resumable) {
+      shell.resumeList?.(resumable.sessions);
       return;
     }
     const shelfList = parseShelf(frame);

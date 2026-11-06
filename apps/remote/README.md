@@ -33,6 +33,22 @@ the sheet lists the session's pending schedules, each with a Cancel. The host
 delivers a schedule even with no browser open; it needs the session still
 running at that time. Terminals take no schedules, only agent sessions do.
 
+## Starting or resuming a session
+
+**New session** starts one on the host: pick Agent or Terminal, then the
+harness and directory (the host's last one is prefilled), optionally yolo, a
+name and a first prompt. Yolo stays disabled for a harness that cannot skip
+approvals.
+
+On a host that speaks `session_resume`, Agent offers a second control with
+**New** and **Resume**. Resume lists the host's recorded conversations newest
+first, each with its harness, folder and how long ago it started; a folder's
+latest with no transcript is marked as such. The filter matches the name,
+harness or folder, case-insensitively. Tapping a row brings that conversation
+back on the host and opens its session. A host without the feature shows no
+Resume control. Against the fake host, `?resume=off` greets like an older
+host, `?resume=empty` has no history and `?resume=error` refuses the request.
+
 ## Watching graphs
 
 The home screen switches between **Sessions** and **Graphs**. Graphs lists

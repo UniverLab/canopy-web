@@ -195,6 +195,15 @@ const SWITCH_WIDTH_BUDGET = 512;
  * ride the main bundle.
  */
 const SESSION_CLOSE_BUDGET = 1_024;
+/**
+ * Allowance for the resume-dialog spec (the resumable_list/session_resume
+ * frames, the Resume pane with its filter, rows and states, the New/Resume
+ * control and the dialog, router and app wiring): measured +1 476 B gzip
+ * over the pre-change main (175 923 → 177 399), JS and CSS. Added in the
+ * feature commit like SESSION_CLOSE_BUDGET: the tree had 339 bytes of
+ * headroom and the whole pane rides the main bundle.
+ */
+const RESUME_BUDGET = 1_536;
 /** The budget the lazy guest chunk is allowed, gzip bytes of JS. */
 const GUEST_BUDGET = 6_144;
 /**
@@ -319,7 +328,8 @@ describe("the remote's bundle", () => {
         FLOW_AXIS_BUDGET +
         UNIT_GLOW_BUDGET +
         SWITCH_WIDTH_BUDGET +
-        SESSION_CLOSE_BUDGET,
+        SESSION_CLOSE_BUDGET +
+        RESUME_BUDGET,
     );
     expect(guestJs, JSON.stringify(report)).toBeLessThanOrEqual(GUEST_BUDGET + GUEST_INVITE_BUDGET);
     expect(editorJs, JSON.stringify(report)).toBeLessThanOrEqual(EDITOR_BUDGET);
