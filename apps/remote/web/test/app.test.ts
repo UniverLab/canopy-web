@@ -214,6 +214,7 @@ describe("createShell", () => {
       onGraphsRequest: () => {},
       onWatchGraph: () => {},
       onUnwatchGraph: () => {},
+      onGraphControl: () => true,
     };
     (
       calls as unknown as {

@@ -64,6 +64,12 @@ export interface RouterShell {
   sessionRemoved?: (id: string) => void;
   /** A kill{req} error; true when the session view consumed it. */
   killError?: (req: string | null, message: string) => boolean;
+  /** The host greets: the graph view's pause/continue gate. */
+  graphHello?: (features: string[]) => void;
+  /** A graph_control ok; true when the graph route consumed it. */
+  graphControlOk?: (req: string) => boolean;
+  /** A graph_control error; true when the graph route consumed it. */
+  graphControlError?: (req: string | null, message: string) => boolean;
 }
 
 export interface FrameRouterDeps {
@@ -186,6 +192,7 @@ export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
       // the harness list narrows the New dialog to installed harnesses.
       catalog.setInstalledHarnesses(hello.harnesses);
       shelf?.handleHello(hello.features);
+      shell.graphHello?.(hello.features);
       return;
     }
     const shelfList = parseShelf(frame);
@@ -223,6 +230,9 @@ export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
       if (shelf?.handleOk(ok)) {
         return;
       }
+      if (shell.graphControlOk?.(ok)) {
+        return;
+      }
       shell.sheetOk(ok);
       return;
     }
@@ -249,6 +259,10 @@ export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
       }
       // A failed graph watch paints in the graph view, never as a dialog.
       if (graphs?.handleWatchError(clean.message, clean.req)) {
+        return;
+      }
+      // A refused pause or continue lands on the graph view's note.
+      if (shell.graphControlError?.(clean.req, clean.message)) {
         return;
       }
       // A failed Close answers its own req and stays in the session view.

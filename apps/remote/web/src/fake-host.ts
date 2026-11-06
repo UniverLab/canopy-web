@@ -9,6 +9,7 @@ import { signOut } from "./auth.js";
 import { CatalogStore } from "./catalog.js";
 import { createChannelHandler } from "./channel.js";
 import { b64encode } from "./crypto.js";
+import { createFakeControl, fakeHelloFeatures } from "./fake-control.js";
 import { createFakeShelfDeleter } from "./fake-delete.js";
 import { createFakeGraphs } from "./fake-graphs.js";
 import { createFakeKiller } from "./fake-kill.js";
@@ -18,8 +19,8 @@ import { GraphStore } from "./graph-store.js";
 import { createGuestSession } from "./guest.js";
 import { INVITE_REFUSED_MESSAGE } from "./guest-invite.js";
 import { MetricsStore } from "./metrics-store.js";
-import { buildCatalog, buildList, buildSpawn, newReqId } from "./protocol.js";
-import type { PromptDraft, SessionItem, ShelfItem } from "./protocol.js";
+import { buildCatalog, buildGraphControl, buildList, buildSpawn, newReqId } from "./protocol.js";
+import type { GraphControlAction, PromptDraft, SessionItem, ShelfItem } from "./protocol.js";
 import { createFrameRouter } from "./router.js";
 import { SessionController } from "./session.js";
 import { ShelfController } from "./shelf-controller.js";
@@ -605,6 +606,7 @@ function main(): void {
       onUnwatchGraph: () => {
         graphs.unwatch();
       },
+      onGraphControl: (req, id, action) => send(buildGraphControl(req, id, action)),
       onWatchMetrics: () => {
         metrics.watch();
       },
@@ -657,10 +659,9 @@ function main(): void {
 
   // The host greets first: hello.features is what turns the shelf UI on,
   // and hello.harnesses is what the New dialog may offer (both installed).
-  const uploadMode = new URLSearchParams(globalThis.location.search).get("upload");
   deliver({
     t: "hello",
-    features: uploadMode === "off" ? ["shelf"] : ["shelf", "shelf_upload"],
+    features: fakeHelloFeatures(globalThis.location.search),
     harnesses: ["muse", "claude"],
   });
 
@@ -748,6 +749,8 @@ function main(): void {
     graphTick: () => {
       fakeGraphs.tick();
     },
+    /** Send graph_control for the watched graph, straight at the host. */
+    graphControl: createFakeControl(send, () => fakeGraphs.watchedId()),
     pushMetrics: (patch?: Record<string, unknown>) => {
       fakeMetrics.pushMetrics(patch ?? {});
     },
@@ -777,6 +780,8 @@ declare global {
       failNextPrompt: (code: string, message: string) => void;
       /** Advance the running graph fixture one step and push its state. */
       graphTick: () => void;
+      /** Send graph_control for the watched graph, straight at the host. */
+      graphControl?: (action: GraphControlAction) => void;
       /** Push one metrics frame, with the patch merged over the fixture. */
       pushMetrics: (patch?: Record<string, unknown>) => void;
       /** Guest mode only: open one session by id, listed or not. */

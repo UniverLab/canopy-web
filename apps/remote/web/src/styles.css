@@ -2052,6 +2052,14 @@ label > textarea {
   min-width: 2.75rem;
 }
 
+.graph-bar #graph-action {
+  min-width: 2.75rem;
+}
+
+.graph-bar #graph-action[hidden] {
+  display: none;
+}
+
 .graph-title {
   font-family: var(--font-mono);
   font-size: 0.95rem;

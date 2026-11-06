@@ -14,6 +14,7 @@ import { mountPlateViewer, type PlateLabels, type PlateViewer } from "../../../.
 import { REMOTE_FOOTER } from "./footer.js";
 import { specMark, statusChip } from "./graphs-list.js";
 import { icon } from "./icons-dom.js";
+import type { GraphControlAction } from "./protocol.js";
 import type { GraphState, GraphSpecRow, GraphSummary } from "./protocol.js";
 
 export interface GraphViewArgs {
@@ -32,6 +33,14 @@ export interface GraphViewArgs {
   /** The failed watch's message, shown until the drawing arrives. */
   watchError?: string | null;
   connected: boolean;
+  /** The host speaks graph_control: hello carried it for this device. */
+  canControl: boolean;
+  /** A pause/continue request is in flight: the button stays disabled. */
+  controlPending: boolean;
+  /** The last control request's failure, cleared by the next success. */
+  controlError: string | null;
+  /** Ask the host to pause or continue; the reply repaints the button. */
+  onControl: (action: GraphControlAction) => void;
   onBack: () => void;
 }
 
@@ -69,6 +78,17 @@ function clockOf(ms: number): string {
     minute: "2-digit",
     second: "2-digit",
   });
+}
+
+/** The pause/continue control each live status offers, or null for none. */
+export function controlForStatus(status: string): GraphControlAction | null {
+  if (status === "running") {
+    return "pause";
+  }
+  if (status === "paused" || status === "failed") {
+    return "continue";
+  }
+  return null;
 }
 
 /** The plate's live overlay for a pushed state; none until one arrives. */
@@ -201,12 +221,43 @@ function paint(main: HTMLElement, args: GraphViewArgs): void {
   }
   const note = main.querySelector<HTMLElement>("#graph-note");
   if (note) {
+    // A refused pause or continue beats the disconnect line: it names
+    // what just failed, and the next success clears it.
     const text =
-      args.connected || args.receivedAt === null
-        ? ""
-        : `disconnected — last update ${clockOf(args.receivedAt)}`;
+      args.controlError !== null && args.controlError !== undefined && args.controlError !== ""
+        ? args.controlError
+        : args.connected || args.receivedAt === null
+          ? ""
+          : `disconnected — last update ${clockOf(args.receivedAt)}`;
     note.hidden = text === "";
     note.textContent = text;
+  }
+  const action = main.querySelector<HTMLButtonElement>("#graph-action");
+  if (action) {
+    // The control lives only here, never in the list rows: pause while
+    // running, continue while parked or refused, nothing anywhere else —
+    // and nothing at all against an older host. The button node itself
+    // never swaps, so a push under a finger only repaints it.
+    const status = args.state?.status ?? args.summary?.status ?? "";
+    const visible =
+      args.canControl === true &&
+      (status === "running" || status === "pausing" || status === "paused" || status === "failed");
+    action.hidden = !visible;
+    if (visible) {
+      const control = controlForStatus(status);
+      action.dataset["action"] = control ?? "";
+      action.disabled = args.controlPending === true || control === null;
+      if (status === "pausing") {
+        action.setAttribute("aria-label", "Pausing");
+        action.innerHTML = `<span>Pausing...</span>`;
+      } else if (control === "pause") {
+        action.setAttribute("aria-label", "Pause the graph");
+        action.innerHTML = `${icon("pause")}<span>Pause</span>`;
+      } else {
+        action.setAttribute("aria-label", "Continue the graph");
+        action.innerHTML = `${icon("play")}<span>Continue</span>`;
+      }
+    }
   }
   const stage = main.querySelector<HTMLElement>("#graph-stage");
   if (stage) {
@@ -229,6 +280,7 @@ function viewHtml(args: GraphViewArgs): string {
     `<span class="graph-title">${esc(args.name)}</span>` +
     `<span id="graph-chip"></span>` +
     `<span class="graph-count" id="graph-count" hidden></span>` +
+    `<button type="button" id="graph-action" hidden></button>` +
     `</div>` +
     `<p class="graph-blocker" id="graph-blocker" hidden></p>` +
     `<p class="graph-note" id="graph-note" hidden></p>` +
@@ -246,6 +298,15 @@ export function renderGraphView(root: HTMLElement, args: GraphViewArgs): void {
   scrolledRunning = null;
   root.innerHTML = viewHtml(args);
   root.querySelector("#graph-back")?.addEventListener("click", () => args.onBack());
+  // The painted action rides the button's dataset (repainted in place by
+  // every push), so the listener attached once still asks for today's one.
+  root.querySelector("#graph-action")?.addEventListener("click", (event) => {
+    const target = event.currentTarget;
+    const action = target instanceof HTMLElement ? target.dataset["action"] : undefined;
+    if (action === "pause" || action === "continue") {
+      args.onControl(action);
+    }
+  });
   const main = root.querySelector<HTMLElement>("main.graph-view");
   if (main) {
     paint(main, args);

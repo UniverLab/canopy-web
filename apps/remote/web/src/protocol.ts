@@ -683,6 +683,7 @@ export function buildShelfDelete(req: string, fileId: string): string {
 // is at the gate's size limit); the re-export keeps every importer —
 // the router, the stores, the views — on this module.
 export {
+  buildGraphControl,
   buildGraphs,
   buildGraphUnwatch,
   buildGraphWatch,
@@ -692,6 +693,7 @@ export {
   parseGraphs,
 } from "./graphs-protocol.js";
 export type {
+  GraphControlAction,
   GraphSpecRow,
   GraphState,
   GraphSummary,

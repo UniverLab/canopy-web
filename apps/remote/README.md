@@ -48,8 +48,14 @@ another tab, a hidden page) stops the live updates; returning resumes
 them. If the link drops, the view keeps its last state and says when it
 arrived, then resumes on reconnect.
 
-Watching is read-only: the remote never pauses, continues or resets a
-graph. Against the fake host (`/fake.html` in development) two fixture
+Watching never resets a graph, and the controls live only in the open
+view, never in the list rows. While a graph runs, the view offers
+**Pause**; a paused or refused graph offers **Continue** instead. Pause
+takes no confirmation: it is reversible, and the running node finishes
+first. The new status arrives live through the same pushes, and a refused
+request names itself on the view's note. The buttons need a host that
+speaks `graph_control` — against an older host the view stays read-only
+and shows no button. Against the fake host (`/fake.html` in development) two fixture
 graphs — one running with an ensemble, one completed — exercise the whole
 view, the running one advancing every 2 seconds.
 

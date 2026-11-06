@@ -261,6 +261,18 @@ function parseStatePayload(value: unknown): GraphState | null {
   };
 }
 
+// Client frame (graphs.rs): `graph_control{req, id, action}` with action
+// `"pause"` or `"continue"`. The host answers `ok{req}` or
+// `error{req, code, message}`, and the new status arrives through the
+// existing `graph_state` push. `hello.features` carries `"graph_control"`
+// only for the owner's devices on a new enough host.
+/** Pause or continue a watched graph: the owner's remote control. */
+export type GraphControlAction = "pause" | "continue";
+
+export function buildGraphControl(req: string, id: string, action: GraphControlAction): string {
+  return JSON.stringify({ t: "graph_control", req, id, action });
+}
+
 export function buildGraphs(req: string): string {
   return JSON.stringify({ t: "graphs", req });
 }

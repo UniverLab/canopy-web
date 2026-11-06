@@ -159,6 +159,7 @@ describe("Prompt Builder send through the shell", () => {
         onGraphsRequest: () => {},
         onWatchGraph: () => {},
         onUnwatchGraph: () => {},
+        onGraphControl: () => true,
       },
       { catalog },
     );

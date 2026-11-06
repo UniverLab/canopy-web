@@ -93,6 +93,7 @@ describe("shell titles", () => {
         onGraphsRequest: () => {},
         onWatchGraph: () => {},
         onUnwatchGraph: () => {},
+        onGraphControl: () => true,
       },
       { terminalFactory: factory, catalog: new CatalogStore(), graphs },
     );

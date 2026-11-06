@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 // The Graphs tab and the graph view outside the browser: the status chips
 // and checklist marks, the list rows, the store's watch lifecycle, the
-// view's header, plate, checklist and disconnect note, and the routing of
-// the three graph frames. Read-only throughout: nothing here pauses.
+// view's header, plate, checklist and disconnect note, the pause/continue
+// control through the route, and the routing of the graph frames. The
+// fake host answers pauses the way the real one does.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Shell } from "../src/app.js";
 import { CatalogStore } from "../src/catalog.js";
 import { createFakeGraphs } from "../src/fake-graphs.js";
+import { GraphRoute } from "../src/graph-route.js";
 import { GraphStore } from "../src/graph-store.js";
-import { plateStateOf, renderGraphView, updateGraphView } from "../src/graph-view.js";
+import { controlForStatus, plateStateOf, renderGraphView, updateGraphView } from "../src/graph-view.js";
 import type { GraphViewArgs } from "../src/graph-view.js";
 import {
   graphStatusIcon,
@@ -19,7 +21,7 @@ import {
   statusChip,
 } from "../src/graphs-list.js";
 import type { GraphState, GraphSummary } from "../src/protocol.js";
-import { parseGraph, parseGraphState, parseGraphs } from "../src/protocol.js";
+import { buildGraphControl, parseGraph, parseGraphState, parseGraphs } from "../src/protocol.js";
 import { createFrameRouter } from "../src/router.js";
 import { SessionController } from "../src/session.js";
 import { SessionStore } from "../src/sessions.js";
@@ -81,6 +83,10 @@ function viewArgs(overrides: Partial<GraphViewArgs> = {}): GraphViewArgs {
     state: graphState(),
     receivedAt: 1793100000_000,
     connected: true,
+    canControl: false,
+    controlPending: false,
+    controlError: null,
+    onControl: () => {},
     onBack: () => {},
     ...overrides,
   };
@@ -580,6 +586,271 @@ describe("the graph view", () => {
   });
 });
 
+describe("pausing and continuing", () => {
+  it("builds the graph_control frame the host contract quotes", () => {
+    expect(JSON.parse(buildGraphControl("r1", "g-loop", "pause"))).toEqual({
+      t: "graph_control",
+      req: "r1",
+      id: "g-loop",
+      action: "pause",
+    });
+    expect(JSON.parse(buildGraphControl("r2", "g-loop", "continue"))).toEqual({
+      t: "graph_control",
+      req: "r2",
+      id: "g-loop",
+      action: "continue",
+    });
+  });
+
+  it("offers pause while running, continue while parked or refused", () => {
+    expect(controlForStatus("running")).toBe("pause");
+    expect(controlForStatus("paused")).toBe("continue");
+    expect(controlForStatus("failed")).toBe("continue");
+    // Anything else — pausing, finished, or a hostile word — offers none.
+    for (const status of ["pausing", "completed", "draft", "", "constructor"]) {
+      expect(controlForStatus(status)).toBeNull();
+    }
+  });
+
+  it("hides the control without the hello feature, and past any status it serves", () => {
+    const root = document.createElement("div");
+    renderGraphView(root, viewArgs({ canControl: false }));
+    expect((root.querySelector("#graph-action") as HTMLElement).hidden).toBe(true);
+    for (const status of ["completed", "draft"]) {
+      updateGraphView(
+        root,
+        viewArgs({
+          canControl: true,
+          state: graphState({ status }),
+          summary: summary({ status }),
+        }),
+      );
+      expect((root.querySelector("#graph-action") as HTMLElement).hidden).toBe(true);
+    }
+  });
+
+  it("pauses through the button and keeps its node across pushes", () => {
+    const root = document.createElement("div");
+    const onControl = vi.fn();
+    renderGraphView(root, viewArgs({ canControl: true, onControl }));
+    const button = root.querySelector<HTMLButtonElement>("#graph-action");
+    expect(button?.hidden).toBe(false);
+    expect(button?.textContent).toContain("Pause");
+    button?.click();
+    expect(onControl).toHaveBeenCalledWith("pause");
+    // A push repaints it in place: the same node, still offering Pause.
+    updateGraphView(
+      root,
+      viewArgs({ canControl: true, onControl, state: graphState({ current_node: "first" }) }),
+    );
+    expect(root.querySelector("#graph-action")).toBe(button);
+    expect(button?.textContent).toContain("Pause");
+    // Pausing parks the label and the click; parked and refused continue.
+    updateGraphView(
+      root,
+      viewArgs({
+        canControl: true,
+        onControl,
+        state: graphState({ status: "pausing" }),
+        summary: summary({ status: "pausing" }),
+      }),
+    );
+    expect(root.querySelector("#graph-action")).toBe(button);
+    expect(button?.disabled).toBe(true);
+    expect(button?.textContent).toContain("Pausing...");
+    updateGraphView(
+      root,
+      viewArgs({
+        canControl: true,
+        onControl,
+        state: graphState({ status: "paused" }),
+        summary: summary({ status: "paused" }),
+      }),
+    );
+    expect(root.querySelector("#graph-action")).toBe(button);
+    expect(button?.disabled).toBe(false);
+    expect(button?.textContent).toContain("Continue");
+    button?.click();
+    expect(onControl).toHaveBeenCalledWith("continue");
+  });
+
+  it("disables the control while its request is in flight", () => {
+    const root = document.createElement("div");
+    renderGraphView(root, viewArgs({ canControl: true, controlPending: true }));
+    const button = root.querySelector<HTMLButtonElement>("#graph-action");
+    expect(button?.hidden).toBe(false);
+    expect(button?.disabled).toBe(true);
+  });
+
+  it("shows a refused control on the note, beating the disconnect line", () => {
+    const root = document.createElement("div");
+    const hostile = `<img src=x onerror=alert(1)>`;
+    renderGraphView(
+      root,
+      viewArgs({ canControl: true, connected: false, controlError: hostile }),
+    );
+    const note = root.querySelector("#graph-note") as HTMLElement;
+    expect(note.hidden).toBe(false);
+    // The message is host text: markup in it never becomes elements, and
+    // it wins over the disconnected line the same view would show.
+    expect(note.textContent).toBe(hostile);
+    expect(note.querySelector("img")).toBeNull();
+    expect(note.textContent).not.toMatch(/^disconnected/);
+  });
+});
+
+describe("the graph route's pause and continue", () => {
+  function setupRoute(): {
+    route: GraphRoute;
+    graphs: GraphStore;
+    root: HTMLElement;
+    sent: Array<Record<string, unknown>>;
+    routeName: { current: string };
+    cleanup: () => void;
+  } {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    const sent: Array<Record<string, unknown>> = [];
+    const graphs = new GraphStore({
+      send: (data) => {
+        sent.push(JSON.parse(data) as Record<string, unknown>);
+        return true;
+      },
+    });
+    const routeName = { current: "sessions" };
+    const route = new GraphRoute(
+      root,
+      graphs,
+      null,
+      {
+        onGraphsRequest: () => {},
+        onWatchGraph: () => {},
+        onUnwatchGraph: () => {},
+        onGraphControl: (req, id, action) => {
+          sent.push({ t: "graph_control", req, id, action });
+          return true;
+        },
+      },
+      {
+        listSessions: () => [],
+        sessionsLoaded: () => false,
+        openSession: () => {},
+        newSession: () => {},
+        render: () => {},
+        openGraph: () => {},
+        leaveToSessions: () => {},
+        header: () => "",
+        banner: () => "",
+        wireBanner: () => {},
+        connectionState: () => "connected",
+        route: () => routeName.current,
+      },
+    );
+    return { route, graphs, root, sent, routeName, cleanup: () => root.remove() };
+  }
+
+  function openRunningGraph(ctx: ReturnType<typeof setupRoute>): void {
+    ctx.route.open("g1", "palette-loop");
+    ctx.route.handleHello(["graph_control"]);
+    ctx.graphs.watch("g1");
+    ctx.graphs.handleGraph({ summary: summary(), doc: CHAIN, state: graphState() });
+    ctx.routeName.current = "graph";
+    ctx.route.mountGraph();
+  }
+
+  function controlFrames(ctx: ReturnType<typeof setupRoute>): Array<Record<string, unknown>> {
+    return ctx.sent.filter((frame) => frame.t === "graph_control");
+  }
+
+  it("sends nothing without the hello feature", () => {
+    const ctx = setupRoute();
+    try {
+      ctx.route.open("g1", "palette-loop");
+      ctx.route.requestControl("pause");
+      expect(controlFrames(ctx)).toEqual([]);
+    } finally {
+      ctx.cleanup();
+    }
+  });
+
+  it("pauses through the button and clears the pending request on ok", () => {
+    const ctx = setupRoute();
+    try {
+      openRunningGraph(ctx);
+      const button = ctx.root.querySelector<HTMLButtonElement>("#graph-action");
+      expect(button?.hidden).toBe(false);
+      button?.click();
+      const frames = controlFrames(ctx);
+      expect(frames).toHaveLength(1);
+      expect(frames[0]).toMatchObject({ id: "g1", action: "pause" });
+      const req = frames[0]?.req as string;
+      expect(req).not.toBe("");
+      // The in-flight request disables the same button node.
+      expect(button?.disabled).toBe(true);
+      // A second ask while one is in flight sends nothing.
+      ctx.route.requestControl("pause");
+      expect(controlFrames(ctx)).toHaveLength(1);
+      expect(ctx.route.handleControlOk(req)).toBe(true);
+      expect(ctx.route.args().controlPending).toBe(false);
+      expect(button?.disabled).toBe(false);
+      // A stranger's ok changes nothing.
+      expect(ctx.route.handleControlOk("r-stale")).toBe(false);
+    } finally {
+      ctx.cleanup();
+    }
+  });
+
+  it("shows a refusal on the note and clears it on the next success", () => {
+    const ctx = setupRoute();
+    try {
+      openRunningGraph(ctx);
+      const button = ctx.root.querySelector<HTMLButtonElement>("#graph-action");
+      button?.click();
+      const req = controlFrames(ctx)[0]?.req as string;
+      expect(ctx.route.handleControlError(req, "graph is not running")).toBe(true);
+      const note = ctx.root.querySelector("#graph-note") as HTMLElement;
+      expect(note.hidden).toBe(false);
+      expect(note.textContent).toBe("graph is not running");
+      expect(button?.disabled).toBe(false);
+      // The next successful action clears the note.
+      button?.click();
+      const again = controlFrames(ctx)[1]?.req as string;
+      expect(ctx.route.handleControlOk(again)).toBe(true);
+      expect((ctx.root.querySelector("#graph-note") as HTMLElement).hidden).toBe(true);
+    } finally {
+      ctx.cleanup();
+    }
+  });
+
+  it("drops the button on an older hello, and the request on leave", () => {
+    const ctx = setupRoute();
+    try {
+      openRunningGraph(ctx);
+      expect(
+        (ctx.root.querySelector("#graph-action") as HTMLElement).hidden,
+      ).toBe(false);
+      // A reconnect to an older host greets without the feature: the
+      // button goes, with the pending request and the note behind it.
+      ctx.route.handleHello([]);
+      expect(ctx.route.args().canControl).toBe(false);
+      expect(
+        (ctx.root.querySelector("#graph-action") as HTMLElement).hidden,
+      ).toBe(true);
+      // ...and leaving the view forgets a refusal, never the flag's story.
+      ctx.route.handleHello(["graph_control"]);
+      ctx.route.requestControl("pause");
+      const req = controlFrames(ctx)[0]?.req as string;
+      ctx.route.handleControlError(req, "graph is not running");
+      expect(ctx.route.args().controlError).toBe("graph is not running");
+      ctx.route.leave();
+      expect(ctx.route.args().controlPending).toBe(false);
+      expect(ctx.route.args().controlError).toBeNull();
+    } finally {
+      ctx.cleanup();
+    }
+  });
+});
+
 describe("routing the graph frames", () => {
   function setup(): {
     router: ReturnType<typeof createFrameRouter>;
@@ -663,6 +934,78 @@ describe("routing the graph frames", () => {
     expect(graphs.watchError()).toBe("no such graph");
   });
 
+  it("routes hello, ok and control errors through the graph control", () => {
+    const store = new SessionStore();
+    const catalog = new CatalogStore();
+    const graphs = new GraphStore({ send: () => true });
+    const controller = new SessionController({
+      send: () => true,
+      terminal: () => ({
+        write: () => {},
+        clear: () => {},
+      }),
+      onExited: () => {},
+    });
+    const graphHello = vi.fn();
+    const graphControlOk = vi.fn().mockReturnValue(true);
+    const graphControlError = vi.fn().mockReturnValue(true);
+    const sheetOk = vi.fn();
+    const sheetError = vi.fn();
+    const router = createFrameRouter({
+      store,
+      controller,
+      catalog,
+      graphs,
+      shell: {
+        graphHello,
+        graphControlOk,
+        graphControlError,
+        sheetOk,
+        sheetError,
+      } as unknown as Shell,
+    });
+    router.handleFrame({ t: "hello", features: ["graph_control"], harnesses: [] });
+    expect(graphHello).toHaveBeenCalledWith(["graph_control"]);
+    router.handleFrame({ t: "ok", req: "r1" });
+    expect(graphControlOk).toHaveBeenCalledWith("r1");
+    expect(sheetOk).not.toHaveBeenCalled();
+    router.handleFrame({ t: "error", req: "r2", code: "busy", message: "graph is not running" });
+    expect(graphControlError).toHaveBeenCalledWith("r2", "graph is not running");
+    expect(sheetError).not.toHaveBeenCalled();
+  });
+
+  it("falls through to the sheets when the graph route declines", () => {
+    const store = new SessionStore();
+    const catalog = new CatalogStore();
+    const graphs = new GraphStore({ send: () => true });
+    const controller = new SessionController({
+      send: () => true,
+      terminal: () => ({
+        write: () => {},
+        clear: () => {},
+      }),
+      onExited: () => {},
+    });
+    const sheetOk = vi.fn();
+    const sheetError = vi.fn();
+    const router = createFrameRouter({
+      store,
+      controller,
+      catalog,
+      graphs,
+      shell: {
+        graphControlOk: () => false,
+        graphControlError: () => false,
+        sheetOk,
+        sheetError,
+      } as unknown as Shell,
+    });
+    router.handleFrame({ t: "ok", req: "r1" });
+    expect(sheetOk).toHaveBeenCalledWith("r1");
+    router.handleFrame({ t: "error", req: "r2", code: "busy", message: "graph is not running" });
+    expect(sheetError).toHaveBeenCalledWith("graph is not running", "r2", "busy");
+  });
+
   it("routes nothing without the store, and never throws", () => {
     const store = new SessionStore();
     const catalog = new CatalogStore();
@@ -705,6 +1048,42 @@ describe("the fake graphs host", () => {
       req: string;
     };
     expect(reply.req).toBe("r9");
+    fake.handle({ t: "graph_unwatch", id: "g-loop" });
+  });
+
+  it("pauses the running fixture through pausing to paused, then continues it", () => {
+    const delivered: unknown[] = [];
+    const fake = createFakeGraphs((frame) => delivered.push(frame));
+    // A control without a req is a bad_request, like the watch.
+    expect(fake.handle({ t: "graph_control", id: "g-loop", action: "pause" })).toBe(true);
+    expect(delivered.at(-1)).toMatchObject({ t: "error", code: "bad_request" });
+    // An unknown id is a not_found.
+    expect(fake.handle({ t: "graph_control", req: "r1", id: "nope", action: "pause" })).toBe(true);
+    expect(delivered.at(-1)).toMatchObject({ t: "error", req: "r1", code: "not_found" });
+    // Watching arms the ticks the pause settles on.
+    expect(fake.handle({ t: "graph_watch", req: "rw", id: "g-loop" })).toBe(true);
+    delivered.length = 0;
+    expect(fake.handle({ t: "graph_control", req: "r2", id: "g-loop", action: "pause" })).toBe(true);
+    expect(delivered[0]).toMatchObject({ t: "ok", req: "r2" });
+    expect(delivered[1]).toMatchObject({ t: "graph_state", id: "g-loop" });
+    expect((delivered[1] as { state: { status: string } }).state.status).toBe("pausing");
+    // Neither direction moves twice: pausing is neither running nor parked.
+    expect(fake.handle({ t: "graph_control", req: "r3", id: "g-loop", action: "pause" })).toBe(true);
+    expect(delivered.at(-1)).toMatchObject({ t: "error", req: "r3", code: "busy" });
+    expect(fake.handle({ t: "graph_control", req: "r4", id: "g-loop", action: "continue" })).toBe(true);
+    expect(delivered.at(-1)).toMatchObject({ t: "error", req: "r4", code: "busy" });
+    // The next tick settles the pause and pushes it live.
+    fake.tick();
+    expect((delivered.at(-1) as { state: { status: string } }).state.status).toBe("paused");
+    // Parked continues; running does not.
+    expect(fake.handle({ t: "graph_control", req: "r5", id: "g-loop", action: "continue" })).toBe(true);
+    expect(delivered.at(-2)).toMatchObject({ t: "ok", req: "r5" });
+    expect((delivered.at(-1) as { state: { status: string } }).state.status).toBe("running");
+    expect(fake.handle({ t: "graph_control", req: "r6", id: "g-loop", action: "continue" })).toBe(true);
+    expect(delivered.at(-1)).toMatchObject({ t: "error", req: "r6", code: "busy" });
+    // A completed graph answers busy either way.
+    expect(fake.handle({ t: "graph_control", req: "r7", id: "g-done", action: "continue" })).toBe(true);
+    expect(delivered.at(-1)).toMatchObject({ t: "error", req: "r7", code: "busy" });
     fake.handle({ t: "graph_unwatch", id: "g-loop" });
   });
 });

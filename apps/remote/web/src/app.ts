@@ -18,7 +18,7 @@ import { MetricsRoute } from "./metrics-route.js";
 import type { MetricsStore } from "./metrics-store.js";
 import { NewDialog } from "./new-dialog.js";
 import { defaultDeviceLabel } from "./pairing.js";
-import type { PromptDraft, ScheduledItem, SpawnRequest } from "./protocol.js";
+import type { GraphControlAction, PromptDraft, ScheduledItem, SpawnRequest } from "./protocol.js";
 import type { OnlineHost } from "./relay.js";
 import type { ShelfHandle } from "./shelf-controller.js";
 import type { SessionStore } from "./sessions.js";
@@ -72,6 +72,11 @@ export interface ShellCallbacks {
   onWatchGraph: (id: string) => void;
   /** Stop watching: back, switching tab or hiding the page. */
   onUnwatchGraph: () => void;
+  /**
+   * The graph view's Pause/Continue: graph_control{req,id,action}.
+   * False when nothing went out (no connection yet).
+   */
+  onGraphControl: (req: string, id: string, action: GraphControlAction) => boolean;
   /** Watch the host's metrics while the strip or the SysInfo view shows. */
   onWatchMetrics?: () => void;
   /** Stop watching: hiding the page, entering the terminal, leaving. */
@@ -105,6 +110,12 @@ export interface Shell {
   sessionRemoved: (id: string) => void;
   /** A kill{req} error matched the pending close; true when consumed. */
   killError: (req: string | null, message: string) => boolean;
+  /** The host greets: the graph view's pause/continue gate follows hello. */
+  graphHello: (features: string[]) => void;
+  /** A graph_control ok; true when the graph route consumed it. */
+  graphControlOk: (req: string) => boolean;
+  /** A graph_control error; true when the graph route consumed it. */
+  graphControlError: (req: string | null, message: string) => boolean;
   sheetSpawned: (req: string, id: string) => void;
   sheetComposed: (req: string, text: string) => void;
   sheetScheduled: (req: string, item: ScheduledItem) => void;
@@ -325,6 +336,7 @@ export function createShell(
       onGraphsRequest: () => callbacks.onGraphsRequest(),
       onWatchGraph: (id) => callbacks.onWatchGraph(id),
       onUnwatchGraph: () => callbacks.onUnwatchGraph(),
+      onGraphControl: (req, id, action) => callbacks.onGraphControl(req, id, action),
     },
     {
       listSessions: () => store.list(),
@@ -596,6 +608,15 @@ export function createShell(
     },
     killError(req: string | null, message: string): boolean {
       return sessionRoute.killError(req, message);
+    },
+    graphHello(features: string[]): void {
+      graphRoute.handleHello(features);
+    },
+    graphControlOk(req: string): boolean {
+      return graphRoute.handleControlOk(req);
+    },
+    graphControlError(req: string | null, message: string): boolean {
+      return graphRoute.handleControlError(req, message);
     },
     sheetSpawned(req: string, id: string): void {
       const spawnName = newDialog.handleSpawned(req);

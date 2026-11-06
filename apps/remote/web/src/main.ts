@@ -14,7 +14,7 @@ import type { DeviceKey } from "./crypto.js";
 import { redirectUnknownRoute, resumeGuestReturn } from "./entry-path.js";
 import { GraphStore } from "./graph-store.js";
 import { MetricsStore } from "./metrics-store.js";
-import { buildCatalog, buildCompose, buildList, buildSpawn, newReqId } from "./protocol.js";
+import { buildCatalog, buildCompose, buildGraphControl, buildList, buildSpawn, newReqId } from "./protocol.js";
 import { runPairing } from "./pairing.js";
 import { ConnectionManager } from "./reconnect.js";
 import { RelayKeepalive } from "./keepalive.js";
@@ -143,6 +143,9 @@ async function main(): Promise<void> {
       },
       onUnwatchGraph: () => {
         graphs.unwatch();
+      },
+      onGraphControl: (req, id, action) => {
+        return manager?.send(buildGraphControl(req, id, action)) ?? false;
       },
       onWatchMetrics: () => {
         metrics.watch();
