@@ -18,6 +18,7 @@ class StubTerminal implements TerminalHandle {
   };
   clear = (): void => {};
   focus = (): void => {};
+  blur = (): void => {};
   scrollToBottom = (): void => {};
   isAtBottom = (): boolean => true;
   onUserInput = (): (() => void) => () => {};

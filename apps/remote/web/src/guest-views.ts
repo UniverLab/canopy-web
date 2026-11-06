@@ -22,6 +22,7 @@ import {
   textBytesWithModifiers,
 } from "./modifiers.js";
 import { SessionStore, renderSessions } from "./sessions.js";
+import { dropIdleFocus, openPhoneKeyboard } from "./phone-keyboard.js";
 import { TermCopySheet, termCopyFloatHtml, wireCopyFloat } from "./term-copy.js";
 import { TerminalView, createXtermHandle } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
@@ -99,6 +100,7 @@ export function createGuestView(
   let sessionRows = 0;
   let terminalView: TerminalView | null = null;
   let copyFloatDispose: (() => void) | null = null;
+  let dropFocusDispose: (() => void) | null = null;
   const termCopy = new TermCopySheet();
   const latches = new ModifierLatches();
 
@@ -132,6 +134,8 @@ export function createGuestView(
   }
 
   function teardownSessionWidgets(): void {
+    dropFocusDispose?.();
+    dropFocusDispose = null;
     copyFloatDispose?.();
     copyFloatDispose = null;
     termCopy.close();
@@ -306,12 +310,12 @@ export function createGuestView(
       return;
     }
     if (view.fitted) {
-      view.focus();
+      openPhoneKeyboard(view);
       return;
     }
     void view.ready().then(() => {
       if (terminalView === view) {
-        view.focus();
+        openPhoneKeyboard(view);
       }
     });
   }
@@ -339,6 +343,23 @@ export function createGuestView(
     </main>
     ${REMOTE_FOOTER}`;
     wireChrome();
+    // A tap on any control button is not typing: it drops an idle focus
+    // so the phone keyboard stays closed. One delegated listener covers
+    // the whole session view and goes with teardown.
+    const onControlClick = (ev: Event): void => {
+      const target = ev.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      if (target.closest(".term-controls button, #term-latest, #term-copy-float") === null) {
+        return;
+      }
+      if (terminalView) {
+        dropIdleFocus(terminalView);
+      }
+    };
+    root.addEventListener("click", onControlClick);
+    dropFocusDispose = () => root.removeEventListener("click", onControlClick);
     root.querySelector("#session-back")?.addEventListener("click", () => callbacks.onLeaveSession());
     // Read-only viewing copies too: the guest already sees this text.
     root.querySelector("#term-copy")?.addEventListener("click", () => {
@@ -368,6 +389,9 @@ export function createGuestView(
         const bytes = keyBytesWithModifiers(def.id, latches.snapshot());
         latches.release();
         updateKeyBarLatches(bar, latches.snapshot());
+        if (terminalView) {
+          dropIdleFocus(terminalView);
+        }
         callbacks.onInput(bytes);
       });
     }

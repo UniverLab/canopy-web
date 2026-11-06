@@ -45,6 +45,7 @@ class FakeHandle implements TerminalHandle {
   focus = (): void => {
     this.focuses += 1;
   };
+  blur = (): void => {};
   scrollToBottom = (): void => {
     this.atBottom = true;
   };

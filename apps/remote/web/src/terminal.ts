@@ -27,6 +27,7 @@
 // local terminal is resized to it, so it renders at its base scale (the
 // face at 14 CSS px) times the zoom instead of being fitted to the width.
 
+import { openPhoneKeyboard } from "./phone-keyboard.js";
 import { terminalFontGate } from "./terminal-font.js";
 import type { TerminalFactory, TerminalHandle } from "./terminal-handle.js";
 import {
@@ -165,14 +166,14 @@ export class TerminalView {
     // dispose removes it; the fit's own listeners go with the scaffold.
     const onPaneClick = (): void => {
       if (this.handle) {
-        this.handle.focus();
+        openPhoneKeyboard(this);
         return;
       }
       // Tapped while xterm is still behind the font gate: focus once it
       // opens, unless a remount or dispose replaced this attach first.
       void this.readyPromise.then(() => {
         if (this.generation === generation) {
-          this.handle?.focus();
+          openPhoneKeyboard(this);
         }
       });
     };
@@ -260,6 +261,10 @@ export class TerminalView {
 
   focus(): void {
     this.handle?.focus();
+  }
+
+  blur(): void {
+    this.handle?.blur();
   }
 
   /** The current drag selection, or "" while closed or unselected. */

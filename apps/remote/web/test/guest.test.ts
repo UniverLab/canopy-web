@@ -397,6 +397,7 @@ class FakeGuestHandle implements TerminalHandle {
   };
   clear = (): void => {};
   focus = (): void => {};
+  blur = (): void => {};
   scrollToBottom = (): void => {};
   isAtBottom = (): boolean => true;
   onUserInput = (callback: (text: string) => void): (() => void) => {

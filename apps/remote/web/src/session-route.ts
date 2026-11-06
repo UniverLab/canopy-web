@@ -17,6 +17,7 @@ import {
 import { convergeOpenSessionName, type SessionStore } from "./sessions.js";
 import type { ShelfHandle } from "./shelf-controller.js";
 import { esc } from "./sheet.js";
+import { dropIdleFocus, openPhoneKeyboard } from "./phone-keyboard.js";
 import { TerminalView } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
 import {
@@ -83,6 +84,7 @@ export class SessionRoute {
   private terminalView: TerminalView | null = null;
   private latestButton: HTMLButtonElement | null = null;
   private copyFloatDispose: (() => void) | null = null;
+  private dropFocusDispose: (() => void) | null = null;
   private termControls: TermControls | null = null;
   private uploadView: UploadView | null = null;
   // The Files button's folder: open while the sheet is up.
@@ -158,6 +160,24 @@ export class SessionRoute {
     </main>
     ${REMOTE_FOOTER}`;
     this.hooks.wireBanner();
+    // A tap on any control button is not typing either: it drops an idle
+    // focus so the phone keyboard stays closed. One delegated listener
+    // covers the whole session view and goes with teardown.
+    const onControlClick = (ev: Event): void => {
+      const target = ev.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      if (target.closest(".term-controls button, #term-latest, #term-copy-float") === null) {
+        return;
+      }
+      const view = this.terminalView;
+      if (view) {
+        dropIdleFocus(view);
+      }
+    };
+    this.root.addEventListener("click", onControlClick);
+    this.dropFocusDispose = () => this.root.removeEventListener("click", onControlClick);
     const filesIcon = this.root.querySelector<HTMLElement>("#session-files-icon");
     if (filesIcon) {
       this.shelfIcon = mountMorphSlot(filesIcon, "folder");
@@ -218,6 +238,10 @@ export class SessionRoute {
         const bytes = keyBytesWithModifiers(def.id, this.latches.snapshot());
         this.latches.release();
         updateKeyBarLatches(bar, this.latches.snapshot());
+        const view = this.terminalView;
+        if (view) {
+          dropIdleFocus(view);
+        }
         this.callbacks.onKeyPress(bytes);
       });
     }
@@ -226,6 +250,8 @@ export class SessionRoute {
   teardown(): void {
     this.termControls?.dispose();
     this.termControls = null;
+    this.dropFocusDispose?.();
+    this.dropFocusDispose = null;
     this.copyFloatDispose?.();
     this.copyFloatDispose = null;
     this.terminalView?.dispose();
@@ -417,12 +443,12 @@ export class SessionRoute {
       return;
     }
     if (view.fitted) {
-      view.focus();
+      openPhoneKeyboard(view);
       return;
     }
     void view.ready().then(() => {
       if (this.terminalView === view) {
-        view.focus();
+        openPhoneKeyboard(view);
       }
     });
   }
