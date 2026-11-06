@@ -50,12 +50,14 @@ export function computeOwnedSize(
   };
 }
 
-// The fitted size scaled by the owner's chosen percentage: fewer columns
-// and rows below 100, more above it, still inside the owned bounds.
-export function scaleOwnedSize(size: TermSize, percent: number): TermSize {
+// The fitted width scaled by the owner's chosen percentage: fewer columns
+// below 100, more above it, still inside the owned bounds. Rows always
+// stay fitted to the panel, so the slider reflows the width without ever
+// zooming the glyphs.
+export function scaleOwnedWidth(size: TermSize, percent: number): TermSize {
   return {
     cols: clampInt(Math.round((size.cols * percent) / 100), OWNED_MIN_COLS, OWNED_MAX_COLS),
-    rows: clampInt(Math.round((size.rows * percent) / 100), OWNED_MIN_ROWS, OWNED_MAX_ROWS),
+    rows: size.rows,
   };
 }
 

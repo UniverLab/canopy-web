@@ -67,7 +67,7 @@ export {
   computeScale,
   decayFlingVelocity,
   flingVelocity,
-  scaleOwnedSize,
+  scaleOwnedWidth,
   shouldContinueFling,
   shouldStartFling,
   splitTouchScroll,
