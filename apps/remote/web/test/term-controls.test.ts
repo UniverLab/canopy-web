@@ -468,7 +468,7 @@ describe("control-size toggle", () => {
     expect(slider().value).toBe("100");
   });
 
-  it("sends_the_scaled_size_when_the_slider_moves", () => {
+  it("sends_the_scaled_width_when_the_slider_moves_and_keeps_fitted_rows", () => {
     view!.fits = { cols: 100, rows: 40 };
     flip(true);
     expect(sent).toEqual([{ cols: 100, rows: 40 }]);
@@ -477,13 +477,13 @@ describe("control-size toggle", () => {
     // The panel's own debounce still applies: nothing goes out yet.
     expect(sent).toHaveLength(1);
     vi.advanceTimersByTime(SIZE_DEBOUNCE_MS);
-    expect(sent.at(-1)).toEqual({ cols: 50, rows: 20 });
-    expect(local.at(-1)).toEqual({ cols: 50, rows: 20 });
-    expect(scaleValue()).toBe("50 × 20");
+    expect(sent.at(-1)).toEqual({ cols: 50, rows: 40 });
+    expect(local.at(-1)).toEqual({ cols: 50, rows: 40 });
+    expect(scaleValue()).toBe("50 × 40");
     drag(200);
     vi.advanceTimersByTime(SIZE_DEBOUNCE_MS);
-    expect(sent.at(-1)).toEqual({ cols: 200, rows: 80 });
-    expect(scaleValue()).toBe("200 × 80");
+    expect(sent.at(-1)).toEqual({ cols: 200, rows: 40 });
+    expect(scaleValue()).toBe("200 × 40");
   });
 
   it("sends_the_fitted_size_at_100_percent", () => {
@@ -492,11 +492,23 @@ describe("control-size toggle", () => {
     expect(sent).toEqual([{ cols: 73, rows: 27 }]);
     drag(150);
     vi.advanceTimersByTime(SIZE_DEBOUNCE_MS);
-    expect(sent.at(-1)).toEqual({ cols: 110, rows: 41 });
+    expect(sent.at(-1)).toEqual({ cols: 110, rows: 27 });
     drag(100);
     vi.advanceTimersByTime(SIZE_DEBOUNCE_MS);
     expect(sent.at(-1)).toEqual({ cols: 73, rows: 27 });
     expect(scaleValue()).toBe("73 × 27");
+  });
+
+  it("fits_the_panel_as_soon_as_the_switch_turns_off", () => {
+    flip(true);
+    expect(sent).toEqual([{ cols: 44, rows: 19 }]);
+    view!.fits = { cols: 90, rows: 30 };
+    flip(false);
+    // The local terminal takes the fitted size at once instead of waiting
+    // for a host echo that may never come; nothing is sent back.
+    expect(local.at(-1)).toEqual({ cols: 90, rows: 30 });
+    expect(sent).toHaveLength(1);
+    expect(released).toBe(1);
   });
 
   it("remembers_the_scale_per_session", () => {
@@ -504,7 +516,7 @@ describe("control-size toggle", () => {
     drag(150);
     vi.advanceTimersByTime(SIZE_DEBOUNCE_MS);
     expect(readControlScale("s1")).toBe(150);
-    expect(sent.at(-1)).toEqual({ cols: 66, rows: 29 });
+    expect(sent.at(-1)).toEqual({ cols: 66, rows: 19 });
     controls.dispose();
     document.body.innerHTML = "";
     mount("s2");

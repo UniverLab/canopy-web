@@ -15,7 +15,7 @@ import {
   OWNED_MAX_ROWS,
   OWNED_MIN_COLS,
   OWNED_MIN_ROWS,
-  scaleOwnedSize,
+  scaleOwnedWidth,
   shouldContinueFling,
   shouldStartFling,
   splitTouchScroll,
@@ -208,21 +208,21 @@ describe("owned size", () => {
 });
 
 describe("control scale", () => {
-  it("scale_owned_size_rounds_and_clamps", () => {
+  it("scale_owned_width_rounds_and_clamps_cols_and_keeps_fitted_rows", () => {
     // 100 % sends exactly the fitted size.
-    expect(scaleOwnedSize({ cols: 44, rows: 19 }, 100)).toEqual({ cols: 44, rows: 19 });
-    expect(scaleOwnedSize({ cols: 44, rows: 19 }, 50)).toEqual({ cols: 22, rows: 10 });
-    expect(scaleOwnedSize({ cols: 44, rows: 19 }, 200)).toEqual({ cols: 88, rows: 38 });
-    // Rounds rather than truncates: 109.5 and 28.5 round up.
-    expect(scaleOwnedSize({ cols: 73, rows: 19 }, 150)).toEqual({ cols: 110, rows: 29 });
-    // Never below the floor nor above the ceiling.
-    expect(scaleOwnedSize({ cols: 22, rows: 6 }, 50)).toEqual({
+    expect(scaleOwnedWidth({ cols: 44, rows: 19 }, 100)).toEqual({ cols: 44, rows: 19 });
+    expect(scaleOwnedWidth({ cols: 44, rows: 19 }, 50)).toEqual({ cols: 22, rows: 19 });
+    expect(scaleOwnedWidth({ cols: 44, rows: 19 }, 200)).toEqual({ cols: 88, rows: 19 });
+    // Rounds rather than truncates: 109.5 rounds up.
+    expect(scaleOwnedWidth({ cols: 73, rows: 19 }, 150)).toEqual({ cols: 110, rows: 19 });
+    // Never below the floor nor above the ceiling; rows always fitted.
+    expect(scaleOwnedWidth({ cols: 22, rows: 6 }, 50)).toEqual({
       cols: OWNED_MIN_COLS,
-      rows: OWNED_MIN_ROWS,
+      rows: 6,
     });
-    expect(scaleOwnedSize({ cols: 400, rows: 150 }, 200)).toEqual({
+    expect(scaleOwnedWidth({ cols: 400, rows: 150 }, 200)).toEqual({
       cols: OWNED_MAX_COLS,
-      rows: OWNED_MAX_ROWS,
+      rows: 150,
     });
   });
 });

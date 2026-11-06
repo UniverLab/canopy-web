@@ -16,7 +16,7 @@
 // (no resize ping-pong) and says so in the size row's note.
 
 import { icon } from "./icons-dom.js";
-import { scaleOwnedSize } from "./terminal-geometry.js";
+import { scaleOwnedWidth } from "./terminal-geometry.js";
 import type { TermSize, TerminalView } from "./terminal.js";
 import {
   CONTROL_SCALE_MAX,
@@ -121,10 +121,10 @@ export function termSizeHtml(sessionId: string | null): string {
       </div>`;
 }
 
-// The slider that scales the fitted size, present only while the switch is
-// on: below 100 the owner's grid is denser, above it coarser. The whole
-// label is the 44 px target, like the switch, and the output names the
-// cols × rows in effect.
+// The slider that scales the fitted width, present only while the switch is
+// on: below 100 fewer columns, above it more; rows always stay fitted to
+// the panel. The whole label is the 44 px target, like the switch, and the
+// output names the cols × rows in effect.
 function sizeScaleHtml(sessionId: string): string {
   return `<label class="term-size-scale"><span>Size</span><input type="range" id="term-size-scale" min="${CONTROL_SCALE_MIN}" max="${CONTROL_SCALE_MAX}" step="${CONTROL_SCALE_STEP}" value="${readControlScale(sessionId)}" aria-label="Terminal size"><output id="term-size-value"></output></label>`;
 }
@@ -329,9 +329,9 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
   }
 
   // Measure and send: an unchanged size is not sent again unless forced
-  // (a fresh mount, where the host may hold any size). The size that fits
-  // the panel is scaled by the owner's slider before it is compared and
-  // sent, so 100 % sends exactly the fitted size.
+  // (a fresh mount, where the host may hold any size). The fitted width is
+  // scaled by the owner's slider before it is compared and sent, so 100 %
+  // sends exactly the fitted size.
   function assertSize(force: boolean): void {
     const sessionId = deps.sessionId();
     if (!owning || sessionId === null) {
@@ -350,7 +350,7 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
       return;
     }
     retries = 0;
-    const size = scaleOwnedSize(fitted, readControlScale(sessionId));
+    const size = scaleOwnedWidth(fitted, readControlScale(sessionId));
     if (!force && sameSize(lastSent, size)) {
       return;
     }
@@ -437,7 +437,15 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
     generation += 1;
     stopWatching();
     setScaleVisible(false);
-    deps.terminalView()?.setSizeOwner(false);
+    const view = deps.terminalView();
+    view?.setSizeOwner(false);
+    // Auto fit: the host keeps whatever size it has and may never echo, so
+    // the local terminal takes the fitted size at once instead of staying
+    // frozen on the last asserted grid.
+    const fitted = view?.ownedSize();
+    if (fitted) {
+      deps.onLocalSize(fitted.cols, fitted.rows);
+    }
   };
 
   sizeToggle?.addEventListener("change", () => {
