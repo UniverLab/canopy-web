@@ -149,7 +149,7 @@ describe("session flow over a fake data channel", () => {
     expect(text).not.toContain("\uFFFD");
   });
 
-  it("drops out frames at or below the last applied seq", () => {
+  it("discards_output_the_snapshot_already_covers", () => {
     const h = setup();
     h.controller.open("s1");
     for (const frame of snapshotFrames("s1", 7, "ab")) {
@@ -158,9 +158,31 @@ describe("session flow over a fake data channel", () => {
     h.hostSend({ t: "out", id: "s1", seq: 7, data: b64("STALE") });
     h.hostSend({ t: "out", id: "s1", seq: 6, data: b64("OLDER") });
     h.hostSend({ t: "out", id: "s1", seq: 8, data: b64("!") });
-    h.hostSend({ t: "out", id: "s1", seq: 8, data: b64("DUP") });
     h.hostSend({ t: "out", id: "s2", seq: 99, data: b64("WRONG") });
     expect(textOf(h.written)).toBe("ab!");
+  });
+
+  it("writes_both_parts_of_a_split_frame", () => {
+    const h = setup();
+    h.controller.open("s1");
+    for (const frame of snapshotFrames("s1", 7, "ab")) {
+      h.hostSend(frame);
+    }
+    h.hostSend({ t: "out", id: "s1", seq: 8, data: b64("XY") });
+    h.hostSend({ t: "out", id: "s1", seq: 8, data: b64("Z") });
+    expect(textOf(h.written)).toBe("abXYZ");
+  });
+
+  it("drains_split_parts_held_before_the_snapshot_in_order", () => {
+    const h = setup();
+    h.controller.open("s1");
+    h.hostSend({ t: "out", id: "s1", seq: 9, data: b64("c") });
+    h.hostSend({ t: "out", id: "s1", seq: 8, data: b64("b1") });
+    h.hostSend({ t: "out", id: "s1", seq: 8, data: b64("b2") });
+    for (const frame of snapshotFrames("s1", 7, "a")) {
+      h.hostSend(frame);
+    }
+    expect(textOf(h.written)).toBe("ab1b2c");
   });
 
   it("holds early out frames until the snapshot, then applies them in order", () => {
@@ -185,13 +207,14 @@ describe("session flow over a fake data channel", () => {
     expect(textOf(h.written)).toBe("abc");
 
     // The reconnect: attach again, a fresh snapshot redraws, and the
-    // in-flight out frame from before the drop is dropped by seq.
+    // in-flight out frame from before the drop is dropped by seq once the
+    // fresh snapshot covers it.
     expect(h.controller.reattach()).toBe(true);
     expect(h.sent().filter((f) => (f as { t: string }).t === "attach")).toHaveLength(2);
-    h.hostSend({ t: "out", id: "s1", seq: 8, data: b64("c") });
     for (const frame of snapshotFrames("s1", 8, "abc")) {
       h.hostSend(frame);
     }
+    h.hostSend({ t: "out", id: "s1", seq: 8, data: b64("c") });
     h.hostSend({ t: "out", id: "s1", seq: 9, data: b64("d") });
     expect(h.cleared).toBe(2);
     expect(textOf(h.written)).toBe("abcabcd");
