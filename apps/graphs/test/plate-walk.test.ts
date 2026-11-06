@@ -251,15 +251,26 @@ describe("the lit units", () => {
     return pattern.exec(svg)?.[1]?.split(";") ?? [];
   }
 
-  it("lights a twin only on the legs that touch its unit", () => {
+  it("lights a twin only on the half-legs that touch its unit", () => {
     // Every draw dips: the eight-leg walk loops gate↔fix three times, so
-    // fix touches legs 1–6, start only leg 0 and done only the final leg.
+    // fix leaves legs 2, 4, 6 and reaches legs 1, 3, 5; start only leaves
+    // leg 0 and done only reaches the final leg. A step leaving a unit
+    // lights the leg's first half, reaching it the second half, so the
+    // glow hands off mid-leg as the token passes.
     const svg = renderPlate(LOOP, undefined, () => 0);
     expect(svg.match(/class="unit-lit"/g) ?? []).toHaveLength(4);
-    expect(twinValues(svg, "fix")).toEqual(["0", "1", "1", "1", "1", "1", "1", "0", "0"]);
-    expect(twinValues(svg, "gate")).toEqual(["1", "1", "1", "1", "1", "1", "1", "1", "0"]);
-    expect(twinValues(svg, "start")).toEqual(["1", "0", "0", "0", "0", "0", "0", "0", "0"]);
-    expect(twinValues(svg, "done")).toEqual(["0", "0", "0", "0", "0", "0", "0", "1", "0"]);
+    expect(twinValues(svg, "fix")).toEqual(
+      ["0", "0", "0", "1", "1", "0", "0", "1", "1", "0", "0", "1", "1", "0", "0", "0", "0"],
+    );
+    expect(twinValues(svg, "gate")).toEqual(
+      ["0", "1", "1", "0", "0", "1", "1", "0", "0", "1", "1", "0", "0", "1", "1", "0", "0"],
+    );
+    expect(twinValues(svg, "start")).toEqual(
+      ["1", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0"],
+    );
+    expect(twinValues(svg, "done")).toEqual(
+      ["0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "1", "0"],
+    );
     expect(svg).toContain(
       `@media (prefers-reduced-motion:reduce){.plate-svg .unit-lit{display:none}}`,
     );

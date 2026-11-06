@@ -402,9 +402,9 @@ export function layoutPlate(document: unknown, random: () => number = happyRando
   // Edge endpoints on the unit borders, by drawn name. A forward edge leaves
   // the source border facing its target at the source height and enters the
   // target border facing its source at the target height, so the bend sits
-  // at the midpoint of the rank gap. A channel edge leaves the source's top
-  // corner facing its target and enters the target's top corner facing its
-  // source, clearing the units stacked above.
+  // at the midpoint of the rank gap. A channel edge leaves the middle of
+  // the source's top edge and enters the middle of the target's top edge,
+  // clearing the units stacked above.
   const groupByName = new Map(groups.map((group) => [group.name, group]));
   const displayName = drawnName;
   /** Whether an edge draws along a channel above the flow. */
@@ -430,10 +430,9 @@ export function layoutPlate(document: unknown, random: () => number = happyRando
           b: { x: num(to.x + to.hw), y: to.y },
         };
   const channelEnds = (from: Extent, to: Extent): { a: Pt; b: Pt } => {
-    const dir = to.x < from.x ? -1 : 1;
     return {
-      a: { x: num(from.x + dir * from.hw), y: num(from.y - from.hh) },
-      b: { x: num(to.x - dir * to.hw), y: num(to.y - to.hh) },
+      a: { x: num(from.x), y: num(from.y - from.hh) },
+      b: { x: num(to.x), y: num(to.y - to.hh) },
     };
   };
 

@@ -357,8 +357,8 @@ function twinOpen(twin: UnitTwin): string {
 
 /**
  * The catalogue's lit unit: the unit's own rect behind it, riding a
- * discrete SMIL opacity that turns on exactly on the walk's legs that
- * touch it. `prefers-reduced-motion` hides it whole.
+ * discrete SMIL opacity that turns on exactly on the walk's half-legs
+ * that touch it. `prefers-reduced-motion` hides it whole.
  */
 function renderLitUnit(twin: UnitTwin, legs: number[], total: number, seconds: number): string {
   const { values, keyTimes } = litTiming(legs, total);
@@ -375,30 +375,51 @@ function renderStaticLitUnit(twin: UnitTwin): string {
   return `${twinOpen(twin)}/>`;
 }
 
-/** The legs of the walk that reach or leave one unit. */
-function touchingLegs(steps: WalkStep[], name: string): number[] {
-  const legs: number[] = [];
+/**
+ * The half-legs of the walk that touch one unit: a step leaving it lights
+ * the first half of its leg, a step reaching it the second half — the glow
+ * hands off mid-leg, as the token passes the midpoint, instead of lighting
+ * both ends for the whole leg.
+ */
+function touchingSlots(steps: WalkStep[], name: string): number[] {
+  const slots: number[] = [];
   for (const [index, step] of steps.entries()) {
-    if (step.from === name || step.to === name) {
-      legs.push(index);
+    if (step.from === name) {
+      slots.push(index * 2);
+    }
+    if (step.to === name) {
+      slots.push(index * 2 + 1);
     }
   }
-  return legs;
+  return slots;
 }
 
 /** The catalogue's glow: one lit twin per unit the walk visits, behind them. */
 function renderLits(layout: PlateLayout): string {
-  const total = layout.walkSteps.length;
+  const total = layout.walkSteps.length * 2;
   if (total === 0) {
     return "";
   }
   const units = [
-    ...layout.nodes.map((node) => ({ twin: nodeTwin(node), legs: touchingLegs(layout.walkSteps, node.name) })),
-    ...layout.groups.map((group) => ({ twin: groupTwin(group), legs: touchingLegs(layout.walkSteps, group.name) })),
+    ...layout.nodes.map((node) => ({ twin: nodeTwin(node), legs: touchingSlots(layout.walkSteps, node.name) })),
+    ...layout.groups.map((group) => ({ twin: groupTwin(group), legs: touchingSlots(layout.walkSteps, group.name) })),
   ].filter((unit) => unit.legs.length > 0);
   return `<g class="lits">${units
     .map((unit) => renderLitUnit(unit.twin, unit.legs, total, layout.walkSeconds))
     .join("")}</g>`;
+}
+
+/** The glow twin of a running ensemble member: its own chip, where the token sits. */
+function memberTwin(groupName: string, member: PlacedMember, index: number): UnitTwin {
+  return {
+    name: member.label === "" ? `${groupName}#${index + 1}` : member.label,
+    x: member.x,
+    y: member.y,
+    w: MEMBER_GEOM.w,
+    h: MEMBER_GEOM.h,
+    rx: 1,
+    rotate: 0,
+  };
 }
 
 function renderMember(
@@ -415,6 +436,7 @@ function renderMember(
   const title = mark === null
     ? ""
     : `<title>${escape(member.label)} — ${STATE_WORD[mark.status]}</title>`;
+  const twin = mark?.lit === true ? renderStaticLitUnit(memberTwin(groupName, member, index)) : "";
   const ring = mark?.lit === true
     ? renderRing(member.x, member.y, Math.max(MEMBER_GEOM.w, MEMBER_GEOM.h) / 2 + 1.7)
     : "";
@@ -427,6 +449,7 @@ function renderMember(
     title +
     `<rect class="member-shape" x="${member.x - MEMBER_GEOM.w / 2}" y="${member.y - MEMBER_GEOM.h / 2}" ` +
     `width="${MEMBER_GEOM.w}" height="${MEMBER_GEOM.h}" rx="1"/>` +
+    twin +
     ring +
     `<text class="member-label" x="${member.x}" y="${member.y}" dy="0.7">${escape(member.label)}</text>` +
     harness +
@@ -435,16 +458,16 @@ function renderMember(
   );
 }
 
-/** Whether a running key lights the whole ensemble. */
+/**
+ * Whether the ensemble's own key runs: then the whole box glows. A running
+ * member lights its own chip instead (renderMember), where the token sits,
+ * so the glow never floats apart from the dot.
+ */
 function groupRunning(state: PlateState | undefined, group: PlacedGroup): boolean {
   if (state === undefined) {
     return false;
   }
-  const keys = [
-    group.name,
-    ...group.members.flatMap((member, index) => [member.label, `${group.name}#${index + 1}`]),
-  ];
-  return keys.some((key) => statusOf(state, key) === "running");
+  return statusOf(state, group.name) === "running";
 }
 
 function renderGroups(layout: PlateLayout, state: PlateState | undefined): string {

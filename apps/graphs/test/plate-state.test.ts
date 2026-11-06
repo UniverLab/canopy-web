@@ -122,6 +122,11 @@ describe("renderPlate with a state", () => {
     expect(svg).toContain(`class="state-badge"`);
     // The token stops on the running member instead of walking the chain.
     expect(svg).not.toContain(`<animateMotion`);
+    // The glow sits on the running member's own chip, where the token
+    // stops — not on the whole ensemble box.
+    expect(svg.match(/class="unit-lit"/g) ?? []).toHaveLength(1);
+    const twin = tagOf(svg, /<rect class="unit-lit"[^>]*>/);
+    expect(twin).toContain(`data-name="${label}"`);
   });
 
   it("draws one static twin for the running unit and no SMIL", () => {

@@ -724,8 +724,9 @@ describe("the pattern figures", () => {
     expect(layout).not.toBeNull();
     const fail = layout?.edges.find((edge) => edge.from === "review-panel" && edge.to === "implement");
     expect(fail?.cls).toBe("fail");
-    // A channel: only straight runs and rounded corners, from the source's
-    // top corner to the target's top corner, topping out above the row.
+    // A channel: only straight runs and rounded corners, from the middle
+    // of the source's top edge to the middle of the target's, topping
+    // out above the row.
     for (const letter of commands(fail?.d ?? "")) {
       expect("MLQ").toContain(letter);
     }
@@ -738,14 +739,8 @@ describe("the pattern figures", () => {
     }
     const box = nodeBox(implement);
     const round = (value: number): number => Math.round(value * 100) / 100;
-    expect([
-      [round(panel.x - panel.w / 2), round(panel.y - panel.h / 2)],
-      [round(panel.x + panel.w / 2), round(panel.y - panel.h / 2)],
-    ]).toContainEqual(pathStart(fail.d));
-    expect([
-      [round(implement.x - box.hw), round(implement.y - box.hh)],
-      [round(implement.x + box.hw), round(implement.y - box.hh)],
-    ]).toContainEqual(pathEnd(fail.d));
+    expect(pathStart(fail.d)).toEqual([round(panel.x), round(panel.y - panel.h / 2)]);
+    expect(pathEnd(fail.d)).toEqual([round(implement.x), round(implement.y - box.hh)]);
     const rowTop = Math.min(
       ...(layout?.nodes ?? [])
         .filter((node) => node.lane === "main")
