@@ -226,5 +226,12 @@ for (const viewport of [
     await page.locator("#term-control-size").focus();
     await page.keyboard.press("Space");
     await expect(page.locator("#term-control-size")).toBeChecked();
+    // The slider it reveals is the same 44 px target, inside the viewport.
+    const sizeSlider = page.locator("#term-size-scale");
+    await expect(sizeSlider).toBeVisible();
+    const sliderBox = await sizeSlider.boundingBox();
+    expect(sliderBox?.width ?? 0).toBeGreaterThanOrEqual(44);
+    expect(sliderBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+    expect((sliderBox?.x ?? 0) + (sliderBox?.width ?? 0)).toBeLessThanOrEqual(viewport.width + 1);
   });
 }

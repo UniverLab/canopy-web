@@ -908,6 +908,42 @@ label > textarea {
   color: var(--ink);
 }
 
+/* The slider that scales the size, below the switch and its note: a row
+ * that stays inside a 360 px viewport, the whole label a 44 px target
+ * like the switch. Its colours come from the tokens. */
+.term-size-scale {
+  grid-area: 3 / 2 / 4 / 3;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  max-width: 100%;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* The global label > input rule would make the range a block spanning the
+ * card; here it takes the row's slack, still 44 px tall. */
+.term-size-scale input {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--accent);
+}
+
+.term-size-scale output {
+  flex: none;
+  min-width: 4.5rem;
+  text-align: end;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Ten keys, all visible: two rows of five equal-width touch targets.
  * The bar is one info block; the keys inside stay flat so the tint
  * reads once. */

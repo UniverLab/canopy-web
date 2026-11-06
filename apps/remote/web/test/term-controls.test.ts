@@ -18,7 +18,7 @@ import {
 } from "../src/term-controls.js";
 import type { TermControls, TermControlsDeps, TermControlsView } from "../src/term-controls.js";
 import type { TermSize } from "../src/terminal.js";
-import { readControlSize, writeControlSize } from "../src/terminal-prefs.js";
+import { readControlScale, readControlSize, writeControlSize } from "../src/terminal-prefs.js";
 
 /** The icon markup as the DOM serializes it (paths gain close tags). */
 function rendered(name: Parameters<typeof icon>[0]): string {
@@ -217,12 +217,30 @@ describe("control-size toggle", () => {
     toggle().dispatchEvent(new Event("change", { bubbles: true }));
   };
 
-  const mount = (): void => {
+  const slider = (): HTMLInputElement => {
+    const el = root.querySelector<HTMLInputElement>("#term-size-scale");
+    if (!el) {
+      throw new Error("missing #term-size-scale");
+    }
+    return el;
+  };
+
+  const drag = (value: number): void => {
+    const el = slider();
+    el.value = String(value);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+
+  const scaleValue = (): string =>
+    root.querySelector("#term-size-value")?.textContent ?? "";
+
+  const mount = (sessionId = "s1"): void => {
     root = document.createElement("div");
     document.body.appendChild(root);
-    root.innerHTML = `<div id="term-pane"></div>${termControlsHtml()}${termSizeHtml("s1")}`;
+    root.innerHTML = `<div id="term-pane"></div>${termControlsHtml()}${termSizeHtml(sessionId)}`;
     controls = wireTermControls({
       ...deps(root),
+      sessionId: () => sessionId,
       terminalView: () => view,
       onControlSize: (cols, rows) => sent.push({ cols, rows }),
       onReleaseSize: () => {
@@ -427,6 +445,77 @@ describe("control-size toggle", () => {
     controls.handleResized(120, 40);
     expect(toggle().checked).toBe(true);
     expect(local).toEqual([{ cols: 120, rows: 40 }]);
+  });
+
+  it("shows_the_slider_only_while_the_switch_is_on", () => {
+    expect(root.querySelector("#term-size-scale")).toBeNull();
+    flip(true);
+    const input = slider();
+    expect(input.type).toBe("range");
+    expect(input.min).toBe("50");
+    expect(input.max).toBe("200");
+    expect(input.step).toBe("10");
+    expect(input.value).toBe("100");
+    expect(input.getAttribute("aria-label")).toBe("Terminal size");
+    // The whole label is the target, like the switch.
+    expect(input.closest("label")?.classList.contains("term-size-scale")).toBe(true);
+    expect(root.querySelector("#term-size-value")).not.toBeNull();
+    flip(false);
+    expect(root.querySelector("#term-size-scale")).toBeNull();
+    // Turning the switch off keeps the stored percentage for next time.
+    expect(readControlScale("s1")).toBe(100);
+    flip(true);
+    expect(slider().value).toBe("100");
+  });
+
+  it("sends_the_scaled_size_when_the_slider_moves", () => {
+    view!.fits = { cols: 100, rows: 40 };
+    flip(true);
+    expect(sent).toEqual([{ cols: 100, rows: 40 }]);
+    expect(scaleValue()).toBe("100 × 40");
+    drag(50);
+    // The panel's own debounce still applies: nothing goes out yet.
+    expect(sent).toHaveLength(1);
+    vi.advanceTimersByTime(SIZE_DEBOUNCE_MS);
+    expect(sent.at(-1)).toEqual({ cols: 50, rows: 20 });
+    expect(local.at(-1)).toEqual({ cols: 50, rows: 20 });
+    expect(scaleValue()).toBe("50 × 20");
+    drag(200);
+    vi.advanceTimersByTime(SIZE_DEBOUNCE_MS);
+    expect(sent.at(-1)).toEqual({ cols: 200, rows: 80 });
+    expect(scaleValue()).toBe("200 × 80");
+  });
+
+  it("sends_the_fitted_size_at_100_percent", () => {
+    view!.fits = { cols: 73, rows: 27 };
+    flip(true);
+    expect(sent).toEqual([{ cols: 73, rows: 27 }]);
+    drag(150);
+    vi.advanceTimersByTime(SIZE_DEBOUNCE_MS);
+    expect(sent.at(-1)).toEqual({ cols: 110, rows: 41 });
+    drag(100);
+    vi.advanceTimersByTime(SIZE_DEBOUNCE_MS);
+    expect(sent.at(-1)).toEqual({ cols: 73, rows: 27 });
+    expect(scaleValue()).toBe("73 × 27");
+  });
+
+  it("remembers_the_scale_per_session", () => {
+    flip(true);
+    drag(150);
+    vi.advanceTimersByTime(SIZE_DEBOUNCE_MS);
+    expect(readControlScale("s1")).toBe(150);
+    expect(sent.at(-1)).toEqual({ cols: 66, rows: 29 });
+    controls.dispose();
+    document.body.innerHTML = "";
+    mount("s2");
+    // Another session starts at 100 % and shows no slider while off.
+    expect(readControlScale("s2")).toBe(100);
+    expect(root.querySelector("#term-size-scale")).toBeNull();
+    flip(true);
+    expect(slider().value).toBe("100");
+    expect(sent.at(-1)).toEqual({ cols: 44, rows: 19 });
+    // The first session kept its own percentage.
+    expect(readControlScale("s1")).toBe(150);
   });
 });
 

@@ -16,10 +16,16 @@
 // (no resize ping-pong) and says so in the size row's note.
 
 import { icon } from "./icons-dom.js";
+import { scaleOwnedSize } from "./terminal-geometry.js";
 import type { TermSize, TerminalView } from "./terminal.js";
 import {
+  CONTROL_SCALE_MAX,
+  CONTROL_SCALE_MIN,
+  CONTROL_SCALE_STEP,
+  readControlScale,
   readControlSize,
   readKeyBarVisible,
+  writeControlScale,
   writeControlSize,
   writeKeyBarVisible,
 } from "./terminal-prefs.js";
@@ -101,16 +107,26 @@ export const SIZE_TAKEN_NOTE = "Size taken over by another device.";
 // switch (role="switch" announces on/off) and the whole label is its
 // 44 px target; Space toggles it and the focus ring is the global one.
 export function termSizeHtml(sessionId: string | null): string {
+  const on = sessionId !== null && readControlSize(sessionId);
   return `
       <div class="term-size">
         <label class="term-size-toggle"><input
           type="checkbox"
           role="switch"
           id="term-control-size"
-          ${sessionId !== null && readControlSize(sessionId) ? "checked" : ""}
+          ${on ? "checked" : ""}
         ><span>This device controls the size</span></label>
+        ${on && sessionId !== null ? sizeScaleHtml(sessionId) : ""}
         <p class="term-size-note" role="status">${SIZE_NOTE}</p>
       </div>`;
+}
+
+// The slider that scales the fitted size, present only while the switch is
+// on: below 100 the owner's grid is denser, above it coarser. The whole
+// label is the 44 px target, like the switch, and the output names the
+// cols × rows in effect.
+function sizeScaleHtml(sessionId: string): string {
+  return `<label class="term-size-scale"><span>Size</span><input type="range" id="term-size-scale" min="${CONTROL_SCALE_MIN}" max="${CONTROL_SCALE_MAX}" step="${CONTROL_SCALE_STEP}" value="${readControlScale(sessionId)}" aria-label="Terminal size"><output id="term-size-value"></output></label>`;
 }
 
 /** The slice of the open TerminalView the controls drive. */
@@ -236,6 +252,7 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
   // terminal follows the host's size again.
   const sizeToggle = root.querySelector<HTMLInputElement>("#term-control-size");
   const sizeNote = root.querySelector<HTMLElement>(".term-size-note");
+  const sizeRow = root.querySelector<HTMLElement>(".term-size");
   let owning = false;
   let lastSent: TermSize | null = null;
   let asserted: TermSize[] = [];
@@ -262,18 +279,70 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
     }, SIZE_DEBOUNCE_MS);
   };
 
+  const paintScaleValue = (size: TermSize): void => {
+    const value = root.querySelector<HTMLOutputElement>("#term-size-value");
+    if (value !== null) {
+      value.textContent = `${size.cols} × ${size.rows}`;
+    }
+  };
+
+  // Dragging the slider remembers the percentage and lets the panel's own
+  // debounce re-send the scaled size: no second timer.
+  const bindScale = (input: HTMLInputElement): void => {
+    input.addEventListener("input", () => {
+      const id = deps.sessionId();
+      if (id === null) {
+        return;
+      }
+      writeControlScale(id, Number.parseInt(input.value, 10));
+      schedule();
+    });
+  };
+
+  // The slider lives in the DOM only while the switch is on; turning the
+  // switch off keeps the stored percentage for next time.
+  const setScaleVisible = (visible: boolean): void => {
+    const existing = root.querySelector<HTMLElement>(".term-size-scale");
+    if (!visible) {
+      existing?.remove();
+      return;
+    }
+    const id = deps.sessionId();
+    if (existing !== null || id === null || sizeRow === null) {
+      return;
+    }
+    const note = sizeRow.querySelector(".term-size-note");
+    if (note !== null) {
+      note.insertAdjacentHTML("beforebegin", sizeScaleHtml(id));
+    } else {
+      sizeRow.insertAdjacentHTML("beforeend", sizeScaleHtml(id));
+    }
+    const input = root.querySelector<HTMLInputElement>("#term-size-scale");
+    if (input !== null) {
+      bindScale(input);
+    }
+  };
+
+  const initialScale = root.querySelector<HTMLInputElement>("#term-size-scale");
+  if (initialScale !== null) {
+    bindScale(initialScale);
+  }
+
   // Measure and send: an unchanged size is not sent again unless forced
-  // (a fresh mount, where the host may hold any size).
+  // (a fresh mount, where the host may hold any size). The size that fits
+  // the panel is scaled by the owner's slider before it is compared and
+  // sent, so 100 % sends exactly the fitted size.
   function assertSize(force: boolean): void {
-    if (!owning || deps.sessionId() === null) {
+    const sessionId = deps.sessionId();
+    if (!owning || sessionId === null) {
       return;
     }
     const view = deps.terminalView();
     if (!view) {
       return;
     }
-    const size = view.ownedSize();
-    if (size === null) {
+    const fitted = view.ownedSize();
+    if (fitted === null) {
       if (retries < SIZE_MEASURE_RETRIES) {
         retries += 1;
         schedule();
@@ -281,6 +350,7 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
       return;
     }
     retries = 0;
+    const size = scaleOwnedSize(fitted, readControlScale(sessionId));
     if (!force && sameSize(lastSent, size)) {
       return;
     }
@@ -291,6 +361,7 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
     }
     deps.onLocalSize(size.cols, size.rows);
     deps.onControlSize(size.cols, size.rows);
+    paintScaleValue(size);
   }
 
   // The panel changes that move the size: its own box (a window resize, a
@@ -337,6 +408,7 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
     lastSent = null;
     asserted = [];
     setNote(SIZE_NOTE);
+    setScaleVisible(true);
     retries = 0;
     generation += 1;
     watch();
@@ -364,6 +436,7 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
     asserted = [];
     generation += 1;
     stopWatching();
+    setScaleVisible(false);
     deps.terminalView()?.setSizeOwner(false);
   };
 

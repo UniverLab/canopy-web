@@ -58,6 +58,12 @@ export function writeKeyBarVisible(value: boolean): void {
   }
 }
 
+export const CONTROL_SCALE_KEY_PREFIX = "canopy.remote.term.controlScale.";
+export const CONTROL_SCALE_MIN = 50;
+export const CONTROL_SCALE_MAX = 200;
+export const CONTROL_SCALE_STEP = 10;
+const CONTROL_SCALE_DEFAULT = 100;
+
 export function controlSizeKey(sessionId: string): string {
   return `${CONTROL_SIZE_KEY_PREFIX}${sessionId}`;
 }
@@ -75,5 +81,35 @@ export function writeControlSize(sessionId: string, value: boolean): void {
     storage()?.setItem(controlSizeKey(sessionId), value ? "1" : "0");
   } catch {
     // A terminal that cannot remember the toggle still works.
+  }
+}
+
+export function controlScaleKey(sessionId: string): string {
+  return `${CONTROL_SCALE_KEY_PREFIX}${sessionId}`;
+}
+
+/** The remembered slider percentage, 100 unless a valid 50..200 step of 10. */
+export function readControlScale(sessionId: string): number {
+  try {
+    const value = Number.parseInt(storage()?.getItem(controlScaleKey(sessionId)) ?? "", 10);
+    if (
+      Number.isInteger(value) &&
+      value >= CONTROL_SCALE_MIN &&
+      value <= CONTROL_SCALE_MAX &&
+      value % CONTROL_SCALE_STEP === 0
+    ) {
+      return value;
+    }
+  } catch {
+    // Fall through to the default.
+  }
+  return CONTROL_SCALE_DEFAULT;
+}
+
+export function writeControlScale(sessionId: string, value: number): void {
+  try {
+    storage()?.setItem(controlScaleKey(sessionId), String(value));
+  } catch {
+    // A terminal that cannot remember the scale still works.
   }
 }
