@@ -10,7 +10,10 @@ ends (see its own README).
 
 The key bar under the terminal carries what a phone keyboard lacks. Ctrl and
 Shift are one-shot modifiers: a tap arms the key and opens the keyboard, the
-next key goes out with it, and a second tap disarms it.
+next key goes out with it, and a second tap disarms it. On a phone, only
+Ctrl, Shift, and a tap on the terminal pane open the keyboard; other bar keys
+keep a dismissed keyboard closed, and you can always reopen it with Ctrl,
+Shift, or a pane tap.
 
 **Copy** opens the terminal's text in a sheet where the phone's own long-press
 selection works, with Copy selection and Copy all. With a mouse, drag over the
