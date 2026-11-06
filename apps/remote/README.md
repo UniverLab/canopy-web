@@ -45,9 +45,11 @@ On a host that speaks `session_resume`, Agent offers a second control with
 first, each with its harness, folder and how long ago it started; a folder's
 latest with no transcript is marked as such. The filter matches the name,
 harness or folder, case-insensitively. Tapping a row brings that conversation
-back on the host and opens its session. A host without the feature shows no
-Resume control. Against the fake host, `?resume=off` greets like an older
-host, `?resume=empty` has no history and `?resume=error` refuses the request.
+back on the host and opens its session. An empty history says "No past
+sessions to resume."; a host refusal shows its message above the list with a
+Retry. A host without the feature shows no Resume control. Against the fake
+host, `?resume=off` greets like an older host, `?resume=empty` has no history
+and `?resume=error` refuses the request.
 
 ## Watching graphs
 
