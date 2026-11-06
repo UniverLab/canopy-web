@@ -60,6 +60,10 @@ export interface RouterShell {
   sheetScheduledList: (req: string, items: ScheduledItem[]) => void;
   sheetOk: (req: string) => void;
   sheetError: (message: string, req: string | null, code: string) => void;
+  /** The open session was removed on the host; absent on the guest view. */
+  sessionRemoved?: (id: string) => void;
+  /** A kill{req} error; true when the session view consumed it. */
+  killError?: (req: string | null, message: string) => boolean;
 }
 
 export interface FrameRouterDeps {
@@ -99,6 +103,9 @@ export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
     const removed = parseSessionRemoved(frame);
     if (removed !== null) {
       store.remove(removed);
+      if (removed === controller.sessionId) {
+        shell.sessionRemoved?.(removed);
+      }
       return;
     }
     const exited = parseExited(frame);
@@ -242,6 +249,10 @@ export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
       }
       // A failed graph watch paints in the graph view, never as a dialog.
       if (graphs?.handleWatchError(clean.message, clean.req)) {
+        return;
+      }
+      // A failed Close answers its own req and stays in the session view.
+      if (shell.killError?.(clean.req, clean.message)) {
         return;
       }
       shell.sheetError(clean.message, clean.req, clean.code);

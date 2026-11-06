@@ -11,6 +11,7 @@ import {
   buildGraphWatch,
   buildInput,
   buildInputText,
+  buildKill,
   buildList,
   buildPromptDraft,
   buildPromptSchedule,
@@ -58,6 +59,7 @@ describe("builders", () => {
     expect(JSON.parse(buildCatalog("r1"))).toEqual({ t: "catalog", req: "r1" });
     expect(JSON.parse(buildAttach("s1"))).toEqual({ t: "attach", id: "s1" });
     expect(JSON.parse(buildDetach("s1"))).toEqual({ t: "detach", id: "s1" });
+    expect(JSON.parse(buildKill("r1", "smoke"))).toEqual({ t: "kill", req: "r1", id: "smoke" });
   });
 
   it("builds the exact spawn, compose and draft frames", () => {

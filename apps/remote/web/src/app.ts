@@ -54,6 +54,11 @@ export interface ShellCallbacks {
   onControlSize: (cols: number, rows: number) => void;
   /** The control-size toggle turned off: give the size back to the host. */
   onReleaseSize: () => void;
+  /**
+   * The session view's Close sent its second tap: kill{req,id} for the
+   * open session. False when nothing went out (no session, no channel).
+   */
+  onKill: (req: string) => boolean;
   /** False when the frame could not be sent; the dialog then says so. */
   onSpawn: (spawn: SpawnRequest, req: string) => boolean;
   onCompose: (draft: PromptDraft, req: string) => boolean;
@@ -96,6 +101,10 @@ export interface Shell {
   writeTerminal: (data: Uint8Array) => void;
   clearTerminal: () => void;
   showSessionExited: (code: number) => void;
+  /** The open session was removed on the host, whoever caused it. */
+  sessionRemoved: (id: string) => void;
+  /** A kill{req} error matched the pending close; true when consumed. */
+  killError: (req: string | null, message: string) => boolean;
   sheetSpawned: (req: string, id: string) => void;
   sheetComposed: (req: string, text: string) => void;
   sheetScheduled: (req: string, item: ScheduledItem) => void;
@@ -364,6 +373,7 @@ export function createShell(
       onTerminalInput: (bytes) => callbacks.onTerminalInput(bytes),
       onControlSize: (cols, rows) => callbacks.onControlSize(cols, rows),
       onReleaseSize: () => callbacks.onReleaseSize(),
+      onKill: (req) => callbacks.onKill(req),
       onLeaveSession: () => callbacks.onLeaveSession(),
     },
     {
@@ -572,6 +582,20 @@ export function createShell(
     },
     showSessionExited(code: number): void {
       sessionRoute.showSessionExited(code);
+    },
+    sessionRemoved(id: string): void {
+      if (route !== "session" || sessionRoute.openId !== id) {
+        return;
+      }
+      // The list's one-shot flash must be set before the leave renders
+      // it — render() is synchronous and consumes it.
+      if (sessionRoute.wasKillPending()) {
+        graphRoute.setListFlash("Session closed");
+      }
+      callbacks.onLeaveSession();
+    },
+    killError(req: string | null, message: string): boolean {
+      return sessionRoute.killError(req, message);
     },
     sheetSpawned(req: string, id: string): void {
       const spawnName = newDialog.handleSpawned(req);

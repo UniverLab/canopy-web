@@ -195,6 +195,7 @@ describe("createShell", () => {
       onReleaseSize: () => {
         released += 1;
       },
+      onKill: () => true,
       onSpawn: (spawn, req) => {
         spawns.push({ spawn, req });
         return sendable;

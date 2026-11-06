@@ -11,6 +11,7 @@ import {
   buildDetach,
   buildInput,
   buildInputText,
+  buildKill,
   buildPromptDraft,
   buildPromptSchedule,
   buildResize,
@@ -130,6 +131,16 @@ export class SessionController {
       return false;
     }
     return this.callbacks.send(buildResize(this.openId, cols, rows));
+  }
+
+  // The session view's Close: the host ends the session itself, so every
+  // attached device sees exited and session_removed. False with no open
+  // session or no channel — the caller shows "Not connected".
+  kill(req: string): boolean {
+    if (this.openId === null) {
+      return false;
+    }
+    return this.callbacks.send(buildKill(req, this.openId));
   }
 
   // The control-size toggle turning off: give the size back so the host's

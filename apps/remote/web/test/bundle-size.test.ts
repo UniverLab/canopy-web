@@ -185,6 +185,16 @@ const UNIT_GLOW_BUDGET = 512;
  * headroom, and the switch is styled from the main stylesheet.
  */
 const SWITCH_WIDTH_BUDGET = 512;
+/**
+ * Allowance for the session-close spec (the kill builder and send, the
+ * session bar's two-tap Close with its confirm and error path, the
+ * session_removed leave and the list's one-shot flash): measured +532 B
+ * gzip over the pre-change main (174 735 → 175 267), JS and CSS. Added in
+ * the feature commit like SWITCH_WIDTH_BUDGET: the tree sat on the
+ * allowed total and the button, its styles and the frame routing all
+ * ride the main bundle.
+ */
+const SESSION_CLOSE_BUDGET = 1_024;
 /** The budget the lazy guest chunk is allowed, gzip bytes of JS. */
 const GUEST_BUDGET = 6_144;
 /**
@@ -308,7 +318,8 @@ describe("the remote's bundle", () => {
         GUEST_RETURN_BUDGET +
         FLOW_AXIS_BUDGET +
         UNIT_GLOW_BUDGET +
-        SWITCH_WIDTH_BUDGET,
+        SWITCH_WIDTH_BUDGET +
+        SESSION_CLOSE_BUDGET,
     );
     expect(guestJs, JSON.stringify(report)).toBeLessThanOrEqual(GUEST_BUDGET + GUEST_INVITE_BUDGET);
     expect(editorJs, JSON.stringify(report)).toBeLessThanOrEqual(EDITOR_BUDGET);

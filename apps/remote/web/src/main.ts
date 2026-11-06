@@ -128,6 +128,7 @@ async function main(): Promise<void> {
       onReleaseSize: () => {
         controller.releaseSize();
       },
+      onKill: (req) => controller.kill(req),
       onSpawn: (spawn, req) => manager?.send(buildSpawn(req, spawn)) ?? false,
       onCompose: (draft, req) => manager?.send(buildCompose(req, draft)) ?? false,
       onSendDraft: (draft, req) => controller.sendPromptDraft(draft, req),

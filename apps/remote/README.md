@@ -22,6 +22,12 @@ selection works, with Copy selection and Copy all. With a mouse, drag over the
 terminal and use the floating Copy button or `Ctrl+Shift+C`; plain `Ctrl+C`
 always stays an interrupt for the session.
 
+**Close** ends the session on the host, not just this device's view: the
+first tap arms a "Close?" confirm for a few seconds, the second sends
+`kill{req,id}` and the view returns to the sessions list with a "Session
+closed" note. A host refusal shows its message beside the title and the
+button re-arms.
+
 The **Prompt Builder** sends now or later: Schedule picks a date and time, and
 the sheet lists the session's pending schedules, each with a Cancel. The host
 delivers a schedule even with no browser open; it needs the session still

@@ -11,6 +11,7 @@ import { createChannelHandler } from "./channel.js";
 import { b64encode } from "./crypto.js";
 import { createFakeShelfDeleter } from "./fake-delete.js";
 import { createFakeGraphs } from "./fake-graphs.js";
+import { createFakeKiller } from "./fake-kill.js";
 import { createFakeMetrics } from "./fake-metrics.js";
 import { createFakeUploads } from "./fake-upload.js";
 import { GraphStore } from "./graph-store.js";
@@ -230,6 +231,7 @@ function main(): void {
   );
 
   const deleter = createFakeShelfDeleter({ deliver, files: shelfFiles });
+  const killer = createFakeKiller({ deliver, sessions, ptySizes, prevSizes });
   const shelfItemsFor = (sessionId: string | null): ShelfItem[] => {
     if (sessionId !== null && sessions.find((item) => item.id === sessionId)?.kind === "terminal") {
       return [];
@@ -369,6 +371,8 @@ function main(): void {
       const prev = prevSizes.get(frame.id) ?? { cols: 80, rows: 24 };
       prevSizes.delete(frame.id);
       setPtySize(frame.id, prev.cols, prev.rows);
+    } else if (killer.handle(frame)) {
+      // kill{req,id}: ok or error, then exited and session_removed.
     } else if (fakeUploads.handle(frame)) {
       // shelf_put_begin/part/end/abort: stored on the target shelf.
     } else if (frame.t === "shelf_list") {
@@ -585,6 +589,7 @@ function main(): void {
       onReleaseSize: () => {
         controller.releaseSize();
       },
+      onKill: (req) => controller.kill(req),
       onSpawn: (spawn, req) => send(buildSpawn(req, spawn)),
       onCompose: (draft, req) => send(JSON.stringify({ t: "compose", req, draft })),
       onSendDraft: (draft, req) => controller.sendPromptDraft(draft, req),
@@ -737,6 +742,9 @@ function main(): void {
     failNextPrompt: (code: string, message: string) => {
       promptError = { code, message };
     },
+    failNextKill: (code: string, message: string) => {
+      killer.failNext(code, message);
+    },
     graphTick: () => {
       fakeGraphs.tick();
     },
@@ -777,6 +785,8 @@ declare global {
       guestInvites?: () => string[];
       /** Another device (or the host's TUI) resizes a session's PTY. */
       resizeFromElsewhere?: (cols: number, rows: number, id?: string) => void;
+      /** Owner mode only: the next kill answers this error once. */
+      failNextKill?: (code: string, message: string) => void;
     };
   }
 }

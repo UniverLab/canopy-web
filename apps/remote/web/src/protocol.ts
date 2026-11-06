@@ -640,6 +640,13 @@ export function buildDetach(id: string): string {
   return JSON.stringify({ t: "detach", id });
 }
 
+// `kill{req,id}`: end the session on the host, not just this device's
+// attach. The host answers ok{req} or error{req,code,message}, then
+// broadcasts exited and session_removed.
+export function buildKill(req: string, id: string): string {
+  return JSON.stringify({ t: "kill", req, id });
+}
+
 export function buildResizeRelease(id: string): string {
   return JSON.stringify({ t: "resize_release", id });
 }

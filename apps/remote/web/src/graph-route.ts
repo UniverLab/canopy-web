@@ -10,6 +10,8 @@
 
 import type { GraphStore } from "./graph-store.js";
 import { REMOTE_FOOTER } from "./footer.js";
+import { icon } from "./icons-dom.js";
+import { esc } from "./sheet.js";
 import { graphTitle } from "./titles.js";
 import { disposeGraphView, renderGraphView, updateGraphView } from "./graph-view.js";
 import type { GraphViewArgs } from "./graph-view.js";
@@ -67,6 +69,9 @@ export class GraphRoute {
   private readonly hooks: GraphRouteHooks;
   private stopStore: (() => void) | null = null;
   private ticker: ReturnType<typeof globalThis.setInterval> | null = null;
+  // A one-shot confirmation the next sessions render shows once, like
+  // the session view's spawn flash: set by the shell, consumed by paint.
+  private listFlash: string | null = null;
 
   constructor(
     root: HTMLElement,
@@ -105,12 +110,20 @@ export class GraphRoute {
     }
   }
 
+  /** The one-shot confirmation the next sessions render shows once. */
+  setListFlash(text: string): void {
+    this.listFlash = text;
+  }
+
   renderSessionsRoute(): void {
+    const flash = this.listFlash;
+    this.listFlash = null;
     this.root.innerHTML = `
     ${this.hooks.header()}
     <main class="sessions">
       ${this.hooks.banner()}
       ${this.tabSwitchHtml()}
+      ${flash === null ? "" : `<p class="flash-ok" role="status">${icon("check")}<span>${esc(flash)}</span></p>`}
       <div id="session-list"></div>
     </main>
     ${REMOTE_FOOTER}`;

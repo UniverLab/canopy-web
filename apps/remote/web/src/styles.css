@@ -632,6 +632,7 @@ label > textarea {
 .session-title {
   font-family: var(--font-mono);
   font-size: 0.9rem;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -645,6 +646,31 @@ label > textarea {
 
 .session-exit[hidden] {
   display: none;
+}
+
+/* The session bar's Close: icon-only at rest, "Close?" in the danger
+ * tint for the two-tap confirm. It sits in the bar itself — outside
+ * .term-controls — so it stays reachable while the key bar is hidden,
+ * and its auto margin keeps it at the bar's right edge. */
+#session-close {
+  margin-left: auto;
+  flex-shrink: 0;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.6rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+}
+
+#session-close.confirm {
+  background: var(--tint-danger, var(--tint-warn));
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 /* The terminal card follows the fitted terminal's height (refit writes
@@ -1404,7 +1430,7 @@ label > textarea {
 /* The Files button in the session bar: hidden until hello.features
  * carries "shelf", its badge counting files nobody has looked at. */
 #session-files {
-  margin-left: auto;
+  margin-left: 0;
   flex-shrink: 0;
   min-height: 2.75rem;
   padding: 0.25rem 0.7rem;
