@@ -10,23 +10,26 @@
 // the cols × rows that fit its own panel (TerminalView.ownedSize), resizes
 // the local terminal to them and asserts them to the host, then re-asserts
 // (debounced) whenever the panel changes — a resize, an orientation
-// change, fullscreen, the zoom — for as long as the toggle stays on.
+// change, fullscreen — for as long as the toggle stays on. The zoom and
+// the slider reach assertSize through the same path, but the zoom never
+// moves the size: ownedSize measures at the base scale, so a zoom change
+// compares equal and is not sent again.
 // The host's `resized` frame lands in handleResized: a follower resizes
 // to it, and an owner whose size was replaced by another device's lets go
 // (no resize ping-pong) and says so in the size row's note.
 
 import { icon } from "./icons-dom.js";
-import { scaleOwnedWidth } from "./terminal-geometry.js";
+import { setOwnedWidth } from "./terminal-geometry.js";
 import type { TermSize, TerminalView } from "./terminal.js";
 import {
-  CONTROL_SCALE_MAX,
-  CONTROL_SCALE_MIN,
-  CONTROL_SCALE_STEP,
-  readControlScale,
+  CONTROL_WIDTH_MAX,
+  CONTROL_WIDTH_MIN,
+  CONTROL_WIDTH_STEP,
   readControlSize,
+  readControlWidth,
   readKeyBarVisible,
-  writeControlScale,
   writeControlSize,
+  writeControlWidth,
   writeKeyBarVisible,
 } from "./terminal-prefs.js";
 
@@ -106,7 +109,23 @@ export const SIZE_TAKEN_NOTE = "Size taken over by another device.";
 // pushes the second key row out of view. The checkbox is drawn as a
 // switch (role="switch" announces on/off) and the whole label is its
 // 44 px target; Space toggles it and the focus ring is the global one.
-export function termSizeHtml(sessionId: string | null): string {
+/**
+ * The width the slider shows and sends: the remembered cols, else the
+ * fitted ones inside the slider range. Null fitted (no terminal yet)
+ * starts at the minimum; the first assert syncs the thumb to the truth.
+ */
+export function sliderCols(sessionId: string, fittedCols: number | null): number {
+  const stored = readControlWidth(sessionId);
+  if (stored !== null) {
+    return stored;
+  }
+  if (fittedCols === null) {
+    return CONTROL_WIDTH_MIN;
+  }
+  return Math.min(CONTROL_WIDTH_MAX, Math.max(CONTROL_WIDTH_MIN, fittedCols));
+}
+
+export function termSizeHtml(sessionId: string | null, fittedCols: number | null): string {
   const on = sessionId !== null && readControlSize(sessionId);
   return `
       <div class="term-size">
@@ -116,17 +135,17 @@ export function termSizeHtml(sessionId: string | null): string {
           id="term-control-size"
           ${on ? "checked" : ""}
         ><span>This device controls the size</span></label>
-        ${on && sessionId !== null ? sizeScaleHtml(sessionId) : ""}
+        ${on && sessionId !== null ? sizeScaleHtml(sessionId, sliderCols(sessionId, fittedCols)) : ""}
         <p class="term-size-note" role="status">${SIZE_NOTE}</p>
       </div>`;
 }
 
-// The slider that scales the fitted width, present only while the switch is
-// on: below 100 fewer columns, above it more; rows always stay fitted to
-// the panel. The whole label is the 44 px target, like the switch, and the
-// output names the cols × rows in effect.
-function sizeScaleHtml(sessionId: string): string {
-  return `<label class="term-size-scale"><span>Size</span><input type="range" id="term-size-scale" min="${CONTROL_SCALE_MIN}" max="${CONTROL_SCALE_MAX}" step="${CONTROL_SCALE_STEP}" value="${readControlScale(sessionId)}" aria-label="Terminal size"><output id="term-size-value"></output></label>`;
+// The slider that names the width in columns, present only while the
+// switch is on: 40 at its narrowest, 180 at its widest; rows always stay
+// fitted to the panel. The whole label is the 44 px target, like the
+// switch, and the output names the cols × rows in effect.
+function sizeScaleHtml(sessionId: string, value: number): string {
+  return `<label class="term-size-scale"><span>Size</span><input type="range" id="term-size-scale" min="${CONTROL_WIDTH_MIN}" max="${CONTROL_WIDTH_MAX}" step="${CONTROL_WIDTH_STEP}" value="${value}" aria-label="Terminal size"><output id="term-size-value"></output></label>`;
 }
 
 /** The slice of the open TerminalView the controls drive. */
@@ -160,7 +179,7 @@ export interface TermControls {
    * resized session keeps the size this device asked for.
    */
   reassert: () => void;
-  /** The panel layout changed (the zoom): re-assert, debounced, while on. */
+  /** The panel layout changed: re-assert, debounced, while on. */
   schedule: () => void;
   /**
    * The host reports the session's PTY size. A follower resizes to it; an
@@ -286,21 +305,21 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
     }
   };
 
-  // Dragging the slider remembers the percentage and lets the panel's own
-  // debounce re-send the scaled size: no second timer.
+  // Dragging the slider remembers the cols and lets the panel's own
+  // debounce re-send the width: no second timer.
   const bindScale = (input: HTMLInputElement): void => {
     input.addEventListener("input", () => {
       const id = deps.sessionId();
       if (id === null) {
         return;
       }
-      writeControlScale(id, Number.parseInt(input.value, 10));
+      writeControlWidth(id, Number.parseInt(input.value, 10));
       schedule();
     });
   };
 
   // The slider lives in the DOM only while the switch is on; turning the
-  // switch off keeps the stored percentage for next time.
+  // switch off keeps the stored cols for next time.
   const setScaleVisible = (visible: boolean): void => {
     const existing = root.querySelector<HTMLElement>(".term-size-scale");
     if (!visible) {
@@ -311,11 +330,12 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
     if (existing !== null || id === null || sizeRow === null) {
       return;
     }
+    const fittedCols = deps.terminalView()?.ownedSize()?.cols ?? null;
     const note = sizeRow.querySelector(".term-size-note");
     if (note !== null) {
-      note.insertAdjacentHTML("beforebegin", sizeScaleHtml(id));
+      note.insertAdjacentHTML("beforebegin", sizeScaleHtml(id, sliderCols(id, fittedCols)));
     } else {
-      sizeRow.insertAdjacentHTML("beforeend", sizeScaleHtml(id));
+      sizeRow.insertAdjacentHTML("beforeend", sizeScaleHtml(id, sliderCols(id, fittedCols)));
     }
     const input = root.querySelector<HTMLInputElement>("#term-size-scale");
     if (input !== null) {
@@ -329,9 +349,9 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
   }
 
   // Measure and send: an unchanged size is not sent again unless forced
-  // (a fresh mount, where the host may hold any size). The fitted width is
-  // scaled by the owner's slider before it is compared and sent, so 100 %
-  // sends exactly the fitted size.
+  // (a fresh mount, where the host may hold any size). The slider names
+  // the cols outright; rows stay fitted. The thumb syncs to the sent
+  // size, so a fresh switch-on shows the fitted width, not a stale stop.
   function assertSize(force: boolean): void {
     const sessionId = deps.sessionId();
     if (!owning || sessionId === null) {
@@ -350,7 +370,11 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
       return;
     }
     retries = 0;
-    const size = scaleOwnedWidth(fitted, readControlScale(sessionId));
+    const size = setOwnedWidth(fitted, sliderCols(sessionId, fitted.cols));
+    const thumb = root.querySelector<HTMLInputElement>("#term-size-scale");
+    if (thumb !== null && thumb.value !== String(size.cols)) {
+      thumb.value = String(size.cols);
+    }
     if (!force && sameSize(lastSent, size)) {
       return;
     }
@@ -366,7 +390,8 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
 
   // The panel changes that move the size: its own box (a window resize, a
   // keyboard, the key bar), an orientation change and fullscreen. The zoom
-  // reaches schedule() through the shell.
+  // also reaches schedule() through the shell, but ownedSize ignores it,
+  // so it compares equal and nothing is sent again.
   const watch = (): void => {
     if (unwatch !== null) {
       return;

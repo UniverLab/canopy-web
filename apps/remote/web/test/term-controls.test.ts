@@ -11,6 +11,7 @@ import {
   SIZE_DEBOUNCE_MS,
   SIZE_TAKEN_NOTE,
   latestHidden,
+  sliderCols,
   termControlsHtml,
   termLatestHtml,
   termSizeHtml,
@@ -18,7 +19,7 @@ import {
 } from "../src/term-controls.js";
 import type { TermControls, TermControlsDeps, TermControlsView } from "../src/term-controls.js";
 import type { TermSize } from "../src/terminal.js";
-import { readControlScale, readControlSize, writeControlSize } from "../src/terminal-prefs.js";
+import { readControlSize, readControlWidth, writeControlSize } from "../src/terminal-prefs.js";
 
 /** The icon markup as the DOM serializes it (paths gain close tags). */
 function rendered(name: Parameters<typeof icon>[0]): string {
@@ -237,7 +238,7 @@ describe("control-size toggle", () => {
   const mount = (sessionId = "s1"): void => {
     root = document.createElement("div");
     document.body.appendChild(root);
-    root.innerHTML = `<div id="term-pane"></div>${termControlsHtml()}${termSizeHtml(sessionId)}`;
+    root.innerHTML = `<div id="term-pane"></div>${termControlsHtml()}${termSizeHtml(sessionId, view?.fits?.cols ?? null)}`;
     controls = wireTermControls({
       ...deps(root),
       sessionId: () => sessionId,
@@ -292,7 +293,7 @@ describe("control-size toggle", () => {
       { cols: 90, rows: 30 },
     ]);
     expect(local).toEqual(sent);
-    // A zoom reaches the same debounce through the shell.
+    // A later panel change reaches the same debounce through the shell.
     view!.fits = { cols: 72, rows: 24 };
     controls.schedule();
     vi.advanceTimersByTime(SIZE_DEBOUNCE_MS);
@@ -452,23 +453,33 @@ describe("control-size toggle", () => {
     flip(true);
     const input = slider();
     expect(input.type).toBe("range");
-    expect(input.min).toBe("50");
-    expect(input.max).toBe("200");
-    expect(input.step).toBe("10");
-    expect(input.value).toBe("100");
+    expect(input.min).toBe("40");
+    expect(input.max).toBe("180");
+    expect(input.step).toBe("1");
+    // No stored width yet: the thumb starts at the fitted cols.
+    expect(input.value).toBe("44");
     expect(input.getAttribute("aria-label")).toBe("Terminal size");
     // The whole label is the target, like the switch.
     expect(input.closest("label")?.classList.contains("term-size-scale")).toBe(true);
     expect(root.querySelector("#term-size-value")).not.toBeNull();
+    // Turning the switch off keeps the stored cols for next time.
+    drag(120);
+    vi.advanceTimersByTime(SIZE_DEBOUNCE_MS);
     flip(false);
     expect(root.querySelector("#term-size-scale")).toBeNull();
-    // Turning the switch off keeps the stored percentage for next time.
-    expect(readControlScale("s1")).toBe(100);
+    expect(readControlWidth("s1")).toBe(120);
     flip(true);
-    expect(slider().value).toBe("100");
+    expect(slider().value).toBe("120");
   });
 
-  it("sends_the_scaled_width_when_the_slider_moves_and_keeps_fitted_rows", () => {
+  it("slider_cols_prefers_stored_then_fitted_inside_the_range", () => {
+    expect(sliderCols("s1", null)).toBe(40);
+    expect(sliderCols("s1", 30)).toBe(40);
+    expect(sliderCols("s1", 73)).toBe(73);
+    expect(sliderCols("s1", 300)).toBe(180);
+  });
+
+  it("sends_the_named_width_when_the_slider_moves_and_keeps_fitted_rows", () => {
     view!.fits = { cols: 100, rows: 40 };
     flip(true);
     expect(sent).toEqual([{ cols: 100, rows: 40 }]);
@@ -480,23 +491,30 @@ describe("control-size toggle", () => {
     expect(sent.at(-1)).toEqual({ cols: 50, rows: 40 });
     expect(local.at(-1)).toEqual({ cols: 50, rows: 40 });
     expect(scaleValue()).toBe("50 × 40");
-    drag(200);
+    drag(180);
     vi.advanceTimersByTime(SIZE_DEBOUNCE_MS);
-    expect(sent.at(-1)).toEqual({ cols: 200, rows: 40 });
-    expect(scaleValue()).toBe("200 × 40");
+    expect(sent.at(-1)).toEqual({ cols: 180, rows: 40 });
+    expect(scaleValue()).toBe("180 × 40");
   });
 
-  it("sends_the_fitted_size_at_100_percent", () => {
+  it("sends_the_fitted_cols_when_nothing_is_stored", () => {
     view!.fits = { cols: 73, rows: 27 };
     flip(true);
     expect(sent).toEqual([{ cols: 73, rows: 27 }]);
     drag(150);
     vi.advanceTimersByTime(SIZE_DEBOUNCE_MS);
-    expect(sent.at(-1)).toEqual({ cols: 110, rows: 27 });
-    drag(100);
+    expect(sent.at(-1)).toEqual({ cols: 150, rows: 27 });
+    drag(73);
     vi.advanceTimersByTime(SIZE_DEBOUNCE_MS);
     expect(sent.at(-1)).toEqual({ cols: 73, rows: 27 });
     expect(scaleValue()).toBe("73 × 27");
+  });
+
+  it("clamps_a_fitted_panel_outside_the_slider_range", () => {
+    view!.fits = { cols: 300, rows: 40 };
+    flip(true);
+    expect(sent).toEqual([{ cols: 180, rows: 40 }]);
+    expect(slider().value).toBe("180");
   });
 
   it("fits_the_panel_as_soon_as_the_switch_turns_off", () => {
@@ -511,23 +529,23 @@ describe("control-size toggle", () => {
     expect(released).toBe(1);
   });
 
-  it("remembers_the_scale_per_session", () => {
+  it("remembers_the_width_per_session", () => {
     flip(true);
-    drag(150);
+    drag(120);
     vi.advanceTimersByTime(SIZE_DEBOUNCE_MS);
-    expect(readControlScale("s1")).toBe(150);
-    expect(sent.at(-1)).toEqual({ cols: 66, rows: 19 });
+    expect(readControlWidth("s1")).toBe(120);
+    expect(sent.at(-1)).toEqual({ cols: 120, rows: 19 });
     controls.dispose();
     document.body.innerHTML = "";
     mount("s2");
-    // Another session starts at 100 % and shows no slider while off.
-    expect(readControlScale("s2")).toBe(100);
+    // Another session starts at its fitted cols and shows no slider while off.
+    expect(readControlWidth("s2")).toBeNull();
     expect(root.querySelector("#term-size-scale")).toBeNull();
     flip(true);
-    expect(slider().value).toBe("100");
+    expect(slider().value).toBe("44");
     expect(sent.at(-1)).toEqual({ cols: 44, rows: 19 });
-    // The first session kept its own percentage.
-    expect(readControlScale("s1")).toBe(150);
+    // The first session kept its own width.
+    expect(readControlWidth("s1")).toBe(120);
   });
 });
 

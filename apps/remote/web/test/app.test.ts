@@ -724,19 +724,17 @@ describe("createShell", () => {
     expect(handles[1]?.resizes).toEqual([{ cols: 50, rows: 20 }]);
   });
 
-  it("re-asserts on zoom, debounced, and stops when turned off", () => {
+  it("never moves the asserted size on zoom, and stops when turned off", () => {
     shell.showSession("s1", "build");
     shell.ensureTerminal("s1", 80, 24);
     layOutPanel();
     flipControlSize(true);
-    // Zooming in grows the cell (8 × 16 → 10 × 20): fewer fit.
+    // Zooming in magnifies the rendering only: the asserted size stays put.
     query<HTMLButtonElement>("#term-zoom-in").click();
+    expect(query<HTMLElement>(".term-fit").dataset.scale).toBe("1.25");
     expect(calls.controlSizes).toHaveLength(1);
     vi.advanceTimersByTime(150);
-    expect(calls.controlSizes).toEqual([
-      { cols: 50, rows: 20 },
-      { cols: 40, rows: 16 },
-    ]);
+    expect(calls.controlSizes).toEqual([{ cols: 50, rows: 20 }]);
     // Turning it off remembers, stops asserting and fits the width again.
     flipControlSize(false);
     expect(readControlSize("s1")).toBe(false);
@@ -744,7 +742,7 @@ describe("createShell", () => {
     expect(query(".term-pane").hasAttribute("data-size-owner")).toBe(false);
     query<HTMLButtonElement>("#term-zoom-out").click();
     vi.advanceTimersByTime(1000);
-    expect(calls.controlSizes).toHaveLength(2);
+    expect(calls.controlSizes).toHaveLength(1);
     expect(released).toBe(1);
   });
 

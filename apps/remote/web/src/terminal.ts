@@ -67,7 +67,7 @@ export {
   computeScale,
   decayFlingVelocity,
   flingVelocity,
-  scaleOwnedWidth,
+  setOwnedWidth,
   shouldContinueFling,
   shouldStartFling,
   splitTouchScroll,
@@ -319,17 +319,19 @@ export class TerminalView {
     this.refit();
   }
 
-  // The cols × rows that fit this device's panel at the current font size
-  // and zoom: the cell is measured off the open terminal (screen / grid)
-  // and shown at the owner scale. Null until the terminal is open and laid
-  // out.
+  // The cols × rows that fit this device's panel at the base scale: the
+  // cell is measured off the open terminal (screen / grid) times the base
+  // scale only. The zoom stays out on purpose — it magnifies the rendering
+  // (refit) but never moves the asserted size; only the slider does.
+  // Null until the terminal is open and laid out.
   ownedSize(): TermSize | null {
     const fit = this.fit;
     const natural = this.naturalSize();
     if (!this.handle || !fit || !natural || this.cols <= 0 || this.rows <= 0) {
       return null;
     }
-    const scale = this.ownerScale();
+    const base = this.handle.baseScale;
+    const scale = base !== undefined && base > 0 ? base : 1;
     return computeOwnedSize(
       fit.clientWidth,
       fit.clientHeight,
