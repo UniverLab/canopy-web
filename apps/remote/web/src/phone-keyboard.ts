@@ -24,6 +24,58 @@ export function keyboardOpen(
 }
 
 /**
+ * While the phone keyboard is open the session view pins itself to the
+ * visual viewport: data-keyboard plus --vv-top/--vv-height let the
+ * stylesheet keep the terminal and the key bar above the keyboard, and
+ * the pane stays scrolled to its last rows. Listens to the visual
+ * viewport's resize and scroll, coalesced through requestAnimationFrame;
+ * returns a dispose that removes the listeners and leaves no attribute
+ * or property behind. Without visualViewport it does nothing.
+ */
+export function followKeyboard(main: HTMLElement, pane: HTMLElement): () => void {
+  const viewport = globalThis.window?.visualViewport;
+  if (!viewport) {
+    return () => {};
+  }
+  const apply = (): void => {
+    if (keyboardOpen(viewport, globalThis.window?.innerHeight ?? 0)) {
+      main.setAttribute("data-keyboard", "");
+      main.style.setProperty("--vv-top", `${viewport.offsetTop}px`);
+      main.style.setProperty("--vv-height", `${viewport.height}px`);
+      pane.scrollTop = pane.scrollHeight;
+    } else {
+      main.removeAttribute("data-keyboard");
+      main.style.removeProperty("--vv-top");
+      main.style.removeProperty("--vv-height");
+    }
+  };
+  let rafId = 0;
+  const schedule = (): void => {
+    if (rafId !== 0) {
+      return;
+    }
+    rafId = requestAnimationFrame(() => {
+      rafId = 0;
+      apply();
+    });
+  };
+  viewport.addEventListener("resize", schedule);
+  viewport.addEventListener("scroll", schedule);
+  apply();
+  return () => {
+    if (rafId !== 0) {
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+    }
+    viewport.removeEventListener("resize", schedule);
+    viewport.removeEventListener("scroll", schedule);
+    main.removeAttribute("data-keyboard");
+    main.style.removeProperty("--vv-top");
+    main.style.removeProperty("--vv-height");
+  };
+}
+
+/**
  * A bar key other than Ctrl or Shift sends its bytes and leaves the
  * keyboard closed: on a coarse pointer with the keyboard closed the idle
  * focus goes, so the phone does not reopen it on the next tap.

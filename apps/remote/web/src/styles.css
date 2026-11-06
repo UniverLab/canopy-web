@@ -921,6 +921,56 @@ label > textarea {
   color: var(--accent-ink);
 }
 
+/* The phone keyboard is open (followKeyboard sets data-keyboard and the
+ * --vv-* props from the visual viewport): the session view pins itself to
+ * the visual viewport so the terminal and the key bar end above the
+ * keyboard instead of behind it. The bar, the terminal controls, the size
+ * row and the spawn flash step aside — the banner and the upload tray
+ * stay. The stage takes what is left and the pane and fit fill it, so the
+ * smaller box feeds the rows through the usual ResizeObserver path; the
+ * key bar keeps its two rows at a tighter key height. */
+.session-view[data-keyboard] {
+  position: fixed;
+  top: var(--vv-top);
+  left: 0;
+  right: 0;
+  height: var(--vv-height);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  background: var(--bg-deep);
+  z-index: 10;
+}
+
+.session-view[data-keyboard] .session-bar,
+.session-view[data-keyboard] .term-controls,
+.session-view[data-keyboard] .term-size,
+.session-view[data-keyboard] .flash-ok {
+  display: none;
+}
+
+.session-view[data-keyboard] .term-stage {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Height 100 % of the stage, never of the content: the fit box must not
+ * grow with the terminal or the rows would feed back into themselves.
+ * The extra specificity beats .term-pane[data-size-owner] .term-fit. */
+.session-view[data-keyboard] .term-pane,
+.session-view[data-keyboard] .term-pane .term-fit {
+  height: 100%;
+  min-height: 0;
+}
+
+.session-view[data-keyboard] .keybar {
+  grid-template-rows: repeat(2, auto);
+}
+
+.session-view[data-keyboard] .keybar .key {
+  min-height: 2.25rem;
+}
+
 /* A 360x640 phone: the 96 px banner leaves no slack in the session column,
  * and the ten keys plus the size row must sit inside the viewport without
  * scrolling. The terminal keeps its 24 rows, so the chrome around it

@@ -22,7 +22,7 @@ import {
   textBytesWithModifiers,
 } from "./modifiers.js";
 import { SessionStore, renderSessions } from "./sessions.js";
-import { dropIdleFocus, openPhoneKeyboard } from "./phone-keyboard.js";
+import { dropIdleFocus, followKeyboard, openPhoneKeyboard } from "./phone-keyboard.js";
 import { TermCopySheet, termCopyFloatHtml, wireCopyFloat } from "./term-copy.js";
 import { TerminalView, createXtermHandle } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
@@ -101,6 +101,7 @@ export function createGuestView(
   let terminalView: TerminalView | null = null;
   let copyFloatDispose: (() => void) | null = null;
   let dropFocusDispose: (() => void) | null = null;
+  let keyboardDispose: (() => void) | null = null;
   const termCopy = new TermCopySheet();
   const latches = new ModifierLatches();
 
@@ -134,6 +135,8 @@ export function createGuestView(
   }
 
   function teardownSessionWidgets(): void {
+    keyboardDispose?.();
+    keyboardDispose = null;
     dropFocusDispose?.();
     dropFocusDispose = null;
     copyFloatDispose?.();
@@ -395,6 +398,12 @@ export function createGuestView(
         callbacks.onInput(bytes);
       });
     }
+    // As the owner's: the phone keyboard pins the session view to the
+    // visual viewport so the terminal and the key bar stay above it.
+    const main = root.querySelector<HTMLElement>("main");
+    main?.classList.add("session-view");
+    const pane = root.querySelector<HTMLElement>("#term-pane");
+    keyboardDispose = main !== null && pane !== null ? followKeyboard(main, pane) : null;
   }
 
   function repaint(): void {

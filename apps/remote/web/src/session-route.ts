@@ -17,7 +17,7 @@ import {
 import { convergeOpenSessionName, type SessionStore } from "./sessions.js";
 import type { ShelfHandle } from "./shelf-controller.js";
 import { esc } from "./sheet.js";
-import { dropIdleFocus, openPhoneKeyboard } from "./phone-keyboard.js";
+import { dropIdleFocus, followKeyboard, openPhoneKeyboard } from "./phone-keyboard.js";
 import { TerminalView } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
 import {
@@ -85,6 +85,7 @@ export class SessionRoute {
   private latestButton: HTMLButtonElement | null = null;
   private copyFloatDispose: (() => void) | null = null;
   private dropFocusDispose: (() => void) | null = null;
+  private keyboardDispose: (() => void) | null = null;
   private termControls: TermControls | null = null;
   private uploadView: UploadView | null = null;
   // The Files button's folder: open while the sheet is up.
@@ -245,9 +246,16 @@ export class SessionRoute {
         this.callbacks.onKeyPress(bytes);
       });
     }
+    // The phone keyboard pins the session view to the visual viewport:
+    // the terminal and the key bar stay above it while it is open.
+    const main = this.root.querySelector<HTMLElement>("main.session-view");
+    const pane = this.root.querySelector<HTMLElement>("#term-pane");
+    this.keyboardDispose = main !== null && pane !== null ? followKeyboard(main, pane) : null;
   }
 
   teardown(): void {
+    this.keyboardDispose?.();
+    this.keyboardDispose = null;
     this.termControls?.dispose();
     this.termControls = null;
     this.dropFocusDispose?.();
