@@ -204,6 +204,12 @@ const SESSION_CLOSE_BUDGET = 1_024;
  * headroom and the whole pane rides the main bundle.
  */
 const RESUME_BUDGET = 1_536;
+/**
+ * Allowance for the directory picker (dir_list frames, the picker pane,
+ * breadcrumb/filter/list rendering and its wiring): the designer fixed
+ * this feature's headroom at 3 KB gzip over the pre-change main.
+ */
+const DIR_PICKER_BUDGET = 3_072;
 /** The budget the lazy guest chunk is allowed, gzip bytes of JS. */
 const GUEST_BUDGET = 6_144;
 /**
@@ -329,7 +335,8 @@ describe("the remote's bundle", () => {
         UNIT_GLOW_BUDGET +
         SWITCH_WIDTH_BUDGET +
         SESSION_CLOSE_BUDGET +
-        RESUME_BUDGET,
+        RESUME_BUDGET +
+        DIR_PICKER_BUDGET,
     );
     expect(guestJs, JSON.stringify(report)).toBeLessThanOrEqual(GUEST_BUDGET + GUEST_INVITE_BUDGET);
     expect(editorJs, JSON.stringify(report)).toBeLessThanOrEqual(EDITOR_BUDGET);

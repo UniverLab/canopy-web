@@ -1134,6 +1134,176 @@ label > textarea {
   margin: 0;
 }
 
+/* The New dialog's directory field keeps its text input and gains a
+ * folder-picker button on hosts that speak dir_list. */
+.dir-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.dir-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.dir-browse {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0.25rem 0.6rem;
+}
+
+/* The folder picker inside the New sheet: breadcrumb, filter, hidden
+ * switch, recent suggestions, the scrolling folder list and footer. */
+.dir-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.dir-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  overflow-x: auto;
+  white-space: nowrap;
+  padding-bottom: 0.15rem;
+}
+
+.dir-crumb,
+.dir-crumb-sep {
+  flex: none;
+}
+
+.dir-crumb {
+  min-height: 2.75rem;
+  padding: 0.25rem 0.5rem;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.dir-crumb-sep {
+  color: var(--muted);
+}
+
+.dir-filter input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.dir-hidden {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+}
+
+.dir-hidden input {
+  width: auto;
+  min-height: 0;
+  margin: 0;
+}
+
+.dir-error {
+  color: var(--ink);
+  background: var(--tint-error);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.dir-error[hidden] {
+  display: none;
+}
+
+.dir-error:not([hidden])::before {
+  content: "Error: ";
+  color: var(--err-label);
+}
+
+.dir-recent h3 {
+  margin: 0 0 0.25rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.dir-recent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.dir-recent-item,
+.dir-up,
+.dir-row-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: max(2.75rem, 44px);
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.dir-recent-item {
+  color: var(--accent);
+  overflow-wrap: anywhere;
+}
+
+.dir-up {
+  color: var(--muted);
+}
+
+.dir-row-icon {
+  flex: none;
+  display: inline-flex;
+}
+
+.dir-row-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dir-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 45dvh;
+  overflow-y: auto;
+  margin: 0;
+}
+
+.dir-status {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0.25rem 0;
+}
+
+.dir-status:empty {
+  display: none;
+}
+
+.dir-actions {
+  flex-wrap: wrap;
+}
+
 /* The New dialog's Resume pane: a filter over a scrolling list of the
  * host's recorded conversations. Every row is a 44 px target. */
 .resume-list {

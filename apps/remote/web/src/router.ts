@@ -7,6 +7,8 @@
 
 import type { CatalogStore } from "./catalog.js";
 import type { JoinedSnapshot } from "./channel.js";
+import { parseDirList } from "./dir-protocol.js";
+import type { DirList } from "./dir-protocol.js";
 import { sanitizeRemoteError } from "./errors.js";
 import type { GraphStore } from "./graph-store.js";
 import { parseHostMetrics } from "./metrics.js";
@@ -71,6 +73,10 @@ export interface RouterShell {
   resumeHello?: (features: string[]) => void;
   /** The host's recorded conversations answered resumable_list. */
   resumeList?: (sessions: ResumableSession[]) => void;
+  /** The host greets: the New dialog's folder picker follows dir_list. */
+  dirHello?: (features: string[]) => void;
+  /** A dir_list reply for the open folder picker. */
+  dirList?: (list: DirList) => void;
   /** A graph_control ok; true when the graph route consumed it. */
   graphControlOk?: (req: string) => boolean;
   /** A graph_control error; true when the graph route consumed it. */
@@ -199,6 +205,7 @@ export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
       shelf?.handleHello(hello.features);
       shell.graphHello?.(hello.features);
       shell.resumeHello?.(hello.features);
+      shell.dirHello?.(hello.features);
       return;
     }
     // The New dialog's Resume pane: the host's recorded conversations.
@@ -207,6 +214,11 @@ export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
     const resumable = parseResumable(frame);
     if (resumable) {
       shell.resumeList?.(resumable.sessions);
+      return;
+    }
+    const dirList = parseDirList(frame);
+    if (dirList) {
+      shell.dirList?.(dirList);
       return;
     }
     const shelfList = parseShelf(frame);

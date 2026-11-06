@@ -12,6 +12,8 @@
 // answers the same spawned. Without the feature nothing changes.
 
 import { CatalogStore } from "./catalog.js";
+import type { DirList } from "./dir-protocol.js";
+import { DirPicker } from "./dir-picker.js";
 import {
   buildDirectorySuggestions,
   pushRecentDir,
@@ -33,9 +35,12 @@ export interface NewDialogCallbacks {
   onResumableList?: (req: string) => boolean;
   /** Bring one recorded conversation back: session_resume{req,id}. */
   onResume?: (id: string, req: string) => boolean;
+  /** Ask the host for one folder's children: dir_list{req,path?}. */
+  onDirList?: (path: string | undefined, req: string) => boolean;
 }
 
 type DialogMode = "new" | "resume";
+type DialogPane = "form" | "picker";
 
 export interface NewDialogSessions {
   list: () => SessionItem[];
@@ -73,8 +78,11 @@ export class NewDialog {
   private error: string | null = null;
   private directoryError: string | null = null;
   private hasResume = false;
+  private hasDirList = false;
   private mode: DialogMode = "new";
+  private pane: DialogPane = "form";
   private readonly resume: ResumeList;
+  private readonly picker: DirPicker;
 
   constructor(catalog: CatalogStore, callbacks: NewDialogCallbacks, env?: NewDialogEnv) {
     this.catalog = catalog;
@@ -86,6 +94,13 @@ export class NewDialog {
       onResume: (id) => this.resumeSession(id),
       onRetry: () => this.requestResumeList(),
     });
+    this.picker = new DirPicker({
+      startPath: () => this.form.directory.trim() || readLastDir(this.hostId),
+      recent: () => this.suggestions().slice(0, 6),
+      onList: (path, req) => this.callbacks.onDirList?.(path, req) ?? false,
+      onPick: (path) => this.pickDirectory(path),
+      onCancel: () => this.closePicker(),
+    });
   }
 
   /** hello.features: only a host that speaks "session_resume" offers Resume. */
@@ -93,6 +108,18 @@ export class NewDialog {
     this.hasResume = has;
     if (!has) {
       this.mode = "new";
+    }
+    if (this.sheet.isOpen) {
+      this.render();
+    }
+  }
+
+  /** hello.features: only a host that speaks "dir_list" offers Browse. */
+  setHasDirList(has: boolean): void {
+    this.hasDirList = has;
+    if (!has && this.pane === "picker") {
+      this.pane = "form";
+      this.picker.clear();
     }
     if (this.sheet.isOpen) {
       this.render();
@@ -138,6 +165,8 @@ export class NewDialog {
     // Every open starts in New, as an agent with yolo off; the directory
     // keeps a cancelled draft, or the last directory used on this host.
     this.mode = "new";
+    this.pane = "form";
+    this.picker.clear();
     this.form.kind = "agent";
     this.form.yolo = false;
     if (this.form.directory === "") {
@@ -160,6 +189,8 @@ export class NewDialog {
     this.error = null;
     this.directoryError = null;
     this.mode = "new";
+    this.pane = "form";
+    this.picker.clear();
     this.resume.clear();
     this.unsubscribe?.();
     this.unsubscribe = null;
@@ -185,7 +216,14 @@ export class NewDialog {
     return name;
   }
 
+  handleDirList(list: DirList): void {
+    this.picker.handleList(list);
+  }
+
   handleError(message: string, req: string | null, code: string): boolean {
+    if (this.picker.handleError(message, req)) {
+      return true;
+    }
     if (this.pending === null) {
       return this.resume.handleError(message, req);
     }
@@ -241,6 +279,14 @@ export class NewDialog {
   private render(): void {
     const body = this.body;
     if (!body) {
+      return;
+    }
+    if (this.pane === "picker") {
+      body.innerHTML = `<div id="new-picker"></div>`;
+      const pickerRoot = body.querySelector<HTMLElement>("#new-picker");
+      if (pickerRoot) {
+        this.picker.mount(pickerRoot);
+      }
       return;
     }
     const agent = this.form.kind === "agent";
@@ -325,10 +371,14 @@ export class NewDialog {
     const options = this.suggestions()
       .map((dir) => `<option value="${esc(dir)}"></option>`)
       .join("");
+    const input = `<input id="new-directory" name="directory" autocomplete="off" spellcheck="false"
+            placeholder="/home/user/project" list="new-directory-list" value="${esc(this.form.directory)}">`;
+    const control = this.hasDirList
+      ? `<span class="dir-row">${input}<button type="button" id="new-directory-browse" class="dir-browse" aria-label="Browse directories">${icon("folderOpen")}</button></span>`
+      : input;
     return `
         <label>📁 Directory
-          <input id="new-directory" name="directory" autocomplete="off" spellcheck="false"
-            placeholder="/home/user/project" list="new-directory-list" value="${esc(this.form.directory)}">
+          ${control}
         </label>
         <datalist id="new-directory-list">${options}</datalist>
         <p class="field-error" id="new-directory-error" role="alert"${this.directoryError === null ? " hidden" : ""}>${esc(this.directoryError ?? "")}</p>`;
@@ -432,12 +482,35 @@ export class NewDialog {
       this.form.directory = (ev.target as HTMLInputElement).value;
       this.showDirectoryError(null);
     });
+    body.querySelector<HTMLButtonElement>("#new-directory-browse")?.addEventListener("click", () => {
+      this.openPicker();
+    });
     body.querySelector<HTMLInputElement>("#new-name")?.addEventListener("input", (ev) => {
       this.form.name = (ev.target as HTMLInputElement).value;
     });
     body.querySelector<HTMLTextAreaElement>("#new-prompt")?.addEventListener("input", (ev) => {
       this.form.prompt = (ev.target as HTMLTextAreaElement).value;
     });
+  }
+
+  private openPicker(): void {
+    this.syncFields();
+    this.pane = "picker";
+    this.render();
+  }
+
+  private closePicker(): void {
+    this.pane = "form";
+    this.picker.clear();
+    this.render();
+  }
+
+  private pickDirectory(path: string): void {
+    this.form.directory = path;
+    this.showDirectoryError(null);
+    this.pane = "form";
+    this.picker.clear();
+    this.render();
   }
 
   private syncYoloRow(): void {

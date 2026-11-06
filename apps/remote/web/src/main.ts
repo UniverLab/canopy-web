@@ -13,6 +13,7 @@ import { generateDeviceKey } from "./crypto.js";
 import type { DeviceKey } from "./crypto.js";
 import { redirectUnknownRoute, resumeGuestReturn } from "./entry-path.js";
 import { GraphStore } from "./graph-store.js";
+import { buildDirList } from "./dir-protocol.js";
 import { MetricsStore } from "./metrics-store.js";
 import {
   buildCatalog,
@@ -141,6 +142,7 @@ async function main(): Promise<void> {
       onSpawn: (spawn, req) => manager?.send(buildSpawn(req, spawn)) ?? false,
       onResumableList: (req) => manager?.send(buildResumableList(req)) ?? false,
       onResume: (id, req) => manager?.send(buildSessionResume(req, id)) ?? false,
+      onDirList: (path, req) => manager?.send(buildDirList(req, path)) ?? false,
       onCompose: (draft, req) => manager?.send(buildCompose(req, draft)) ?? false,
       onSendDraft: (draft, req) => controller.sendPromptDraft(draft, req),
       onSchedule: (draft, fireAt, req) => controller.sendPromptSchedule(draft, fireAt, req),

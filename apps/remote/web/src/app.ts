@@ -7,6 +7,7 @@
 
 import { CatalogStore } from "./catalog.js";
 import { Builder } from "./builder.js";
+import type { DirList } from "./dir-protocol.js";
 import { renderConnBanner, renderTopbar, wireAccount, wireConnActions } from "./chrome.js";
 import { syncHeaderFondo } from "./fondo.js";
 import { renderHosts, renderPair, renderSignIn } from "./entry-views.js";
@@ -71,6 +72,8 @@ export interface ShellCallbacks {
   onResumableList?: (req: string) => boolean;
   /** Resume one recorded conversation the pane listed. */
   onResume?: (id: string, req: string) => boolean;
+  /** The directory picker's dir_list request; false when it cannot send. */
+  onDirList?: (path: string | undefined, req: string) => boolean;
   onCompose: (draft: PromptDraft, req: string) => boolean;
   onSendDraft: (draft: PromptDraft, req: string) => boolean;
   onSchedule: (draft: PromptDraft, fireAt: string, req: string) => boolean;
@@ -126,6 +129,10 @@ export interface Shell {
   resumeHello: (features: string[]) => void;
   /** The host's recorded conversations answer the Resume pane's request. */
   resumeList: (sessions: ResumableSession[]) => void;
+  /** The host greets: the New dialog's folder picker follows dir_list. */
+  dirHello: (features: string[]) => void;
+  /** A dir_list reply for the open folder picker. */
+  dirList: (list: DirList) => void;
   /** A graph_control ok; true when the graph route consumed it. */
   graphControlOk: (req: string) => boolean;
   /** A graph_control error; true when the graph route consumed it. */
@@ -184,6 +191,7 @@ export function createShell(
       onSpawn: (spawn, req) => callbacks.onSpawn(spawn, req),
       onResumableList: (req) => callbacks.onResumableList?.(req) ?? false,
       onResume: (id, req) => callbacks.onResume?.(id, req) ?? false,
+      onDirList: (path, req) => callbacks.onDirList?.(path, req) ?? false,
     },
     { sessions: store, hostId },
   );
@@ -633,6 +641,12 @@ export function createShell(
     },
     resumeList(sessions: ResumableSession[]): void {
       newDialog.handleResumable(sessions);
+    },
+    dirHello(features: string[]): void {
+      newDialog.setHasDirList(features.includes("dir_list"));
+    },
+    dirList(list: DirList): void {
+      newDialog.handleDirList(list);
     },
     graphControlOk(req: string): boolean {
       return graphRoute.handleControlOk(req);

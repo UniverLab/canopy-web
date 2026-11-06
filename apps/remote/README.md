@@ -40,6 +40,13 @@ harness and directory (the host's last one is prefilled), optionally yolo, a
 name and a first prompt. Yolo stays disabled for a harness that cannot skip
 approvals.
 
+On a host that speaks `dir_list`, the directory field gains **Browse**: the
+picker walks the host's folders with a breadcrumb, a name filter and an
+optional hidden-folder switch, and offers recent directories before the
+first navigation. **Use this folder** fills the field without starting the
+session; the typed path still works on hosts without the feature, and the
+fake host's `?dirs=off` greets like one.
+
 On a host that speaks `session_resume`, Agent offers a second control with
 **New** and **Resume**. Resume lists the host's recorded conversations newest
 first, each with its harness, folder and how long ago it started; a folder's

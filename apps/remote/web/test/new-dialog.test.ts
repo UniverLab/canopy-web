@@ -528,3 +528,122 @@ describe("NewDialog Resume mode", () => {
     expect(root.querySelector("#resume-filter")).toBeNull();
   });
 });
+
+describe("NewDialog directory picker", () => {
+  let root: HTMLDivElement;
+  let catalog: CatalogStore;
+  let dialog: NewDialog;
+  let lists: { path: string | undefined; req: string }[];
+  let spawns: { spawn: SpawnRequest; req: string }[];
+
+  const query = <T extends Element>(selector: string): T => {
+    const el = root.querySelector(selector);
+    if (!el) {
+      throw new Error(`missing ${selector}`);
+    }
+    return el as T;
+  };
+
+  const answer = (path: string, parent: string | null, names: string[] = []): void => {
+    const req = lists.at(-1)?.req;
+    if (req === undefined) {
+      throw new Error("missing dir_list request");
+    }
+    dialog.handleDirList({
+      req,
+      path,
+      parent,
+      dirs: names.map((name) => ({ name })),
+      truncated: false,
+    });
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    root = document.createElement("div");
+    document.body.appendChild(root);
+    catalog = new CatalogStore();
+    catalog.replace(CATALOG);
+    lists = [];
+    spawns = [];
+    dialog = new NewDialog(
+      catalog,
+      {
+        onSpawn: (spawn, req) => {
+          spawns.push({ spawn, req });
+          return true;
+        },
+        onDirList: (path, req) => {
+          lists.push({ path, req });
+          return true;
+        },
+      },
+      { sessions: SESSIONS, hostId: "h1" },
+    );
+    dialog.setHasDirList(true);
+    dialog.open(root);
+  });
+
+  afterEach(() => {
+    dialog.close();
+    root.remove();
+    document.body.innerHTML = "";
+    localStorage.clear();
+  });
+
+  it("shows Browse only when the host speaks dir_list", () => {
+    expect(query<HTMLButtonElement>("#new-directory-browse")).not.toBeNull();
+    expect(query<HTMLInputElement>("#new-directory")).not.toBeNull();
+    dialog.setHasDirList(false);
+    expect(root.querySelector("#new-directory-browse")).toBeNull();
+    expect(query<HTMLInputElement>("#new-directory")).not.toBeNull();
+  });
+
+  it("swaps the form for the picker and keeps the form values on cancel", () => {
+    query<HTMLInputElement>("#new-name").value = "keep me";
+    query<HTMLTextAreaElement>("#new-prompt").value = "first prompt";
+    query<HTMLInputElement>("#new-directory").value = "/home/u/typed";
+    query<HTMLInputElement>("#new-directory").dispatchEvent(new Event("input", { bubbles: true }));
+    query<HTMLButtonElement>("#new-directory-browse").click();
+    expect(root.querySelector("#new-picker")).not.toBeNull();
+    expect(root.querySelector("#new-form")).toBeNull();
+    expect(lists).toHaveLength(1);
+    expect(lists[0]?.path).toBe("/home/u/typed");
+    answer("/home/u/typed", "/home/u", ["demo"]);
+    expect(query("#dir-crumbs").textContent).toContain("typed");
+    query<HTMLButtonElement>("#dir-cancel").click();
+    expect(root.querySelector("#new-picker")).toBeNull();
+    expect(query<HTMLInputElement>("#new-form")).not.toBeNull();
+    expect(query<HTMLInputElement>("#new-name").value).toBe("keep me");
+    expect(query<HTMLTextAreaElement>("#new-prompt").value).toBe("first prompt");
+    expect(query<HTMLInputElement>("#new-directory").value).toBe("/home/u/typed");
+    expect(spawns).toHaveLength(0);
+  });
+
+  it("Use this folder writes the path, clears the directory error and returns", () => {
+    // A validation error is showing before Browse opens.
+    query<HTMLFormElement>("#new-form").dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+    expect(query<HTMLElement>("#new-directory-error").hidden).toBe(false);
+    query<HTMLButtonElement>("#new-directory-browse").click();
+    expect(lists[0]?.path).toBeUndefined();
+    answer("/home/u", "/home", ["demo"]);
+    root.querySelector<HTMLButtonElement>('.dir-row-item[data-dir-path="/home/u/demo"]')?.click();
+    answer("/home/u/demo", "/home/u", ["src"]);
+    expect(query<HTMLButtonElement>("#dir-use").textContent).toBe("Use this folder · demo");
+    query<HTMLButtonElement>("#dir-use").click();
+    expect(root.querySelector("#new-picker")).toBeNull();
+    expect(query<HTMLInputElement>("#new-directory").value).toBe("/home/u/demo");
+    expect(query<HTMLElement>("#new-directory-error").hidden).toBe(true);
+    expect(spawns).toHaveLength(0);
+    expect(readRecentDirs()).toEqual([]);
+    // The picked path is what submit sends; recents are recorded there.
+    query<HTMLFormElement>("#new-form").dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+    expect(spawns).toHaveLength(1);
+    expect(spawns[0]?.spawn.workdir).toBe("/home/u/demo");
+    expect(readRecentDirs()).toEqual(["/home/u/demo"]);
+  });
+});

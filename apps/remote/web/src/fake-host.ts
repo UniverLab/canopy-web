@@ -10,6 +10,7 @@ import { CatalogStore } from "./catalog.js";
 import { createChannelHandler } from "./channel.js";
 import { b64encode } from "./crypto.js";
 import { createFakeControl, fakeHelloFeatures } from "./fake-control.js";
+import { createFakeDirs } from "./fake-dirs.js";
 import { createFakeShelfDeleter } from "./fake-delete.js";
 import { createFakeGraphs } from "./fake-graphs.js";
 import { createFakeKiller } from "./fake-kill.js";
@@ -21,6 +22,7 @@ import { GraphStore } from "./graph-store.js";
 import { createGuestSession } from "./guest.js";
 import { INVITE_REFUSED_MESSAGE } from "./guest-invite.js";
 import { MetricsStore } from "./metrics-store.js";
+import { buildDirList } from "./dir-protocol.js";
 import {
   buildCatalog,
   buildGraphControl,
@@ -269,6 +271,8 @@ function main(): void {
 
   const fakeResume = createFakeResume({ deliver, sessions });
 
+  const fakeDirs = createFakeDirs({ deliver });
+
   const fakeScheduler = createFakeScheduler({ deliver, compose: composeText });
 
   // Guest mode (?screen=guest): the hub's grant over the sessions the
@@ -289,6 +293,7 @@ function main(): void {
       kind?: string;
       cli?: string;
       workdir?: string;
+      path?: string;
       name?: string;
       file_id?: string;
       interval?: number;
@@ -424,6 +429,8 @@ function main(): void {
       // Every request frame from here on carries a req: without one the
       // real host refuses it, so the fake answers bad_request too.
       deliver({ t: "error", code: "bad_request", message: "frame needs a req" });
+    } else if (fakeDirs.handle(frame)) {
+      // dir_list: the fixture tree answers or refuses.
     } else if (frame.t === "spawn") {
       nextSpawn += 1;
       const id = `spawned-${nextSpawn}`;
@@ -577,6 +584,7 @@ function main(): void {
       onSpawn: (spawn, req) => send(buildSpawn(req, spawn)),
       onResumableList: (req) => send(buildResumableList(req)),
       onResume: (id, req) => send(buildSessionResume(req, id)),
+      onDirList: (path, req) => send(buildDirList(req, path)),
       onCompose: (draft, req) => send(JSON.stringify({ t: "compose", req, draft })),
       onSendDraft: (draft, req) => controller.sendPromptDraft(draft, req),
       onSchedule: (draft, fireAt, req) => controller.sendPromptSchedule(draft, fireAt, req),

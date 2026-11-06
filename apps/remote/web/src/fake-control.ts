@@ -10,9 +10,9 @@ import type { GraphControlAction } from "./protocol.js";
 
 /**
  * The hello's feature list: the shelf always, the upload half unless
- * ?upload=off, graph_control unless ?controls=off, and session_resume
- * unless ?resume=off greets like an older host — each view or dialog
- * then shows nothing of the missing feature.
+ * ?upload=off, graph_control unless ?controls=off, session_resume unless
+ * ?resume=off and dir_list unless ?dirs=off greet like an older host —
+ * each view or dialog then shows nothing of the missing feature.
  */
 export function fakeHelloFeatures(search: string): string[] {
   const params = new URLSearchParams(search);
@@ -21,6 +21,7 @@ export function fakeHelloFeatures(search: string): string[] {
     ...(params.get("upload") === "off" ? [] : ["shelf_upload"]),
     ...(params.get("controls") === "off" ? [] : ["graph_control"]),
     ...(params.get("resume") === "off" ? [] : ["session_resume"]),
+    ...(params.get("dirs") === "off" ? [] : ["dir_list"]),
   ];
 }
 
