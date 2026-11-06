@@ -147,16 +147,33 @@ describe("the status vocabulary", () => {
 describe("renderGraphsList", () => {
   it("empty-states a machine with no graphs", () => {
     const root = document.createElement("div");
-    renderGraphsList(root, [], { onOpen: () => {} });
+    renderGraphsList(root, [], { onOpen: () => {}, onReload: () => {} }, true);
     expect(root.querySelector(".empty")?.textContent).toBe("No graphs running on this machine");
     expect(root.querySelectorAll(".graph-row")).toHaveLength(0);
+  });
+
+  it("shows loading instead of the empty state while the list is on its way", () => {
+    const root = document.createElement("div");
+    renderGraphsList(root, [], { onOpen: () => {}, onReload: () => {} }, false);
+    expect(root.querySelector(".empty")?.textContent).toMatch(/Loading graphs/);
+    expect(root.querySelector('[role="status"]')?.textContent).toMatch(/Loading graphs/);
+    expect(root.querySelectorAll(".graph-row")).toHaveLength(0);
+  });
+
+  it("reloads the list from the header button", () => {
+    const root = document.createElement("div");
+    let reloads = 0;
+    renderGraphsList(root, [], { onOpen: () => {}, onReload: () => { reloads += 1; } }, true);
+    (root.querySelector("#graphs-reload") as HTMLButtonElement).click();
+    expect(reloads).toBe(1);
   });
 
   it("rows each graph with its chip, fraction, bar, spec and workdir", () => {
     const root = document.createElement("div");
     renderGraphsList(root, [summary(), summary({ id: "g2", name: "quality-bubble" })], {
       onOpen: () => {},
-    });
+      onReload: () => {},
+    }, true);
     const rows = root.querySelectorAll(".graph-row");
     expect(rows).toHaveLength(2);
     const first = rows[0] as HTMLElement;
@@ -175,7 +192,8 @@ describe("renderGraphsList", () => {
     const opened: Array<[string, string]> = [];
     renderGraphsList(root, [summary()], {
       onOpen: (id, name) => opened.push([id, name]),
-    });
+      onReload: () => {},
+    }, true);
     (root.querySelector(".graph-row") as HTMLButtonElement).click();
     expect(opened).toEqual([["g1", "palette-loop"]]);
   });
@@ -298,6 +316,15 @@ describe("GraphStore", () => {
     store.reset();
     expect(store.watchError()).toBeNull();
     expect(store.handleWatchError("no such graph", again)).toBe(false);
+  });
+
+  it("tracks whether the list has arrived yet", () => {
+    const { store } = setup();
+    expect(store.hasListed()).toBe(false);
+    store.handleGraphs([]);
+    expect(store.hasListed()).toBe(true);
+    store.reset();
+    expect(store.hasListed()).toBe(false);
   });
 
   it("holds the list sorted, the watch reply and the pushed state", () => {
@@ -1141,7 +1168,7 @@ describe("the host contract vectors", () => {
     const store = new GraphStore({ send: () => true });
     store.handleGraphs(parsed);
     const root = document.createElement("div");
-    renderGraphsList(root, store.list(), { onOpen: () => {} });
+    renderGraphsList(root, store.list(), { onOpen: () => {}, onReload: () => {} }, true);
     const rows = root.querySelectorAll(".graph-row");
     expect(rows).toHaveLength(3);
     for (const row of rows) {
@@ -1230,7 +1257,7 @@ describe("the host contract vectors", () => {
     });
     expect(parsed?.map((row) => row.id)).toEqual(["g1", "g2"]);
     const root = document.createElement("div");
-    renderGraphsList(root, parsed ?? [], { onOpen: () => {} });
+    renderGraphsList(root, parsed ?? [], { onOpen: () => {}, onReload: () => {} }, true);
     expect(root.querySelectorAll(".graph-row")).toHaveLength(2);
   });
 });

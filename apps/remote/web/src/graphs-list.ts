@@ -64,6 +64,7 @@ export function specMark(status: SpecStatus): SpecMark {
 
 export interface GraphsListCallbacks {
   onOpen: (id: string, name: string) => void;
+  onReload: () => void;
 }
 
 function esc(text: string): string {
@@ -103,17 +104,24 @@ function row(summary: GraphSummary): string {
   );
 }
 
-/** Paint the Graphs tab into `root`; no state, no timers, no network. */
+/** Paint the Graphs tab into `root`; no state, no timers, no network.
+ * While `loaded` is false the list is still on its way, so a loading line
+ * shows instead of the empty state. */
 export function renderGraphsList(
   root: HTMLElement,
   items: GraphSummary[],
   callbacks: GraphsListCallbacks,
+  loaded: boolean,
 ): void {
   root.innerHTML =
-    `<div class="sessions-head"><h2>Graphs</h2></div>` +
-    (items.length === 0
-      ? `<p class="empty">No graphs running on this machine</p>`
-      : `<ul class="graph-list">${items.map(row).join("")}</ul>`);
+    `<div class="sessions-head"><h2>Graphs</h2>` +
+    `<button type="button" id="graphs-reload"><span>Reload</span></button></div>` +
+    (!loaded
+      ? `<p class="empty" role="status">Loading graphs…</p>`
+      : items.length === 0
+        ? `<p class="empty">No graphs running on this machine</p>`
+        : `<ul class="graph-list">${items.map(row).join("")}</ul>`);
+  root.querySelector("#graphs-reload")?.addEventListener("click", () => callbacks.onReload());
   for (const button of root.querySelectorAll<HTMLButtonElement>("[data-graph]")) {
     button.addEventListener("click", () => {
       const id = button.getAttribute("data-graph");

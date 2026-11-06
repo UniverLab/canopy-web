@@ -164,7 +164,8 @@ export class GraphRoute {
     }
     renderGraphsList(slot, this.graphs?.list() ?? [], {
       onOpen: (id, name) => this.hooks.openGraph(id, name),
-    });
+      onReload: () => this.callbacks.onGraphsRequest(),
+    }, this.graphs?.hasListed() ?? false);
   }
 
   private shelfListArgs(): SessionListShelf | undefined {
