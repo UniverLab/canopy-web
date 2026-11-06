@@ -7,6 +7,8 @@
 
 import type { CatalogStore } from "./catalog.js";
 import type { JoinedSnapshot } from "./channel.js";
+import { parseDirList } from "./dir-protocol.js";
+import type { DirList } from "./dir-protocol.js";
 import { sanitizeRemoteError } from "./errors.js";
 import type { GraphStore } from "./graph-store.js";
 import { parseHostMetrics } from "./metrics.js";
@@ -25,6 +27,7 @@ import {
   parseOk,
   parseOut,
   parseResized,
+  parseResumable,
   parseScheduled,
   parseScheduledList,
   parseSessionAdded,
@@ -35,7 +38,7 @@ import {
   parseShelfRemoved,
   parseSpawned,
 } from "./protocol.js";
-import type { ScheduledItem } from "./protocol.js";
+import type { ResumableSession, ScheduledItem } from "./protocol.js";
 import type { SessionController } from "./session.js";
 import type { ShelfFrames } from "./shelf-controller.js";
 import type { SessionStore } from "./sessions.js";
@@ -60,6 +63,24 @@ export interface RouterShell {
   sheetScheduledList: (req: string, items: ScheduledItem[]) => void;
   sheetOk: (req: string) => void;
   sheetError: (message: string, req: string | null, code: string) => void;
+  /** The open session was removed on the host; absent on the guest view. */
+  sessionRemoved?: (id: string) => void;
+  /** A kill{req} error; true when the session view consumed it. */
+  killError?: (req: string | null, message: string) => boolean;
+  /** The host greets: the graph view's pause/continue gate. */
+  graphHello?: (features: string[]) => void;
+  /** The host greets: the New dialog's Resume offer follows the feature. */
+  resumeHello?: (features: string[]) => void;
+  /** The host's recorded conversations answered resumable_list. */
+  resumeList?: (sessions: ResumableSession[]) => void;
+  /** The host greets: the New dialog's folder picker follows dir_list. */
+  dirHello?: (features: string[]) => void;
+  /** A dir_list reply for the open folder picker. */
+  dirList?: (list: DirList) => void;
+  /** A graph_control ok; true when the graph route consumed it. */
+  graphControlOk?: (req: string) => boolean;
+  /** A graph_control error; true when the graph route consumed it. */
+  graphControlError?: (req: string | null, message: string) => boolean;
 }
 
 export interface FrameRouterDeps {
@@ -99,6 +120,9 @@ export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
     const removed = parseSessionRemoved(frame);
     if (removed !== null) {
       store.remove(removed);
+      if (removed === controller.sessionId) {
+        shell.sessionRemoved?.(removed);
+      }
       return;
     }
     const exited = parseExited(frame);
@@ -179,6 +203,22 @@ export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
       // the harness list narrows the New dialog to installed harnesses.
       catalog.setInstalledHarnesses(hello.harnesses);
       shelf?.handleHello(hello.features);
+      shell.graphHello?.(hello.features);
+      shell.resumeHello?.(hello.features);
+      shell.dirHello?.(hello.features);
+      return;
+    }
+    // The New dialog's Resume pane: the host's recorded conversations.
+    // Without "session_resume" in hello the dialog never asks, so this
+    // branch stays cold on an older host.
+    const resumable = parseResumable(frame);
+    if (resumable) {
+      shell.resumeList?.(resumable.sessions);
+      return;
+    }
+    const dirList = parseDirList(frame);
+    if (dirList) {
+      shell.dirList?.(dirList);
       return;
     }
     const shelfList = parseShelf(frame);
@@ -216,6 +256,9 @@ export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
       if (shelf?.handleOk(ok)) {
         return;
       }
+      if (shell.graphControlOk?.(ok)) {
+        return;
+      }
       shell.sheetOk(ok);
       return;
     }
@@ -242,6 +285,14 @@ export function createFrameRouter(deps: FrameRouterDeps): FrameRouter {
       }
       // A failed graph watch paints in the graph view, never as a dialog.
       if (graphs?.handleWatchError(clean.message, clean.req)) {
+        return;
+      }
+      // A refused pause or continue lands on the graph view's note.
+      if (shell.graphControlError?.(clean.req, clean.message)) {
+        return;
+      }
+      // A failed Close answers its own req and stays in the session view.
+      if (shell.killError?.(clean.req, clean.message)) {
         return;
       }
       shell.sheetError(clean.message, clean.req, clean.code);

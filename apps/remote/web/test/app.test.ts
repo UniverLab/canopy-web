@@ -45,6 +45,7 @@ class FakeHandle implements TerminalHandle {
   focus = (): void => {
     this.focuses += 1;
   };
+  blur = (): void => {};
   scrollToBottom = (): void => {
     this.atBottom = true;
   };
@@ -194,6 +195,7 @@ describe("createShell", () => {
       onReleaseSize: () => {
         released += 1;
       },
+      onKill: () => true,
       onSpawn: (spawn, req) => {
         spawns.push({ spawn, req });
         return sendable;
@@ -212,6 +214,7 @@ describe("createShell", () => {
       onGraphsRequest: () => {},
       onWatchGraph: () => {},
       onUnwatchGraph: () => {},
+      onGraphControl: () => true,
     };
     (
       calls as unknown as {

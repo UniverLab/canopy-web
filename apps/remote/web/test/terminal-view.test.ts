@@ -15,6 +15,7 @@ import {
   OWNED_MAX_ROWS,
   OWNED_MIN_COLS,
   OWNED_MIN_ROWS,
+  scaleOwnedSize,
   shouldContinueFling,
   shouldStartFling,
   splitTouchScroll,
@@ -55,6 +56,7 @@ class FakeHandle implements TerminalHandle {
   focus = (): void => {
     this.focused += 1;
   };
+  blur = (): void => {};
   scrollToBottom = (): void => {
     this.scrolledToBottom += 1;
     this.atBottom = true;
@@ -202,6 +204,26 @@ describe("owned size", () => {
     expect(computeOwnedSize(300, 0, 8, 16)).toBeNull();
     expect(computeOwnedSize(300, 300, 0, 16)).toBeNull();
     expect(computeOwnedSize(300, 300, 8, Number.NaN)).toBeNull();
+  });
+});
+
+describe("control scale", () => {
+  it("scale_owned_size_rounds_and_clamps", () => {
+    // 100 % sends exactly the fitted size.
+    expect(scaleOwnedSize({ cols: 44, rows: 19 }, 100)).toEqual({ cols: 44, rows: 19 });
+    expect(scaleOwnedSize({ cols: 44, rows: 19 }, 50)).toEqual({ cols: 22, rows: 10 });
+    expect(scaleOwnedSize({ cols: 44, rows: 19 }, 200)).toEqual({ cols: 88, rows: 38 });
+    // Rounds rather than truncates: 109.5 and 28.5 round up.
+    expect(scaleOwnedSize({ cols: 73, rows: 19 }, 150)).toEqual({ cols: 110, rows: 29 });
+    // Never below the floor nor above the ceiling.
+    expect(scaleOwnedSize({ cols: 22, rows: 6 }, 50)).toEqual({
+      cols: OWNED_MIN_COLS,
+      rows: OWNED_MIN_ROWS,
+    });
+    expect(scaleOwnedSize({ cols: 400, rows: 150 }, 200)).toEqual({
+      cols: OWNED_MAX_COLS,
+      rows: OWNED_MAX_ROWS,
+    });
   });
 });
 

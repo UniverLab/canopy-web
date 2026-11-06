@@ -397,6 +397,7 @@ class FakeGuestHandle implements TerminalHandle {
   };
   clear = (): void => {};
   focus = (): void => {};
+  blur = (): void => {};
   scrollToBottom = (): void => {};
   isAtBottom = (): boolean => true;
   onUserInput = (callback: (text: string) => void): (() => void) => {
@@ -509,9 +510,9 @@ describe("createGuestSession", () => {
       JSON.stringify({ t: "out", id: "s1", seq: 8, data: b64encode(new TextEncoder().encode("!")) }),
     );
     expect(textOf(handles[0]?.written ?? [])).toBe("hello!");
-    // Stale output from a reconnect never duplicates.
+    // Stale output the snapshot already covers never duplicates.
     session.push(
-      JSON.stringify({ t: "out", id: "s1", seq: 8, data: b64encode(new TextEncoder().encode("!")) }),
+      JSON.stringify({ t: "out", id: "s1", seq: 7, data: b64encode(new TextEncoder().encode("?")) }),
     );
     expect(textOf(handles[0]?.written ?? [])).toBe("hello!");
   });

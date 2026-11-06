@@ -18,6 +18,7 @@ class StubTerminal implements TerminalHandle {
   };
   clear = (): void => {};
   focus = (): void => {};
+  blur = (): void => {};
   scrollToBottom = (): void => {};
   isAtBottom = (): boolean => true;
   onUserInput = (): (() => void) => () => {};
@@ -74,6 +75,7 @@ describe("sign out", () => {
       onTerminalInput: () => {},
       onControlSize: () => {},
       onReleaseSize: () => {},
+      onKill: () => true,
       onSpawn: () => true,
       onCompose: () => true,
       onSendDraft: () => true,
@@ -83,6 +85,7 @@ describe("sign out", () => {
       onGraphsRequest: () => {},
       onWatchGraph: () => {},
       onUnwatchGraph: () => {},
+      onGraphControl: () => true,
     };
     shell = createShell(root, new SessionStore(), callbacks, {
       terminalFactory: () => new StubTerminal(),
@@ -270,6 +273,10 @@ describe("sign out on the graph view", () => {
       state: null,
       receivedAt: null,
       connected: true,
+      canControl: false,
+      controlPending: false,
+      controlError: null,
+      onControl: () => {},
       onBack: () => {},
       ...overrides,
     };

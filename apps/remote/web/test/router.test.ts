@@ -7,6 +7,7 @@ import type { Shell } from "../src/app.js";
 import { CatalogStore } from "../src/catalog.js";
 import { createChannelHandler } from "../src/channel.js";
 import { b64encode } from "../src/crypto.js";
+import type { DirList } from "../src/dir-protocol.js";
 import { createFrameRouter } from "../src/router.js";
 import type { FrameRouter } from "../src/router.js";
 import { SessionController } from "../src/session.js";
@@ -32,6 +33,8 @@ interface Harness {
   scheduledLists: { req: string; items: unknown[] }[];
   sheetOks: string[];
   sheetErrors: { message: string; req: string | null; code: string }[];
+  dirHellos: string[][];
+  dirLists: DirList[];
   hostSend: (frame: unknown) => void;
 }
 
@@ -49,6 +52,8 @@ function setup(onForbidden?: (id: string | null) => void, shelf?: ShelfFrames): 
   const scheduledLists: Harness["scheduledLists"] = [];
   const sheetOks: string[] = [];
   const sheetErrors: Harness["sheetErrors"] = [];
+  const dirHellos: string[][] = [];
+  const dirLists: DirList[] = [];
   // Only the methods the router calls; main.ts wires the real shell.
   const shell = {
     ensureTerminal: (id: string, cols: number, rows: number) => {
@@ -77,6 +82,12 @@ function setup(onForbidden?: (id: string | null) => void, shelf?: ShelfFrames): 
     },
     sheetError: (message: string, req: string | null, code: string) => {
       sheetErrors.push({ message, req, code });
+    },
+    dirHello: (features: string[]) => {
+      dirHellos.push(features);
+    },
+    dirList: (list: DirList) => {
+      dirLists.push(list);
     },
   } as unknown as Shell;
   const controller = new SessionController({
@@ -115,6 +126,8 @@ function setup(onForbidden?: (id: string | null) => void, shelf?: ShelfFrames): 
     scheduledLists,
     sheetOks,
     sheetErrors,
+    dirHellos,
+    dirLists,
     hostSend: (frame: unknown) => channel.deliver(JSON.stringify(frame)),
   };
 }
@@ -276,6 +289,34 @@ describe("createFrameRouter", () => {
     h.hostSend({ t: "scheduled_list", req: "r7", id: "s1", items: {} });
     expect(h.scheduled).toHaveLength(1);
     expect(h.scheduledLists).toHaveLength(1);
+  });
+
+  it("routes hello features and dir_list replies to the picker", () => {
+    const h = setup();
+    h.hostSend({ t: "hello", features: ["dir_list"], harnesses: [] });
+    expect(h.dirHellos).toEqual([["dir_list"]]);
+    h.hostSend({
+      t: "dir_list",
+      req: "d1",
+      path: "/home/u",
+      parent: "/home",
+      dirs: [{ name: "demo" }, { name: "" }],
+      truncated: false,
+    });
+    expect(h.dirLists).toEqual([
+      {
+        req: "d1",
+        path: "/home/u",
+        parent: "/home",
+        dirs: [{ name: "demo" }],
+        truncated: false,
+      },
+    ]);
+    h.hostSend({ t: "dir_list", req: "d2", path: "/home/u", parent: null, dirs: [], truncated: true });
+    expect(h.dirLists[1]?.truncated).toBe(true);
+    // A malformed reply is not a picker answer.
+    h.hostSend({ t: "dir_list", req: "d3", path: "", parent: null, dirs: [] });
+    expect(h.dirLists).toHaveLength(2);
   });
 
   it("routes hello harnesses to the catalog's installed set", () => {

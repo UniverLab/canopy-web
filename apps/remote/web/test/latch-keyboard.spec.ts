@@ -77,3 +77,64 @@ test("ctrl latch survives the focus report and applies to the next key", async (
   ]);
   await expect(ctrl).toHaveAttribute("aria-pressed", "false");
 });
+
+// Make the page behave like a phone: a coarse pointer, a fixed layout
+// height, and a visual viewport that shrinks when the keyboard is open.
+async function simulatePhone(
+  page: import("@playwright/test").Page,
+  keyboard: "open" | "closed",
+): Promise<void> {
+  await page.evaluate((keyboard) => {
+    const original = window.matchMedia.bind(window);
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: (query: string): MediaQueryList => {
+        if (query === "(pointer: fine)") {
+          return {
+            matches: false,
+            media: query,
+            onchange: null,
+            addListener: () => {},
+            removeListener: () => {},
+            addEventListener: () => {},
+            removeEventListener: () => {},
+            dispatchEvent: () => false,
+          } as unknown as MediaQueryList;
+        }
+        return original(query);
+      },
+    });
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 640 });
+    Object.defineProperty(window, "visualViewport", {
+      configurable: true,
+      value: { height: keyboard === "open" ? 340 : 640 },
+    });
+  }, keyboard);
+}
+
+async function focusXtermTextarea(page: import("@playwright/test").Page): Promise<void> {
+  await page.locator(".xterm-helper-textarea").focus();
+}
+
+test("an arrow on a closed phone keyboard leaves the terminal unfocused", async ({ page }) => {
+  await simulatePhone(page, "closed");
+  await focusXtermTextarea(page);
+  expect(await xtermTextareaIsFocused(page)).toBe(true);
+  await page.evaluate(() => window.__fake.clearSent());
+  await page.locator('#keybar .key[data-key="up"]').tap();
+  await expect.poll(() => xtermTextareaIsFocused(page)).toBe(false);
+  // The arrow still sent its bytes.
+  await expect.poll(() => inputBytes(page)).toEqual([[0x1b, 0x5b, 0x41]]);
+  // Ctrl opens the keyboard again.
+  await page.locator('#keybar .key[data-key="ctrl"]').tap();
+  await expect.poll(() => xtermTextareaIsFocused(page)).toBe(true);
+});
+
+test("an arrow keeps the terminal focused when the phone keyboard is open", async ({ page }) => {
+  await simulatePhone(page, "open");
+  await focusXtermTextarea(page);
+  expect(await xtermTextareaIsFocused(page)).toBe(true);
+  await page.locator('#keybar .key[data-key="up"]').tap();
+  await expect.poll(() => xtermTextareaIsFocused(page)).toBe(true);
+});

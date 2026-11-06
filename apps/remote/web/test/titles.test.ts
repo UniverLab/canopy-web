@@ -83,6 +83,7 @@ describe("shell titles", () => {
         onTerminalInput: () => {},
         onControlSize: () => {},
         onReleaseSize: () => {},
+        onKill: () => true,
         onSpawn: () => true,
         onCompose: () => true,
         onSendDraft: () => true,
@@ -92,6 +93,7 @@ describe("shell titles", () => {
         onGraphsRequest: () => {},
         onWatchGraph: () => {},
         onUnwatchGraph: () => {},
+        onGraphControl: () => true,
       },
       { terminalFactory: factory, catalog: new CatalogStore(), graphs },
     );

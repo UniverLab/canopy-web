@@ -11,13 +11,16 @@ import {
   buildGraphWatch,
   buildInput,
   buildInputText,
+  buildKill,
   buildList,
   buildPromptDraft,
   buildPromptSchedule,
   buildResize,
   buildResizeRelease,
+  buildResumableList,
   buildScheduledCancel,
   buildScheduledList,
+  buildSessionResume,
   buildShelfDelete,
   buildShelfGet,
   buildShelfList,
@@ -37,6 +40,7 @@ import {
   parseOk,
   parseOut,
   parseResized,
+  parseResumable,
   parseScheduled,
   parseScheduledList,
   parseSessionAdded,
@@ -58,6 +62,7 @@ describe("builders", () => {
     expect(JSON.parse(buildCatalog("r1"))).toEqual({ t: "catalog", req: "r1" });
     expect(JSON.parse(buildAttach("s1"))).toEqual({ t: "attach", id: "s1" });
     expect(JSON.parse(buildDetach("s1"))).toEqual({ t: "detach", id: "s1" });
+    expect(JSON.parse(buildKill("r1", "smoke"))).toEqual({ t: "kill", req: "r1", id: "smoke" });
   });
 
   it("builds the exact spawn, compose and draft frames", () => {
@@ -805,5 +810,75 @@ describe("graph frames", () => {
     expect(parseGraphState({ t: "graph_state", id: "g1", ...statePayload() })).toBeNull();
     expect(parseGraphState(state({ t: "graph" }))).toBeNull();
     expect(parseGraphState(null)).toBeNull();
+  });
+});
+
+describe("resume frames", () => {
+  it("builds resumable_list and session_resume", () => {
+    expect(JSON.parse(buildResumableList("r1"))).toEqual({ t: "resumable_list", req: "r1" });
+    expect(JSON.parse(buildSessionResume("r2", "past-1"))).toEqual({
+      t: "session_resume",
+      req: "r2",
+      id: "past-1",
+    });
+  });
+
+  it("parses the history, dropping rows with no id", () => {
+    const parsed = parseResumable({
+      t: "resumable",
+      req: "r3",
+      sessions: [
+        {
+          id: "a",
+          name: "refactor",
+          cli: "muse",
+          workdir: "/home/u/demo",
+          started_at: 1_700_000_000,
+          has_conversation: true,
+        },
+        { name: "no id" },
+        { id: "", name: "empty id" },
+        { id: "b", started_at: "2024-01-02T03:04:05Z" },
+        { id: "c", has_conversation: "yes", started_at: 1_700_000_000_000 },
+      ],
+    });
+    expect(parsed?.req).toBe("r3");
+    expect(parsed?.sessions).toEqual([
+      {
+        id: "a",
+        name: "refactor",
+        cli: "muse",
+        workdir: "/home/u/demo",
+        started_at: 1_700_000_000_000,
+        has_conversation: true,
+      },
+      {
+        id: "b",
+        name: "",
+        cli: "",
+        workdir: "",
+        started_at: Date.parse("2024-01-02T03:04:05Z"),
+        has_conversation: false,
+      },
+      {
+        id: "c",
+        name: "",
+        cli: "",
+        workdir: "",
+        started_at: 1_700_000_000_000,
+        has_conversation: false,
+      },
+    ]);
+    // The host's order is kept: newest first is its promise, not ours.
+    expect(parsed?.sessions.map((row) => row.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("rejects a frame that is not a resumable with a sessions array", () => {
+    expect(parseResumable({ t: "sessions", sessions: [] })).toBeNull();
+    expect(parseResumable({ t: "resumable" })).toBeNull();
+    expect(parseResumable({ t: "resumable", sessions: "nope" })).toBeNull();
+    expect(parseResumable(null)).toBeNull();
+    // A reply without a req still lists: the rows are what matters.
+    expect(parseResumable({ t: "resumable", sessions: [{ id: "a" }] })?.req).toBeNull();
   });
 });

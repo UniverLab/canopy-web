@@ -382,6 +382,7 @@ describe("TerminalView selection and buffer", () => {
         write: () => {},
         clear: () => {},
         focus: () => {},
+        blur: () => {},
         scrollToBottom: () => {},
         isAtBottom: () => true,
         onUserInput: () => () => {},

@@ -177,6 +177,39 @@ const FLOW_AXIS_BUDGET = 512;
  * FLOW_AXIS_BUDGET: the shared plate code rides the main bundle.
  */
 const UNIT_GLOW_BUDGET = 512;
+/**
+ * Allowance for the wider size switch (its track and the thumb's travel, and
+ * the grid column that reserves its width): measured +9 B gzip over the
+ * pre-change main (174 726 → 174 735), CSS only. Added in the fix commit like
+ * UNIT_GLOW_BUDGET: the tree sat exactly on the allowed total, leaving no
+ * headroom, and the switch is styled from the main stylesheet.
+ */
+const SWITCH_WIDTH_BUDGET = 512;
+/**
+ * Allowance for the session-close spec (the kill builder and send, the
+ * session bar's two-tap Close with its confirm and error path, the
+ * session_removed leave and the list's one-shot flash): measured +532 B
+ * gzip over the pre-change main (174 735 → 175 267), JS and CSS. Added in
+ * the feature commit like SWITCH_WIDTH_BUDGET: the tree sat on the
+ * allowed total and the button, its styles and the frame routing all
+ * ride the main bundle.
+ */
+const SESSION_CLOSE_BUDGET = 1_024;
+/**
+ * Allowance for the resume-dialog spec (the resumable_list/session_resume
+ * frames, the Resume pane with its filter, rows and states, the New/Resume
+ * control and the dialog, router and app wiring): measured +1 476 B gzip
+ * over the pre-change main (175 923 → 177 399), JS and CSS. Added in the
+ * feature commit like SESSION_CLOSE_BUDGET: the tree had 339 bytes of
+ * headroom and the whole pane rides the main bundle.
+ */
+const RESUME_BUDGET = 1_536;
+/**
+ * Allowance for the directory picker (dir_list frames, the picker pane,
+ * breadcrumb/filter/list rendering and its wiring): the designer fixed
+ * this feature's headroom at 3 KB gzip over the pre-change main.
+ */
+const DIR_PICKER_BUDGET = 3_072;
 /** The budget the lazy guest chunk is allowed, gzip bytes of JS. */
 const GUEST_BUDGET = 6_144;
 /**
@@ -299,7 +332,11 @@ describe("the remote's bundle", () => {
         RESIZED_BUDGET +
         GUEST_RETURN_BUDGET +
         FLOW_AXIS_BUDGET +
-        UNIT_GLOW_BUDGET,
+        UNIT_GLOW_BUDGET +
+        SWITCH_WIDTH_BUDGET +
+        SESSION_CLOSE_BUDGET +
+        RESUME_BUDGET +
+        DIR_PICKER_BUDGET,
     );
     expect(guestJs, JSON.stringify(report)).toBeLessThanOrEqual(GUEST_BUDGET + GUEST_INVITE_BUDGET);
     expect(editorJs, JSON.stringify(report)).toBeLessThanOrEqual(EDITOR_BUDGET);

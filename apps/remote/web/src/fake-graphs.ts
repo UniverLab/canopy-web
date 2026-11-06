@@ -225,6 +225,7 @@ function loopOverlay(step: number): { current: string; nodes: Record<string, Nod
 interface FakeGraphs {
   handle: (frame: Record<string, unknown>) => boolean;
   tick: () => void;
+  watchedId: () => string | null;
 }
 
 export function createFakeGraphs(deliver: (frame: unknown) => void): FakeGraphs {
@@ -268,14 +269,22 @@ export function createFakeGraphs(deliver: (frame: unknown) => void): FakeGraphs 
 
   let loopStep = 0;
   let loopSpecs = specs();
-  let loopStatus = "running";
+  // Every fixture's live status: replies and ticks read it, so a pause or
+  // continue moves the next frames exactly like the host's own engine.
+  const statuses = new Map<string, string>([
+    ["g-loop", "running"],
+    ["g-paused", "paused"],
+    ["g-failed", "failed"],
+    ["g-done", "completed"],
+    ["g-builder", "running"],
+  ]);
   let loopTimer: ReturnType<typeof globalThis.setInterval> | null = null;
   let watched: string | null = null;
 
   const loopState = (): GraphState => {
     const overlay = loopOverlay(loopStep);
     return {
-      status: loopStatus,
+      status: statuses.get("g-loop") ?? "running",
       blocked: false,
       blocker: null,
       current_spec_id: loopSpecs.find((row) => row.status === "running")?.id ?? null,
@@ -302,7 +311,7 @@ export function createFakeGraphs(deliver: (frame: unknown) => void): FakeGraphs 
       loopSpecs = loopSpecs.map((row) => (row.id === next.id ? { ...row, status: "running" as const } : row));
       return;
     }
-    loopStatus = "completed";
+    statuses.set("g-loop", "completed");
     if (loopTimer !== null) {
       globalThis.clearInterval(loopTimer);
       loopTimer = null;
@@ -310,7 +319,19 @@ export function createFakeGraphs(deliver: (frame: unknown) => void): FakeGraphs 
   };
 
   const tick = (): void => {
-    if (watched !== "g-loop" || loopStatus !== "running") {
+    if (watched === null) {
+      return;
+    }
+    // A pausing graph settles on its next tick: paused, pushed live.
+    if (statuses.get(watched) === "pausing") {
+      statuses.set(watched, "paused");
+      const settled = replyFor(watched, Date.now());
+      if (settled !== null) {
+        deliver(stateFrame(watched, settled.state));
+      }
+      return;
+    }
+    if (watched !== "g-loop" || statuses.get("g-loop") !== "running") {
       return;
     }
     loopStep += 1;
@@ -346,13 +367,22 @@ export function createFakeGraphs(deliver: (frame: unknown) => void): FakeGraphs 
       return { document: DONE_DOC, state: doneState };
     }
     if (id === "g-builder") {
-      return { document: BUILDER_DOC, state: { ...BUILDER_STATE, updated_at: nowMs } };
+      return {
+        document: BUILDER_DOC,
+        state: { ...BUILDER_STATE, status: statuses.get("g-builder") ?? "running", updated_at: nowMs },
+      };
     }
     if (id === "g-paused") {
-      return { document: PAUSED_DOC, state: pausedState(nowMs) };
+      return {
+        document: PAUSED_DOC,
+        state: { ...pausedState(nowMs), status: statuses.get("g-paused") ?? "paused" },
+      };
     }
     if (id === "g-failed") {
-      return { document: FAILED_DOC, state: failedState(nowMs) };
+      return {
+        document: FAILED_DOC,
+        state: { ...failedState(nowMs), status: statuses.get("g-failed") ?? "failed" },
+      };
     }
     return null;
   };
@@ -361,15 +391,20 @@ export function createFakeGraphs(deliver: (frame: unknown) => void): FakeGraphs 
     handle(frame: Record<string, unknown>): boolean {
       if (frame.t === "graphs") {
         // graphs.rs:101-103: {"t": "graphs", "req": req, "graphs": graphs}.
+        // The list reads the live statuses, so a pause moves its chip too.
+        const live = (row: GraphSummary): GraphSummary => ({
+          ...row,
+          status: statuses.get(row.id) ?? row.status,
+        });
         deliver({
           t: "graphs",
           req: typeof frame.req === "string" ? frame.req : null,
           graphs: [
-            loopSummary(startedAt, loopState()),
-            pausedSummary(startedAt),
-            failedSummary(startedAt),
-            doneSummary,
-            builderSummary(startedAt),
+            live(loopSummary(startedAt, loopState())),
+            live(pausedSummary(startedAt)),
+            live(failedSummary(startedAt)),
+            live(doneSummary),
+            live(builderSummary(startedAt)),
           ].map(wireSummary),
         });
         return true;
@@ -413,8 +448,51 @@ export function createFakeGraphs(deliver: (frame: unknown) => void): FakeGraphs 
         }
         return true;
       }
+      // The host's pause/continue: graphs.rs answers ok{req} or
+      // error{req,code,message}, and the new status rides graph_state.
+      if (frame.t === "graph_control") {
+        if (typeof frame.req !== "string" || frame.req === "") {
+          deliver({ t: "error", code: "bad_request", message: "graph_control: missing field 'req'" });
+          return true;
+        }
+        const req = frame.req;
+        if (typeof frame.id !== "string" || !statuses.has(frame.id)) {
+          deliver({ t: "error", req, code: "not_found", message: "no such graph" });
+          return true;
+        }
+        const id = frame.id;
+        const status = statuses.get(id) ?? "";
+        const apply = (next: string): void => {
+          statuses.set(id, next);
+          deliver({ t: "ok", req });
+          const reply = replyFor(id, Date.now());
+          if (reply !== null) {
+            deliver(stateFrame(id, reply.state));
+          }
+        };
+        if (frame.action === "pause") {
+          // Pause parks the run: pausing now, paused on the next tick.
+          if (status !== "running") {
+            deliver({ t: "error", req, code: "busy", message: "graph is not running" });
+            return true;
+          }
+          apply("pausing");
+          return true;
+        }
+        if (frame.action === "continue") {
+          if (status !== "paused" && status !== "failed") {
+            deliver({ t: "error", req, code: "busy", message: "graph is not paused" });
+            return true;
+          }
+          apply("running");
+          return true;
+        }
+        deliver({ t: "error", req, code: "bad_request", message: "graph_control: unknown action" });
+        return true;
+      }
       return false;
     },
     tick,
+    watchedId: () => watched,
   };
 }

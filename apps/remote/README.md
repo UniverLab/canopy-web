@@ -10,17 +10,53 @@ ends (see its own README).
 
 The key bar under the terminal carries what a phone keyboard lacks. Ctrl and
 Shift are one-shot modifiers: a tap arms the key and opens the keyboard, the
-next key goes out with it, and a second tap disarms it.
+next key goes out with it, and a second tap disarms it. On a phone, only
+Ctrl, Shift, and a tap on the terminal pane open the keyboard; other bar keys
+keep a dismissed keyboard closed, and you can always reopen it with Ctrl,
+Shift, or a pane tap. While the keyboard is up the session view follows it:
+the terminal and the key bar stay above it and the pane keeps its last rows in
+view, with the session bar, terminal controls and size row stepping aside.
 
 **Copy** opens the terminal's text in a sheet where the phone's own long-press
 selection works, with Copy selection and Copy all. With a mouse, drag over the
 terminal and use the floating Copy button or `Ctrl+Shift+C`; plain `Ctrl+C`
 always stays an interrupt for the session.
 
+**Close** ends the session on the host, not just this device's view: the
+first tap arms a "Close?" confirm for a few seconds, the second sends
+`kill{req,id}` and the view returns to the sessions list with a "Session
+closed" note. A host refusal shows its message beside the title and the
+button re-arms.
+
 The **Prompt Builder** sends now or later: Schedule picks a date and time, and
 the sheet lists the session's pending schedules, each with a Cancel. The host
 delivers a schedule even with no browser open; it needs the session still
 running at that time. Terminals take no schedules, only agent sessions do.
+
+## Starting or resuming a session
+
+**New session** starts one on the host: pick Agent or Terminal, then the
+harness and directory (the host's last one is prefilled), optionally yolo, a
+name and a first prompt. Yolo stays disabled for a harness that cannot skip
+approvals.
+
+On a host that speaks `dir_list`, the directory field gains **Browse**: the
+picker walks the host's folders with a breadcrumb, a name filter and an
+optional hidden-folder switch, and offers recent directories before the
+first navigation. **Use this folder** fills the field without starting the
+session; the typed path still works on hosts without the feature, and the
+fake host's `?dirs=off` greets like one.
+
+On a host that speaks `session_resume`, Agent offers a second control with
+**New** and **Resume**. Resume lists the host's recorded conversations newest
+first, each with its harness, folder and how long ago it started; a folder's
+latest with no transcript is marked as such. The filter matches the name,
+harness or folder, case-insensitively. Tapping a row brings that conversation
+back on the host and opens its session. An empty history says "No past
+sessions to resume."; a host refusal shows its message above the list with a
+Retry. A host without the feature shows no Resume control. Against the fake
+host, `?resume=off` greets like an older host, `?resume=empty` has no history
+and `?resume=error` refuses the request.
 
 ## Watching graphs
 
@@ -37,8 +73,14 @@ another tab, a hidden page) stops the live updates; returning resumes
 them. If the link drops, the view keeps its last state and says when it
 arrived, then resumes on reconnect.
 
-Watching is read-only: the remote never pauses, continues or resets a
-graph. Against the fake host (`/fake.html` in development) two fixture
+Watching never resets a graph, and the controls live only in the open
+view, never in the list rows. While a graph runs, the view offers
+**Pause**; a paused or refused graph offers **Continue** instead. Pause
+takes no confirmation: it is reversible, and the running node finishes
+first. The new status arrives live through the same pushes, and a refused
+request names itself on the view's note. The buttons need a host that
+speaks `graph_control` — against an older host the view stays read-only
+and shows no button. Against the fake host (`/fake.html` in development) two fixture
 graphs — one running with an ensemble, one completed — exercise the whole
 view, the running one advancing every 2 seconds.
 

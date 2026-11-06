@@ -9,16 +9,30 @@ import { signOut } from "./auth.js";
 import { CatalogStore } from "./catalog.js";
 import { createChannelHandler } from "./channel.js";
 import { b64encode } from "./crypto.js";
+import { createFakeControl, fakeHelloFeatures } from "./fake-control.js";
+import { createFakeDirs } from "./fake-dirs.js";
 import { createFakeShelfDeleter } from "./fake-delete.js";
 import { createFakeGraphs } from "./fake-graphs.js";
+import { createFakeKiller } from "./fake-kill.js";
 import { createFakeMetrics } from "./fake-metrics.js";
+import { createFakeResume } from "./fake-resume.js";
+import { createFakeScheduler } from "./fake-schedule.js";
 import { createFakeUploads } from "./fake-upload.js";
 import { GraphStore } from "./graph-store.js";
 import { createGuestSession } from "./guest.js";
 import { INVITE_REFUSED_MESSAGE } from "./guest-invite.js";
 import { MetricsStore } from "./metrics-store.js";
-import { buildCatalog, buildList, buildSpawn, newReqId } from "./protocol.js";
-import type { PromptDraft, SessionItem, ShelfItem } from "./protocol.js";
+import { buildDirList } from "./dir-protocol.js";
+import {
+  buildCatalog,
+  buildGraphControl,
+  buildList,
+  buildResumableList,
+  buildSessionResume,
+  buildSpawn,
+  newReqId,
+} from "./protocol.js";
+import type { GraphControlAction, PromptDraft, SessionItem, ShelfItem } from "./protocol.js";
 import { createFrameRouter } from "./router.js";
 import { SessionController } from "./session.js";
 import { ShelfController } from "./shelf-controller.js";
@@ -140,10 +154,6 @@ function main(): void {
   };
   let nextSpawn = 0;
   let promptError: { code: string; message: string } | null = null;
-  // The pending schedules per session: the preview is the composed text's
-  // first 120 chars, like the real host's.
-  const scheduled: { id: string; sessionId: string; fire_at: string; preview: string }[] = [];
-  let scheduleCounter = 0;
 
   const sessions: SessionItem[] = [
     {
@@ -230,6 +240,7 @@ function main(): void {
   );
 
   const deleter = createFakeShelfDeleter({ deliver, files: shelfFiles });
+  const killer = createFakeKiller({ deliver, sessions, ptySizes, prevSizes });
   const shelfItemsFor = (sessionId: string | null): ShelfItem[] => {
     if (sessionId !== null && sessions.find((item) => item.id === sessionId)?.kind === "terminal") {
       return [];
@@ -258,6 +269,12 @@ function main(): void {
 
   const fakeMetrics = createFakeMetrics({ deliver });
 
+  const fakeResume = createFakeResume({ deliver, sessions });
+
+  const fakeDirs = createFakeDirs({ deliver });
+
+  const fakeScheduler = createFakeScheduler({ deliver, compose: composeText });
+
   // Guest mode (?screen=guest): the hub's grant over the sessions the
   // owner holds, enforced the way the hub enforces it — the list carries
   // only granted ids and any other attach is forbidden. `grant=none`
@@ -276,6 +293,7 @@ function main(): void {
       kind?: string;
       cli?: string;
       workdir?: string;
+      path?: string;
       name?: string;
       file_id?: string;
       interval?: number;
@@ -369,6 +387,8 @@ function main(): void {
       const prev = prevSizes.get(frame.id) ?? { cols: 80, rows: 24 };
       prevSizes.delete(frame.id);
       setPtySize(frame.id, prev.cols, prev.rows);
+    } else if (killer.handle(frame)) {
+      // kill{req,id}: ok or error, then exited and session_removed.
     } else if (fakeUploads.handle(frame)) {
       // shelf_put_begin/part/end/abort: stored on the target shelf.
     } else if (frame.t === "shelf_list") {
@@ -405,6 +425,12 @@ function main(): void {
       }
     } else if (deleter.handle(frame)) {
       // shelf_delete: ok plus the removed broadcast, or an error.
+    } else if (typeof frame.req !== "string" || frame.req === "") {
+      // Every request frame from here on carries a req: without one the
+      // real host refuses it, so the fake answers bad_request too.
+      deliver({ t: "error", code: "bad_request", message: "frame needs a req" });
+    } else if (fakeDirs.handle(frame)) {
+      // dir_list: the fixture tree answers or refuses.
     } else if (frame.t === "spawn") {
       nextSpawn += 1;
       const id = `spawned-${nextSpawn}`;
@@ -422,6 +448,8 @@ function main(): void {
       sessions.push(item);
       deliver({ t: "spawned", req: frame.req, id });
       deliver({ t: "session_added", item: sessionItems()[sessions.length - 1] });
+    } else if (fakeResume.handle(frame)) {
+      // resumable_list and session_resume: the fixtures answer.
     } else if (frame.t === "compose") {
       const draft = frame.draft ?? { sections: [], skills: [] };
       deliver({ t: "composed", req: frame.req, text: composeText(draft) });
@@ -432,41 +460,8 @@ function main(): void {
       } else {
         deliver({ t: "ok", req: frame.req });
       }
-    } else if (
-      frame.t === "prompt_schedule" &&
-      typeof frame.req === "string" &&
-      typeof frame.id === "string" &&
-      typeof frame.fire_at === "string"
-    ) {
-      scheduleCounter += 1;
-      const item = {
-        id: `ss-${scheduleCounter}`,
-        fire_at: frame.fire_at,
-        preview: composeText(frame.draft ?? { sections: [], skills: [] }).slice(0, 120),
-      };
-      scheduled.push({ ...item, sessionId: frame.id });
-      deliver({ t: "scheduled", req: frame.req, item });
-    } else if (frame.t === "scheduled_list" && typeof frame.req === "string" && typeof frame.id === "string") {
-      const items = scheduled
-        .filter((entry) => entry.sessionId === frame.id)
-        .sort((a, b) => Date.parse(a.fire_at) - Date.parse(b.fire_at))
-        .map((entry) => ({ id: entry.id, fire_at: entry.fire_at, preview: entry.preview }));
-      deliver({ t: "scheduled_list", req: frame.req, id: frame.id, items });
-    } else if (
-      frame.t === "scheduled_cancel" &&
-      typeof frame.req === "string" &&
-      typeof frame.id === "string" &&
-      typeof frame.schedule_id === "string"
-    ) {
-      const index = scheduled.findIndex(
-        (entry) => entry.sessionId === frame.id && entry.id === frame.schedule_id,
-      );
-      if (index < 0) {
-        deliver({ t: "error", req: frame.req, code: "not_found", message: "no such schedule" });
-      } else {
-        scheduled.splice(index, 1);
-        deliver({ t: "ok", req: frame.req });
-      }
+    } else if (fakeScheduler.handle(frame)) {
+      // prompt_schedule, scheduled_list and scheduled_cancel.
     }
     return true;
   };
@@ -585,7 +580,11 @@ function main(): void {
       onReleaseSize: () => {
         controller.releaseSize();
       },
+      onKill: (req) => controller.kill(req),
       onSpawn: (spawn, req) => send(buildSpawn(req, spawn)),
+      onResumableList: (req) => send(buildResumableList(req)),
+      onResume: (id, req) => send(buildSessionResume(req, id)),
+      onDirList: (path, req) => send(buildDirList(req, path)),
       onCompose: (draft, req) => send(JSON.stringify({ t: "compose", req, draft })),
       onSendDraft: (draft, req) => controller.sendPromptDraft(draft, req),
       onSchedule: (draft, fireAt, req) => controller.sendPromptSchedule(draft, fireAt, req),
@@ -600,6 +599,7 @@ function main(): void {
       onUnwatchGraph: () => {
         graphs.unwatch();
       },
+      onGraphControl: (req, id, action) => send(buildGraphControl(req, id, action)),
       onWatchMetrics: () => {
         metrics.watch();
       },
@@ -652,10 +652,9 @@ function main(): void {
 
   // The host greets first: hello.features is what turns the shelf UI on,
   // and hello.harnesses is what the New dialog may offer (both installed).
-  const uploadMode = new URLSearchParams(globalThis.location.search).get("upload");
   deliver({
     t: "hello",
-    features: uploadMode === "off" ? ["shelf"] : ["shelf", "shelf_upload"],
+    features: fakeHelloFeatures(globalThis.location.search),
     harnesses: ["muse", "claude"],
   });
 
@@ -737,9 +736,14 @@ function main(): void {
     failNextPrompt: (code: string, message: string) => {
       promptError = { code, message };
     },
+    failNextKill: (code: string, message: string) => {
+      killer.failNext(code, message);
+    },
     graphTick: () => {
       fakeGraphs.tick();
     },
+    /** Send graph_control for the watched graph, straight at the host. */
+    graphControl: createFakeControl(send, () => fakeGraphs.watchedId()),
     pushMetrics: (patch?: Record<string, unknown>) => {
       fakeMetrics.pushMetrics(patch ?? {});
     },
@@ -769,6 +773,8 @@ declare global {
       failNextPrompt: (code: string, message: string) => void;
       /** Advance the running graph fixture one step and push its state. */
       graphTick: () => void;
+      /** Send graph_control for the watched graph, straight at the host. */
+      graphControl?: (action: GraphControlAction) => void;
       /** Push one metrics frame, with the patch merged over the fixture. */
       pushMetrics: (patch?: Record<string, unknown>) => void;
       /** Guest mode only: open one session by id, listed or not. */
@@ -777,6 +783,8 @@ declare global {
       guestInvites?: () => string[];
       /** Another device (or the host's TUI) resizes a session's PTY. */
       resizeFromElsewhere?: (cols: number, rows: number, id?: string) => void;
+      /** Owner mode only: the next kill answers this error once. */
+      failNextKill?: (code: string, message: string) => void;
     };
   }
 }

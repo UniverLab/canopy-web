@@ -149,6 +149,7 @@ describe("Prompt Builder send through the shell", () => {
         onTerminalInput: () => {},
         onControlSize: () => {},
         onReleaseSize: () => {},
+        onKill: () => true,
         onSpawn: () => true,
         onCompose: () => true,
         onSendDraft: (draft, req) => controller?.sendPromptDraft(draft, req) ?? false,
@@ -158,6 +159,7 @@ describe("Prompt Builder send through the shell", () => {
         onGraphsRequest: () => {},
         onWatchGraph: () => {},
         onUnwatchGraph: () => {},
+        onGraphControl: () => true,
       },
       { catalog },
     );

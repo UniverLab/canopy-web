@@ -632,6 +632,7 @@ label > textarea {
 .session-title {
   font-family: var(--font-mono);
   font-size: 0.9rem;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -645,6 +646,31 @@ label > textarea {
 
 .session-exit[hidden] {
   display: none;
+}
+
+/* The session bar's Close: icon-only at rest, "Close?" in the danger
+ * tint for the two-tap confirm. It sits in the bar itself — outside
+ * .term-controls — so it stays reachable while the key bar is hidden,
+ * and its auto margin keeps it at the bar's right edge. */
+#session-close {
+  margin-left: auto;
+  flex-shrink: 0;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.6rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+}
+
+#session-close.confirm {
+  background: var(--tint-danger, var(--tint-warn));
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 /* The terminal card follows the fitted terminal's height (refit writes
@@ -801,7 +827,7 @@ label > textarea {
  * without the row growing taller than the two lines of text. */
 .term-size {
   display: grid;
-  grid-template-columns: 2.75rem minmax(0, 1fr);
+  grid-template-columns: 4.125rem minmax(0, 1fr);
   column-gap: 0.5rem;
 }
 
@@ -828,7 +854,7 @@ label > textarea {
   flex: none;
   align-self: center;
   display: inline-block;
-  width: 2.75rem;
+  width: 4.125rem;
   height: 1.5rem;
   min-height: 0;
   margin: 0;
@@ -858,7 +884,7 @@ label > textarea {
 
 .term-size-toggle input:checked::before {
   background: var(--accent-ink);
-  transform: translateX(1.25rem);
+  transform: translateX(2.625rem);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -880,6 +906,42 @@ label > textarea {
  * (the words carry it, the colour only lifts it off the muted line). */
 .term-size-note.is-notice {
   color: var(--ink);
+}
+
+/* The slider that scales the size, below the switch and its note: a row
+ * that stays inside a 360 px viewport, the whole label a 44 px target
+ * like the switch. Its colours come from the tokens. */
+.term-size-scale {
+  grid-area: 3 / 2 / 4 / 3;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  max-width: 100%;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* The global label > input rule would make the range a block spanning the
+ * card; here it takes the row's slack, still 44 px tall. */
+.term-size-scale input {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--accent);
+}
+
+.term-size-scale output {
+  flex: none;
+  min-width: 4.5rem;
+  text-align: end;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Ten keys, all visible: two rows of five equal-width touch targets.
@@ -919,6 +981,56 @@ label > textarea {
   background: var(--accent);
   border: 2px solid var(--accent);
   color: var(--accent-ink);
+}
+
+/* The phone keyboard is open (followKeyboard sets data-keyboard and the
+ * --vv-* props from the visual viewport): the session view pins itself to
+ * the visual viewport so the terminal and the key bar end above the
+ * keyboard instead of behind it. The bar, the terminal controls, the size
+ * row and the spawn flash step aside — the banner and the upload tray
+ * stay. The stage takes what is left and the pane and fit fill it, so the
+ * smaller box feeds the rows through the usual ResizeObserver path; the
+ * key bar keeps its two rows at a tighter key height. */
+.session-view[data-keyboard] {
+  position: fixed;
+  top: var(--vv-top);
+  left: 0;
+  right: 0;
+  height: var(--vv-height);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  background: var(--bg-deep);
+  z-index: 10;
+}
+
+.session-view[data-keyboard] .session-bar,
+.session-view[data-keyboard] .term-controls,
+.session-view[data-keyboard] .term-size,
+.session-view[data-keyboard] .flash-ok {
+  display: none;
+}
+
+.session-view[data-keyboard] .term-stage {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Height 100 % of the stage, never of the content: the fit box must not
+ * grow with the terminal or the rows would feed back into themselves.
+ * The extra specificity beats .term-pane[data-size-owner] .term-fit. */
+.session-view[data-keyboard] .term-pane,
+.session-view[data-keyboard] .term-pane .term-fit {
+  height: 100%;
+  min-height: 0;
+}
+
+.session-view[data-keyboard] .keybar {
+  grid-template-rows: repeat(2, auto);
+}
+
+.session-view[data-keyboard] .keybar .key {
+  min-height: 2.25rem;
 }
 
 /* A 360x640 phone: the 96 px banner leaves no slack in the session column,
@@ -1056,6 +1168,258 @@ label > textarea {
   width: auto;
   min-height: 0;
   margin: 0;
+}
+
+/* The New dialog's directory field keeps its text input and gains a
+ * folder-picker button on hosts that speak dir_list. */
+.dir-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.dir-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.dir-browse {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0.25rem 0.6rem;
+}
+
+/* The folder picker inside the New sheet: breadcrumb, filter, hidden
+ * switch, recent suggestions, the scrolling folder list and footer. */
+.dir-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.dir-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  overflow-x: auto;
+  white-space: nowrap;
+  padding-bottom: 0.15rem;
+}
+
+.dir-crumb,
+.dir-crumb-sep {
+  flex: none;
+}
+
+.dir-crumb {
+  min-height: 2.75rem;
+  padding: 0.25rem 0.5rem;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.dir-crumb-sep {
+  color: var(--muted);
+}
+
+.dir-filter input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.dir-hidden {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+}
+
+.dir-hidden input {
+  width: auto;
+  min-height: 0;
+  margin: 0;
+}
+
+.dir-error {
+  color: var(--ink);
+  background: var(--tint-error);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.dir-error[hidden] {
+  display: none;
+}
+
+.dir-error:not([hidden])::before {
+  content: "Error: ";
+  color: var(--err-label);
+}
+
+.dir-recent h3 {
+  margin: 0 0 0.25rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.dir-recent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.dir-recent-item,
+.dir-up,
+.dir-row-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: max(2.75rem, 44px);
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.dir-recent-item {
+  color: var(--accent);
+  overflow-wrap: anywhere;
+}
+
+.dir-up {
+  color: var(--muted);
+}
+
+.dir-row-icon {
+  flex: none;
+  display: inline-flex;
+}
+
+.dir-row-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dir-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 45dvh;
+  overflow-y: auto;
+  margin: 0;
+}
+
+.dir-status {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0.25rem 0;
+}
+
+.dir-status:empty {
+  display: none;
+}
+
+.dir-actions {
+  flex-wrap: wrap;
+}
+
+/* The New dialog's Resume pane: a filter over a scrolling list of the
+ * host's recorded conversations. Every row is a 44 px target. */
+.resume-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 45dvh;
+  overflow-y: auto;
+  margin: 0.5rem 0;
+}
+
+.resume-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  width: 100%;
+  min-height: max(2.75rem, 44px);
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.resume-row:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.resume-name {
+  font-weight: 500;
+}
+
+.resume-meta {
+  color: var(--muted);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.resume-status {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0.25rem 0;
+}
+
+.resume-status:empty {
+  display: none;
+}
+
+.resume-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: var(--ink);
+  background: var(--tint-error);
+  border: 1px solid var(--tint-line);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  margin: 0.5rem 0;
+  overflow-wrap: anywhere;
+}
+
+.resume-error[hidden] {
+  display: none;
+}
+
+.resume-error:not([hidden])::before {
+  content: "Error: ";
+  color: var(--err-label);
+}
+
+.resume-error #resume-retry {
+  flex: none;
+  min-height: max(2.75rem, 44px);
 }
 
 /* Shared modal sheet: New dialog and Prompt Builder. */
@@ -1354,7 +1718,7 @@ label > textarea {
 /* The Files button in the session bar: hidden until hello.features
  * carries "shelf", its badge counting files nobody has looked at. */
 #session-files {
-  margin-left: auto;
+  margin-left: 0;
   flex-shrink: 0;
   min-height: 2.75rem;
   padding: 0.25rem 0.7rem;
@@ -1974,6 +2338,14 @@ label > textarea {
 
 .graph-bar #graph-back {
   min-width: 2.75rem;
+}
+
+.graph-bar #graph-action {
+  min-width: 2.75rem;
+}
+
+.graph-bar #graph-action[hidden] {
+  display: none;
 }
 
 .graph-title {

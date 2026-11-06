@@ -7,6 +7,7 @@
 
 import { CatalogStore } from "./catalog.js";
 import { Builder } from "./builder.js";
+import type { DirList } from "./dir-protocol.js";
 import { renderConnBanner, renderTopbar, wireAccount, wireConnActions } from "./chrome.js";
 import { syncHeaderFondo } from "./fondo.js";
 import { renderHosts, renderPair, renderSignIn } from "./entry-views.js";
@@ -18,7 +19,13 @@ import { MetricsRoute } from "./metrics-route.js";
 import type { MetricsStore } from "./metrics-store.js";
 import { NewDialog } from "./new-dialog.js";
 import { defaultDeviceLabel } from "./pairing.js";
-import type { PromptDraft, ScheduledItem, SpawnRequest } from "./protocol.js";
+import type {
+  GraphControlAction,
+  PromptDraft,
+  ResumableSession,
+  ScheduledItem,
+  SpawnRequest,
+} from "./protocol.js";
 import type { OnlineHost } from "./relay.js";
 import type { ShelfHandle } from "./shelf-controller.js";
 import type { SessionStore } from "./sessions.js";
@@ -54,8 +61,19 @@ export interface ShellCallbacks {
   onControlSize: (cols: number, rows: number) => void;
   /** The control-size toggle turned off: give the size back to the host. */
   onReleaseSize: () => void;
+  /**
+   * The session view's Close sent its second tap: kill{req,id} for the
+   * open session. False when nothing went out (no session, no channel).
+   */
+  onKill: (req: string) => boolean;
   /** False when the frame could not be sent; the dialog then says so. */
   onSpawn: (spawn: SpawnRequest, req: string) => boolean;
+  /** The New dialog's Resume pane asks for the host's history. */
+  onResumableList?: (req: string) => boolean;
+  /** Resume one recorded conversation the pane listed. */
+  onResume?: (id: string, req: string) => boolean;
+  /** The directory picker's dir_list request; false when it cannot send. */
+  onDirList?: (path: string | undefined, req: string) => boolean;
   onCompose: (draft: PromptDraft, req: string) => boolean;
   onSendDraft: (draft: PromptDraft, req: string) => boolean;
   onSchedule: (draft: PromptDraft, fireAt: string, req: string) => boolean;
@@ -67,6 +85,11 @@ export interface ShellCallbacks {
   onWatchGraph: (id: string) => void;
   /** Stop watching: back, switching tab or hiding the page. */
   onUnwatchGraph: () => void;
+  /**
+   * The graph view's Pause/Continue: graph_control{req,id,action}.
+   * False when nothing went out (no connection yet).
+   */
+  onGraphControl: (req: string, id: string, action: GraphControlAction) => boolean;
   /** Watch the host's metrics while the strip or the SysInfo view shows. */
   onWatchMetrics?: () => void;
   /** Stop watching: hiding the page, entering the terminal, leaving. */
@@ -96,6 +119,24 @@ export interface Shell {
   writeTerminal: (data: Uint8Array) => void;
   clearTerminal: () => void;
   showSessionExited: (code: number) => void;
+  /** The open session was removed on the host, whoever caused it. */
+  sessionRemoved: (id: string) => void;
+  /** A kill{req} error matched the pending close; true when consumed. */
+  killError: (req: string | null, message: string) => boolean;
+  /** The host greets: the graph view's pause/continue gate follows hello. */
+  graphHello: (features: string[]) => void;
+  /** The host greets: the New dialog offers Resume only when it does. */
+  resumeHello: (features: string[]) => void;
+  /** The host's recorded conversations answer the Resume pane's request. */
+  resumeList: (sessions: ResumableSession[]) => void;
+  /** The host greets: the New dialog's folder picker follows dir_list. */
+  dirHello: (features: string[]) => void;
+  /** A dir_list reply for the open folder picker. */
+  dirList: (list: DirList) => void;
+  /** A graph_control ok; true when the graph route consumed it. */
+  graphControlOk: (req: string) => boolean;
+  /** A graph_control error; true when the graph route consumed it. */
+  graphControlError: (req: string | null, message: string) => boolean;
   sheetSpawned: (req: string, id: string) => void;
   sheetComposed: (req: string, text: string) => void;
   sheetScheduled: (req: string, item: ScheduledItem) => void;
@@ -148,6 +189,9 @@ export function createShell(
     catalog,
     {
       onSpawn: (spawn, req) => callbacks.onSpawn(spawn, req),
+      onResumableList: (req) => callbacks.onResumableList?.(req) ?? false,
+      onResume: (id, req) => callbacks.onResume?.(id, req) ?? false,
+      onDirList: (path, req) => callbacks.onDirList?.(path, req) ?? false,
     },
     { sessions: store, hostId },
   );
@@ -316,6 +360,7 @@ export function createShell(
       onGraphsRequest: () => callbacks.onGraphsRequest(),
       onWatchGraph: (id) => callbacks.onWatchGraph(id),
       onUnwatchGraph: () => callbacks.onUnwatchGraph(),
+      onGraphControl: (req, id, action) => callbacks.onGraphControl(req, id, action),
     },
     {
       listSessions: () => store.list(),
@@ -364,6 +409,7 @@ export function createShell(
       onTerminalInput: (bytes) => callbacks.onTerminalInput(bytes),
       onControlSize: (cols, rows) => callbacks.onControlSize(cols, rows),
       onReleaseSize: () => callbacks.onReleaseSize(),
+      onKill: (req) => callbacks.onKill(req),
       onLeaveSession: () => callbacks.onLeaveSession(),
     },
     {
@@ -572,6 +618,41 @@ export function createShell(
     },
     showSessionExited(code: number): void {
       sessionRoute.showSessionExited(code);
+    },
+    sessionRemoved(id: string): void {
+      if (route !== "session" || sessionRoute.openId !== id) {
+        return;
+      }
+      // The list's one-shot flash must be set before the leave renders
+      // it — render() is synchronous and consumes it.
+      if (sessionRoute.wasKillPending()) {
+        graphRoute.setListFlash("Session closed");
+      }
+      callbacks.onLeaveSession();
+    },
+    killError(req: string | null, message: string): boolean {
+      return sessionRoute.killError(req, message);
+    },
+    graphHello(features: string[]): void {
+      graphRoute.handleHello(features);
+    },
+    resumeHello(features: string[]): void {
+      newDialog.setHasResume(features.includes("session_resume"));
+    },
+    resumeList(sessions: ResumableSession[]): void {
+      newDialog.handleResumable(sessions);
+    },
+    dirHello(features: string[]): void {
+      newDialog.setHasDirList(features.includes("dir_list"));
+    },
+    dirList(list: DirList): void {
+      newDialog.handleDirList(list);
+    },
+    graphControlOk(req: string): boolean {
+      return graphRoute.handleControlOk(req);
+    },
+    graphControlError(req: string | null, message: string): boolean {
+      return graphRoute.handleControlError(req, message);
     },
     sheetSpawned(req: string, id: string): void {
       const spawnName = newDialog.handleSpawned(req);

@@ -14,9 +14,11 @@ import {
   ModifierLatches,
   textBytesWithModifiers,
 } from "./modifiers.js";
+import { newReqId } from "./protocol.js";
 import { convergeOpenSessionName, type SessionStore } from "./sessions.js";
 import type { ShelfHandle } from "./shelf-controller.js";
 import { esc } from "./sheet.js";
+import { dropIdleFocus, followKeyboard, openPhoneKeyboard } from "./phone-keyboard.js";
 import { TerminalView } from "./terminal.js";
 import type { TerminalFactory } from "./terminal.js";
 import {
@@ -46,6 +48,12 @@ export interface SessionRouteCallbacks {
   onControlSize: (cols: number, rows: number) => void;
   /** The control-size toggle turned off: give the size back to the host. */
   onReleaseSize: () => void;
+  /**
+   * The Close button's second tap: send kill{req,id} for the open
+   * session. False when nothing went out — the route says "Not
+   * connected" and re-arms the confirm.
+   */
+  onKill: (req: string) => boolean;
   onLeaveSession: () => void;
 }
 
@@ -83,6 +91,8 @@ export class SessionRoute {
   private terminalView: TerminalView | null = null;
   private latestButton: HTMLButtonElement | null = null;
   private copyFloatDispose: (() => void) | null = null;
+  private dropFocusDispose: (() => void) | null = null;
+  private keyboardDispose: (() => void) | null = null;
   private termControls: TermControls | null = null;
   private uploadView: UploadView | null = null;
   // The Files button's folder: open while the sheet is up.
@@ -90,6 +100,10 @@ export class SessionRoute {
   // The one-shot spawn confirmation: set by sheetSpawned, consumed by the
   // session view's first render, so it shows exactly once.
   private spawnFlash: string | null = null;
+  // The Close button's two-tap confirm: closeTimer runs the 4 s window,
+  // killReq names the kill{req} in flight so its error can find it.
+  private closeTimer: ReturnType<typeof setTimeout> | null = null;
+  private killReq: string | null = null;
 
   constructor(
     root: HTMLElement,
@@ -140,6 +154,7 @@ export class SessionRoute {
         <button type="button" id="session-back" aria-label="Back to sessions">${icon("chevronLeft")}</button>
         <span class="session-title">${esc(this.sessionName)}</span>
         <span class="session-exit" id="session-exit" hidden></span>
+        <button type="button" id="session-close" aria-label="Close session">${icon("x")}</button>
         <button type="button" id="session-files" hidden>
           <span class="icon-slot" id="session-files-icon" data-morph="shelf" aria-hidden="true">${icon("folder")}</span>
           <span>Files</span><span
@@ -158,11 +173,30 @@ export class SessionRoute {
     </main>
     ${REMOTE_FOOTER}`;
     this.hooks.wireBanner();
+    // A tap on any control button is not typing either: it drops an idle
+    // focus so the phone keyboard stays closed. One delegated listener
+    // covers the whole session view and goes with teardown.
+    const onControlClick = (ev: Event): void => {
+      const target = ev.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      if (target.closest(".term-controls button, #term-latest, #term-copy-float") === null) {
+        return;
+      }
+      const view = this.terminalView;
+      if (view) {
+        dropIdleFocus(view);
+      }
+    };
+    this.root.addEventListener("click", onControlClick);
+    this.dropFocusDispose = () => this.root.removeEventListener("click", onControlClick);
     const filesIcon = this.root.querySelector<HTMLElement>("#session-files-icon");
     if (filesIcon) {
       this.shelfIcon = mountMorphSlot(filesIcon, "folder");
     }
     this.root.querySelector("#session-back")?.addEventListener("click", () => this.callbacks.onLeaveSession());
+    this.root.querySelector("#session-close")?.addEventListener("click", () => this.onCloseTap());
     // The Files sheet only exists behind hello.features "shelf"; the
     // button itself is rendered hidden and syncFilesBadge reveals it.
     this.root.querySelector("#session-files")?.addEventListener("click", () => {
@@ -218,14 +252,32 @@ export class SessionRoute {
         const bytes = keyBytesWithModifiers(def.id, this.latches.snapshot());
         this.latches.release();
         updateKeyBarLatches(bar, this.latches.snapshot());
+        const view = this.terminalView;
+        if (view) {
+          dropIdleFocus(view);
+        }
         this.callbacks.onKeyPress(bytes);
       });
     }
+    // The phone keyboard pins the session view to the visual viewport:
+    // the terminal and the key bar stay above it while it is open.
+    const main = this.root.querySelector<HTMLElement>("main.session-view");
+    const pane = this.root.querySelector<HTMLElement>("#term-pane");
+    this.keyboardDispose = main !== null && pane !== null ? followKeyboard(main, pane) : null;
   }
 
   teardown(): void {
+    if (this.closeTimer !== null) {
+      globalThis.clearTimeout(this.closeTimer);
+      this.closeTimer = null;
+    }
+    this.killReq = null;
+    this.keyboardDispose?.();
+    this.keyboardDispose = null;
     this.termControls?.dispose();
     this.termControls = null;
+    this.dropFocusDispose?.();
+    this.dropFocusDispose = null;
     this.copyFloatDispose?.();
     this.copyFloatDispose = null;
     this.terminalView?.dispose();
@@ -337,9 +389,87 @@ export class SessionRoute {
   }
 
   showSessionExited(code: number): void {
+    this.exitText(`exited (${code})`);
+  }
+
+  // The Close button's two taps: the first arms the "Close?" confirm for
+  // four seconds, the second sends kill{req,id} and holds the button
+  // disabled until the host answers or the session leaves. A send that
+  // never left re-arms with "Not connected".
+  private onCloseTap(): void {
+    const button = this.root.querySelector<HTMLButtonElement>("#session-close");
+    if (button === null || button.disabled) {
+      return;
+    }
+    if (this.closeTimer === null) {
+      this.armClose();
+      return;
+    }
+    globalThis.clearTimeout(this.closeTimer);
+    this.closeTimer = null;
+    button.disabled = true;
+    const req = newReqId();
+    // Set before the send: a fast host answers ok/exited/session_removed
+    // or the error synchronously, and the reply must find its req.
+    this.killReq = req;
+    if (this.callbacks.onKill(req)) {
+      return;
+    }
+    this.killReq = null;
+    this.exitText("Not connected");
+    this.armClose();
+  }
+
+  private armClose(): void {
+    const button = this.root.querySelector<HTMLButtonElement>("#session-close");
+    if (button === null) {
+      return;
+    }
+    button.disabled = false;
+    button.classList.add("confirm");
+    button.innerHTML = `${icon("x")}<span>Close?</span>`;
+    this.closeTimer = globalThis.setTimeout(() => this.disarmClose(), 4000);
+  }
+
+  private disarmClose(): void {
+    if (this.closeTimer !== null) {
+      globalThis.clearTimeout(this.closeTimer);
+      this.closeTimer = null;
+    }
+    const button = this.root.querySelector<HTMLButtonElement>("#session-close");
+    if (button === null) {
+      return;
+    }
+    button.classList.remove("confirm");
+    button.innerHTML = icon("x");
+    button.disabled = false;
+  }
+
+  /**
+   * An error frame matching the pending kill's req: the button re-arms
+   * and the host's message lands on the exit badge. True when consumed.
+   */
+  killError(req: string | null, message: string): boolean {
+    if (this.killReq === null || req !== this.killReq) {
+      return false;
+    }
+    this.killReq = null;
+    this.disarmClose();
+    this.exitText(message);
+    return true;
+  }
+
+  /** This device sent the kill whose session_removed just arrived. */
+  wasKillPending(): boolean {
+    const pending = this.killReq !== null;
+    this.killReq = null;
+    return pending;
+  }
+
+  private exitText(text: string): void {
     const badge = this.root.querySelector<HTMLElement>("#session-exit");
     if (badge) {
-      badge.textContent = `exited (${code})`;
+      badge.textContent = text;
       badge.hidden = false;
     }
   }
@@ -417,12 +547,12 @@ export class SessionRoute {
       return;
     }
     if (view.fitted) {
-      view.focus();
+      openPhoneKeyboard(view);
       return;
     }
     void view.ready().then(() => {
       if (this.terminalView === view) {
-        view.focus();
+        openPhoneKeyboard(view);
       }
     });
   }

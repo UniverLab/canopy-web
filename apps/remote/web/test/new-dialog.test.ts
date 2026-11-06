@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CatalogStore } from "../src/catalog.js";
 import { readLastDir, readRecentDirs } from "../src/dir-history.js";
 import { NewDialog, YOLO_HINT } from "../src/new-dialog.js";
-import type { Catalog, SessionItem } from "../src/protocol.js";
+import type { Catalog, ResumableSession, SessionItem } from "../src/protocol.js";
 import type { SpawnRequest } from "../src/protocol.js";
 
 const CATALOG: Catalog = {
@@ -311,9 +311,339 @@ describe("NewDialog", () => {
 
   it("directory_label_has_space", () => {
     const labelText = (): string =>
-      query<HTMLInputElement>("#new-directory").closest("label")?.textContent ?? "";
+      query<HTMLInputElement>("#new-directory")?.closest("label")?.textContent ?? "";
     expect(labelText()).toContain("📁 Directory");
     pickKind("terminal");
     expect(labelText()).toContain("📁 Directory");
+  });
+});
+
+describe("NewDialog Resume mode", () => {
+  let root: HTMLDivElement;
+  let catalog: CatalogStore;
+  let dialog: NewDialog;
+  let listed: string[];
+  let resumes: { id: string; req: string }[];
+  let connected: boolean;
+
+  const ROWS: ResumableSession[] = [
+    {
+      id: "past-a",
+      name: "refactor the parser",
+      cli: "muse",
+      workdir: "/home/u/demo",
+      started_at: Date.now() - 60_000,
+      has_conversation: true,
+    },
+    {
+      id: "past-b",
+      name: "docs pass",
+      cli: "claude",
+      workdir: "/home/u/other",
+      started_at: Date.now() - 3_600_000,
+      has_conversation: false,
+    },
+  ];
+
+  const query = <T extends Element>(selector: string): T => {
+    const el = root.querySelector(selector);
+    if (!el) {
+      throw new Error(`missing ${selector}`);
+    }
+    return el as T;
+  };
+
+  const pickMode = (mode: string): void => {
+    const el = query<HTMLInputElement>(`input[name="mode"][value="${mode}"]`);
+    el.checked = true;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+
+  const pickKind = (kind: string): void => {
+    const el = query<HTMLInputElement>(`input[name="kind"][value="${kind}"]`);
+    el.checked = true;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    root = document.createElement("div");
+    document.body.appendChild(root);
+    catalog = new CatalogStore();
+    catalog.replace(CATALOG);
+    listed = [];
+    resumes = [];
+    connected = true;
+    dialog = new NewDialog(
+      catalog,
+      {
+        onSpawn: () => connected,
+        onResumableList: (req) => {
+          listed.push(req);
+          return connected;
+        },
+        onResume: (id, req) => {
+          resumes.push({ id, req });
+          return connected;
+        },
+      },
+      { sessions: SESSIONS, hostId: "h1" },
+    );
+    dialog.open(root);
+  });
+
+  afterEach(() => {
+    dialog.close();
+    root.remove();
+    document.body.innerHTML = "";
+    localStorage.clear();
+  });
+
+  it("offers no Resume on a host that does not speak it", () => {
+    expect(root.querySelector("#new-mode-resume")).toBeNull();
+    expect(root.querySelector('input[name="mode"]')).toBeNull();
+    expect(query<HTMLInputElement>("#new-kind-agent").checked).toBe(true);
+  });
+
+  it("shows the second control for agents, New selected by default", () => {
+    dialog.setHasResume(true);
+    expect(query<HTMLInputElement>("#new-mode-new").checked).toBe(true);
+    expect(query<HTMLInputElement>("#new-mode-resume").checked).toBe(false);
+    // New keeps the whole spawn form.
+    expect(root.querySelector("#new-cli")).not.toBeNull();
+    expect(root.querySelector("#new-prompt")).not.toBeNull();
+    // Terminals cannot resume; the control goes away, and comes back.
+    pickKind("terminal");
+    expect(root.querySelector("#new-mode-resume")).toBeNull();
+    pickKind("agent");
+    expect(root.querySelector("#new-mode-resume")).not.toBeNull();
+  });
+
+  it("Resume hides the spawn fields and asks for the history", () => {
+    dialog.setHasResume(true);
+    pickMode("resume");
+    expect(listed).toHaveLength(1);
+    expect(typeof listed[0]).toBe("string");
+    for (const selector of [
+      "#new-cli",
+      "#new-directory",
+      "#new-yolo",
+      "#new-name",
+      "#new-prompt",
+      "#new-create",
+    ]) {
+      expect(root.querySelector(selector), selector).toBeNull();
+    }
+    expect(root.querySelector("#resume-filter")).not.toBeNull();
+    expect(root.querySelector("#resume-list")).not.toBeNull();
+    expect(query("#resume-status").textContent).toBe("Loading…");
+  });
+
+  it("lists the answer and says so when it is empty", () => {
+    dialog.setHasResume(true);
+    pickMode("resume");
+    dialog.handleResumable(ROWS);
+    const rows = [...root.querySelectorAll<HTMLButtonElement>(".resume-row")];
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.textContent).toContain("refactor the parser");
+    expect(rows[1]?.textContent).toContain("latest in this folder");
+    // A history the host no longer has.
+    dialog.handleResumable([]);
+    expect(query("#resume-status").textContent).toBe("No past sessions to resume.");
+  });
+
+  it("filters the rows as the filter is typed", () => {
+    dialog.setHasResume(true);
+    pickMode("resume");
+    dialog.handleResumable(ROWS);
+    const filter = query<HTMLInputElement>("#resume-filter");
+    filter.value = "CLAUDE";
+    filter.dispatchEvent(new Event("input", { bubbles: true }));
+    const rows = [...root.querySelectorAll<HTMLButtonElement>(".resume-row")];
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.dataset.resumeId).toBe("past-b");
+  });
+
+  it("a row sends session_resume, and its spawned closes the dialog", () => {
+    dialog.setHasResume(true);
+    pickMode("resume");
+    dialog.handleResumable(ROWS);
+    root.querySelector<HTMLButtonElement>('.resume-row[data-resume-id="past-a"]')?.click();
+    expect(resumes).toHaveLength(1);
+    expect(resumes[0]?.id).toBe("past-a");
+    const req = resumes[0]?.req ?? "";
+    // The list is disabled while the host works.
+    expect(
+      [...root.querySelectorAll<HTMLButtonElement>(".resume-row")].every((row) => row.disabled),
+    ).toBe(true);
+    // Another spawned is not this resume's.
+    expect(dialog.handleSpawned("elsewhere")).toBeNull();
+    expect(dialog.isOpen).toBe(true);
+    // The shell opens the session through the spawn path: name "" means
+    // the store's own row names it.
+    expect(dialog.handleSpawned(req)).toBe("");
+    expect(dialog.isOpen).toBe(false);
+    expect(root.querySelector(".sheet-overlay")).toBeNull();
+  });
+
+  it("a host error stays in the dialog above the list and re-enables it", () => {
+    dialog.setHasResume(true);
+    pickMode("resume");
+    dialog.handleResumable(ROWS);
+    root.querySelector<HTMLButtonElement>('.resume-row[data-resume-id="past-a"]')?.click();
+    const req = resumes[0]?.req ?? "";
+    expect(dialog.handleError("host is busy", req, "busy")).toBe(true);
+    expect(dialog.isOpen).toBe(true);
+    expect(query<HTMLElement>("#resume-error").hidden).toBe(false);
+    expect(query("#resume-error-text").textContent).toBe("host is busy");
+    expect(
+      [...root.querySelectorAll<HTMLButtonElement>(".resume-row")].every((row) => row.disabled),
+    ).toBe(false);
+  });
+
+  it("a failed history request says so with Retry, and Retry asks again", () => {
+    dialog.setHasResume(true);
+    pickMode("resume");
+    const req = listed[0] ?? "";
+    expect(dialog.handleError("could not read the host's history", req, "internal")).toBe(true);
+    expect(query("#resume-error-text").textContent).toBe("could not read the host's history");
+    query<HTMLButtonElement>("#resume-retry").click();
+    expect(listed).toHaveLength(2);
+  });
+
+  it("says Not connected when the list cannot be sent", () => {
+    connected = false;
+    dialog.setHasResume(true);
+    pickMode("resume");
+    expect(query("#resume-error-text").textContent).toBe("Not connected");
+  });
+
+  it("every open starts on New again", () => {
+    dialog.setHasResume(true);
+    pickMode("resume");
+    dialog.close();
+    dialog.open(root);
+    expect(query<HTMLInputElement>("#new-mode-new").checked).toBe(true);
+    expect(root.querySelector("#new-cli")).not.toBeNull();
+    expect(root.querySelector("#resume-filter")).toBeNull();
+  });
+});
+
+describe("NewDialog directory picker", () => {
+  let root: HTMLDivElement;
+  let catalog: CatalogStore;
+  let dialog: NewDialog;
+  let lists: { path: string | undefined; req: string }[];
+  let spawns: { spawn: SpawnRequest; req: string }[];
+
+  const query = <T extends Element>(selector: string): T => {
+    const el = root.querySelector(selector);
+    if (!el) {
+      throw new Error(`missing ${selector}`);
+    }
+    return el as T;
+  };
+
+  const answer = (path: string, parent: string | null, names: string[] = []): void => {
+    const req = lists.at(-1)?.req;
+    if (req === undefined) {
+      throw new Error("missing dir_list request");
+    }
+    dialog.handleDirList({
+      req,
+      path,
+      parent,
+      dirs: names.map((name) => ({ name })),
+      truncated: false,
+    });
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    root = document.createElement("div");
+    document.body.appendChild(root);
+    catalog = new CatalogStore();
+    catalog.replace(CATALOG);
+    lists = [];
+    spawns = [];
+    dialog = new NewDialog(
+      catalog,
+      {
+        onSpawn: (spawn, req) => {
+          spawns.push({ spawn, req });
+          return true;
+        },
+        onDirList: (path, req) => {
+          lists.push({ path, req });
+          return true;
+        },
+      },
+      { sessions: SESSIONS, hostId: "h1" },
+    );
+    dialog.setHasDirList(true);
+    dialog.open(root);
+  });
+
+  afterEach(() => {
+    dialog.close();
+    root.remove();
+    document.body.innerHTML = "";
+    localStorage.clear();
+  });
+
+  it("shows Browse only when the host speaks dir_list", () => {
+    expect(query<HTMLButtonElement>("#new-directory-browse")).not.toBeNull();
+    expect(query<HTMLInputElement>("#new-directory")).not.toBeNull();
+    dialog.setHasDirList(false);
+    expect(root.querySelector("#new-directory-browse")).toBeNull();
+    expect(query<HTMLInputElement>("#new-directory")).not.toBeNull();
+  });
+
+  it("swaps the form for the picker and keeps the form values on cancel", () => {
+    query<HTMLInputElement>("#new-name").value = "keep me";
+    query<HTMLTextAreaElement>("#new-prompt").value = "first prompt";
+    query<HTMLInputElement>("#new-directory").value = "/home/u/typed";
+    query<HTMLInputElement>("#new-directory").dispatchEvent(new Event("input", { bubbles: true }));
+    query<HTMLButtonElement>("#new-directory-browse").click();
+    expect(root.querySelector("#new-picker")).not.toBeNull();
+    expect(root.querySelector("#new-form")).toBeNull();
+    expect(lists).toHaveLength(1);
+    expect(lists[0]?.path).toBe("/home/u/typed");
+    answer("/home/u/typed", "/home/u", ["demo"]);
+    expect(query("#dir-crumbs").textContent).toContain("typed");
+    query<HTMLButtonElement>("#dir-cancel").click();
+    expect(root.querySelector("#new-picker")).toBeNull();
+    expect(query<HTMLInputElement>("#new-form")).not.toBeNull();
+    expect(query<HTMLInputElement>("#new-name").value).toBe("keep me");
+    expect(query<HTMLTextAreaElement>("#new-prompt").value).toBe("first prompt");
+    expect(query<HTMLInputElement>("#new-directory").value).toBe("/home/u/typed");
+    expect(spawns).toHaveLength(0);
+  });
+
+  it("Use this folder writes the path, clears the directory error and returns", () => {
+    // A validation error is showing before Browse opens.
+    query<HTMLFormElement>("#new-form").dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+    expect(query<HTMLElement>("#new-directory-error").hidden).toBe(false);
+    query<HTMLButtonElement>("#new-directory-browse").click();
+    expect(lists[0]?.path).toBeUndefined();
+    answer("/home/u", "/home", ["demo"]);
+    root.querySelector<HTMLButtonElement>('.dir-row-item[data-dir-path="/home/u/demo"]')?.click();
+    answer("/home/u/demo", "/home/u", ["src"]);
+    expect(query<HTMLButtonElement>("#dir-use").textContent).toBe("Use this folder · demo");
+    query<HTMLButtonElement>("#dir-use").click();
+    expect(root.querySelector("#new-picker")).toBeNull();
+    expect(query<HTMLInputElement>("#new-directory").value).toBe("/home/u/demo");
+    expect(query<HTMLElement>("#new-directory-error").hidden).toBe(true);
+    expect(spawns).toHaveLength(0);
+    expect(readRecentDirs()).toEqual([]);
+    // The picked path is what submit sends; recents are recorded there.
+    query<HTMLFormElement>("#new-form").dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+    expect(spawns).toHaveLength(1);
+    expect(spawns[0]?.spawn.workdir).toBe("/home/u/demo");
+    expect(readRecentDirs()).toEqual(["/home/u/demo"]);
   });
 });

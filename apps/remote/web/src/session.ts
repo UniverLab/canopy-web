@@ -11,6 +11,7 @@ import {
   buildDetach,
   buildInput,
   buildInputText,
+  buildKill,
   buildPromptDraft,
   buildPromptSchedule,
   buildResize,
@@ -36,7 +37,7 @@ const MAX_PENDING_OUT = 200;
 export class SessionController {
   private readonly callbacks: SessionCallbacks;
   private openId: string | null = null;
-  private lastSeq = -1;
+  private snapshotSeq = -1;
   private snapshotSeen = false;
   private pending: OutFrame[] = [];
 
@@ -53,7 +54,7 @@ export class SessionController {
       this.callbacks.send(buildDetach(this.openId));
     }
     this.openId = id;
-    this.lastSeq = -1;
+    this.snapshotSeq = -1;
     this.snapshotSeen = false;
     this.pending = [];
     this.callbacks.send(buildAttach(id));
@@ -73,7 +74,7 @@ export class SessionController {
       this.callbacks.send(buildDetach(this.openId));
     }
     this.openId = null;
-    this.lastSeq = -1;
+    this.snapshotSeq = -1;
     this.snapshotSeen = false;
     this.pending = [];
   }
@@ -132,6 +133,16 @@ export class SessionController {
     return this.callbacks.send(buildResize(this.openId, cols, rows));
   }
 
+  // The session view's Close: the host ends the session itself, so every
+  // attached device sees exited and session_removed. False with no open
+  // session or no channel — the caller shows "Not connected".
+  kill(req: string): boolean {
+    if (this.openId === null) {
+      return false;
+    }
+    return this.callbacks.send(buildKill(req, this.openId));
+  }
+
   // The control-size toggle turning off: give the size back so the host's
   // own TUI re-asserts its size at once. Takeovers and teardown stay
   // silent: only the user's own toggle calls this.
@@ -152,7 +163,7 @@ export class SessionController {
     }
     // The channel already decoded the parts: bytes written as they came.
     terminal.clear();
-    this.lastSeq = snapshot.seq;
+    this.snapshotSeq = snapshot.seq;
     this.snapshotSeen = true;
     terminal.write(snapshot.data);
     this.drainPending(terminal);
@@ -169,11 +180,10 @@ export class SessionController {
       }
       return;
     }
-    if (frame.seq <= this.lastSeq) {
+    if (frame.seq <= this.snapshotSeq) {
       return;
     }
     this.callbacks.terminal()?.write(frame.data);
-    this.lastSeq = frame.seq;
   }
 
   handleExited(id: string, code: number): void {
@@ -185,12 +195,11 @@ export class SessionController {
 
   private drainPending(terminal: SessionTerminal): void {
     const frames = this.pending
-      .filter((frame) => frame.seq > this.lastSeq)
+      .filter((frame) => frame.seq > this.snapshotSeq)
       .sort((a, b) => a.seq - b.seq);
     this.pending = [];
     for (const frame of frames) {
       terminal.write(frame.data);
-      this.lastSeq = frame.seq;
     }
   }
 }

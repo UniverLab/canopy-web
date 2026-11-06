@@ -51,6 +51,7 @@ const CALLBACKS: ShellCallbacks = {
   onTerminalInput: () => {},
   onControlSize: () => {},
   onReleaseSize: () => {},
+  onKill: () => true,
   onSpawn: () => true,
   onCompose: () => true,
   onSendDraft: () => true,
@@ -60,6 +61,7 @@ const CALLBACKS: ShellCallbacks = {
   onGraphsRequest: () => {},
   onWatchGraph: () => {},
   onUnwatchGraph: () => {},
+  onGraphControl: () => true,
 };
 
 function shelfItem(overrides: Partial<ShelfItem> = {}): ShelfItem {

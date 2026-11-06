@@ -109,6 +109,68 @@ test("watches the running graph live on its plate and checklist", async ({ page 
   await expect.poll(() => page.locator("#graph-count").textContent()).not.toBe("1/4");
 });
 
+test("pauses the running graph and continues it", async ({ page }) => {
+  await page.locator('[data-graph="g-loop"]').click();
+  await expect(page.locator("main.graph-view")).toBeVisible();
+  const action = page.locator("#graph-action");
+  await expect(action).toBeVisible();
+  await expect(action).toContainText("Pause");
+  await action.click();
+  // The request goes out, and the button holds while it is in flight.
+  await expect(action).toBeDisabled();
+  const sent = await page.evaluate(() => window.__fake.sent());
+  expect(sent).toContainEqual(
+    expect.objectContaining({ t: "graph_control", id: "g-loop", action: "pause" }),
+  );
+  // The host answers ok and pushes pausing through the live state: the
+  // chip words it paused, the button names the transition it is in.
+  await expect(action).toContainText("Pausing...");
+  await expect(page.locator("#graph-chip .status-chip")).toHaveAttribute(
+    "data-status",
+    "paused",
+  );
+  // The next tick settles the pause and offers the way back.
+  await page.evaluate(() => window.__fake.graphTick());
+  await expect(action).toContainText("Continue");
+  await expect(action).toBeEnabled();
+  await action.click();
+  await expect(page.locator("#graph-chip .status-chip")).toHaveAttribute(
+    "data-status",
+    "running",
+  );
+  await expect(action).toContainText("Pause");
+});
+
+test("shows a refused continue on the graph note", async ({ page }) => {
+  await page.locator('[data-graph="g-loop"]').click();
+  await expect(page.locator("main.graph-view")).toBeVisible();
+  // A raw continue for the running graph: the host answers busy, and the
+  // refusal lands on the view's note, never as a dialog.
+  await page.evaluate(() => {
+    const control = window.__fake.graphControl;
+    if (!control) {
+      throw new Error("missing graphControl hook");
+    }
+    control("continue");
+  });
+  await expect(page.locator("#graph-note")).toContainText("graph is not paused");
+  // The button still offers Pause: nothing went out through it.
+  await expect(page.locator("#graph-action")).toContainText("Pause");
+  // The next successful action clears the note.
+  await page.locator("#graph-action").click();
+  await expect(page.locator("#graph-note")).toBeHidden();
+  await expect(page.locator("#graph-action")).toContainText("Pausing...");
+});
+
+test("shows no pause control against an older host", async ({ page }) => {
+  await page.goto("/fake.html?controls=off");
+  await page.locator('[data-tab="graphs"]').click();
+  await expect(page.locator(".graph-row")).toHaveCount(5);
+  await page.locator('[data-graph="g-loop"]').click();
+  await expect(page.locator("main.graph-view")).toBeVisible();
+  await expect(page.locator("#graph-action")).toBeHidden();
+});
+
 test("unwatches when leaving the graph view", async ({ page }) => {
   await page.locator('[data-graph="g-loop"]').click();
   await expect(page.locator("main.graph-view")).toBeVisible();

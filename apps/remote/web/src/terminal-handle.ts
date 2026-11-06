@@ -18,6 +18,7 @@ export interface TerminalHandle {
   write: (data: Uint8Array) => void;
   clear: () => void;
   focus: () => void;
+  blur: () => void;
   scrollToBottom: () => void;
   isAtBottom: () => boolean;
   /** True while xterm's alternate (fullscreen) buffer is active. Absent means always normal. */
@@ -85,6 +86,7 @@ export function createXtermHandle(
     write: (data) => terminal.write(data),
     clear: () => terminal.clear(),
     focus: () => terminal.focus(),
+    blur: () => terminal.blur(),
     scrollToBottom: () => terminal.scrollToBottom(),
     isAtBottom: () => {
       const buffer = terminal.buffer.active;
