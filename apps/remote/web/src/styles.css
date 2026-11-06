@@ -526,6 +526,10 @@ label > textarea {
   margin-left: auto;
 }
 
+.sessions-head #graphs-reload {
+  margin-left: auto;
+}
+
 /* The Agents / Terminals group headings: the h3 scale, one step down
  * from the Sessions title, spacing only. */
 .session-group {

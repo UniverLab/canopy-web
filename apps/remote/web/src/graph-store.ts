@@ -17,6 +17,8 @@ export class GraphStore {
   private readonly send: (data: string) => boolean;
   private readonly listeners = new Set<() => void>();
   private items: GraphSummary[] = [];
+  /** True once a list reply has arrived since the last reset. */
+  private listed = false;
   /** The graph being watched right now, or null when nothing is watched. */
   private watching: string | null = null;
   /** The graph the summary/state belong to, so a new id starts clean. */
@@ -101,6 +103,7 @@ export class GraphStore {
 
   handleGraphs(items: GraphSummary[]): void {
     this.items = items;
+    this.listed = true;
     this.notify();
   }
 
@@ -141,6 +144,7 @@ export class GraphStore {
   /** Leaving the host or pairing again: nothing of its graphs stays. */
   reset(): void {
     this.items = [];
+    this.listed = false;
     this.watching = null;
     this.open = null;
     this.summary = null;
@@ -156,6 +160,11 @@ export class GraphStore {
 
   list(): GraphSummary[] {
     return [...this.items].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  /** Whether a list reply has arrived since the last reset. */
+  hasListed(): boolean {
+    return this.listed;
   }
 
   currentSummary(): GraphSummary | null {
