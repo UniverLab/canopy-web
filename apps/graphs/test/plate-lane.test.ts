@@ -275,10 +275,11 @@ describe("no-handler plates", () => {
   it("keeps a handler-free svg byte-identical", async () => {
     // Re-pinned when the vertical layout went away and the marker ids lost
     // their orientation prefix, then again when the walk's unit twins joined
-    // the catalogue plate.
+    // the catalogue plate, then when channel edges left from the top middle
+    // and the twins started handing off mid-leg with the token.
     const svg = renderPlate(qualityBubble as unknown as GraphDocument);
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(svg));
     const hex = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-    expect(hex).toBe("c954baa22c0d109fefd430e1d67ccccf54b30f1170437c88635db556e24a1130");
+    expect(hex).toBe("f4c722422178fad13866e9d9c588de258499c5171a40e92dcd3095d32afc2966");
   });
 });
