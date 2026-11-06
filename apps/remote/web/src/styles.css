@@ -801,7 +801,7 @@ label > textarea {
  * without the row growing taller than the two lines of text. */
 .term-size {
   display: grid;
-  grid-template-columns: 2.75rem minmax(0, 1fr);
+  grid-template-columns: 4.125rem minmax(0, 1fr);
   column-gap: 0.5rem;
 }
 
@@ -828,7 +828,7 @@ label > textarea {
   flex: none;
   align-self: center;
   display: inline-block;
-  width: 2.75rem;
+  width: 4.125rem;
   height: 1.5rem;
   min-height: 0;
   margin: 0;
@@ -858,7 +858,7 @@ label > textarea {
 
 .term-size-toggle input:checked::before {
   background: var(--accent-ink);
-  transform: translateX(1.25rem);
+  transform: translateX(2.625rem);
 }
 
 @media (prefers-reduced-motion: reduce) {

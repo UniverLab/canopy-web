@@ -177,6 +177,14 @@ const FLOW_AXIS_BUDGET = 512;
  * FLOW_AXIS_BUDGET: the shared plate code rides the main bundle.
  */
 const UNIT_GLOW_BUDGET = 512;
+/**
+ * Allowance for the wider size switch (its track and the thumb's travel, and
+ * the grid column that reserves its width): measured +9 B gzip over the
+ * pre-change main (174 726 → 174 735), CSS only. Added in the fix commit like
+ * UNIT_GLOW_BUDGET: the tree sat exactly on the allowed total, leaving no
+ * headroom, and the switch is styled from the main stylesheet.
+ */
+const SWITCH_WIDTH_BUDGET = 512;
 /** The budget the lazy guest chunk is allowed, gzip bytes of JS. */
 const GUEST_BUDGET = 6_144;
 /**
@@ -299,7 +307,8 @@ describe("the remote's bundle", () => {
         RESIZED_BUDGET +
         GUEST_RETURN_BUDGET +
         FLOW_AXIS_BUDGET +
-        UNIT_GLOW_BUDGET,
+        UNIT_GLOW_BUDGET +
+        SWITCH_WIDTH_BUDGET,
     );
     expect(guestJs, JSON.stringify(report)).toBeLessThanOrEqual(GUEST_BUDGET + GUEST_INVITE_BUDGET);
     expect(editorJs, JSON.stringify(report)).toBeLessThanOrEqual(EDITOR_BUDGET);
