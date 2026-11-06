@@ -169,7 +169,7 @@ export class SessionRoute {
       ${termControlsHtml()}
       <div class="upload-tray" id="upload-tray" hidden></div>
       <div class="keybar" id="keybar"></div>
-      ${termSizeHtml(this.sessionId)}
+      ${termSizeHtml(this.sessionId, this.terminalView?.ownedSize()?.cols ?? null)}
     </main>
     ${REMOTE_FOOTER}`;
     this.hooks.wireBanner();

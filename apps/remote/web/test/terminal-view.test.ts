@@ -15,7 +15,7 @@ import {
   OWNED_MAX_ROWS,
   OWNED_MIN_COLS,
   OWNED_MIN_ROWS,
-  scaleOwnedWidth,
+  setOwnedWidth,
   shouldContinueFling,
   shouldStartFling,
   splitTouchScroll,
@@ -207,20 +207,19 @@ describe("owned size", () => {
   });
 });
 
-describe("control scale", () => {
-  it("scale_owned_width_rounds_and_clamps_cols_and_keeps_fitted_rows", () => {
-    // 100 % sends exactly the fitted size.
-    expect(scaleOwnedWidth({ cols: 44, rows: 19 }, 100)).toEqual({ cols: 44, rows: 19 });
-    expect(scaleOwnedWidth({ cols: 44, rows: 19 }, 50)).toEqual({ cols: 22, rows: 19 });
-    expect(scaleOwnedWidth({ cols: 44, rows: 19 }, 200)).toEqual({ cols: 88, rows: 19 });
-    // Rounds rather than truncates: 109.5 rounds up.
-    expect(scaleOwnedWidth({ cols: 73, rows: 19 }, 150)).toEqual({ cols: 110, rows: 19 });
+describe("control width", () => {
+  it("set_owned_width_names_cols_outright_and_keeps_fitted_rows", () => {
+    expect(setOwnedWidth({ cols: 44, rows: 19 }, 44)).toEqual({ cols: 44, rows: 19 });
+    expect(setOwnedWidth({ cols: 44, rows: 19 }, 100)).toEqual({ cols: 100, rows: 19 });
+    expect(setOwnedWidth({ cols: 44, rows: 19 }, 180)).toEqual({ cols: 180, rows: 19 });
+    // Rounds rather than truncates.
+    expect(setOwnedWidth({ cols: 44, rows: 19 }, 72.5)).toEqual({ cols: 73, rows: 19 });
     // Never below the floor nor above the ceiling; rows always fitted.
-    expect(scaleOwnedWidth({ cols: 22, rows: 6 }, 50)).toEqual({
+    expect(setOwnedWidth({ cols: 22, rows: 6 }, 1)).toEqual({
       cols: OWNED_MIN_COLS,
       rows: 6,
     });
-    expect(scaleOwnedWidth({ cols: 400, rows: 150 }, 200)).toEqual({
+    expect(setOwnedWidth({ cols: 400, rows: 150 }, 900)).toEqual({
       cols: OWNED_MAX_COLS,
       rows: 150,
     });
@@ -714,9 +713,9 @@ describe("TerminalView", () => {
     layOut(parent, handle, 400, 320);
     // 400 / 8 and 320 / 16, whatever size the host had.
     expect(view.ownedSize()).toEqual({ cols: 50, rows: 20 });
-    // The zoom grows the cell, so fewer fit.
+    // The zoom magnifies the rendering but never moves the asserted size.
     view.setZoom(2);
-    expect(view.ownedSize()).toEqual({ cols: 25, rows: 10 });
+    expect(view.ownedSize()).toEqual({ cols: 50, rows: 20 });
     // The DPR-1 double-size face shows at its base scale, not its own size.
     view.setZoom(1);
     handle.baseScale = 0.5;

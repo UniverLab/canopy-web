@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  CONTROL_SCALE_KEY_PREFIX,
   CONTROL_SIZE_KEY_PREFIX,
-  controlScaleKey,
+  CONTROL_WIDTH_KEY_PREFIX,
   controlSizeKey,
+  controlWidthKey,
   KEYBAR_KEY,
   pointerIsFine,
-  readControlScale,
   readControlSize,
+  readControlWidth,
   readKeyBarVisible,
-  writeControlScale,
   writeControlSize,
+  writeControlWidth,
   writeKeyBarVisible,
 } from "../src/terminal-prefs.js";
 
@@ -54,8 +54,8 @@ describe("key bar visibility", () => {
       expect(() => writeKeyBarVisible(true)).not.toThrow();
       expect(readControlSize("smoke")).toBe(false);
       expect(() => writeControlSize("smoke", true)).not.toThrow();
-      expect(readControlScale("smoke")).toBe(100);
-      expect(() => writeControlScale("smoke", 150)).not.toThrow();
+      expect(readControlWidth("smoke")).toBeNull();
+      expect(() => writeControlWidth("smoke", 150)).not.toThrow();
     } finally {
       if (original) {
         Object.defineProperty(globalThis, "localStorage", original);
@@ -85,28 +85,28 @@ describe("control size prefs", () => {
   });
 });
 
-describe("control scale prefs", () => {
+describe("control width prefs", () => {
   afterEach(() => {
     localStorage.clear();
   });
 
-  it("keeps the scale per session, 100 by default", () => {
-    expect(readControlScale("smoke")).toBe(100);
-    writeControlScale("smoke", 150);
-    expect(localStorage.getItem(controlScaleKey("smoke"))).toBe("150");
-    expect(controlScaleKey("smoke")).toBe(`${CONTROL_SCALE_KEY_PREFIX}smoke`);
-    expect(readControlScale("smoke")).toBe(150);
-    expect(readControlScale("other")).toBe(100);
+  it("keeps the width per session, null until set", () => {
+    expect(readControlWidth("smoke")).toBeNull();
+    writeControlWidth("smoke", 150);
+    expect(localStorage.getItem(controlWidthKey("smoke"))).toBe("150");
+    expect(controlWidthKey("smoke")).toBe(`${CONTROL_WIDTH_KEY_PREFIX}smoke`);
+    expect(readControlWidth("smoke")).toBe(150);
+    expect(readControlWidth("other")).toBeNull();
   });
 
-  it("reads out-of-range and off-step values as 100", () => {
-    for (const bad of ["40", "210", "155", "", "abc", "NaN"]) {
-      localStorage.setItem(controlScaleKey("smoke"), bad);
-      expect(readControlScale("smoke"), bad).toBe(100);
+  it("reads out-of-range values as null", () => {
+    for (const bad of ["39", "181", "", "abc", "NaN"]) {
+      localStorage.setItem(controlWidthKey("smoke"), bad);
+      expect(readControlWidth("smoke"), bad).toBeNull();
     }
-    localStorage.setItem(controlScaleKey("smoke"), "50");
-    expect(readControlScale("smoke")).toBe(50);
-    localStorage.setItem(controlScaleKey("smoke"), "200");
-    expect(readControlScale("smoke")).toBe(200);
+    localStorage.setItem(controlWidthKey("smoke"), "40");
+    expect(readControlWidth("smoke")).toBe(40);
+    localStorage.setItem(controlWidthKey("smoke"), "180");
+    expect(readControlWidth("smoke")).toBe(180);
   });
 });

@@ -58,11 +58,10 @@ export function writeKeyBarVisible(value: boolean): void {
   }
 }
 
-export const CONTROL_SCALE_KEY_PREFIX = "canopy.remote.term.controlScale.";
-export const CONTROL_SCALE_MIN = 50;
-export const CONTROL_SCALE_MAX = 200;
-export const CONTROL_SCALE_STEP = 10;
-const CONTROL_SCALE_DEFAULT = 100;
+export const CONTROL_WIDTH_KEY_PREFIX = "canopy.remote.term.controlWidth.";
+export const CONTROL_WIDTH_MIN = 40;
+export const CONTROL_WIDTH_MAX = 180;
+export const CONTROL_WIDTH_STEP = 1;
 
 export function controlSizeKey(sessionId: string): string {
   return `${CONTROL_SIZE_KEY_PREFIX}${sessionId}`;
@@ -84,32 +83,35 @@ export function writeControlSize(sessionId: string, value: boolean): void {
   }
 }
 
-export function controlScaleKey(sessionId: string): string {
-  return `${CONTROL_SCALE_KEY_PREFIX}${sessionId}`;
+export function controlWidthKey(sessionId: string): string {
+  return `${CONTROL_WIDTH_KEY_PREFIX}${sessionId}`;
 }
 
-/** The remembered slider percentage, 100 unless a valid 50..200 step of 10. */
-export function readControlScale(sessionId: string): number {
+/**
+ * The remembered slider width in columns, or null when never set. The key
+ * is new on purpose: older percentage values must not read as columns.
+ */
+export function readControlWidth(sessionId: string): number | null {
   try {
-    const value = Number.parseInt(storage()?.getItem(controlScaleKey(sessionId)) ?? "", 10);
+    const value = Number.parseInt(storage()?.getItem(controlWidthKey(sessionId)) ?? "", 10);
     if (
       Number.isInteger(value) &&
-      value >= CONTROL_SCALE_MIN &&
-      value <= CONTROL_SCALE_MAX &&
-      value % CONTROL_SCALE_STEP === 0
+      value >= CONTROL_WIDTH_MIN &&
+      value <= CONTROL_WIDTH_MAX &&
+      value % CONTROL_WIDTH_STEP === 0
     ) {
       return value;
     }
   } catch {
-    // Fall through to the default.
+    // Fall through to null.
   }
-  return CONTROL_SCALE_DEFAULT;
+  return null;
 }
 
-export function writeControlScale(sessionId: string, value: number): void {
+export function writeControlWidth(sessionId: string, value: number): void {
   try {
-    storage()?.setItem(controlScaleKey(sessionId), String(value));
+    storage()?.setItem(controlWidthKey(sessionId), String(value));
   } catch {
-    // A terminal that cannot remember the scale still works.
+    // A terminal that cannot remember the width still works.
   }
 }

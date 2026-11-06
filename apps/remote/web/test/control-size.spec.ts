@@ -76,11 +76,11 @@ test("asserts the size that fits the phone's panel and renders it unfitted", asy
   });
   expect(fits.paneOverflow).toBeLessThanOrEqual(1);
   expect(fits.pageOverflow).toBeLessThanOrEqual(1);
-  // Zooming in fits fewer cells: re-asserted once the change settles.
+  // Zooming in magnifies the rendering but never moves the asserted size.
   await page.locator("#term-zoom-in").click();
-  await expect.poll(() => resizesSent(page).then((sent) => sent.length)).toBe(2);
-  const zoomed = (await resizesSent(page))[1]!;
-  expect(zoomed.cols).toBeLessThan(asserted!.cols);
+  await expect(page.locator(".term-fit")).not.toHaveAttribute("data-scale", "1");
+  await page.waitForTimeout(400);
+  expect(await resizesSent(page)).toHaveLength(1);
   // The remembered toggle re-asserts after a reload.
   await page.reload();
   await page.locator('[data-session="smoke"]').click();
