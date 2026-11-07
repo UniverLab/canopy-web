@@ -403,6 +403,15 @@ export function wireTermControls(deps: TermControlsDeps): TermControls {
         : null;
     if (pane !== null) {
       observer?.observe(pane);
+      // The fit box moves on its own: the keyboard layout and the
+      // size-owner rule resize it without touching the pane (a keyboard
+      // close grows the pane, but a class toggle alone reshapes the fit).
+      // Watching it too re-asserts the rows whenever either box moves, so
+      // a size measured from a short box never gets stuck.
+      const fit = pane.querySelector(".term-fit");
+      if (fit !== null) {
+        observer?.observe(fit);
+      }
     }
     globalThis.addEventListener("resize", schedule);
     globalThis.addEventListener("orientationchange", schedule);

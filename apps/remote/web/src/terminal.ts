@@ -32,6 +32,7 @@ import { terminalFontGate } from "./terminal-font.js";
 import type { TerminalFactory, TerminalHandle } from "./terminal-handle.js";
 import {
   classifyTouchGesture,
+  clampOwnerZoom,
   clampZoom,
   computeFitScale,
   computeOwnedSize,
@@ -60,6 +61,7 @@ export {
   OWNED_MIN_ROWS,
   TOUCH_GESTURE_PX,
   classifyTouchGesture,
+  clampOwnerZoom,
   clampZoom,
   computeFitScale,
   computeMinScale,
@@ -354,6 +356,12 @@ export class TerminalView {
     this.rows = rows;
     this.handle?.resize?.(cols, rows);
     this.refit();
+    // A resize reflows the buffer and the viewport can jump to the top;
+    // while following, pin it back to the latest line at once instead of
+    // showing the top first and scrolling down after.
+    if (this.following && !this.alternate) {
+      this.handle?.scrollToBottom();
+    }
     return true;
   }
 
@@ -454,7 +462,9 @@ export class TerminalView {
 
   private ownerScale(): number {
     const base = this.handle?.baseScale;
-    return (base !== undefined && base > 0 ? base : 1) * this.zoom;
+    // The zoom magnifies but never shrinks a fitted grid: below 1 the
+    // terminal would render smaller than its card and stay there.
+    return (base !== undefined && base > 0 ? base : 1) * clampOwnerZoom(this.zoom);
   }
 
   dispose(): void {
