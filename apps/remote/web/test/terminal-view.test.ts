@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  clampOwnerZoom,
   clampZoom,
   classifyTouchGesture,
   computeFitScale,
@@ -154,6 +155,13 @@ describe("scale math", () => {
     expect(clampZoom(99)).toBe(MAX_ZOOM);
     expect(clampZoom(0)).toBe(MIN_ZOOM);
     expect(clampZoom(1.5)).toBe(1.5);
+  });
+
+  it("floors the owner zoom at one", () => {
+    expect(clampOwnerZoom(0.5)).toBe(1);
+    expect(clampOwnerZoom(1)).toBe(1);
+    expect(clampOwnerZoom(2)).toBe(2);
+    expect(clampOwnerZoom(99)).toBe(MAX_ZOOM);
   });
 
   it("derives zoom from a pinch", () => {
@@ -788,6 +796,41 @@ describe("TerminalView", () => {
     view.dispose();
     expect(parent.dataset.sizeOwner).toBeUndefined();
     expect(view.isSizeOwner).toBe(false);
+  });
+
+  it("never renders a size owner below its natural scale", () => {
+    const { parent, view, handles } = setup();
+    view.mount(parent, 80, 24);
+    const handle = handles[0]!;
+    const { host } = layOut(parent, handle, 400, 320);
+    view.setSizeOwner(true);
+    // Zooming out of a fitted grid would leave the card half empty with
+    // no way back: the owner renders at its natural scale instead.
+    view.setZoom(0.5);
+    expect(host.style.transform).toBe("scale(1)");
+    view.setZoom(2);
+    expect(host.style.transform).toBe("scale(2)");
+    view.dispose();
+  });
+
+  it("pins the viewport to the latest line on resize while following", () => {
+    const { parent, view, handles } = setup();
+    view.mount(parent, 80, 24);
+    const handle = handles[0]!;
+    layOut(parent, handle, 400, 320);
+    expect(view.isFollowing).toBe(true);
+    expect(view.resize(50, 20)).toBe(true);
+    expect(handle.scrolledToBottom).toBe(1);
+    // Scrolled up: a resize no longer yanks the viewport.
+    handle.emitScroll(false);
+    expect(view.resize(60, 22)).toBe(true);
+    expect(handle.scrolledToBottom).toBe(1);
+    // Fullscreen has no tail: no pin either.
+    handle.emitScroll(true);
+    handle.emitBufferChange(true);
+    expect(view.resize(70, 24)).toBe(true);
+    expect(handle.scrolledToBottom).toBe(1);
+    view.dispose();
   });
 
   it("reports every zoom change", () => {

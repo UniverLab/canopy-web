@@ -123,8 +123,9 @@ test("touch_targets_meet_44px", async ({ page }) => {
 // past its button; the latest button floats over the terminal card's
 // bottom-right corner instead of taking a toolbar slot; the toolbar
 // itself never wraps onto a second row (which cost the terminal a row)
-// but scrolls sideways instead, so it stays one 44 px row; and the
-// size switch's label is a 44 px target.
+// but scrolls sideways instead, so it stays one 44 px row. The size
+// switch is gone while the resize is disabled (see the toggle assertion
+// at the end of the test).
 for (const viewport of [
   { width: 360, height: 640 },
   { width: 390, height: 844 },
@@ -220,18 +221,10 @@ for (const viewport of [
         `${button.id} inside the scrollable row`,
       ).toBeLessThanOrEqual(report.rowScrollWidth + 1);
     }
-    expect(report.toggle?.width ?? 0).toBeGreaterThanOrEqual(44);
-    expect(report.toggle?.height ?? 0).toBeGreaterThanOrEqual(44);
-    // The switch toggles from the keyboard.
-    await page.locator("#term-control-size").focus();
-    await page.keyboard.press("Space");
-    await expect(page.locator("#term-control-size")).toBeChecked();
-    // The slider it reveals is the same 44 px target, inside the viewport.
-    const sizeSlider = page.locator("#term-size-scale");
-    await expect(sizeSlider).toBeVisible();
-    const sliderBox = await sizeSlider.boundingBox();
-    expect(sliderBox?.width ?? 0).toBeGreaterThanOrEqual(44);
-    expect(sliderBox?.height ?? 0).toBeGreaterThanOrEqual(44);
-    expect((sliderBox?.x ?? 0) + (sliderBox?.width ?? 0)).toBeLessThanOrEqual(viewport.width + 1);
+    // No size switch while the resize is disabled: neither toggle nor
+    // slider is in the page.
+    expect(report.toggle).toBeNull();
+    await expect(page.locator("#term-control-size")).toHaveCount(0);
+    await expect(page.locator("#term-size-scale")).toHaveCount(0);
   });
 }

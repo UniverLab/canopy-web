@@ -7,7 +7,7 @@ import { connectFailMessage } from "../src/peer.js";
 import type { PromptDraft, SpawnRequest } from "../src/protocol.js";
 import { openSessionName, SessionStore } from "../src/sessions.js";
 import type { TerminalFactory, TerminalHandle } from "../src/terminal.js";
-import { KEYBAR_KEY, readControlSize, writeControlSize } from "../src/terminal-prefs.js";
+import { KEYBAR_KEY, writeControlSize } from "../src/terminal-prefs.js";
 import { sessionTitle } from "../src/titles.js";
 import type { PairSubmit } from "../src/ui.js";
 
@@ -646,20 +646,15 @@ describe("createShell", () => {
     }
   });
 
-  it("offers control-size per session, default off, with its explainer", () => {
+  it("hides the size row while the resize is disabled", () => {
     shell.showSession("s1", "build");
-    const toggle = query<HTMLInputElement>("#term-control-size");
-    expect(toggle.checked).toBe(false);
-    expect(toggle.closest("label")?.textContent).toContain("This device controls the size");
-    // A switch: the label wraps it (the whole label is the target) and
-    // it announces on/off.
-    expect(toggle.getAttribute("role")).toBe("switch");
-    expect(toggle.closest("label")?.classList.contains("term-size-toggle")).toBe(true);
-    expect(query(".term-size-note").textContent).toContain("Only one client should control the size");
+    expect(root.querySelector("#term-control-size")).toBeNull();
+    expect(root.querySelector(".term-size")).toBeNull();
     expect(calls.controlSizes).toEqual([]);
-    // Mounting while off asserts nothing.
+    // Mounting asserts nothing either.
     shell.ensureTerminal("s1", 80, 24);
     expect(calls.controlSizes).toEqual([]);
+    expect(query(".term-pane").hasAttribute("data-size-owner")).toBe(false);
   });
 
   // happy-dom has no layout: a 400 × 320 px panel and a grid whose
@@ -678,72 +673,40 @@ describe("createShell", () => {
     Object.defineProperty(host, "scrollHeight", { get: () => handle.rows * 16, configurable: true });
   };
 
-  const flipControlSize = (checked: boolean): void => {
-    const toggle = query<HTMLInputElement>("#term-control-size");
-    toggle.checked = checked;
-    toggle.dispatchEvent(new Event("change", { bubbles: true }));
-  };
-
-  it("asserts the size that fits this panel, never the host's own", () => {
+  it("asserts nothing from this panel while the resize is disabled", () => {
     shell.showSession("s1", "build");
     shell.ensureTerminal("s1", 80, 24);
     layOutPanel();
-    // Turning it on remembers the session, resizes the local terminal to
-    // the panel and asserts that size once: re-sending the host's 80 × 24
-    // would change nothing.
-    flipControlSize(true);
-    expect(readControlSize("s1")).toBe(true);
-    expect(readControlSize("s2")).toBe(false);
-    expect(calls.controlSizes).toEqual([{ cols: 50, rows: 20 }]);
+    vi.advanceTimersByTime(1000);
+    expect(calls.controlSizes).toEqual([]);
     expect(handles).toHaveLength(1);
-    expect(handles[0]?.resizes).toEqual([{ cols: 50, rows: 20 }]);
-    // The owner renders at scale 1, not fitted to the width.
-    expect(query(".term-pane").getAttribute("data-size-owner")).toBe("true");
-    expect(query<HTMLElement>(".term-fit").dataset.scale).toBe("1");
-    // The host's snapshot at the asserted size keeps the terminal as is.
-    shell.ensureTerminal("s1", 50, 20);
-    expect(handles).toHaveLength(1);
-    expect(calls.controlSizes).toHaveLength(1);
+    expect(handles[0]?.resizes).toEqual([]);
+    expect(query(".term-pane").hasAttribute("data-size-owner")).toBe(false);
   });
 
-  it("re-asserts the fitted size when a remount brings the host's size back", () => {
+  it("still asserts nothing after a remount while the resize is disabled", () => {
     shell.showSession("s1", "build");
     shell.ensureTerminal("s1", 80, 24);
     layOutPanel();
-    flipControlSize(true);
     // A remount (a changed host size): the fresh terminal is laid out and
-    // the size that fits the panel goes out again.
+    // nothing goes out.
     shell.ensureTerminal("s1", 100, 40);
     expect(handles).toHaveLength(2);
     layOutPanel();
     vi.advanceTimersByTime(1000);
-    expect(calls.controlSizes).toEqual([
-      { cols: 50, rows: 20 },
-      { cols: 50, rows: 20 },
-    ]);
-    expect(handles[1]?.resizes).toEqual([{ cols: 50, rows: 20 }]);
+    expect(calls.controlSizes).toEqual([]);
   });
 
-  it("never moves the asserted size on zoom, and stops when turned off", () => {
+  it("zooms without owning or asserting while the resize is disabled", () => {
     shell.showSession("s1", "build");
     shell.ensureTerminal("s1", 80, 24);
     layOutPanel();
-    flipControlSize(true);
-    // Zooming in magnifies the rendering only: the asserted size stays put.
+    const before = query<HTMLElement>(".term-fit").dataset.scale;
     query<HTMLButtonElement>("#term-zoom-in").click();
-    expect(query<HTMLElement>(".term-fit").dataset.scale).toBe("1.25");
-    expect(calls.controlSizes).toHaveLength(1);
-    vi.advanceTimersByTime(150);
-    expect(calls.controlSizes).toEqual([{ cols: 50, rows: 20 }]);
-    // Turning it off remembers, stops asserting and fits the width again.
-    flipControlSize(false);
-    expect(readControlSize("s1")).toBe(false);
-    expect(released).toBe(1);
-    expect(query(".term-pane").hasAttribute("data-size-owner")).toBe(false);
-    query<HTMLButtonElement>("#term-zoom-out").click();
+    expect(query<HTMLElement>(".term-fit").dataset.scale).not.toBe(before);
     vi.advanceTimersByTime(1000);
-    expect(calls.controlSizes).toHaveLength(1);
-    expect(released).toBe(1);
+    expect(calls.controlSizes).toEqual([]);
+    expect(query(".term-pane").hasAttribute("data-size-owner")).toBe(false);
   });
 
   it("follows the host's resized frame in place while not the size owner", () => {
@@ -764,39 +727,28 @@ describe("createShell", () => {
     expect(calls.controlSizes).toEqual([]);
   });
 
-  it("turns the toggle off when another device takes the size over", () => {
+  it("follows a new host size without owning while the resize is disabled", () => {
     shell.showSession("s1", "build");
     shell.ensureTerminal("s1", 80, 24);
     layOutPanel();
-    flipControlSize(true);
-    expect(calls.controlSizes).toEqual([{ cols: 50, rows: 20 }]);
-    // The host echoes this device's own size: nothing changes.
-    shell.sessionResized("s1", 50, 20);
-    expect(query<HTMLInputElement>("#term-control-size").checked).toBe(true);
-    // Another device asserts 120 × 40: let it, follow it, say so.
+    // Another device asserts 120 × 40: follow it, assert nothing back.
     shell.sessionResized("s1", 120, 40);
-    expect(query<HTMLInputElement>("#term-control-size").checked).toBe(false);
-    expect(readControlSize("s1")).toBe(false);
-    expect(query(".term-size-note").textContent).toBe("Size taken over by another device.");
-    expect(query(".term-pane").hasAttribute("data-size-owner")).toBe(false);
     expect(handles[0]?.resizes.at(-1)).toEqual({ cols: 120, rows: 40 });
-    vi.advanceTimersByTime(1000);
-    expect(calls.controlSizes).toHaveLength(1);
-    // A takeover is not the user's toggle: the size stays taken, nothing
-    // goes back.
+    expect(calls.controlSizes).toEqual([]);
     expect(released).toBe(0);
+    vi.advanceTimersByTime(1000);
+    expect(calls.controlSizes).toEqual([]);
   });
 
-  it("re-asserts a remembered control-size toggle on mount", () => {
+  it("ignores a remembered control-size toggle while the resize is disabled", () => {
     writeControlSize("s1", true);
     shell.showSession("s1", "build");
-    expect(query<HTMLInputElement>("#term-control-size").checked).toBe(true);
+    expect(root.querySelector("#term-control-size")).toBeNull();
     shell.ensureTerminal("s1", 80, 24);
-    // Nothing measurable yet in happy-dom: the size goes out once laid out.
     layOutPanel();
-    vi.advanceTimersByTime(150);
-    expect(calls.controlSizes).toEqual([{ cols: 50, rows: 20 }]);
-    expect(handles[0]?.resizes).toEqual([{ cols: 50, rows: 20 }]);
+    vi.advanceTimersByTime(1000);
+    expect(calls.controlSizes).toEqual([]);
+    expect(handles[0]?.resizes).toEqual([]);
   });
 
   it("keeps the terminal across state changes", () => {

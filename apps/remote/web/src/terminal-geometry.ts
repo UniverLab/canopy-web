@@ -13,6 +13,14 @@ export function clampZoom(zoom: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
 }
 
+// While this device owns the size the zoom never shrinks the rendering
+// below its natural scale: a fitted grid at zoom < 1 would leave the card
+// half empty with no way back, so the owner floor is 1. Snapshot mode
+// keeps the global floor — shrinking a fixed snapshot stays useful there.
+export function clampOwnerZoom(zoom: number): number {
+  return Math.min(MAX_ZOOM, Math.max(1, zoom));
+}
+
 export interface TermSize {
   cols: number;
   rows: number;

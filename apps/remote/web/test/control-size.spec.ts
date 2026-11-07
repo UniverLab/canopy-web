@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-// "This device controls the size" against the fake host: turning it on
-// asserts the cols × rows that fit this phone's panel (never the host's
-// own 80 × 24) and renders them unfitted; the host's resized frame then
-// either moves a follower's terminal in place or, for an owner whose size
-// another device replaced, turns the toggle off without fighting back.
+// The resize is disabled: the size row is not offered, so the web never
+// asserts a cols × rows of its own and stays a follower of the host's
+// frame. These tests pin that: no toggle, no slider, no resize out, and
+// a remembered toggle stays ignored after a reload.
 import { expect, test } from "@playwright/test";
 
 interface TermState {
@@ -55,17 +54,12 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator(".term-fit")).toHaveAttribute("data-row-height", /\d/);
 });
 
-test("asserts the size that fits the phone's panel and renders it unfitted", async ({ page }) => {
+test("offers no resize: no toggle, no slider, nothing asserted", async ({ page }) => {
   expect(await resizesSent(page)).toEqual([]);
-  await page.locator(".term-size-toggle").click();
-  await expect.poll(() => resizesSent(page).then((sent) => sent.length)).toBe(1);
-  const [asserted] = await resizesSent(page);
-  // A 390 px phone holds far fewer than the host's 80 columns.
-  expect(asserted!.cols).toBeGreaterThanOrEqual(20);
-  expect(asserted!.cols).toBeLessThan(80);
-  expect(asserted!.rows).toBeGreaterThanOrEqual(5);
-  // The local terminal took that grid and owns it, and it fits the pane.
-  await expect.poll(() => termState(page)).toEqual({ ...asserted!, owner: true });
+  await expect(page.locator("#term-control-size")).toHaveCount(0);
+  await expect(page.locator(".term-size-toggle")).toHaveCount(0);
+  await expect(page.locator("#term-size-scale")).toHaveCount(0);
+  await expect.poll(() => termState(page)).toEqual({ cols: 80, rows: 24, owner: false });
   const fits = await page.evaluate(() => {
     const pane = document.querySelector(".term-pane") as HTMLElement;
     const doc = document.scrollingElement ?? document.documentElement;
@@ -76,17 +70,17 @@ test("asserts the size that fits the phone's panel and renders it unfitted", asy
   });
   expect(fits.paneOverflow).toBeLessThanOrEqual(1);
   expect(fits.pageOverflow).toBeLessThanOrEqual(1);
-  // Zooming in magnifies the rendering but never moves the asserted size.
+  // Zooming still magnifies the rendering, and asserts nothing.
   await page.locator("#term-zoom-in").click();
   await expect(page.locator(".term-fit")).not.toHaveAttribute("data-scale", "1");
   await page.waitForTimeout(400);
-  expect(await resizesSent(page)).toHaveLength(1);
-  // The remembered toggle re-asserts after a reload.
+  expect(await resizesSent(page)).toEqual([]);
+  // A reload keeps it that way: no toggle, no resize out.
   await page.reload();
   await page.locator('[data-session="smoke"]').click();
-  await expect(page.locator("#term-control-size")).toBeChecked();
-  await expect.poll(() => resizesSent(page).then((sent) => sent.length)).toBeGreaterThan(0);
-  await expect.poll(() => termState(page).then((state) => state?.owner)).toBe(true);
+  await expect.poll(() => termState(page)).toEqual({ cols: 80, rows: 24, owner: false });
+  await expect(page.locator("#term-control-size")).toHaveCount(0);
+  expect(await resizesSent(page)).toEqual([]);
 });
 
 test("follows a host resize in place while not the size owner", async ({ page }) => {
@@ -101,30 +95,20 @@ test("follows a host resize in place while not the size owner", async ({ page })
   expect(await resizesSent(page)).toEqual([]);
 });
 
-test("gives the size back when the toggle turns off", async ({ page }) => {
-  await page.locator(".term-size-toggle").click();
-  await expect.poll(() => resizesSent(page).then((sent) => sent.length)).toBe(1);
-  await page.evaluate(() => window.__fake.clearSent());
-  await page.locator(".term-size-toggle").click();
-  await expect(page.locator("#term-control-size")).not.toBeChecked();
-  // Exactly one release goes out, and the host's own size comes back: the
-  // terminal returns to the host's 80 columns and stops owning the size.
-  await expect.poll(() => releasesSent(page).then((sent) => sent.length)).toBe(1);
-  await expect.poll(() => termState(page)).toEqual({ cols: 80, rows: 24, owner: false });
+test("sends no release without a toggle to turn off", async ({ page }) => {
+  await expect(page.locator("#term-control-size")).toHaveCount(0);
+  await page.waitForTimeout(400);
+  expect(await releasesSent(page)).toEqual([]);
   expect(await resizesSent(page)).toEqual([]);
+  await expect.poll(() => termState(page)).toEqual({ cols: 80, rows: 24, owner: false });
 });
 
-test("lets another device take the size over without fighting", async ({ page }) => {
-  await page.locator(".term-size-toggle").click();
-  await expect.poll(() => resizesSent(page).then((sent) => sent.length)).toBe(1);
+test("follows another device's size without owning or fighting", async ({ page }) => {
   await page.evaluate(() => window.__fake.resizeFromElsewhere?.(120, 40));
-  await expect(page.locator("#term-control-size")).not.toBeChecked();
-  await expect(page.locator(".term-size-note")).toHaveText("Size taken over by another device.");
+  await expect(page.locator("#term-control-size")).toHaveCount(0);
   await expect.poll(() => termState(page)).toEqual({ cols: 120, rows: 40, owner: false });
   // Nothing goes back: the other device keeps the size.
   await page.setViewportSize({ width: 360, height: 640 });
   await page.waitForTimeout(400);
-  expect(await resizesSent(page)).toHaveLength(1);
-  // And the choice is remembered off.
-  expect(await page.evaluate(() => localStorage.getItem("canopy.remote.term.controlSize.smoke"))).toBe("0");
+  expect(await resizesSent(page)).toEqual([]);
 });
