@@ -62,7 +62,7 @@ test("ends the sessions home, both tabs, in the footer at 390x844", async ({ pag
   expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
 });
 
-test("keeps the session's terminal, key bar and size row above the footer at 390x844", async ({
+test("keeps the session's terminal and key bar above the footer at 390x844", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -77,8 +77,9 @@ test("keeps the session's terminal, key bar and size row above the footer at 390
     await page.locator("#term-keys").click();
   }
   await expectFooterAfterMain(page);
-  // Top to bottom: terminal, key bar, size row, then the footer — the
-  // footer never overlays any of them, and the terminal keeps its height.
+  // Top to bottom: terminal, key bar, then the footer (no size row while
+  // the resize is disabled) — the footer never overlays any of them, and
+  // the terminal keeps its height.
   const [term, keys, size, footer] = await vboxes(page, [
     "#term-pane",
     "#keybar",
@@ -87,11 +88,10 @@ test("keeps the session's terminal, key bar and size row above the footer at 390
   ]);
   expect(term).not.toBeNull();
   expect(keys).not.toBeNull();
-  expect(size).not.toBeNull();
+  expect(size).toBeNull();
   expect(footer).not.toBeNull();
   expect(term!.bottom).toBeLessThanOrEqual(keys!.top + 1);
-  expect(keys!.bottom).toBeLessThanOrEqual(size!.top + 1);
-  expect(size!.bottom).toBeLessThanOrEqual(footer!.top + 1);
+  expect(keys!.bottom).toBeLessThanOrEqual(footer!.top + 1);
   expect(term!.bottom - term!.top).toBeGreaterThan(200);
   expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
 });
