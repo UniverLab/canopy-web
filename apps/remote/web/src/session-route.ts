@@ -28,6 +28,12 @@ import {
   termSizeHtml,
   wireTermControls,
 } from "./term-controls.js";
+
+// Temporary kill-switch: the web resize misbehaves on phones (the terminal
+// can end up small with no way back, and a resize pauses the graph), so the
+// size row is not offered until the resize is fixed properly. One flag to
+// flip back: the wiring underneath stays intact and tested.
+const RESIZE_ENABLED = false;
 import type { TermControls } from "./term-controls.js";
 import { pointerIsFine } from "./terminal-prefs.js";
 import { termCopyFloatHtml, wireCopyFloat } from "./term-copy.js";
@@ -169,7 +175,7 @@ export class SessionRoute {
       ${termControlsHtml()}
       <div class="upload-tray" id="upload-tray" hidden></div>
       <div class="keybar" id="keybar"></div>
-      ${termSizeHtml(this.sessionId, this.terminalView?.ownedSize()?.cols ?? null)}
+      ${RESIZE_ENABLED ? termSizeHtml(this.sessionId, this.terminalView?.ownedSize()?.cols ?? null) : ""}
     </main>
     ${REMOTE_FOOTER}`;
     this.hooks.wireBanner();
@@ -363,8 +369,11 @@ export class SessionRoute {
     }
     // A remembered control-size toggle re-asserts on every (re)mount —
     // the size that fits this panel, never the snapshot's — so a
-    // reconnected session keeps the size this device asked for.
-    this.termControls?.reassert();
+    // reconnected session keeps the size this device asked for. Skipped
+    // while the resize is disabled: without the row nothing may assert.
+    if (RESIZE_ENABLED) {
+      this.termControls?.reassert();
+    }
   }
 
   sessionResized(id: string, cols: number, rows: number): void {
