@@ -641,7 +641,6 @@ test("gives the terminal pane the freed height at 360x640", async ({ page }) => 
     const pane = document.querySelector("#term-pane") as HTMLElement;
     const paneBox = pane.getBoundingClientRect();
     const style = getComputedStyle(pane);
-    const size = document.querySelector(".term-size") as HTMLElement;
     return {
       paneHeight: paneBox.height,
       visualHeight: Number(pane.style.getPropertyValue("--term-visual-h").replace("px", "")),
@@ -653,7 +652,7 @@ test("gives the terminal pane the freed height at 360x640", async ({ page }) => 
       keyBottoms: [...document.querySelectorAll("#keybar .key")].map(
         (key) => key.getBoundingClientRect().bottom,
       ),
-      sizeBottom: size.getBoundingClientRect().bottom,
+      hasSizeRow: document.querySelector(".term-size") !== null,
       textareas: document.querySelectorAll("main.session-view textarea").length,
       helperTextareas: document.querySelectorAll(".xterm-helper-textarea").length,
     };
@@ -662,12 +661,13 @@ test("gives the terminal pane the freed height at 360x640", async ({ page }) => 
   // engaged, so the terminal took height instead of a second input.
   expect(layout.visualHeight).toBeGreaterThan(0);
   expect(layout.paneHeight - layout.chrome).toBeGreaterThan(layout.visualHeight);
-  // ...while every key and the whole size row stay inside the viewport.
+  // ...while every key stays inside the viewport, and no size row takes
+  // space while the resize is disabled.
   expect(layout.keyBottoms).toHaveLength(10);
   for (const bottom of layout.keyBottoms) {
     expect(bottom).toBeLessThanOrEqual(640);
   }
-  expect(layout.sizeBottom).toBeLessThanOrEqual(640);
+  expect(layout.hasSizeRow).toBe(false);
   // xterm's hidden textarea is the only text input left in the view.
   expect(layout.textareas).toBe(1);
   expect(layout.helperTextareas).toBe(1);
