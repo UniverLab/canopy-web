@@ -12,8 +12,7 @@ compatibility_date = "2026-10-26"
 # workflow then needs exactly one secret (CLOUDFLARE_API_TOKEN).
 account_id = "d7b81bdd721f503968523dd903d967be"
 
-# The domain attached by API on 2026-10-27, declared in config.
-routes = [{ pattern = "graphs.univerlab.org", custom_domain = true }]
+# Domains and routes live in UniverLab/infra (Terraform), not here.
 
 [vars]
 # The Analytics Engine account the downloads API reads; the SQL API is the
